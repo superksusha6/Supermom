@@ -59,3 +59,34 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
 ## 5) Next Step (recommended)
 
 Replace mock data (`src/data/mock.ts`) with real Supabase queries in screens and app state.
+
+## 6) Web Deploy
+
+Recommended: deploy the web build to Vercel.
+
+### Vercel
+
+1. Import the GitHub repo into Vercel.
+2. Set the project root to `smart-mom-app`.
+3. Vercel will use:
+   - Build command: `npm run build:web`
+   - Output directory: `dist`
+4. Add these environment variables in Vercel:
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://ebsrwsjpgnhsgygzhuxm.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
+```
+
+5. In Supabase, open:
+   - `Authentication` -> `URL Configuration`
+   - add your production domain to allowed URLs / site URL if needed
+
+6. Redeploy after updating environment variables.
+
+### Local production build check
+
+```bash
+npm run typecheck
+npm run build:web
+```
