@@ -38,6 +38,10 @@ create table if not exists public.nutrition_entries (
 alter table public.habit_entries enable row level security;
 alter table public.nutrition_entries enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.habit_entries to authenticated;
+grant select, insert, update, delete on table public.nutrition_entries to authenticated;
+
 drop policy if exists "habit_entries_select_own" on public.habit_entries;
 create policy "habit_entries_select_own" on public.habit_entries
 for select using (user_id = auth.uid());

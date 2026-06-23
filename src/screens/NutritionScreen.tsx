@@ -1,8 +1,12 @@
-import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
-import { buildMacroMessage, cleanNutritionNumber, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
-import { ActivityLevel, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
+import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
+import { lookupNutritionBarcode, normalizeNutritionSearchText, searchNutritionCatalog } from '@/lib/nutritionCatalog';
+import { analyzeMealPhoto } from '@/lib/mealVision';
+import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -21,7 +25,45 @@ type Props = {
   onCalorieOverrideChange: Dispatch<SetStateAction<string>>;
   nutritionEntries: NutritionFoodEntry[];
   onNutritionEntriesChange: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
+  customFoodPresets: CustomNutritionFood[];
+  onCustomFoodPresetsChange: Dispatch<SetStateAction<CustomNutritionFood[]>>;
+  quickActionRequest?: { type: 'add-meal'; mealType: NutritionMealType; token: number } | null;
+  renderInlineContent?: boolean;
 };
+
+type NutritionLibraryMeta = {
+  favorites: string[];
+  recentIds: string[];
+};
+
+type AddFoodFlow = 'search' | 'scan' | 'photo';
+
+const LOCAL_NUTRITION_LIBRARY_META_KEY = 'smartmom.nutritionLibraryMeta.v1';
+const EMPTY_LIBRARY_META: NutritionLibraryMeta = { favorites: [], recentIds: [] };
+
+function loadNutritionLibraryMeta(): NutritionLibraryMeta {
+  try {
+    if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return EMPTY_LIBRARY_META;
+    const raw = globalThis.localStorage.getItem(LOCAL_NUTRITION_LIBRARY_META_KEY);
+    if (!raw) return EMPTY_LIBRARY_META;
+    const parsed = JSON.parse(raw) as Partial<NutritionLibraryMeta>;
+    return {
+      favorites: Array.isArray(parsed.favorites) ? parsed.favorites.filter((item): item is string => typeof item === 'string') : [],
+      recentIds: Array.isArray(parsed.recentIds) ? parsed.recentIds.filter((item): item is string => typeof item === 'string') : [],
+    };
+  } catch {
+    return EMPTY_LIBRARY_META;
+  }
+}
+
+function persistNutritionLibraryMeta(meta: NutritionLibraryMeta) {
+  try {
+    if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+    globalThis.localStorage.setItem(LOCAL_NUTRITION_LIBRARY_META_KEY, JSON.stringify(meta));
+  } catch {
+    // ignore local persistence errors
+  }
+}
 
 export function NutritionScreen({
   personalProfile,
@@ -39,12 +81,19 @@ export function NutritionScreen({
   onCalorieOverrideChange,
   nutritionEntries,
   onNutritionEntriesChange,
+  customFoodPresets,
+  onCustomFoodPresetsChange,
+  quickActionRequest,
+  renderInlineContent = true,
 }: Props) {
+  const usdaApiKey = process.env.EXPO_PUBLIC_USDA_API_KEY || '';
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const isMobile = width < 760;
+  const styles = useMemo(() => createStyles(colors, isMobile), [colors, isMobile]);
   const hasProfileInputs = Boolean(personalProfile.dateOfBirth && personalProfile.heightCm && personalProfile.weightKg);
-  const [goalSetupCollapsed, setGoalSetupCollapsed] = useState(hasProfileInputs);
   const [activeMealType, setActiveMealType] = useState<NutritionMealType | null>(null);
+  const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
   const [draftProtein, setDraftProtein] = useState('');
@@ -54,11 +103,24 @@ export function NutritionScreen({
   const [draftGrams, setDraftGrams] = useState('100');
   const [selectedPreset, setSelectedPreset] = useState<NutritionFoodPreset | null>(null);
   const [customFoodMode, setCustomFoodMode] = useState(false);
+  const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
   const [customBrand, setCustomBrand] = useState('');
   const [customServingType, setCustomServingType] = useState<'100g' | '100ml' | 'serving'>('100g');
+  const [catalogResults, setCatalogResults] = useState<NutritionFoodPreset[]>([]);
+  const [catalogSearchLoading, setCatalogSearchLoading] = useState(false);
+  const [catalogSearchError, setCatalogSearchError] = useState<string | null>(null);
+  const [libraryMeta, setLibraryMeta] = useState<NutritionLibraryMeta>(() => loadNutritionLibraryMeta());
+  const [barcodeCameraOpen, setBarcodeCameraOpen] = useState(false);
+  const [barcodeLookupBusy, setBarcodeLookupBusy] = useState(false);
+  const [barcodeLookupError, setBarcodeLookupError] = useState<string | null>(null);
+  const [mealPhotoLoading, setMealPhotoLoading] = useState(false);
+  const [mealPhotoError, setMealPhotoError] = useState<string | null>(null);
+  const [mealPhotoNote, setMealPhotoNote] = useState<string | null>(null);
+  const [mealPhotoConfidence, setMealPhotoConfidence] = useState<'low' | 'medium' | 'high' | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
   const [weekOffset, setWeekOffset] = useState(0);
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const plan = getNutritionPlan({
     dateOfBirth: personalProfile.dateOfBirth,
@@ -79,6 +141,7 @@ export function NutritionScreen({
     { key: 'lunch', title: 'Lunch', icon: 'Sky', accent: '#0ea5e9', subtitle: 'Main meal for focus and balance' },
     { key: 'dinner', title: 'Dinner', icon: 'Moon', accent: '#fb7185', subtitle: 'Keep the evening nourishing' },
     { key: 'snack', title: 'Snacks', icon: 'Spark', accent: '#8b5cf6', subtitle: 'Small bites between meals' },
+    { key: 'other', title: 'Other', icon: 'Mix', accent: '#64748b', subtitle: 'Anything that does not fit the usual meal slots' },
   ];
   const mealData = mealSections.map((section) => {
     const entries = selectedDateEntries.filter((entry) => entry.mealType === section.key);
@@ -88,28 +151,101 @@ export function NutritionScreen({
       totals: getNutritionTotals(entries),
     };
   });
-  const insights = plan
-    ? [
-        buildMacroMessage('Calories', totals.calories, plan.calories, 'kcal'),
-        buildMacroMessage('Protein', totals.protein, plan.protein, 'g'),
-        buildMacroMessage('Fat', totals.fat, plan.fat, 'g'),
-        buildMacroMessage('Carbs', totals.carbs, plan.carbs, 'g'),
-      ]
-    : [];
+  const allFoodPresets = useMemo(
+    () => [...customFoodPresets.map(customNutritionFoodToPreset), ...NUTRITION_FOOD_PRESETS],
+    [customFoodPresets],
+  );
+  const mealTypeUsageCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!activeMealType) return map;
+    nutritionEntries
+      .filter((entry) => entry.mealType === activeMealType)
+      .forEach((entry) => {
+        const key = entry.name.trim().toLowerCase();
+        if (!key) return;
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+    return map;
+  }, [activeMealType, nutritionEntries]);
   const filteredFoodPresets = useMemo(() => {
-    const query = foodSearch.trim().toLowerCase();
-    if (!query) return NUTRITION_FOOD_PRESETS.slice(0, 8);
-    return NUTRITION_FOOD_PRESETS.filter((item) => item.name.toLowerCase().includes(query)).slice(0, 8);
-  }, [foodSearch]);
+    const query = normalizeNutritionSearchText(foodSearch);
+    if (!query) return [] as NutritionFoodPreset[];
+    const scorePreset = (item: NutritionFoodPreset) => {
+      const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
+      const name = normalizeNutritionSearchText(item.name);
+      const title = normalizeNutritionSearchText(displayTitle);
+      const brand = normalizeNutritionSearchText(item.brand);
+      const tokens = query.split(' ').filter(Boolean);
+      const mealScore = mealTypeUsageCounts.get(name) || mealTypeUsageCounts.get(title) || 0;
+      const prefixScore = name.startsWith(query) || title.startsWith(query) || brand.startsWith(query) ? 100 : 0;
+      const favoriteScore = libraryMeta.favorites.includes(item.id) ? 20 : 0;
+      const recentIndex = libraryMeta.recentIds.indexOf(item.id);
+      const recentScore = recentIndex >= 0 ? Math.max(0, 12 - recentIndex) : 0;
+      const tokenScore = tokens.reduce((sum, token) => sum + (title.includes(token) ? 20 : 0), 0);
+      const allTokensScore = tokens.length > 1 && tokens.every((token) => title.includes(token)) ? 100 : 0;
+      return prefixScore + favoriteScore + recentScore + mealScore * 10 + tokenScore + allTokensScore;
+    };
+    return [...allFoodPresets]
+      .filter((item) => {
+        const title = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
+        const normalizedName = normalizeNutritionSearchText(item.name);
+        const normalizedTitle = normalizeNutritionSearchText(title);
+        const normalizedBrand = normalizeNutritionSearchText(item.brand);
+        const tokens = query.split(' ').filter(Boolean);
+        return (
+          normalizedName.includes(query) ||
+          normalizedTitle.includes(query) ||
+          normalizedBrand.includes(query) ||
+          (tokens.length > 1 && tokens.every((token) => normalizedTitle.includes(token)))
+        );
+      })
+      .sort((a, b) => scorePreset(b) - scorePreset(a))
+      .slice(0, 8);
+  }, [allFoodPresets, foodSearch, libraryMeta.favorites, libraryMeta.recentIds, mealTypeUsageCounts]);
+  const visibleCatalogResults = useMemo(() => {
+    const existingKeys = new Set(
+      allFoodPresets.map((item) => `${(item.brand || '').trim().toLowerCase()}::${item.name.trim().toLowerCase()}::${item.baseMode || '100g'}`),
+    );
+    return catalogResults.filter((item) => {
+      const key = `${(item.brand || '').trim().toLowerCase()}::${item.name.trim().toLowerCase()}::${item.baseMode || '100g'}`;
+      return !existingKeys.has(key);
+    });
+  }, [allFoodPresets, catalogResults]);
   const hasExactFoodMatch = useMemo(() => {
-    const query = foodSearch.trim().toLowerCase();
+    const query = normalizeNutritionSearchText(foodSearch);
     if (!query) return false;
-    return NUTRITION_FOOD_PRESETS.some((item) => item.name.toLowerCase() === query);
-  }, [foodSearch]);
+    return [...allFoodPresets, ...catalogResults].some((item) => {
+      const title = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
+      const normalizedTitle = normalizeNutritionSearchText(title);
+      const normalizedBrand = normalizeNutritionSearchText(item.brand);
+      return normalizeNutritionSearchText(item.name) === query || normalizedTitle === query || normalizedBrand === query;
+    });
+  }, [allFoodPresets, catalogResults, foodSearch]);
   const todayDateKey = useMemo(() => toDateKey(new Date()), []);
   const weekDays = useMemo(() => buildNutritionWeekDays(weekOffset, nutritionEntries), [nutritionEntries, weekOffset]);
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
   const selectedPresetValues = selectedPreset ? getNutritionValuesForGrams(selectedPreset, draftGrams) : null;
+  const selectedPresetBaseMode = selectedPreset?.baseMode || '100g';
+  const customFoodPreviewPreset = useMemo<NutritionFoodPreset | null>(() => {
+    if (!customFoodMode || !draftMealName.trim()) return null;
+    return {
+      id: 'custom-preview',
+      name: draftMealName.trim(),
+      baseAmount: customServingType === 'serving' ? 'per 1 serving' : `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
+      baseMode: customServingType,
+      baseQuantity: customServingType === 'serving' ? 1 : 100,
+      caloriesPer100g: Number(draftCalories.replace(',', '.')) || 0,
+      proteinPer100g: Number(draftProtein.replace(',', '.')) || 0,
+      fatPer100g: Number(draftFat.replace(',', '.')) || 0,
+      carbsPer100g: Number(draftCarbs.replace(',', '.')) || 0,
+    };
+  }, [customFoodMode, customServingType, draftCalories, draftCarbs, draftFat, draftMealName, draftProtein]);
+  const customFoodPreviewValues = useMemo(() => {
+    if (!customFoodPreviewPreset) return null;
+    const amount = customServingType === 'serving' ? '1' : draftGrams || '100';
+    return getNutritionValuesForGrams(customFoodPreviewPreset, amount);
+  }, [customFoodPreviewPreset, customServingType, draftGrams]);
+  const showNutritionEditor = addFoodFlow === 'search' || !!selectedPreset || customFoodMode;
   const nutritionProgress = plan
     ? [
         { key: 'calories', label: 'Calories', short: 'K', current: totals.calories, target: plan.calories, size: 122, stroke: 8, unit: 'kcal' },
@@ -133,112 +269,231 @@ export function NutritionScreen({
       })
     : [];
 
+  useEffect(() => {
+    const query = foodSearch.trim();
+    if (customFoodMode || photoEstimateMode || !activeMealType || query.length < 2) {
+      setCatalogResults([]);
+      setCatalogSearchLoading(false);
+      setCatalogSearchError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setCatalogSearchLoading(true);
+      setCatalogSearchError(null);
+      try {
+        const results = await searchNutritionCatalog(query, {
+          signal: controller.signal,
+          usdaApiKey,
+        });
+        setCatalogResults(results);
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        setCatalogResults([]);
+        setCatalogSearchError('Could not reach the nutrition database right now.');
+      } finally {
+        if (!controller.signal.aborted) setCatalogSearchLoading(false);
+      }
+    }, 280);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [activeMealType, customFoodMode, foodSearch, photoEstimateMode, usdaApiKey]);
+
+  useEffect(() => {
+    persistNutritionLibraryMeta(libraryMeta);
+  }, [libraryMeta]);
+
+  useEffect(() => {
+    if (!quickActionRequest || quickActionRequest.type !== 'add-meal') return;
+    setSelectedDateKey(todayDateKey);
+    setWeekOffset(0);
+    setAddFoodFlow('search');
+    setPhotoEstimateMode(false);
+    setCustomFoodMode(false);
+    setFoodSearch('');
+    setCatalogResults([]);
+    setCatalogSearchError(null);
+    setSelectedPreset(null);
+    setDraftMealName('');
+    setDraftGrams('100');
+    setDraftCalories('');
+    setDraftProtein('');
+    setDraftFat('');
+    setDraftCarbs('');
+    setActiveMealType(quickActionRequest.mealType);
+  }, [quickActionRequest, todayDateKey]);
+
+  function createUuid() {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+      const random = Math.floor(Math.random() * 16);
+      const value = char === 'x' ? random : (random & 0x3) | 0x8;
+      return value.toString(16);
+    });
+  }
+
+  function savePresetToLibrary(preset: NutritionFoodPreset) {
+    if (preset.source && preset.source !== 'custom') {
+      const cachedPreset = nutritionPresetToCustomFood(preset);
+      onCustomFoodPresetsChange((prev) => {
+        const filtered = prev.filter((item) => item.id !== cachedPreset.id);
+        return [cachedPreset, ...filtered];
+      });
+    }
+  }
+
+  function registerRecentPreset(presetId: string) {
+    setLibraryMeta((prev) => ({
+      ...prev,
+      recentIds: [presetId, ...prev.recentIds.filter((item) => item !== presetId)].slice(0, 14),
+    }));
+  }
+
+  function toggleFavoritePreset(preset: NutritionFoodPreset) {
+    savePresetToLibrary(preset);
+    setLibraryMeta((prev) => {
+      const exists = prev.favorites.includes(preset.id);
+      return {
+        favorites: exists ? prev.favorites.filter((item) => item !== preset.id) : [preset.id, ...prev.favorites].slice(0, 14),
+        recentIds: exists ? prev.recentIds : [preset.id, ...prev.recentIds.filter((item) => item !== preset.id)].slice(0, 14),
+      };
+    });
+  }
+
+  function applyPresetSelection(item: NutritionFoodPreset) {
+    const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
+    const baseMode = item.baseMode || '100g';
+    const defaultAmount = baseMode === 'serving' ? String(item.baseQuantity || 1) : String(item.baseQuantity || 100);
+    const next = getNutritionValuesForGrams(item, defaultAmount);
+    setSelectedPreset(item);
+    setDraftMealName(displayTitle);
+    setDraftCalories(next.calories);
+    setDraftProtein(next.protein);
+    setDraftFat(next.fat);
+    setDraftCarbs(next.carbs);
+    setCustomServingType(baseMode);
+    setDraftGrams(defaultAmount);
+    setFoodSearch(displayTitle);
+  }
+
+  async function openBarcodeScanner() {
+    try {
+      if (!cameraPermission?.granted) {
+        const permission = await requestCameraPermission();
+        if (!permission.granted) {
+          Alert.alert('Permission needed', 'Allow camera access to scan product barcodes.');
+          return;
+        }
+      }
+      setBarcodeLookupError(null);
+      setAddFoodFlow('scan');
+      setBarcodeCameraOpen(true);
+    } catch {
+      Alert.alert('Camera unavailable', 'Could not open the barcode scanner right now.');
+    }
+  }
+
+  async function captureMealPhoto() {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Allow camera access to estimate meal calories from a photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.9,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.base64) return;
+
+      const asset = result.assets[0];
+      const assetBase64 = asset.base64;
+      if (!assetBase64) return;
+      setMealPhotoLoading(true);
+      setMealPhotoError(null);
+      setMealPhotoNote(null);
+      setMealPhotoConfidence(null);
+      const estimate = await analyzeMealPhoto({
+        imageBase64: assetBase64,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+      });
+      if (!estimate) {
+        setMealPhotoError('We could not estimate this meal from the photo.');
+        return;
+      }
+      setPhotoEstimateMode(true);
+      setCustomFoodMode(true);
+      setSelectedPreset(null);
+      setDraftMealName(estimate.mealName);
+      setCustomBrand('');
+      setCustomServingType('100g');
+      setDraftGrams(String(Math.max(1, Math.round(estimate.estimatedAmountGrams || 100))));
+      setDraftCalories(String(Math.round(estimate.caloriesPer100g * 10) / 10));
+      setDraftProtein(String(Math.round(estimate.proteinPer100g * 10) / 10));
+      setDraftFat(String(Math.round(estimate.fatPer100g * 10) / 10));
+      setDraftCarbs(String(Math.round(estimate.carbsPer100g * 10) / 10));
+      setFoodSearch(estimate.mealName);
+      setAddFoodFlow('photo');
+      setMealPhotoConfidence(estimate.confidence || null);
+      setMealPhotoNote(
+        [estimate.note, estimate.detectedFoods?.length ? `Detected: ${estimate.detectedFoods.join(', ')}` : null]
+          .filter(Boolean)
+          .join(' · '),
+      );
+    } catch {
+      setMealPhotoError('Could not analyze the meal photo right now.');
+    } finally {
+      setMealPhotoLoading(false);
+    }
+  }
+
+  async function handleBarcodeScanned(data?: string) {
+    if (!data || barcodeLookupBusy) return;
+    setBarcodeLookupBusy(true);
+    setBarcodeLookupError(null);
+    try {
+      const preset = await lookupNutritionBarcode(data);
+      if (!preset) {
+        setBarcodeLookupError('We found the barcode, but there is no product data for it yet.');
+        return;
+      }
+      const displayTitle = preset.brand?.trim() ? `${preset.brand.trim()} ${preset.name}` : preset.name;
+      const baseMode = preset.baseMode || '100g';
+      const defaultAmount = baseMode === 'serving' ? String(preset.baseQuantity || 1) : String(preset.baseQuantity || 100);
+      const next = getNutritionValuesForGrams(preset, defaultAmount);
+      setSelectedPreset(preset);
+      setDraftMealName(displayTitle);
+      setDraftCalories(next.calories);
+      setDraftProtein(next.protein);
+      setDraftFat(next.fat);
+      setDraftCarbs(next.carbs);
+      setCustomServingType(baseMode);
+      setDraftGrams(defaultAmount);
+      setFoodSearch(displayTitle);
+      setAddFoodFlow('scan');
+      setBarcodeCameraOpen(false);
+      savePresetToLibrary(preset);
+    } catch {
+      setBarcodeLookupError('Could not load product details from the barcode right now.');
+    } finally {
+      setBarcodeLookupBusy(false);
+    }
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <SectionCard title="Goal Setup">
-        {plan ? (
-          <>
-            <View style={styles.goalTopRow}>
-              <View style={styles.goalCompactSummary}>
-                <Text style={styles.goalCompactTitle}>
-                  {plan.calories} kcal • {plan.effectiveGoal === 'lose' ? 'Lose' : plan.effectiveGoal === 'gain' ? 'Gain' : 'Maintain'}
-                </Text>
-                <Text style={styles.goalCompactText}>
-                  {personalProfile.weightKg || '0'} kg now • target {Math.round(plan.desiredWeight)} kg • {activityLevel}
-                </Text>
-              </View>
-              <Pressable style={styles.goalToggleBtn} onPress={() => setGoalSetupCollapsed((prev) => !prev)}>
-                <Text style={styles.goalToggleBtnText}>{goalSetupCollapsed ? 'Edit' : 'Hide'}</Text>
-              </Pressable>
-            </View>
-
-            {!goalSetupCollapsed ? (
-              <>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Current</Text>
-                    <Text style={styles.summaryValue}>{personalProfile.weightKg || '0'} kg</Text>
-                    <Text style={styles.summaryMeta}>{personalProfile.heightCm || '0'} cm</Text>
-                  </View>
-                  <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Target Weight</Text>
-                    <TextInput
-                      placeholder="55"
-                      keyboardType="decimal-pad"
-                      style={styles.inlineInput}
-                      value={desiredWeight}
-                      onChangeText={(text) => onDesiredWeightChange(cleanNutritionNumber(text))}
-                    />
-                    <Text style={styles.summaryMeta}>kg</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.label}>Goal</Text>
-                <View style={styles.pillRow}>
-                  {(['lose', 'maintain', 'gain'] as NutritionGoal[]).map((goal) => (
-                    <Pressable key={goal} style={[styles.pillBtn, nutritionGoal === goal && styles.pillBtnActive]} onPress={() => onNutritionGoalChange(goal)}>
-                      <Text style={[styles.pillBtnText, nutritionGoal === goal && styles.pillBtnTextActive]}>
-                        {goal === 'lose' ? 'Lose' : goal === 'gain' ? 'Gain' : 'Maintain'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>Pace</Text>
-                <View style={styles.pillRow}>
-                  {(['fast', 'flexible'] as NutritionPace[]).map((pace) => (
-                    <Pressable key={pace} style={[styles.pillBtn, nutritionPace === pace && styles.pillBtnActive]} onPress={() => onNutritionPaceChange(pace)}>
-                      <Text style={[styles.pillBtnText, nutritionPace === pace && styles.pillBtnTextActive]}>
-                        {pace === 'fast' ? 'Fast result' : 'No deadline'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>Activity</Text>
-                <View style={styles.pillRow}>
-                  {(['low', 'moderate', 'high'] as ActivityLevel[]).map((level) => (
-                    <Pressable key={level} style={[styles.pillBtn, activityLevel === level && styles.pillBtnActive]} onPress={() => onActivityLevelChange(level)}>
-                      <Text style={[styles.pillBtnText, activityLevel === level && styles.pillBtnTextActive]}>
-                        {level === 'low' ? 'Low' : level === 'high' ? 'High' : 'Moderate'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Daily calories</Text>
-                    <Text style={styles.summaryValue}>{plan.calories}</Text>
-                    <Text style={styles.summaryMeta}>kcal target</Text>
-                  </View>
-                  <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Direction</Text>
-                    <Text style={styles.summaryMacro}>
-                      {plan.effectiveGoal === 'lose' ? 'Lose' : plan.effectiveGoal === 'gain' ? 'Gain' : 'Maintain'}
-                    </Text>
-                    <Text style={styles.summaryMeta}>
-                      {Math.round(plan.desiredWeight)} kg target
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.insightsWrap}>
-                  {insights.map((item) => (
-                    <View key={item.title} style={styles.insightCard}>
-                      <Text style={styles.insightTitle}>{item.title}</Text>
-                      <Text style={styles.insightText}>{item.text}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.emptyText}>Fill in date of birth, height, and weight in Settings to calculate your calories and macros.</Text>
-        )}
-      </SectionCard>
-
+    <>
+      {renderInlineContent ? (
+        <ScrollView contentContainerStyle={styles.content}>
       <SectionCard title="Meals Today">
         <View style={styles.weekHeader}>
           <Pressable style={styles.weekArrowBtn} onPress={() => setWeekOffset((prev) => prev - 1)}>
@@ -358,83 +613,51 @@ export function NutritionScreen({
         </View>
         <View style={styles.mealCardsWrap}>
           {mealData.map((section) => (
-            <View key={section.key} style={styles.mealCard}>
-              <View style={styles.mealHeader}>
-                <View style={styles.mealTitleWrap}>
-                  <View style={[styles.mealIconBadge, { backgroundColor: `${section.accent}18`, borderColor: `${section.accent}4D` }]}>
-                    <Text style={[styles.mealIconText, { color: section.accent }]}>{section.icon}</Text>
-                  </View>
-                  <View style={styles.mealHeaderCopy}>
-                    <Text style={styles.mealTitle}>{section.title}</Text>
-                    <Text style={styles.mealSubtitle}>{section.subtitle}</Text>
-                  </View>
+            <View key={section.key} style={styles.mealRowCard}>
+              <View style={styles.mealTitleWrap}>
+                <View style={[styles.mealIconBadge, { backgroundColor: `${section.accent}18`, borderColor: `${section.accent}4D` }]}>
+                  <Text style={[styles.mealIconText, { color: section.accent }]}>{section.icon}</Text>
                 </View>
-                <Pressable
-                  style={styles.addMealBtn}
-                  onPress={() => {
-                    setActiveMealType(section.key);
-                    setDraftMealName('');
-                    setDraftCalories('');
-                    setDraftProtein('');
-                    setDraftFat('');
-                    setDraftCarbs('');
-                    setFoodSearch('');
-                    setDraftGrams('100');
-                    setSelectedPreset(null);
-                    setCustomFoodMode(false);
-                    setCustomBrand('');
-                    setCustomServingType('100g');
-                  }}
-                >
-                  <Text style={styles.addMealBtnText}>+</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.mealStatsRow}>
-                <View style={styles.mealStatChip}>
-                  <Text style={styles.mealStatValue}>{section.totals.calories}</Text>
-                  <Text style={styles.mealStatLabel}>kcal</Text>
-                </View>
-                <View style={styles.mealStatChip}>
-                  <Text style={styles.mealStatValue}>P {section.totals.protein}</Text>
-                  <Text style={styles.mealStatLabel}>protein</Text>
-                </View>
-                <View style={styles.mealStatChip}>
-                  <Text style={styles.mealStatValue}>F {section.totals.fat}</Text>
-                  <Text style={styles.mealStatLabel}>fat</Text>
-                </View>
-                <View style={styles.mealStatChip}>
-                  <Text style={styles.mealStatValue}>C {section.totals.carbs}</Text>
-                  <Text style={styles.mealStatLabel}>carbs</Text>
+                <View style={styles.mealHeaderCopy}>
+                  <Text style={styles.mealTitle}>{section.title}</Text>
+                  <Text style={styles.mealRowMeta}>
+                    {section.entries.length
+                      ? `${section.entries.length} item${section.entries.length === 1 ? '' : 's'} • ${section.totals.calories} kcal • P ${section.totals.protein} • F ${section.totals.fat} • C ${section.totals.carbs}`
+                      : 'Tap + to add foods'}
+                  </Text>
                 </View>
               </View>
-
-              {section.entries.length ? (
-                <View style={styles.entriesWrap}>
-                  {section.entries.map((entry) => (
-                    <View key={entry.id} style={styles.entryCard}>
-                      <View style={styles.entryCopy}>
-                        <Text style={styles.entryTitle}>{entry.name}</Text>
-                        <Text style={styles.entryMeta}>
-                          {entry.calories} kcal · P {entry.protein} · F {entry.fat} · C {entry.carbs}
-                        </Text>
-                      </View>
-                      <Pressable style={styles.secondaryBtn} onPress={() => onNutritionEntriesChange((prev) => prev.filter((item) => item.id !== entry.id))}>
-                        <Text style={styles.secondaryBtnText}>Delete</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.mealEmptyState}>
-                  <Text style={styles.mealEmptyTitle}>Nothing here yet</Text>
-                  <Text style={styles.mealEmptyText}>Add your first product to start tracking this meal.</Text>
-                </View>
-              )}
+              <Pressable
+                style={styles.addMealBtn}
+                onPress={() => {
+                  setActiveMealType(section.key);
+                  setDraftMealName('');
+                  setDraftCalories('');
+                  setDraftProtein('');
+                  setDraftFat('');
+                  setDraftCarbs('');
+                  setFoodSearch('');
+                  setDraftGrams('100');
+                  setSelectedPreset(null);
+                  setAddFoodFlow('search');
+                  setCustomFoodMode(false);
+                  setPhotoEstimateMode(false);
+                  setCustomBrand('');
+                  setCustomServingType('100g');
+                  setMealPhotoError(null);
+                  setMealPhotoNote(null);
+                  setMealPhotoConfidence(null);
+                }}
+              >
+                <Text style={styles.addMealBtnText}>+</Text>
+              </Pressable>
             </View>
           ))}
         </View>
       </SectionCard>
+
+        </ScrollView>
+      ) : null}
 
       <Modal visible={!!activeMealType} transparent animationType="fade" onRequestClose={() => setActiveMealType(null)}>
         <View style={styles.modalScrim}>
@@ -446,44 +669,111 @@ export function NutritionScreen({
                 {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
               </Text>
               <View style={styles.modalSection}>
-                <TextInput
-                  placeholder="Search foods"
-                  style={styles.input}
-                  value={foodSearch}
-                  onChangeText={(text) => {
-                    setFoodSearch(text);
-                    if (!customFoodMode) {
-                      setSelectedPreset(null);
-                      setDraftMealName(text);
-                    }
-                  }}
-                />
+                {!customFoodMode ? (
+                  <View style={styles.searchRow}>
+                    <View style={styles.searchInputWrap}>
+                      <TextInput
+                        placeholder="Search foods"
+                        style={[styles.input, styles.searchInput]}
+                        value={foodSearch}
+                        onChangeText={(text) => {
+                          setFoodSearch(text);
+                          if (!customFoodMode || addFoodFlow === 'search') {
+                            setSelectedPreset(null);
+                            setDraftMealName(text);
+                          }
+                        }}
+                      />
+                    </View>
+                    <View style={styles.searchToolsRow}>
+                      <Pressable style={styles.toolIconBtn} onPress={openBarcodeScanner}>
+                        <Text style={styles.toolIconGlyph}>▦</Text>
+                        <Text style={styles.toolIconLabel}>Scan</Text>
+                      </Pressable>
+                      <Pressable style={styles.toolIconBtn} onPress={captureMealPhoto}>
+                        <Text style={styles.toolIconGlyph}>◉</Text>
+                        <Text style={styles.toolIconLabel}>Photo</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+                {barcodeLookupError ? <Text style={styles.catalogError}>{barcodeLookupError}</Text> : null}
+                {mealPhotoError ? <Text style={styles.catalogError}>{mealPhotoError}</Text> : null}
+                {photoEstimateMode ? (
+                  <View style={styles.photoPreviewCard}>
+                    <View style={styles.photoPreviewHeader}>
+                      <View style={styles.photoPreviewCopy}>
+                        <Text style={styles.photoPreviewTitle}>{draftMealName || 'Meal estimate'}</Text>
+                        <Text style={styles.photoPreviewSubtitle}>Estimated portion: {draftGrams || '0'} g</Text>
+                      </View>
+                      {mealPhotoConfidence ? (
+                        <View
+                          style={[
+                            styles.confidenceBadge,
+                            mealPhotoConfidence === 'high'
+                              ? styles.confidenceBadgeHigh
+                              : mealPhotoConfidence === 'medium'
+                                ? styles.confidenceBadgeMedium
+                                : styles.confidenceBadgeLow,
+                          ]}
+                        >
+                          <Text style={styles.confidenceBadgeText}>{mealPhotoConfidence} confidence</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.photoPreviewStats}>
+                      <Text style={styles.productInfoStat}>{draftCalories || '0'} kcal / 100 g</Text>
+                      <Text style={styles.productInfoStat}>P {draftProtein || '0'}</Text>
+                      <Text style={styles.productInfoStat}>F {draftFat || '0'}</Text>
+                      <Text style={styles.productInfoStat}>C {draftCarbs || '0'}</Text>
+                    </View>
+                    {mealPhotoNote ? <Text style={styles.photoPreviewNote}>{mealPhotoNote}</Text> : null}
+                    <Text style={styles.photoPreviewHint}>You can edit the grams and nutrition below before saving.</Text>
+                  </View>
+                ) : null}
                 {!customFoodMode ? (
                   <>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScrollContent}>
-                      {filteredFoodPresets.map((item) => (
-                        <Pressable
-                          key={item.id}
-                          style={[styles.presetCard, selectedPreset?.id === item.id && styles.presetCardActive]}
-                          onPress={() => {
-                            const next = getNutritionValuesForGrams(item, draftGrams);
-                            setSelectedPreset(item);
-                            setDraftMealName(item.name);
-                            setDraftCalories(next.calories);
-                            setDraftProtein(next.protein);
-                            setDraftFat(next.fat);
-                            setDraftCarbs(next.carbs);
-                            setFoodSearch(item.name);
-                          }}
-                        >
-                          <Text style={styles.presetTitle}>{item.name}</Text>
-                          <Text style={styles.presetServing}>{item.baseAmount}</Text>
-                          <Text style={styles.presetMacros}>
-                            {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
+                    {foodSearch.trim().length >= 1 && filteredFoodPresets.length ? (
+                      <View style={styles.quickSection}>
+                        <View style={styles.quickSectionHeader}>
+                          <Text style={styles.quickSectionTitle}>
+                            {activeMealType
+                              ? `Usually for ${mealSections.find((item) => item.key === activeMealType)?.title?.toLowerCase() || 'this meal'}`
+                              : 'Quick suggestions'}
                           </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
+                          <Text style={styles.quickSectionMeta}>{filteredFoodPresets.length}</Text>
+                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScrollContent}>
+                          {filteredFoodPresets.map((item) => (
+                            <Pressable
+                              key={item.id}
+                              style={[styles.presetCard, selectedPreset?.id === item.id && styles.presetCardActive]}
+                              onPress={() => applyPresetSelection(item)}
+                            >
+                              <Pressable
+                                style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
+                                onPress={(event) => {
+                                  event.stopPropagation?.();
+                                  toggleFavoritePreset(item);
+                                }}
+                              >
+                                <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
+                              </Pressable>
+                              <Text style={styles.presetTitle}>{item.name}</Text>
+                              <Text style={styles.presetServing}>{item.baseAmount}</Text>
+                              <Text style={styles.presetMacros}>
+                                {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    ) : null}
+                    {addFoodFlow === 'search' && !foodSearch.trim() ? (
+                      <Text style={styles.searchEmptyHint}>
+                        Start typing to see quick suggestions and foods you usually add for this meal.
+                      </Text>
+                    ) : null}
                     {foodSearch.trim() && !hasExactFoodMatch ? (
                       <Pressable
                         style={styles.customFoodBtn}
@@ -504,19 +794,77 @@ export function NutritionScreen({
                         <Text style={styles.customFoodBtnText}>Use this when the product is not in the list.</Text>
                       </Pressable>
                     ) : null}
+                    {foodSearch.trim().length >= 2 ? (
+                      <View style={styles.catalogSection}>
+                        <View style={styles.catalogHeader}>
+                          <View style={styles.catalogHeaderCopy}>
+                            <Text style={styles.catalogTitle}>Nutrition database</Text>
+                          </View>
+                          <Text style={styles.catalogMeta}>
+                            {catalogSearchLoading
+                              ? 'Searching...'
+                              : visibleCatalogResults.length
+                                ? `${visibleCatalogResults.length} found`
+                                : 'No matches yet'}
+                          </Text>
+                        </View>
+                        {catalogSearchError ? <Text style={styles.catalogError}>{catalogSearchError}</Text> : null}
+                        {!catalogSearchLoading && !visibleCatalogResults.length && !catalogSearchError ? (
+                          <Text style={styles.catalogEmpty}>Try a more specific product name or save it manually as a custom food.</Text>
+                        ) : null}
+                        {visibleCatalogResults.map((item) => (
+                          <Pressable
+                            key={item.id}
+                            style={[styles.catalogResultCard, selectedPreset?.id === item.id && styles.presetCardActive]}
+                            onPress={() => applyPresetSelection(item)}
+                          >
+                            <Pressable
+                              style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
+                              onPress={(event) => {
+                                event.stopPropagation?.();
+                                toggleFavoritePreset(item);
+                              }}
+                            >
+                              <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
+                            </Pressable>
+                            <View style={styles.catalogResultTopRow}>
+                              <View style={styles.catalogResultCopy}>
+                                <Text style={styles.catalogResultTitle}>{item.name}</Text>
+                                <Text style={styles.catalogResultSubtitle}>
+                                  {item.brand?.trim()
+                                    ? `${item.brand.trim()} · ${item.baseAmount}`
+                                    : item.baseAmount}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.catalogResultMacros}>
+                              {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
                   </>
                 ) : (
                   <View style={styles.customFoodCard}>
                     <View style={styles.customFoodHeader}>
                       <View>
-                        <Text style={styles.customFoodTitle}>Custom food</Text>
-                        <Text style={styles.customFoodText}>Enter values from the package or label.</Text>
+                        <Text style={styles.customFoodTitle}>{photoEstimateMode ? 'Photo estimate' : 'Custom food'}</Text>
+                        <Text style={styles.customFoodText}>
+                          {photoEstimateMode
+                            ? 'We estimated this meal from the photo. Adjust the portion or nutrition if needed before saving.'
+                            : `Enter nutrition from the package per ${customServingType === 'serving' ? '1 serving' : customServingType === '100ml' ? '100 ml' : '100 g'}, then choose how much was eaten.`}
+                        </Text>
+                        {mealPhotoNote ? <Text style={styles.customFoodText}>{mealPhotoNote}</Text> : null}
                       </View>
                       <Pressable
                         style={styles.customFoodCloseBtn}
                         onPress={() => {
                           setCustomFoodMode(false);
+                          setPhotoEstimateMode(false);
                           setCustomBrand('');
+                          setMealPhotoError(null);
+                          setMealPhotoNote(null);
                         }}
                       >
                         <Text style={styles.customFoodCloseText}>Back</Text>
@@ -545,7 +893,7 @@ export function NutritionScreen({
               {selectedPreset ? (
                 <View style={styles.productInfoCard}>
                   <Text style={styles.productInfoTitle}>{selectedPreset.name}</Text>
-                  <Text style={styles.productInfoSubtitle}>Per 100 g</Text>
+                  <Text style={styles.productInfoSubtitle}>{selectedPreset.baseAmount}</Text>
                   <View style={styles.productInfoStats}>
                     <Text style={styles.productInfoStat}>{selectedPreset.caloriesPer100g} kcal</Text>
                     <Text style={styles.productInfoStat}>P {selectedPreset.proteinPer100g}</Text>
@@ -556,74 +904,107 @@ export function NutritionScreen({
               ) : null}
 
               <View style={styles.modalSection}>
-                {!selectedPreset || customFoodMode ? (
-                  <TextInput placeholder="Product or meal" style={styles.input} value={draftMealName} onChangeText={setDraftMealName} />
-                ) : null}
-                {!customFoodMode || customServingType !== 'serving' ? (
-                  <View style={styles.gramsRow}>
-                    <View style={styles.gramsInputWrap}>
-                      <Text style={styles.fieldLabel}>{customServingType === '100ml' ? 'Volume' : 'Amount'}</Text>
-                      <TextInput
-                        placeholder={customServingType === '100ml' ? 'ml' : 'Grams'}
-                        keyboardType="decimal-pad"
-                        style={styles.input}
-                        value={draftGrams}
-                        onChangeText={(text) => {
-                          const grams = cleanNutritionNumber(text);
-                          setDraftGrams(grams);
-                          if (selectedPreset) {
-                            const next = getNutritionValuesForGrams(selectedPreset, grams);
-                            setDraftCalories(next.calories);
-                            setDraftProtein(next.protein);
-                            setDraftFat(next.fat);
-                            setDraftCarbs(next.carbs);
-                          }
-                        }}
-                      />
-                    </View>
-                    <View style={styles.gramsUnitChip}>
-                      <Text style={styles.gramsUnitChipText}>{customServingType === '100ml' ? 'ml' : 'g'}</Text>
-                    </View>
-                  </View>
-                ) : null}
-                {customFoodMode ? (
+                {showNutritionEditor ? (
                   <>
+                    {!(customFoodMode ? customServingType === 'serving' : selectedPresetBaseMode === 'serving') ? (
+                      <View style={styles.gramsRow}>
+                        <View style={styles.gramsInputWrap}>
+                          <Text style={styles.fieldLabel}>{(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'Volume' : 'Amount'}</Text>
+                          <TextInput
+                            placeholder={(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'ml' : 'Grams'}
+                            keyboardType="decimal-pad"
+                            style={styles.input}
+                            value={draftGrams}
+                            onChangeText={(text) => {
+                              const grams = cleanNutritionNumber(text);
+                              setDraftGrams(grams);
+                              if (selectedPreset) {
+                                const next = getNutritionValuesForGrams(selectedPreset, grams);
+                                setDraftCalories(next.calories);
+                                setDraftProtein(next.protein);
+                                setDraftFat(next.fat);
+                                setDraftCarbs(next.carbs);
+                              }
+                            }}
+                          />
+                        </View>
+                        <View style={styles.gramsUnitChip}>
+                          <Text style={styles.gramsUnitChipText}>{(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'ml' : 'g'}</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                    {customFoodMode ? (
+                      <>
                     <View style={styles.row}>
                       <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>
+                          Calories {customServingType === 'serving' ? 'per serving' : customServingType === '100ml' ? 'per 100 ml' : 'per 100 g'}
+                        </Text>
                         <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftCalories} onChangeText={(text) => setDraftCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
                       </View>
                       <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>
+                          Protein {customServingType === 'serving' ? 'per serving' : customServingType === '100ml' ? 'per 100 ml' : 'per 100 g'}
+                        </Text>
                         <TextInput placeholder="Protein" keyboardType="decimal-pad" style={styles.input} value={draftProtein} onChangeText={(text) => setDraftProtein(cleanNutritionNumber(text))} />
                       </View>
                     </View>
                     <View style={styles.row}>
                       <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>
+                          Fat {customServingType === 'serving' ? 'per serving' : customServingType === '100ml' ? 'per 100 ml' : 'per 100 g'}
+                        </Text>
                         <TextInput placeholder="Fat" keyboardType="decimal-pad" style={styles.input} value={draftFat} onChangeText={(text) => setDraftFat(cleanNutritionNumber(text))} />
                       </View>
                       <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>
+                          Carbs {customServingType === 'serving' ? 'per serving' : customServingType === '100ml' ? 'per 100 ml' : 'per 100 g'}
+                        </Text>
                         <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftCarbs} onChangeText={(text) => setDraftCarbs(cleanNutritionNumber(text))} />
                       </View>
                     </View>
+                    {customFoodPreviewValues ? (
+                      <View style={styles.macroPreviewGrid}>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.calories || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>kcal for this amount</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.protein || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Protein</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.fat || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Fat</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.carbs || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Carbs</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                      </>
+                    ) : selectedPresetValues ? (
+                      <View style={styles.macroPreviewGrid}>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.calories || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>kcal</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.protein || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Protein</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.fat || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Fat</Text>
+                        </View>
+                        <View style={styles.macroPreviewCard}>
+                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.carbs || '0'}</Text>
+                          <Text style={styles.macroPreviewLabel}>Carbs</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </>
-                ) : selectedPresetValues ? (
-                  <View style={styles.macroPreviewGrid}>
-                    <View style={styles.macroPreviewCard}>
-                      <Text style={styles.macroPreviewValue}>{selectedPresetValues.calories || '0'}</Text>
-                      <Text style={styles.macroPreviewLabel}>kcal</Text>
-                    </View>
-                    <View style={styles.macroPreviewCard}>
-                      <Text style={styles.macroPreviewValue}>{selectedPresetValues.protein || '0'}</Text>
-                      <Text style={styles.macroPreviewLabel}>Protein</Text>
-                    </View>
-                    <View style={styles.macroPreviewCard}>
-                      <Text style={styles.macroPreviewValue}>{selectedPresetValues.fat || '0'}</Text>
-                      <Text style={styles.macroPreviewLabel}>Fat</Text>
-                    </View>
-                    <View style={styles.macroPreviewCard}>
-                      <Text style={styles.macroPreviewValue}>{selectedPresetValues.carbs || '0'}</Text>
-                      <Text style={styles.macroPreviewLabel}>Carbs</Text>
-                    </View>
-                  </View>
                 ) : null}
               </View>
             <View style={styles.modalActions}>
@@ -634,9 +1015,43 @@ export function NutritionScreen({
                 style={styles.primaryBtn}
                 onPress={() => {
                   if (!draftMealName.trim() || !activeMealType) return;
+                  let nextEntryCalories = draftCalories || '0';
+                  let nextEntryProtein = draftProtein || '0';
+                  let nextEntryFat = draftFat || '0';
+                  let nextEntryCarbs = draftCarbs || '0';
+                  if (selectedPreset && selectedPreset.source && selectedPreset.source !== 'custom') {
+                    savePresetToLibrary(selectedPreset);
+                  }
+                  if (customFoodMode) {
+                    const normalizedBaseQuantity = customServingType === 'serving' ? 1 : 100;
+                    if (!photoEstimateMode) {
+                      const nextCustomFood: CustomNutritionFood = {
+                        id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
+                        name: draftMealName.trim(),
+                        brand: customBrand.trim() || undefined,
+                        baseMode: customServingType,
+                        baseQuantity: normalizedBaseQuantity,
+                        calories: Number(draftCalories) || 0,
+                        protein: Number(draftProtein.replace(',', '.')) || 0,
+                        fat: Number(draftFat.replace(',', '.')) || 0,
+                        carbs: Number(draftCarbs.replace(',', '.')) || 0,
+                      };
+                      onCustomFoodPresetsChange((prev) => {
+                        const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
+                        return [nextCustomFood, ...filtered];
+                      });
+                    }
+                    if (customFoodPreviewPreset && customFoodPreviewValues) {
+                      nextEntryCalories = customFoodPreviewValues.calories || '0';
+                      nextEntryProtein = customFoodPreviewValues.protein || '0';
+                      nextEntryFat = customFoodPreviewValues.fat || '0';
+                      nextEntryCarbs = customFoodPreviewValues.carbs || '0';
+                    }
+                  }
+                  if (selectedPreset) registerRecentPreset(selectedPreset.id);
                   onNutritionEntriesChange((prev) => [
                     {
-                      id: `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                      id: createUuid(),
                       name: formatNutritionEntryName({
                         name: draftMealName.trim(),
                         grams: draftGrams,
@@ -646,10 +1061,10 @@ export function NutritionScreen({
                       }),
                       mealType: activeMealType,
                       date: selectedDateKey,
-                      calories: draftCalories || '0',
-                      protein: draftProtein || '0',
-                      fat: draftFat || '0',
-                      carbs: draftCarbs || '0',
+                      calories: nextEntryCalories,
+                      protein: nextEntryProtein,
+                      fat: nextEntryFat,
+                      carbs: nextEntryCarbs,
                     },
                     ...prev,
                   ]);
@@ -662,8 +1077,13 @@ export function NutritionScreen({
                   setDraftGrams('100');
                   setSelectedPreset(null);
                   setCustomFoodMode(false);
+                  setPhotoEstimateMode(false);
                   setCustomBrand('');
                   setCustomServingType('100g');
+                  setCatalogResults([]);
+                  setCatalogSearchError(null);
+                  setMealPhotoError(null);
+                  setMealPhotoNote(null);
                   setActiveMealType(null);
                 }}
               >
@@ -674,7 +1094,35 @@ export function NutritionScreen({
           </View>
         </View>
       </Modal>
-    </ScrollView>
+
+      <Modal visible={barcodeCameraOpen} transparent animationType="fade" onRequestClose={() => setBarcodeCameraOpen(false)}>
+        <View style={styles.modalScrim}>
+          <View style={styles.barcodeModalCard}>
+            <Text style={styles.modalEyebrow}>Barcode scan</Text>
+            <Text style={styles.modalTitle}>Scan product package</Text>
+            <Text style={styles.barcodeHint}>Point the camera at the barcode and we will try to fill calories and macros automatically.</Text>
+            <View style={styles.barcodePreviewWrap}>
+              <CameraView
+                style={styles.barcodePreview}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+                onBarcodeScanned={barcodeLookupBusy ? undefined : ({ data }) => void handleBarcodeScanned(data)}
+              />
+              <View pointerEvents="none" style={styles.barcodeFrame} />
+            </View>
+            {barcodeLookupError ? <Text style={styles.catalogError}>{barcodeLookupError}</Text> : null}
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalGhostBtn} onPress={() => setBarcodeCameraOpen(false)}>
+                <Text style={styles.modalGhostBtnText}>Cancel</Text>
+              </Pressable>
+              <View style={styles.barcodeStatusPill}>
+                <Text style={styles.barcodeStatusText}>{barcodeLookupBusy ? 'Looking up...' : 'Ready to scan'}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -730,7 +1178,7 @@ function formatNutritionEntryName({
   return `${title}${grams ? ` • ${grams} g` : ' • 100 g'}`;
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = (colors: ThemeColors, isMobile = false) =>
   StyleSheet.create({
     content: {
       gap: 14,
@@ -1017,7 +1465,7 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: '#ffffff',
       color: colors.text,
       marginBottom: 12,
-      fontSize: 14,
+      fontSize: isMobile ? 16 : 14,
       fontWeight: '600',
     },
     inlineInput: {
@@ -1033,7 +1481,7 @@ const createStyles = (colors: ThemeColors) =>
       minWidth: 84,
     },
     row: {
-      flexDirection: 'row',
+      flexDirection: isMobile ? 'column' : 'row',
       gap: 12,
     },
     half: {
@@ -1170,21 +1618,19 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
     },
     mealCardsWrap: {
-      gap: 12,
+      gap: 10,
     },
-    mealCard: {
-      borderRadius: 22,
+    mealRowCard: {
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.glassStrong,
-      padding: 14,
-      gap: 12,
-    },
-    mealHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
     },
     mealTitleWrap: {
       flex: 1,
@@ -1219,6 +1665,12 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 12,
       lineHeight: 17,
     },
+    mealRowMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
     addMealBtn: {
       width: 40,
       height: 40,
@@ -1235,99 +1687,14 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: 26,
       fontWeight: '800',
     },
-    mealStatsRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    mealStatChip: {
-      minWidth: 72,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassSoft,
-      paddingHorizontal: 10,
-      paddingVertical: 9,
-      gap: 2,
-    },
-    mealStatValue: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: '800',
-    },
-    mealStatLabel: {
-      color: colors.subtext,
-      fontSize: 10,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-    },
-    entriesWrap: {
-      gap: 10,
-    },
-    entryCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 12,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      padding: 12,
-    },
-    entryCopy: {
-      flex: 1,
-      gap: 4,
-    },
-    entryTitle: {
-      color: colors.text,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    entryMeta: {
-      color: colors.subtext,
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    secondaryBtn: {
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    secondaryBtnText: {
-      color: colors.text,
-      fontWeight: '700',
-    },
-    mealEmptyState: {
-      borderRadius: 16,
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderColor: colors.border,
-      padding: 14,
-      gap: 4,
-      backgroundColor: colors.glassSoft,
-    },
-    mealEmptyTitle: {
-      color: colors.text,
-      fontWeight: '800',
-      fontSize: 14,
-    },
-    mealEmptyText: {
-      color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 18,
-    },
     modalScrim: {
       flex: 1,
       backgroundColor: 'rgba(15, 23, 42, 0.72)',
       justifyContent: 'center',
-      padding: 20,
+      padding: isMobile ? 12 : 20,
     },
     modalCard: {
-      maxHeight: '88%',
+      maxHeight: isMobile ? '94%' : '88%',
       borderRadius: 24,
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.96)',
@@ -1340,8 +1707,8 @@ const createStyles = (colors: ThemeColors) =>
       overflow: 'hidden',
     },
     modalContent: {
-      padding: 18,
-      paddingBottom: 20,
+      padding: isMobile ? 14 : 18,
+      paddingBottom: isMobile ? 16 : 20,
     },
     modalSection: {
       gap: 10,
@@ -1356,9 +1723,238 @@ const createStyles = (colors: ThemeColors) =>
     },
     modalTitle: {
       color: colors.text,
-      fontSize: 24,
+      fontSize: isMobile ? 21 : 24,
       fontWeight: '800',
       marginBottom: 14,
+    },
+    searchRow: {
+      flexDirection: 'row',
+      gap: 10,
+      alignItems: 'stretch',
+      marginBottom: 12,
+    },
+    searchInputWrap: {
+      flex: 1,
+    },
+    searchInput: {
+      marginBottom: 0,
+    },
+    searchToolsRow: {
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: 8,
+      alignItems: 'stretch',
+    },
+    toolIconBtn: {
+      minWidth: isMobile ? 64 : 82,
+      height: 56,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 10,
+      gap: 1,
+    },
+    toolIconGlyph: {
+      color: colors.primary,
+      fontSize: 17,
+      fontWeight: '800',
+      lineHeight: 18,
+    },
+    toolIconLabel: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    flowTabsRow: {
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: 10,
+      marginBottom: 4,
+    },
+    flowTab: {
+      flex: 1,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      gap: 4,
+    },
+    flowTabActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.14,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+    },
+    flowTabTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    flowTabTitleActive: {
+      color: colors.primary,
+    },
+    flowTabHint: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: '600',
+    },
+    flowTabHintActive: {
+      color: colors.primary,
+    },
+    scanBtn: {
+      minWidth: 84,
+      height: 50,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    scanBtnText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    flowActionCard: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      padding: 14,
+      gap: 12,
+      marginBottom: 12,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    },
+    flowActionCopy: {
+      gap: 4,
+    },
+    flowActionTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    flowActionText: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    flowActionBtn: {
+      alignSelf: isMobile ? 'stretch' : 'flex-start',
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      alignItems: 'center',
+    },
+    flowActionBtnText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    photoPreviewCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: '#d9e4f2',
+      backgroundColor: '#f8fbff',
+      padding: 12,
+      gap: 10,
+    },
+    photoPreviewHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    photoPreviewCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    photoPreviewTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    photoPreviewSubtitle: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    photoPreviewStats: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    photoPreviewNote: {
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '600',
+    },
+    photoPreviewHint: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 16,
+    },
+    confidenceBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    confidenceBadgeHigh: {
+      backgroundColor: '#dcfce7',
+    },
+    confidenceBadgeMedium: {
+      backgroundColor: '#fef3c7',
+    },
+    confidenceBadgeLow: {
+      backgroundColor: '#fee2e2',
+    },
+    confidenceBadgeText: {
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    quickSection: {
+      gap: 10,
+      marginBottom: 12,
+    },
+    quickSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    quickSectionTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    quickSectionMeta: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    searchEmptyHint: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      marginBottom: 10,
     },
     presetScrollContent: {
       gap: 10,
@@ -1366,7 +1962,8 @@ const createStyles = (colors: ThemeColors) =>
       paddingRight: 6,
     },
     presetCard: {
-      width: 190,
+      position: 'relative',
+      width: isMobile ? 166 : 190,
       borderRadius: 18,
       borderWidth: 1,
       borderColor: '#d9e4f2',
@@ -1378,6 +1975,32 @@ const createStyles = (colors: ThemeColors) =>
       shadowRadius: 10,
       shadowOffset: { width: 0, height: 5 },
       elevation: 4,
+    },
+    favoritePill: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      zIndex: 2,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    favoritePillActive: {
+      borderColor: '#f59e0b',
+      backgroundColor: '#fff7ed',
+    },
+    favoritePillText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '900',
+    },
+    favoritePillTextActive: {
+      color: '#d97706',
     },
     presetCardActive: {
       borderColor: colors.primary,
@@ -1397,6 +2020,80 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
       fontSize: 11,
       lineHeight: 16,
+    },
+    catalogSection: {
+      gap: 10,
+      marginBottom: 12,
+    },
+    catalogHeader: {
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: 12,
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+    catalogHeaderCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    catalogTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    catalogMeta: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    catalogError: {
+      color: '#b91c1c',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    catalogEmpty: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    catalogResultCard: {
+      position: 'relative',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: '#d9e4f2',
+      backgroundColor: '#ffffff',
+      padding: 12,
+      gap: 6,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    },
+    catalogResultTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    catalogResultCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    catalogResultTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    catalogResultSubtitle: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: '600',
+    },
+    catalogResultMacros: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
     },
     customFoodBtn: {
       borderRadius: 18,
@@ -1431,7 +2128,7 @@ const createStyles = (colors: ThemeColors) =>
       elevation: 6,
     },
     customFoodHeader: {
-      flexDirection: 'row',
+      flexDirection: isMobile ? 'column' : 'row',
       justifyContent: 'space-between',
       gap: 12,
       alignItems: 'flex-start',
@@ -1498,15 +2195,16 @@ const createStyles = (colors: ThemeColors) =>
       overflow: 'hidden',
     },
     gramsRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'stretch' : 'flex-end',
       gap: 10,
     },
     gramsInputWrap: {
       flex: 1,
     },
     gramsUnitChip: {
-      minWidth: 58,
+      minWidth: isMobile ? undefined : 58,
+      width: isMobile ? '100%' : undefined,
       height: 50,
       marginBottom: 12,
       borderRadius: 14,
@@ -1528,7 +2226,7 @@ const createStyles = (colors: ThemeColors) =>
       gap: 10,
     },
     macroPreviewCard: {
-      width: '47%',
+      width: isMobile ? '48%' : '47%',
       minHeight: 76,
       borderRadius: 16,
       borderWidth: 1,
@@ -1550,12 +2248,13 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '700',
     },
     modalActions: {
-      flexDirection: 'row',
+      flexDirection: isMobile ? 'column-reverse' : 'row',
       justifyContent: 'flex-end',
       gap: 10,
       marginTop: 8,
     },
     modalGhostBtn: {
+      alignItems: 'center',
       borderRadius: 14,
       paddingHorizontal: 18,
       paddingVertical: 13,
@@ -1565,6 +2264,64 @@ const createStyles = (colors: ThemeColors) =>
     },
     modalGhostBtnText: {
       color: colors.text,
+      fontWeight: '700',
+    },
+    barcodeModalCard: {
+      maxHeight: isMobile ? '92%' : '88%',
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.96)',
+      backgroundColor: 'rgba(248,250,252,0.97)',
+      shadowColor: '#0f172a',
+      shadowOpacity: 0.34,
+      shadowRadius: 30,
+      shadowOffset: { width: 0, height: 16 },
+      elevation: 20,
+      overflow: 'hidden',
+      padding: isMobile ? 14 : 18,
+      gap: 12,
+    },
+    barcodeHint: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: -8,
+    },
+    barcodePreviewWrap: {
+      borderRadius: 22,
+      overflow: 'hidden',
+      height: isMobile ? 240 : 320,
+      position: 'relative',
+      backgroundColor: '#0f172a',
+    },
+    barcodePreview: {
+      flex: 1,
+    },
+    barcodeFrame: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: isMobile ? 180 : 220,
+      height: isMobile ? 90 : 110,
+      marginLeft: isMobile ? -90 : -110,
+      marginTop: isMobile ? -45 : -55,
+      borderRadius: 18,
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.92)',
+      backgroundColor: 'transparent',
+    },
+    barcodeStatusPill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      justifyContent: 'center',
+    },
+    barcodeStatusText: {
+      color: colors.text,
+      fontSize: 12,
       fontWeight: '700',
     },
   });

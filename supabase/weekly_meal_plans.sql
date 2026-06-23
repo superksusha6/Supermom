@@ -4,11 +4,17 @@
 create table if not exists public.weekly_meal_plans (
   family_id uuid primary key references public.families(id) on delete cascade,
   entries_json jsonb not null default '[]'::jsonb,
+  profiles_json jsonb not null default '[]'::jsonb,
   updated_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now()
 );
 
+alter table public.weekly_meal_plans add column if not exists profiles_json jsonb not null default '[]'::jsonb;
+
 alter table public.weekly_meal_plans enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.weekly_meal_plans to authenticated;
 
 drop policy if exists "weekly_meal_plans_select_members" on public.weekly_meal_plans;
 create policy "weekly_meal_plans_select_members" on public.weekly_meal_plans

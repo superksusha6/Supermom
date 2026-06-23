@@ -1,5 +1,5 @@
 import { PropsWithChildren, ReactNode, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = PropsWithChildren<{ title: string }>;
@@ -8,7 +8,9 @@ type CardProps = PropsWithChildren<{ title: string; borderless?: boolean; header
 
 export function SectionCard({ title, children, borderless = false, headerRight }: CardProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const isMobile = width < 760;
+  const styles = useMemo(() => createStyles(colors, isMobile), [colors, isMobile]);
 
   return (
     <View style={[styles.card, borderless && styles.cardBorderless]}>
@@ -21,20 +23,20 @@ export function SectionCard({ title, children, borderless = false, headerRight }
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = (colors: ThemeColors, isMobile: boolean) =>
   StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: isMobile ? 15 : 18,
+    padding: isMobile ? 11 : 14,
+    marginBottom: isMobile ? 10 : 12,
     shadowColor: colors.shadow,
     shadowOpacity: 1,
-    shadowRadius: 18,
+    shadowRadius: isMobile ? 12 : 18,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    elevation: isMobile ? 7 : 10,
   },
   cardBorderless: {
     borderWidth: 0,
@@ -43,11 +45,11 @@ const createStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 12,
+    marginBottom: isMobile ? 8 : 10,
+    gap: isMobile ? 8 : 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: isMobile ? 15 : 16,
     fontWeight: '700',
     color: colors.text,
   },

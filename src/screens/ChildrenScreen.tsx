@@ -8,12 +8,16 @@ type Props = {
   children: ChildProfile[];
   onAddActivity: (childId: string, activityName: string, timesPerWeek: number) => void;
   onDeleteChild: (childId: string) => void;
+  onEditChild: (childId: string) => void;
+  onAddChild: () => void;
+  quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
 
-export function ChildrenScreen({ children, onAddActivity, onDeleteChild }: Props) {
+export function ChildrenScreen({ children, onAddActivity, onDeleteChild, onEditChild, onAddChild, quickActionRequest }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedChild, setSelectedChild] = useState(children[0]?.id ?? '');
+  const [addActivityOpen, setAddActivityOpen] = useState(false);
   const [activityName, setActivityName] = useState('');
   const [timesPerWeek, setTimesPerWeek] = useState('1');
 
@@ -24,9 +28,27 @@ export function ChildrenScreen({ children, onAddActivity, onDeleteChild }: Props
     setSelectedChild(children[0]?.id ?? '');
   }, [children, selectedChild]);
 
+  useEffect(() => {
+    setAddActivityOpen(false);
+    setActivityName('');
+    setTimesPerWeek('1');
+  }, [selectedChild]);
+
+  useEffect(() => {
+    if (!quickActionRequest || quickActionRequest.type !== 'add-activity') return;
+    if (!children.length) return;
+    setSelectedChild((prev) => (prev && children.some((item) => item.id === prev) ? prev : children[0]?.id ?? ''));
+    setAddActivityOpen(true);
+  }, [quickActionRequest, children]);
+
   return (
     <>
       <SectionCard title="Children Profiles">
+        <View style={styles.profileHeaderRow}>
+          <Pressable style={styles.secondaryBtn} onPress={onAddChild}>
+            <Text style={styles.secondaryBtnText}>+ Add child</Text>
+          </Pressable>
+        </View>
         <View style={styles.row}>
           {children.map((item) => (
             <Pressable key={item.id} onPress={() => setSelectedChild(item.id)} style={[styles.chip, item.id === selectedChild && styles.chipActive]}>
@@ -36,37 +58,52 @@ export function ChildrenScreen({ children, onAddActivity, onDeleteChild }: Props
         </View>
         {child ? (
           <View style={styles.childMetaRow}>
-            <Text style={styles.meta}>Age: {child.age}</Text>
-            <Pressable style={styles.deleteBtn} onPress={() => onDeleteChild(child.id)}>
-              <Text style={styles.deleteBtnText}>Delete child</Text>
-            </Pressable>
+            <View style={styles.childMetaCopy}>
+              <Text style={styles.title}>{child.name}</Text>
+              <Text style={styles.meta}>Age: {child.age}</Text>
+            </View>
+            <View style={styles.childMetaActions}>
+              <Pressable style={styles.secondaryBtn} onPress={() => onEditChild(child.id)}>
+                <Text style={styles.secondaryBtnText}>Edit child</Text>
+              </Pressable>
+              <Pressable style={styles.deleteBtn} onPress={() => onDeleteChild(child.id)}>
+                <Text style={styles.deleteBtnText}>Delete child</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
       </SectionCard>
 
       <SectionCard title="Activities / Sports / Clubs">
+        <View style={styles.profileHeaderRow}>
+          <Pressable style={styles.secondaryBtn} onPress={() => setAddActivityOpen((prev) => !prev)}>
+            <Text style={styles.secondaryBtnText}>{addActivityOpen ? 'Close' : '+ Add activity'}</Text>
+          </Pressable>
+        </View>
         {child?.activities.map((activity) => (
           <View key={activity.id} style={styles.item}>
             <Text style={styles.title}>{activity.name}</Text>
             <Text style={styles.meta}>{activity.timesPerWeek} times per week</Text>
           </View>
         ))}
-      </SectionCard>
-
-      <SectionCard title="Add Activity">
-        <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" style={styles.input} />
-        <TextInput value={timesPerWeek} onChangeText={setTimesPerWeek} placeholder="Times per week" keyboardType="number-pad" style={styles.input} />
-        <Pressable
-          style={styles.button}
-          onPress={() => {
-            if (!child || !activityName.trim()) return;
-            onAddActivity(child.id, activityName.trim(), Number(timesPerWeek) || 1);
-            setActivityName('');
-            setTimesPerWeek('1');
-          }}
-        >
-          <Text style={styles.buttonText}>Add Activity</Text>
-        </Pressable>
+        {addActivityOpen ? (
+          <View style={styles.addActivityForm}>
+            <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" style={styles.input} />
+            <TextInput value={timesPerWeek} onChangeText={setTimesPerWeek} placeholder="Times per week" keyboardType="number-pad" style={styles.input} />
+            <Pressable
+              style={styles.button}
+              onPress={() => {
+                if (!child || !activityName.trim()) return;
+                onAddActivity(child.id, activityName.trim(), Number(timesPerWeek) || 1);
+                setActivityName('');
+                setTimesPerWeek('1');
+                setAddActivityOpen(false);
+              }}
+            >
+              <Text style={styles.buttonText}>Add Activity</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </SectionCard>
     </>
   );
@@ -79,6 +116,14 @@ const createStyles = (colors: ThemeColors) =>
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 6,
+  },
+  profileHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  addActivityForm: {
+    marginTop: 8,
   },
   chip: {
     borderWidth: 1,
@@ -114,9 +159,31 @@ const createStyles = (colors: ThemeColors) =>
   childMetaRow: {
     marginTop: 4,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  childMetaCopy: {
+    gap: 4,
+    flex: 1,
+  },
+  childMetaActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  secondaryBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  secondaryBtnText: {
+    color: colors.text,
+    fontWeight: '700',
   },
   deleteBtn: {
     borderRadius: 12,

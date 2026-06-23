@@ -1,5 +1,5 @@
 import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native';
 import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, Role, TaskItem } from '@/types/app';
 import { SectionCard } from '@/components/SectionCard';
@@ -7,6 +7,7 @@ import { cleanNutritionNumber, getNutritionPlan, getNutritionTotals, getNutritio
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
+  isActive?: boolean;
   parentLabel: 'Mom' | 'Dad';
   currentRole: Role;
   personalDateOfBirth?: string;
@@ -17,6 +18,8 @@ type Props = {
   cycleLengthDays?: string;
   cyclePeriodLengthDays?: string;
   cycleEntries?: CycleDayEntry[];
+  periodRemindersEnabled?: boolean;
+  periodReminderLeadDays?: number;
   onMarkPeriodStart?: (dateKey: string) => void | Promise<void>;
   onSaveCycleEntry?: (entry: CycleDayEntry) => void | Promise<void>;
   onRemoveCycleEntry?: (dateKey: string) => void | Promise<void>;
@@ -39,6 +42,7 @@ type Props = {
   showStaff: boolean;
   filtersBelowSection?: ReactNode;
   filtersHeaderRight?: ReactNode;
+  quickActionRequest?: { type: 'add-plan' | 'today' | 'log-period'; token: number } | null;
   onAddEvent: (payload: {
     title: string;
     date: string;
@@ -46,6 +50,7 @@ type Props = {
     owner: Role;
     ownerName: string;
     ownerChildProfileId?: string;
+    shareToParent?: boolean;
     category: string;
     color: string;
     taskPriority?: 'urgent' | 'non_urgent';
@@ -62,16 +67,23 @@ type Props = {
     owner: Role;
     ownerName: string;
     ownerChildProfileId?: string;
+    shareToParent?: boolean;
     category: string;
     motherColor?: string;
     staffColor?: string;
     visibility?: 'shared' | 'staff_private';
   }) => void;
+  onDeleteEvent: (payload: { id: string }) => void;
   onCompleteStaffTask: (taskId: string) => void;
   getStaffTaskSuggestions: (query: string, limit?: number) => string[];
 };
 
+type GuidanceScope = 'day' | 'month' | 'year';
+const MIN_CALENDAR_MONTH = new Date(2010, 0, 1);
+const MAX_CALENDAR_MONTH = new Date(2100, 11, 1);
+
 export function CalendarScreen({
+  isActive,
   parentLabel,
   currentRole,
   personalDateOfBirth,
@@ -82,6 +94,8 @@ export function CalendarScreen({
   cycleLengthDays,
   cyclePeriodLengthDays,
   cycleEntries,
+  periodRemindersEnabled,
+  periodReminderLeadDays,
   onMarkPeriodStart,
   onSaveCycleEntry,
   onRemoveCycleEntry,
@@ -104,22 +118,34 @@ export function CalendarScreen({
   showStaff,
   filtersBelowSection,
   filtersHeaderRight,
+  quickActionRequest,
   onAddEvent,
   onUpdateEvent,
+  onDeleteEvent,
   onCompleteStaffTask,
   getStaffTaskSuggestions,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const isMomProfile = currentRole === 'mother' && parentLabel === 'Mom' && activeOwnerFilter === 'mother';
   const taskInputWrapRef = useRef<View | null>(null);
+  const wasActiveRef = useRef(false);
+  const selectedDateKeyRef = useRef(toDateKey(new Date()));
+  const currentMonthRef = useRef(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const calendarGridRef = useRef<View | null>(null);
+  const calendarDragX = useRef(new Animated.Value(0)).current;
+  const calendarSwipeAnimatingRef = useRef(false);
+  const calendarWebScrollSuppressRef = useRef(false);
+  const calendarWebScrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+  const [calendarPagerWidth, setCalendarPagerWidth] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [energyModeOpen, setEnergyModeOpen] = useState(false);
+  const [guidanceScope, setGuidanceScope] = useState<GuidanceScope>('day');
   const [nutritionInfoOpen, setNutritionInfoOpen] = useState(false);
   const [nutritionEditorOpen, setNutritionEditorOpen] = useState(false);
   const [editingNutritionEntryId, setEditingNutritionEntryId] = useState<string | null>(null);
@@ -133,7 +159,7 @@ export function CalendarScreen({
   const [nutritionFoodSearch, setNutritionFoodSearch] = useState('');
   const [selectedNutritionPreset, setSelectedNutritionPreset] = useState<NutritionFoodPreset | null>(null);
   const [personalInfoOpen, setPersonalInfoOpen] = useState(false);
-  const [generalDayModalNumber, setGeneralDayModalNumber] = useState<number | null>(null);
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [cycleModalOpen, setCycleModalOpen] = useState(false);
   const [cycleMarking, setCycleMarking] = useState(false);
   const [cycleActionStatus, setCycleActionStatus] = useState<string | null>(null);
@@ -157,6 +183,7 @@ export function CalendarScreen({
   const [editColorPickerOpen, setEditColorPickerOpen] = useState(false);
   const [editTonePickerOpen, setEditTonePickerOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editShareToParent, setEditShareToParent] = useState(true);
   const [editTitle, setEditTitle] = useState('');
   const [editColor, setEditColor] = useState('#ffffff');
   const [editCategory, setEditCategory] = useState('General');
@@ -170,6 +197,7 @@ export function CalendarScreen({
   const [newTime, setNewTime] = useState('10:00 AM');
   const [editTime, setEditTime] = useState('10:00 AM');
   const [newAssignee, setNewAssignee] = useState<string>('mother');
+  const [newShareToParent, setNewShareToParent] = useState(true);
   const [editAssignee, setEditAssignee] = useState<string>('mother');
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [timeTarget, setTimeTarget] = useState<'create' | 'edit'>('create');
@@ -186,6 +214,18 @@ export function CalendarScreen({
   const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const [confettiOrigin, setConfettiOrigin] = useState({ x: 0, y: 0 });
   const confettiAnim = useRef(new Animated.Value(0)).current;
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const calendarTrackTranslateX = useMemo(
+    () => Animated.add(calendarDragX, new Animated.Value(-calendarPagerWidth || 0)),
+    [calendarDragX, calendarPagerWidth],
+  );
+
+  function logCalendarDebug(message: string, extra?: Record<string, unknown>) {
+    console.log(
+      `[calendar-debug] ${message}`,
+      extra || {},
+    );
+  }
 
   const basePalette = ['#ff7a00', '#ffcc00', '#22c55e', '#06b6d4', '#2563eb', '#7c3aed', '#ec4899', '#8b5a2b', '#111827'];
   const toneColors = useMemo(() => buildToneScale(baseColor, 11), [baseColor]);
@@ -223,58 +263,44 @@ export function CalendarScreen({
       events.filter((event) => {
         const birthdayEvent = isBirthdayEvent(event);
         if (currentRole === 'mother' && birthdayEvent) {
-          if (activeOwnerFilter === 'staff' || activeOwnerFilter.startsWith('child:')) return false;
+          if (scope === 'my') return event.owner === 'mother';
           return true;
         }
 
-        if (scope === 'my_only' && event.owner === 'staff') return false;
         if (currentRole === 'mother' && event.owner === 'staff' && event.visibility === 'staff_private') return false;
 
-        if (activeOwnerFilter === 'mother') return event.owner === 'mother';
-        if (activeOwnerFilter === 'staff') return event.owner === 'staff';
-        if (activeOwnerFilter.startsWith('child:')) {
-          const childId = activeOwnerFilter.replace('child:', '');
-          const child = children.find((item) => item.id === childId);
-          return (
-            event.owner === 'child' &&
-            (event.ownerChildProfileId === childId || (!!child && event.ownerName.toLowerCase() === child.name.toLowerCase()))
-          );
+        if (scope === 'my') {
+          if (currentRole === 'mother') return event.owner === 'mother';
+          if (currentRole === 'child' && activeOwnerFilter.startsWith('child:')) {
+            const childId = activeOwnerFilter.replace('child:', '');
+            return event.owner === 'child' && event.ownerChildProfileId === childId;
+          }
+          if (currentRole === 'staff' && activeOwnerFilter.startsWith('staff:')) {
+            const staffId = activeOwnerFilter.replace('staff:', '');
+            const profile = staffProfiles.find((item) => item.id === staffId);
+            if (!profile) return false;
+            return event.owner === 'staff' && event.ownerName === profile.name;
+          }
+          return event.owner === 'mother';
         }
-        return true;
+
+        if (scope === 'family') {
+          if (currentRole === 'mother') return event.owner === 'mother';
+          if (currentRole === 'child' && activeOwnerFilter.startsWith('child:')) {
+            const childId = activeOwnerFilter.replace('child:', '');
+            return event.owner === 'child' && event.ownerChildProfileId === childId;
+          }
+          if (currentRole === 'staff' && activeOwnerFilter.startsWith('staff:')) {
+            const staffId = activeOwnerFilter.replace('staff:', '');
+            const profile = staffProfiles.find((item) => item.id === staffId);
+            if (!profile) return false;
+            return event.owner === 'staff' && event.ownerName === profile.name;
+          }
+          return true;
+        }
       }),
-    [events, scope, activeOwnerFilter, children, currentRole],
+    [events, scope, activeOwnerFilter, currentRole, staffProfiles],
   );
-
-  const calendarDays = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-
-    // Monday-based index: Mon=0 ... Sun=6
-    const firstWeekDay = (firstDay.getDay() + 6) % 7;
-    const cells: Array<{ key: string; label: string; dateKey: string | null }> = [];
-
-    for (let i = 0; i < firstWeekDay; i += 1) {
-      cells.push({ key: `empty-${i}`, label: '', dateKey: null });
-    }
-
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(year, month, day);
-      cells.push({
-        key: `day-${day}`,
-        label: String(day),
-        dateKey: toDateKey(date),
-      });
-    }
-
-    while (cells.length % 7 !== 0) {
-      cells.push({ key: `empty-tail-${cells.length}`, label: '', dateKey: null });
-    }
-
-    return cells;
-  }, [currentMonth]);
 
   const selectedEvents = useMemo(() => {
     const eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
@@ -363,6 +389,7 @@ export function CalendarScreen({
       { key: 'lunch', title: 'Lunch' },
       { key: 'dinner', title: 'Dinner' },
       { key: 'snack', title: 'Snacks' },
+      { key: 'other', title: 'Other' },
     ];
     return sections
       .map((section) => ({
@@ -371,8 +398,33 @@ export function CalendarScreen({
       }))
       .filter((section) => section.entries.length > 0);
   }, [selectedNutritionEntries]);
-  const effectiveCycleTrackingEnabled = !!cycleTrackingEnabled || !!localCycleLastPeriodStart;
-  const effectiveCycleLastPeriodStart = localCycleLastPeriodStart || cycleLastPeriodStart;
+  const inferredCyclePeriodStartDateKeys = useMemo(() => {
+    if (!isMomProfile) return [] as string[];
+    const flowDates = [...new Set((cycleEntries || []).filter((entry) => !!entry.flowLevel && !!entry.date).map((entry) => entry.date))].sort();
+    return flowDates.filter((dateKey) => {
+      const previousDateKey = toDateKey(addDays(parseDateKeyToDate(dateKey), -1));
+      return !flowDates.includes(previousDateKey);
+    });
+  }, [cycleEntries, isMomProfile]);
+  const latestCyclePeriodStartDateKey = useMemo(() => {
+    if (!isMomProfile) return null;
+    return (
+      [...(cycleEntries || [])]
+        .filter((entry) => !!entry.isPeriodStart && !!entry.date)
+        .map((entry) => entry.date)
+        .sort((a, b) => b.localeCompare(a))[0] ||
+      [...inferredCyclePeriodStartDateKeys].sort((a, b) => b.localeCompare(a))[0] ||
+      null
+    );
+  }, [cycleEntries, inferredCyclePeriodStartDateKeys, isMomProfile]);
+  const effectiveCycleLastPeriodStart = useMemo(() => {
+    if (!isMomProfile) return undefined;
+    if (localCycleLastPeriodStart && isValidBirthDateInput(localCycleLastPeriodStart)) return localCycleLastPeriodStart;
+    if (cycleLastPeriodStart && isValidBirthDateInput(cycleLastPeriodStart)) return cycleLastPeriodStart;
+    return latestCyclePeriodStartDateKey ? formatDateForCycleAction(latestCyclePeriodStartDateKey) : undefined;
+  }, [cycleLastPeriodStart, isMomProfile, latestCyclePeriodStartDateKey, localCycleLastPeriodStart]);
+  const effectiveCycleTrackingEnabled =
+    isMomProfile && (!!cycleTrackingEnabled || !!effectiveCycleLastPeriodStart || !!latestCyclePeriodStartDateKey);
   const cycleInfoByDate = useMemo(() => {
     const map = new Map<string, { phase: 'period' | 'fertile' | 'ovulation' | 'pms'; color: string; label: string }>();
     if (!effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart || !isValidBirthDateInput(effectiveCycleLastPeriodStart)) return map;
@@ -418,41 +470,62 @@ export function CalendarScreen({
   }, [effectiveCycleTrackingEnabled, effectiveCycleLastPeriodStart, cycleLengthDays, cyclePeriodLengthDays, currentMonth]);
   const selectedCycleInfo = useMemo(() => cycleInfoByDate.get(selectedDateKey) || null, [cycleInfoByDate, selectedDateKey]);
   const selectedCycleEntry = useMemo(
-    () => (cycleEntries || []).find((entry) => entry.date === selectedDateKey) || null,
-    [cycleEntries, selectedDateKey],
+    () => (isMomProfile ? (cycleEntries || []).find((entry) => entry.date === selectedDateKey) || null : null),
+    [cycleEntries, isMomProfile, selectedDateKey],
   );
   const cyclePeriodEntryDates = useMemo(() => {
     const set = new Set<string>();
+    if (!isMomProfile) return set;
     (cycleEntries || []).forEach((entry) => {
       if (entry.flowLevel && entry.date) set.add(entry.date);
     });
     return set;
-  }, [cycleEntries]);
+  }, [cycleEntries, isMomProfile]);
   const cyclePeriodStartDates = useMemo(() => {
     const set = new Set<string>();
+    if (!isMomProfile) return set;
     (cycleEntries || []).forEach((entry) => {
       if (entry.isPeriodStart && entry.date) set.add(entry.date);
     });
+    inferredCyclePeriodStartDateKeys.forEach((dateKey) => set.add(dateKey));
     if (effectiveCycleLastPeriodStart && isValidBirthDateInput(effectiveCycleLastPeriodStart)) {
       const parsed = parseBirthDateToDate(effectiveCycleLastPeriodStart);
       if (parsed) set.add(toDateKey(parsed));
     }
     return set;
-  }, [cycleEntries, effectiveCycleLastPeriodStart]);
+  }, [cycleEntries, effectiveCycleLastPeriodStart, inferredCyclePeriodStartDateKeys, isMomProfile]);
   const selectedDateLabel = useMemo(() => formatDateForCycleAction(selectedDateKey), [selectedDateKey]);
+  const selectedDayPlanTitle = useMemo(() => formatDayPlanTitle(selectedDateKey), [selectedDateKey]);
   const isSelectedDateCurrentPeriodStart = effectiveCycleLastPeriodStart === selectedDateLabel;
+  const periodReminderMessage = useMemo(() => {
+    if (!isMomProfile || !periodRemindersEnabled || !effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart) return null;
+    const leadDays = Math.max(1, Math.min(3, Number(periodReminderLeadDays) || 2));
+    const lastStart = parseBirthDateToDate(effectiveCycleLastPeriodStart);
+    if (!lastStart) return null;
+    const cycleLength = Math.max(21, Math.min(40, Number(cycleLengthDays) || 28));
+    const today = new Date();
+    const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    let nextPeriodStart = new Date(lastStart.getFullYear(), lastStart.getMonth(), lastStart.getDate());
+    while (nextPeriodStart < todayLocal) {
+      nextPeriodStart = addDays(nextPeriodStart, cycleLength);
+    }
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysUntil = Math.round((nextPeriodStart.getTime() - todayLocal.getTime()) / msPerDay);
+    if (daysUntil < 1 || daysUntil > leadDays) return null;
+    return `Your period may start in ${daysUntil} day${daysUntil === 1 ? '' : 's'}.`;
+  }, [
+    cycleLengthDays,
+    effectiveCycleLastPeriodStart,
+    effectiveCycleTrackingEnabled,
+    isMomProfile,
+    periodReminderLeadDays,
+    periodRemindersEnabled,
+  ]);
   const filteredNutritionFoodPresets = useMemo(() => {
     const query = nutritionFoodSearch.trim().toLowerCase();
     if (!query) return NUTRITION_FOOD_PRESETS.slice(0, 8);
     return NUTRITION_FOOD_PRESETS.filter((item) => item.name.toLowerCase().includes(query)).slice(0, 8);
   }, [nutritionFoodSearch]);
-  const calendarWeeks = useMemo(() => {
-    const weeks: Array<Array<{ key: string; label: string; dateKey: string | null }>> = [];
-    for (let index = 0; index < calendarDays.length; index += 7) {
-      weeks.push(calendarDays.slice(index, index + 7));
-    }
-    return weeks;
-  }, [calendarDays]);
 
   const monthLabel = currentMonth.toLocaleDateString('en-US', { month: 'long' });
   const currentYear = currentMonth.getFullYear();
@@ -470,18 +543,274 @@ export function CalendarScreen({
     () => (birthDateParts ? calculatePersonalEnergyNumber(selectedDateKey, birthDateParts) : null),
     [birthDateParts, selectedDateKey],
   );
-  const selectedGeneralDayNumber = useMemo(() => calculateGeneralEnergyNumber(selectedDateKey), [selectedDateKey]);
-  const selectedGeneralDayInfo = useMemo(() => getSpecialGeneralDayInfo(selectedGeneralDayNumber), [selectedGeneralDayNumber]);
-  const yearOptions = useMemo(() => Array.from({ length: 121 }, (_, i) => currentYear - 60 + i), [currentYear]);
-  const currentYearIndex = useMemo(() => yearOptions.findIndex((y) => y === currentYear), [yearOptions, currentYear]);
+  const yearOptions = useMemo(
+    () => Array.from({ length: MAX_CALENDAR_MONTH.getFullYear() - MIN_CALENDAR_MONTH.getFullYear() + 1 }, (_, i) => MIN_CALENDAR_MONTH.getFullYear() + i),
+    [],
+  );
+  const selectedGuidanceNumber = useMemo(() => {
+    if (guidanceScope === 'day') return selectedPersonalDayNumber;
+    if (guidanceScope === 'month') return personalMonthNumber;
+    return personalYearNumber;
+  }, [guidanceScope, personalMonthNumber, personalYearNumber, selectedPersonalDayNumber]);
+  const selectedGuidanceTitle = useMemo(() => {
+    if (guidanceScope === 'day') return 'Day guidance';
+    if (guidanceScope === 'month') return 'Month focus';
+    return 'Year focus';
+  }, [guidanceScope]);
+  const selectedGuidanceLabel = useMemo(() => {
+    if (guidanceScope === 'day') return selectedDayPlanTitle;
+    if (guidanceScope === 'month') return `${monthLabel} ${currentYear}`;
+    return String(currentYear);
+  }, [currentYear, guidanceScope, monthLabel, selectedDayPlanTitle]);
+  const selectedGuidance = useMemo(() => {
+    if (!selectedGuidanceNumber) return null;
+    return getGuidanceContent(selectedGuidanceNumber, guidanceScope);
+  }, [guidanceScope, selectedGuidanceNumber]);
+  const dayGuidancePreview = useMemo(() => {
+    if (!selectedPersonalDayNumber) return null;
+    return getGuidanceContent(selectedPersonalDayNumber, 'day');
+  }, [selectedPersonalDayNumber]);
 
-  function moveMonth(step: number) {
-    setCurrentMonth((prev) => {
-      const next = new Date(prev.getFullYear(), prev.getMonth() + step, 1);
-      setSelectedDateKey(toDateKey(next));
-      return next;
+  useEffect(() => {
+    selectedDateKeyRef.current = selectedDateKey;
+  }, [selectedDateKey]);
+
+  useEffect(() => {
+    currentMonthRef.current = currentMonth;
+  }, [currentMonth]);
+
+  useEffect(() => {
+    logCalendarDebug('selectedDateKey changed', { selectedDateKey });
+  }, [selectedDateKey]);
+
+  useEffect(() => {
+    logCalendarDebug('currentMonth changed', {
+      currentMonth: `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }, [currentMonth]);
+
+  useEffect(() => {
+    if (!isActive) {
+      wasActiveRef.current = false;
+      logCalendarDebug('screen inactive');
+      return;
+    }
+    if (wasActiveRef.current) return;
+    wasActiveRef.current = true;
+
+    const today = new Date();
+    const todayKey = toDateKey(today);
+    logCalendarDebug('screen activated -> jump to today', {
+      todayKey,
+      todayMonth: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
+    });
+    setSelectedDateKey(todayKey);
+    setVisibleMonth(today, false, false);
+  }, [isActive]);
+
+  const calendarPagerMonths = useMemo(
+    () => [clampCalendarMonth(addMonths(currentMonth, -1)), currentMonth, clampCalendarMonth(addMonths(currentMonth, 1))],
+    [currentMonth],
+  );
+
+  function setVisibleMonth(nextMonth: Date, syncSelectedDate = false, _animated = true) {
+    const normalized = clampCalendarMonth(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1));
+    logCalendarDebug('setVisibleMonth called', {
+      requestedMonth: `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`,
+      normalizedMonth: `${normalized.getFullYear()}-${String(normalized.getMonth() + 1).padStart(2, '0')}`,
+      syncSelectedDate,
+      currentMonth: `${currentMonthRef.current.getFullYear()}-${String(currentMonthRef.current.getMonth() + 1).padStart(2, '0')}`,
+    });
+    if (isSameCalendarMonth(normalized, currentMonthRef.current)) {
+      logCalendarDebug('setVisibleMonth skipped because same month');
+      return;
+    }
+    setCurrentMonth(normalized);
+  }
+
+  function animateCalendarToOffset(targetOffset: number, onComplete?: () => void) {
+    calendarSwipeAnimatingRef.current = true;
+    Animated.timing(calendarDragX, {
+      toValue: targetOffset,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      calendarDragX.setValue(0);
+      calendarSwipeAnimatingRef.current = false;
+      onComplete?.();
     });
   }
+
+  function navigateCalendarMonth(direction: -1 | 1) {
+    const baseMonth = currentMonthRef.current;
+    const nextMonth = clampCalendarMonth(addMonths(baseMonth, direction));
+    if (isSameCalendarMonth(nextMonth, baseMonth)) {
+      animateCalendarToOffset(0);
+      return;
+    }
+
+    if (!calendarPagerWidth) {
+      setVisibleMonth(nextMonth, false, true);
+      return;
+    }
+
+    animateCalendarToOffset(direction > 0 ? -calendarPagerWidth : calendarPagerWidth, () => {
+      setVisibleMonth(nextMonth, false, true);
+    });
+  }
+
+  function commitCalendarSwipe(offsetX: number) {
+    if (!calendarPagerWidth) return;
+    const baseMonth = currentMonthRef.current;
+    logCalendarDebug('commitCalendarSwipe', {
+      offsetX,
+      calendarPagerWidth,
+      baseMonth: `${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`,
+    });
+
+    if (offsetX <= -calendarPagerWidth * 0.22) {
+      navigateCalendarMonth(1);
+      return;
+    }
+
+    if (offsetX >= calendarPagerWidth * 0.22) {
+      navigateCalendarMonth(-1);
+      return;
+    }
+
+    logCalendarDebug('commitCalendarSwipe -> stay on current month');
+    animateCalendarToOffset(0);
+  }
+
+  const calendarPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_event, gestureState) =>
+          !calendarSwipeAnimatingRef.current &&
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2,
+        onMoveShouldSetPanResponderCapture: (_event, gestureState) =>
+          !calendarSwipeAnimatingRef.current &&
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2,
+        onPanResponderGrant: () => {
+          logCalendarDebug('onPanResponderGrant');
+          calendarDragX.stopAnimation();
+        },
+        onPanResponderMove: (_event, gestureState) => {
+          const clampedDx = Math.max(-calendarPagerWidth, Math.min(calendarPagerWidth, gestureState.dx));
+          calendarDragX.setValue(clampedDx);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          logCalendarDebug('onPanResponderRelease', {
+            dx: gestureState.dx,
+            vx: gestureState.vx,
+          });
+          const shouldCommitByVelocity = Math.abs(gestureState.vx) > 0.45;
+          const effectiveOffset = shouldCommitByVelocity
+            ? gestureState.dx < 0
+              ? -calendarPagerWidth
+              : calendarPagerWidth
+            : gestureState.dx;
+          commitCalendarSwipe(effectiveOffset);
+        },
+        onPanResponderTerminate: () => {
+          logCalendarDebug('onPanResponderTerminate');
+          animateCalendarToOffset(0);
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [calendarDragX, calendarPagerWidth],
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !calendarPagerWidth) return;
+
+    const node = calendarGridRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const getPageWidth = () => node.clientWidth || calendarPagerWidth;
+
+    const centerScroll = (behavior: ScrollBehavior = 'auto') => {
+      calendarWebScrollSuppressRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const pageWidth = getPageWidth();
+          node.scrollTo({ left: pageWidth, behavior });
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              calendarWebScrollSuppressRef.current = false;
+            });
+          });
+        });
+      });
+    };
+
+    centerScroll('auto');
+
+    const handleScroll = () => {
+      if (calendarWebScrollSuppressRef.current || calendarSwipeAnimatingRef.current) return;
+
+      const scrollLeft = node.scrollLeft;
+      const pageWidth = getPageWidth();
+
+      if (scrollLeft <= pageWidth * 0.45) {
+        calendarWebScrollSuppressRef.current = true;
+        setVisibleMonth(addMonths(currentMonthRef.current, -1), false, false);
+        return;
+      }
+
+      if (scrollLeft >= pageWidth * 1.55) {
+        calendarWebScrollSuppressRef.current = true;
+        setVisibleMonth(addMonths(currentMonthRef.current, 1), false, false);
+        return;
+      }
+
+      if (calendarWebScrollSettleTimerRef.current) clearTimeout(calendarWebScrollSettleTimerRef.current);
+      calendarWebScrollSettleTimerRef.current = setTimeout(() => {
+        if (calendarWebScrollSuppressRef.current) return;
+        centerScroll('smooth');
+      }, 120);
+    };
+
+    node.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      node.removeEventListener('scroll', handleScroll);
+      if (calendarWebScrollSettleTimerRef.current) {
+        clearTimeout(calendarWebScrollSettleTimerRef.current);
+        calendarWebScrollSettleTimerRef.current = null;
+      }
+      calendarWebScrollSuppressRef.current = false;
+    };
+  }, [calendarPagerWidth, currentMonth]);
+
+  useEffect(() => {
+    if (!quickActionRequest) return;
+
+    const today = new Date();
+    const todayKey = toDateKey(today);
+
+    if (quickActionRequest.type === 'today') {
+      setVisibleMonth(today, false, true);
+      setSelectedDateKey(todayKey);
+      return;
+    }
+
+    if (quickActionRequest.type === 'log-period') {
+      setVisibleMonth(today, false, true);
+      setSelectedDateKey(todayKey);
+      setCycleActionStatus(null);
+      setCycleModalOpen(true);
+      return;
+    }
+
+    if (quickActionRequest.type === 'add-plan') {
+      setVisibleMonth(today, false, true);
+      setSelectedDateKey(todayKey);
+      openCreator('general');
+    }
+  }, [quickActionRequest]);
 
   async function handleMarkPeriodStartPress() {
     if (cycleMarking) return;
@@ -508,9 +837,10 @@ export function CalendarScreen({
       sleepMinutes,
       isPeriodStart: markAsPeriodStart,
     };
+    const nextLocalCycleStart = markAsPeriodStart ? selectedDateLabel : effectiveCycleLastPeriodStart || null;
 
     if (onSaveCycleEntry) {
-      setLocalCycleLastPeriodStart(selectedDateLabel);
+      setLocalCycleLastPeriodStart(nextLocalCycleStart);
       setCycleActionStatus(`Saved for ${selectedDateLabel}`);
       try {
         setCycleMarking(true);
@@ -530,7 +860,18 @@ export function CalendarScreen({
 
   async function handleRemoveCycleDay() {
     if (!onRemoveCycleEntry) return;
+    const remainingPeriodStartDateKey =
+      [...(cycleEntries || [])]
+        .filter((item) => item.date !== selectedDateKey && !!item.isPeriodStart && !!item.date)
+        .map((item) => item.date)
+        .sort((a, b) => b.localeCompare(a))[0] || null;
+    const nextLocalCycleStart = cyclePeriodStartDates.has(selectedDateKey)
+      ? remainingPeriodStartDateKey
+        ? formatDateForCycleAction(remainingPeriodStartDateKey)
+        : null
+      : effectiveCycleLastPeriodStart || null;
     try {
+      setLocalCycleLastPeriodStart(nextLocalCycleStart);
       setCycleMarking(true);
       await onRemoveCycleEntry(selectedDateKey);
       setCycleActionStatus(`Removed entry for ${selectedDateLabel}`);
@@ -555,8 +896,16 @@ export function CalendarScreen({
     setCycleActionStatus(null);
   }, [selectedDateKey]);
   useEffect(() => {
-    setLocalCycleLastPeriodStart(cycleLastPeriodStart || null);
-  }, [cycleLastPeriodStart]);
+    if (cycleLastPeriodStart && isValidBirthDateInput(cycleLastPeriodStart)) {
+      setLocalCycleLastPeriodStart(cycleLastPeriodStart);
+      return;
+    }
+    if (latestCyclePeriodStartDateKey) {
+      setLocalCycleLastPeriodStart(formatDateForCycleAction(latestCyclePeriodStartDateKey));
+      return;
+    }
+    setLocalCycleLastPeriodStart(null);
+  }, [cycleLastPeriodStart, latestCyclePeriodStartDateKey]);
   useEffect(() => {
     setSelectedFlowLevel(selectedCycleEntry?.flowLevel || null);
     setSelectedDischargeType(selectedCycleEntry?.dischargeType || null);
@@ -567,19 +916,13 @@ export function CalendarScreen({
     setSleepMinutes(selectedCycleEntry?.sleepMinutes || 0);
     setMarkAsPeriodStart(!!selectedCycleEntry?.isPeriodStart || isSelectedDateCurrentPeriodStart);
   }, [isSelectedDateCurrentPeriodStart, selectedCycleEntry]);
-
-  function moveYear(step: number) {
-    setCurrentMonth((prev) => {
-      const next = new Date(prev.getFullYear() + step, prev.getMonth(), 1);
-      setSelectedDateKey(toDateKey(next));
-      return next;
-    });
-  }
+  useEffect(() => {
+    if (!isMomProfile) setCycleModalOpen(false);
+  }, [isMomProfile]);
 
   function pickMonthYear(monthIndex: number, year: number) {
     const next = new Date(year, monthIndex, 1);
-    setCurrentMonth(next);
-    setSelectedDateKey(toDateKey(next));
+    setVisibleMonth(next, false, true);
     setPickerOpen(false);
   }
 
@@ -653,20 +996,26 @@ export function CalendarScreen({
     if (event.owner === 'staff' && isAutoGeneratedStaffTask) return;
     if (isBirthdayEvent(event)) return;
     setEditingEventId(event.id);
-    setEditTitle(event.title);
+    const mirrorChildId = event.owner === 'mother' && event.category === 'Child Plan' ? event.ownerChildProfileId : undefined;
+    const linkedChildId = event.owner === 'child' ? event.ownerChildProfileId : mirrorChildId;
+    const linkedChild = linkedChildId ? children.find((item) => item.id === linkedChildId) : null;
+    const isChildMirror = event.owner === 'mother' && event.category === 'Child Plan' && !!linkedChild;
+    setEditTitle(isChildMirror && linkedChild ? stripChildMirrorTitle(event.title, linkedChild.name) : event.title);
     setEditCategory(event.category || 'General');
     setEditVisibility(event.visibility || 'shared');
     setEditMotherColor(event.motherColor);
     setEditStaffColor(event.staffColor);
     setEditTime(normalizeTimeText(event.time));
-    if (event.owner === 'child') {
-      const child = children.find((item) => item.name === event.ownerName);
-      setEditAssignee(child ? `child:${child.id}` : 'mother');
+    if (event.owner === 'child' || isChildMirror) {
+      setEditAssignee(linkedChild ? `child:${linkedChild.id}` : 'mother');
+      setEditShareToParent(isChildMirror || hasParentMirrorEvent(event, linkedChild || undefined));
     } else if (event.owner === 'staff') {
       const staff = staffProfiles.find((item) => item.name === event.ownerName);
       setEditAssignee(staff ? `staff:${staff.id}` : 'mother');
+      setEditShareToParent(true);
     } else {
       setEditAssignee('mother');
+      setEditShareToParent(true);
     }
     const initialEditColor =
       event.owner === 'staff'
@@ -733,10 +1082,35 @@ export function CalendarScreen({
     }
 
     setNewAssignee('mother');
+    setNewShareToParent(true);
     setBaseColor('#2563eb');
     setToneIndex(4);
     setNewColor('#ffffff');
     setCreatorOpen(true);
+  }
+
+  function getChildShareDefault(childId: string) {
+    const child = children.find((item) => item.id === childId);
+    return child?.includeInMotherCalendar ?? true;
+  }
+
+  function stripChildMirrorTitle(title: string, childName: string) {
+    const prefix = `${childName}: `;
+    return title.startsWith(prefix) ? title.slice(prefix.length) : title;
+  }
+
+  function hasParentMirrorEvent(sourceEvent: CalendarEvent, child?: ChildProfile | null) {
+    const childId = sourceEvent.ownerChildProfileId || child?.id;
+    if (!childId) return false;
+    return events.some(
+      (event) =>
+        event.id !== sourceEvent.id &&
+        event.owner === 'mother' &&
+        event.category === 'Child Plan' &&
+        event.ownerChildProfileId === childId &&
+        event.date === sourceEvent.date &&
+        normalizeTimeText(event.time) === normalizeTimeText(sourceEvent.time),
+    );
   }
 
   function updateTaskSuggestionFrame() {
@@ -778,6 +1152,104 @@ export function CalendarScreen({
     setConfettiVisible(false);
     setConfettiBurstKey((prev) => prev + 1);
     setConfettiVisible(true);
+  }
+
+  function renderCalendarMonthPages() {
+    return calendarPagerMonths.map((monthDate) => {
+      const cells = buildCalendarDaysForMonth(monthDate);
+      const isVisibleMonthPage = isSameCalendarMonth(monthDate, currentMonth);
+      return (
+        <View
+          key={`${monthDate.getFullYear()}-${monthDate.getMonth()}`}
+          style={[
+            styles.calendarMonthPage,
+            Platform.OS === 'web'
+              ? ({ width: '33.3333%', flexBasis: '33.3333%', maxWidth: '33.3333%', scrollSnapAlign: 'start' } as any)
+              : { width: calendarPagerWidth },
+          ]}
+        >
+          <View style={[styles.grid, styles.dayRowGlass]}>
+            {cells.map((cell) => {
+              const cellCyclePhase = cell.dateKey ? cycleInfoByDate.get(cell.dateKey)?.phase : null;
+              const isPeriodDay = !!(cell.dateKey && cyclePeriodEntryDates.has(cell.dateKey));
+              const isPeriodStart = !!(cell.dateKey && cyclePeriodStartDates.has(cell.dateKey));
+              const canShowCyclePhase = isMomProfile && !isPeriodDay && !isPeriodStart;
+              const isSelected = isVisibleMonthPage && cell.dateKey === selectedDateKey;
+              const isToday = cell.dateKey === todayKey;
+
+              return (
+                <Pressable
+                  key={cell.key}
+                  disabled={!cell.dateKey}
+                  style={[
+                    styles.dayCell,
+                    isToday && !isSelected && styles.dayCellToday,
+                    isSelected && styles.dayCellSelected,
+                    cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayCellBirthday,
+                  ]}
+                  onPress={(event) => {
+                    if (cell.dateKey) {
+                      setSelectedDateKey(cell.dateKey);
+                      if (birthdayDates.has(cell.dateKey)) {
+                        triggerBirthdayCelebration({
+                          x: event.nativeEvent.pageX,
+                          y: event.nativeEvent.pageY,
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.dayNumberWrap,
+                      cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayNumberWrapBirthday,
+                      isPeriodDay && styles.dayNumberWrapPeriodDay,
+                      isPeriodStart && styles.dayNumberWrapPeriodStart,
+                      canShowCyclePhase && cellCyclePhase === 'fertile' && styles.dayNumberWrapFertile,
+                      canShowCyclePhase && cellCyclePhase === 'ovulation' && styles.dayNumberWrapOvulation,
+                      canShowCyclePhase && cellCyclePhase === 'pms' && styles.dayNumberWrapPms,
+                      isSelected && !isPeriodDay && !isPeriodStart && styles.dayNumberWrapSelected,
+                    ]}
+                  >
+                    <View style={cell.dateKey && birthdayDates.has(cell.dateKey) ? styles.dayNumberInnerRing : undefined}>
+                      <Text
+                        style={[
+                          styles.dayText,
+                          cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayTextBirthday,
+                          isPeriodDay && styles.dayTextPeriodDay,
+                          isPeriodStart && styles.dayTextPeriodStart,
+                          canShowCyclePhase && cellCyclePhase === 'fertile' && styles.dayTextFertile,
+                          canShowCyclePhase && cellCyclePhase === 'ovulation' && styles.dayTextOvulation,
+                          canShowCyclePhase && cellCyclePhase === 'pms' && styles.dayTextPms,
+                          isToday && !isPeriodDay && !isPeriodStart && styles.dayTextToday,
+                          isSelected && !isPeriodDay && !isPeriodStart && styles.dayTextSelected,
+                        ]}
+                      >
+                        {cell.label}
+                      </Text>
+                      {isMomProfile && cell.dateKey && cellCyclePhase === 'fertile' ? (
+                        <Text style={[styles.cycleStarMarker, styles.cycleStarMarkerFertile]}>✦</Text>
+                      ) : null}
+                      {isMomProfile && cell.dateKey && cellCyclePhase === 'pms' ? (
+                        <Text style={[styles.cycleStarMarker, styles.cycleStarMarkerPms]}>✦</Text>
+                      ) : null}
+                      {isMomProfile && cell.dateKey && cellCyclePhase === 'ovulation' ? <View style={styles.cycleOvulationMarker} /> : null}
+                    </View>
+                  </View>
+                  {cell.dateKey && dayDotColorsByDate.has(cell.dateKey) ? (
+                    <View style={styles.dayDotsRow}>
+                      {(dayDotColorsByDate.get(cell.dateKey) || []).slice(0, 4).map((dotColor, index) => (
+                        <View key={`${cell.dateKey}-dot-${index}`} style={[styles.dayDot, { backgroundColor: dotColor || '#64748b' }]} />
+                      ))}
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    });
   }
 
   return (
@@ -833,83 +1305,18 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      {currentRole === 'mother' ? (
-        <>
-          <SectionCard title="Filters" headerRight={filtersHeaderRight}>
-            <View style={styles.row}>
-              <Chip active={activeOwnerFilter === 'mother'} label={parentLabel} onPress={() => onSelectOwnerFilter('mother')} styles={styles} />
-              {children.map((child) => (
-                <Chip
-                  key={`filter-child-${child.id}`}
-                  active={activeOwnerFilter === `child:${child.id}`}
-                  label={child.name}
-                  onPress={() => onSelectOwnerFilter(`child:${child.id}`)}
-                  styles={styles}
-                />
-              ))}
-              {staffProfiles.map((profile) => (
-                <Chip
-                  key={`filter-staff-${profile.id}`}
-                  active={activeOwnerFilter === `staff:${profile.id}`}
-                  label={profile.name}
-                  onPress={() => onSelectOwnerFilter(`staff:${profile.id}`)}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          </SectionCard>
-          {filtersBelowSection ? <View style={styles.filtersBelowRow}>{filtersBelowSection}</View> : null}
-        </>
-      ) : null}
-
-      <SectionCard title="Calendar">
-        {currentRole === 'mother' ? (
-          <View style={styles.calendarCloverWrap}>
-            <View style={styles.calendarTopActions}>
-              <Pressable onPress={() => setCycleModalOpen(true)} style={[styles.calendarPeriodBtn, cycleModalOpen && styles.calendarPeriodBtnActive]}>
-                <PeriodDropIcon styles={styles} active={cycleModalOpen} />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  onSelectOwnerFilter('mother');
-                  setEnergyModeOpen((prev) => !prev);
-                }}
-                style={[styles.calendarCloverBtn, energyModeOpen && styles.calendarCloverBtnActive]}
-              >
-                <CloverIcon styles={styles} active={energyModeOpen} />
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <Pressable style={styles.pickerModalBackdrop} onPress={() => setPickerOpen(false)}>
+          <Pressable style={styles.pickerModalCard} onPress={() => {}}>
+            <View style={styles.pickerModalHeader}>
+              <View>
+                <Text style={styles.pickerModalTitle}>Choose month and year</Text>
+                <Text style={styles.pickerModalSubtitle}>Pick a point in time for the calendar view.</Text>
+              </View>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setPickerOpen(false)}>
+                <Text style={styles.pickerModalCloseText}>×</Text>
               </Pressable>
             </View>
-          </View>
-        ) : null}
-        <View style={styles.calendarHeader}>
-          <View style={styles.navRow}>
-            <Pressable style={styles.arrow} onPress={() => moveYear(-1)}>
-              <Text style={styles.arrowText}>{'<<'}</Text>
-            </Pressable>
-            <Pressable style={styles.arrow} onPress={() => moveMonth(-1)}>
-              <Text style={styles.arrowText}>{'<'}</Text>
-            </Pressable>
-          </View>
-          <View style={styles.centerButtons}>
-            <Pressable style={[styles.monthButton, pickerOpen && styles.monthButtonActive]} onPress={() => setPickerOpen((v) => !v)}>
-              <Text style={[styles.monthButtonText, pickerOpen && styles.monthButtonTextActive]}>{monthLabel}</Text>
-            </Pressable>
-            <Pressable style={[styles.yearButton, pickerOpen && styles.monthButtonActive]} onPress={() => setPickerOpen((v) => !v)}>
-              <Text style={[styles.monthButtonText, pickerOpen && styles.monthButtonTextActive]}>{currentYear}</Text>
-            </Pressable>
-          </View>
-          <View style={styles.navRow}>
-            <Pressable style={styles.arrow} onPress={() => moveMonth(1)}>
-              <Text style={styles.arrowText}>{'>'}</Text>
-            </Pressable>
-            <Pressable style={styles.arrow} onPress={() => moveYear(1)}>
-              <Text style={styles.arrowText}>{'>>'}</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {pickerOpen ? (
-          <View style={styles.pickerCard}>
             <View style={styles.pickerColumns}>
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerTitle}>Month</Text>
@@ -928,350 +1335,147 @@ export function CalendarScreen({
 
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerTitle}>Year</Text>
-                <FlatList
-                  style={styles.pickerScroll}
-                  showsVerticalScrollIndicator
-                  data={yearOptions}
-                  keyExtractor={(item) => String(item)}
-                  initialScrollIndex={Math.max(0, currentYearIndex - 3)}
-                  getItemLayout={(_, index) => ({
-                    length: 38,
-                    offset: 38 * index,
-                    index,
-                  })}
-                  renderItem={({ item: year }) => (
+                <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator nestedScrollEnabled>
+                  {yearOptions.map((year) => (
                     <Pressable
+                      key={year}
                       style={[styles.pickerItem, year === currentYear && styles.pickerItemActive]}
                       onPress={() => pickMonthYear(currentMonth.getMonth(), year)}
                     >
                       <Text style={[styles.pickerItemText, year === currentYear && styles.pickerItemTextActive]}>{year}</Text>
                     </Pressable>
-                  )}
-                />
+                  ))}
+                </ScrollView>
               </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <SectionCard title="Calendar">
+        {currentRole === 'mother' ? (
+          <View style={styles.scopeRow}>
+            <Chip active={scope === 'my'} label="My" onPress={() => onScopeChange('my')} styles={styles} />
+            <Chip active={scope === 'family'} label="Family" onPress={() => onScopeChange('family')} styles={styles} />
+          </View>
+        ) : null}
+        {isMomProfile ? (
+          <View style={styles.calendarCloverWrap}>
+            <View style={styles.calendarTopActions}>
+              <Pressable onPress={() => setCycleModalOpen(true)} style={[styles.calendarPeriodBtn, cycleModalOpen && styles.calendarPeriodBtnActive]}>
+                <PeriodDropIcon styles={styles} active={cycleModalOpen} />
+              </Pressable>
             </View>
           </View>
         ) : null}
+        {periodReminderMessage ? (
+          <View style={styles.periodReminderBanner}>
+            <View style={styles.periodReminderDot} />
+            <Text style={styles.periodReminderText}>{periodReminderMessage}</Text>
+          </View>
+        ) : null}
+        <View style={styles.calendarHeader}>
+          <View style={styles.centerButtons}>
+            <Pressable style={[styles.monthButton, pickerOpen && styles.monthButtonActive]} onPress={() => setPickerOpen((v) => !v)}>
+              <Text style={[styles.monthButtonText, pickerOpen && styles.monthButtonTextActive]}>{monthLabel}</Text>
+            </Pressable>
+            <Pressable style={[styles.yearButton, pickerOpen && styles.monthButtonActive]} onPress={() => setPickerOpen((v) => !v)}>
+              <Text style={[styles.monthButtonText, pickerOpen && styles.monthButtonTextActive]}>{currentYear}</Text>
+            </Pressable>
+          </View>
+        </View>
 
         <View style={styles.weekHeader}>
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-            <Text key={day} style={[styles.weekday, energyModeOpen && styles.energyWeekday]}>
-              {day}
-            </Text>
+            <View key={day} style={styles.weekdayCell}>
+              <Text style={styles.weekday}>{day}</Text>
+            </View>
           ))}
         </View>
 
-        <View style={styles.calendarGridWrap}>
-          {energyModeOpen ? (
-            <View style={styles.energyCalendarWrap}>
-              {calendarWeeks.map((week, weekIndex) => (
-                <View key={`energy-week-${weekIndex}`} style={styles.energyWeekBlock}>
-                  <View style={[styles.grid, styles.dayRowGlass, styles.energyDayRowGlass]}>
-                    {week.map((cell) => (
-                      <Pressable
-                        key={cell.key}
-                        disabled={!cell.dateKey}
-                        style={[
-                          styles.dayCell,
-                          styles.energyDayCell,
-                          cell.dateKey === selectedDateKey && styles.energyDayCellSelected,
-                        ]}
-                        onPress={(event) => {
-                          if (cell.dateKey) {
-                            setSelectedDateKey(cell.dateKey);
-                            if (birthdayDates.has(cell.dateKey)) {
-                              triggerBirthdayCelebration({
-                                x: event.nativeEvent.pageX,
-                                y: event.nativeEvent.pageY,
-                              });
-                            }
-                          }
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.dayNumberWrap,
-                            styles.energyDayNumberWrap,
-                            cell.dateKey && getSpecialGeneralDayInfo(calculateGeneralEnergyNumber(cell.dateKey)) && styles.energyDayNumberWrapSpecial,
-                            cell.dateKey === selectedDateKey && styles.energyDayNumberWrapSelected,
-                          ]}
-                        >
-                          <View style={styles.energyDayNumberInline}>
-                            <Text
-                              style={[
-                                styles.dayText,
-                                styles.energyDayText,
-                                cell.dateKey === selectedDateKey && styles.energyDayTextSelected,
-                              ]}
-                            >
-                              {cell.label}
-                            </Text>
-                            {cell.dateKey && getSpecialGeneralDayInfo(calculateGeneralEnergyNumber(cell.dateKey)) ? (
-                              <Pressable
-                                style={styles.energyDaySpecialIconWrap}
-                                onPress={() => setGeneralDayModalNumber(calculateGeneralEnergyNumber(cell.dateKey!))}
-                              >
-                                <Text
-                                  style={[
-                                    styles.energyDaySpecialIcon,
-                                    calculateGeneralEnergyNumber(cell.dateKey) === 6 && styles.energyDaySpecialIconLove,
-                                    calculateGeneralEnergyNumber(cell.dateKey) === 8 && styles.energyDaySpecialIconDollar,
-                                  ]}
-                                >
-                                  {getSpecialGeneralDayInfo(calculateGeneralEnergyNumber(cell.dateKey))?.icon}
-                                </Text>
-                              </Pressable>
-                            ) : null}
-                          </View>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <View style={styles.energyRowsWrap}>
-                    <View style={styles.energyValuesWrap}>
-                      {week.map((cell) => (
-                        <View key={`${cell.key}-energy`} style={styles.energyValueCell}>
-                          <Text style={styles.energyValueText} />
-                          <Text style={styles.energyValueText}>
-                            {cell.dateKey && birthDateParts ? String(calculatePersonalEnergyNumber(cell.dateKey, birthDateParts)) : ''}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={[styles.grid, styles.dayRowGlass]}>
-              {calendarDays.map((cell) => (
-                <Pressable
-                  key={cell.key}
-                  disabled={!cell.dateKey}
-                  style={[
-                    styles.dayCell,
-                    cell.dateKey === selectedDateKey && styles.dayCellSelected,
-                    cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayCellBirthday,
-                  ]}
-                  onPress={(event) => {
-                    if (cell.dateKey) {
-                      setSelectedDateKey(cell.dateKey);
-                      if (birthdayDates.has(cell.dateKey)) {
-                        triggerBirthdayCelebration({
-                          x: event.nativeEvent.pageX,
-                          y: event.nativeEvent.pageY,
-                        });
-                      }
-                    }
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.dayNumberWrap,
-                      cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayNumberWrapBirthday,
-                      cell.dateKey && cyclePeriodEntryDates.has(cell.dateKey) && styles.dayNumberWrapPeriodDay,
-                      cell.dateKey && cyclePeriodStartDates.has(cell.dateKey) && styles.dayNumberWrapPeriodStart,
-                      cell.dateKey === selectedDateKey &&
-                        !cyclePeriodEntryDates.has(cell.dateKey || '') &&
-                        !cyclePeriodStartDates.has(cell.dateKey || '') &&
-                        styles.dayNumberWrapSelected,
-                    ]}
-                  >
-                    <View style={cell.dateKey && birthdayDates.has(cell.dateKey) ? styles.dayNumberInnerRing : undefined}>
-                      <Text
-                        style={[
-                          styles.dayText,
-                          cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayTextBirthday,
-                          cell.dateKey && cyclePeriodEntryDates.has(cell.dateKey) && styles.dayTextPeriodDay,
-                          cell.dateKey && cyclePeriodStartDates.has(cell.dateKey) && styles.dayTextPeriodStart,
-                          cell.dateKey === selectedDateKey &&
-                            !cyclePeriodEntryDates.has(cell.dateKey || '') &&
-                            !cyclePeriodStartDates.has(cell.dateKey || '') &&
-                            styles.dayTextSelected,
-                        ]}
-                      >
-                        {cell.label}
-                      </Text>
-                    </View>
-                  </View>
-                  {cell.dateKey && dayDotColorsByDate.has(cell.dateKey) ? (
-                    <View style={styles.dayDotsRow}>
-                      {cycleInfoByDate.has(cell.dateKey) ? (
-                        cycleInfoByDate.get(cell.dateKey)?.phase === 'period' ? null : (
-                          <View
-                            style={[
-                              styles.cycleDayDot,
-                              { backgroundColor: cycleInfoByDate.get(cell.dateKey)?.color || '#e11d48' },
-                              cycleInfoByDate.get(cell.dateKey)?.phase === 'ovulation' && styles.cycleDayDotOvulation,
-                            ]}
-                          />
-                        )
-                      ) : null}
-                      {nutritionStatusByDate.has(cell.dateKey) ? (
-                        <View
-                          style={[
-                            styles.nutritionDayDot,
-                            { backgroundColor: nutritionStatusByDate.get(cell.dateKey)?.color || '#22c55e' },
-                          ]}
-                        />
-                      ) : null}
-                      {(dayDotColorsByDate.get(cell.dateKey) || []).slice(0, 4).map((dotColor, index) => (
-                        <View key={`${cell.dateKey}-dot-${index}`} style={[styles.dayDot, { backgroundColor: dotColor || '#64748b' }]} />
-                      ))}
-                    </View>
-                  ) : cell.dateKey && nutritionStatusByDate.has(cell.dateKey) ? (
-                    <View style={styles.dayDotsRow}>
-                      {cycleInfoByDate.has(cell.dateKey) ? (
-                        cycleInfoByDate.get(cell.dateKey)?.phase === 'period' ? null : (
-                          <View
-                            style={[
-                              styles.cycleDayDot,
-                              { backgroundColor: cycleInfoByDate.get(cell.dateKey)?.color || '#e11d48' },
-                              cycleInfoByDate.get(cell.dateKey)?.phase === 'ovulation' && styles.cycleDayDotOvulation,
-                            ]}
-                          />
-                        )
-                      ) : null}
-                      <View
-                        style={[
-                          styles.nutritionDayDot,
-                          { backgroundColor: nutritionStatusByDate.get(cell.dateKey)?.color || '#22c55e' },
-                        ]}
-                      />
-                    </View>
-                  ) : cell.dateKey && cycleInfoByDate.has(cell.dateKey) ? (
-                    <View style={styles.dayDotsRow}>
-                      {cycleInfoByDate.get(cell.dateKey)?.phase === 'period' ? null : (
-                        <View
-                          style={[
-                            styles.cycleDayDot,
-                            { backgroundColor: cycleInfoByDate.get(cell.dateKey)?.color || '#e11d48' },
-                            cycleInfoByDate.get(cell.dateKey)?.phase === 'ovulation' && styles.cycleDayDotOvulation,
-                          ]}
-                        />
-                      )}
-                    </View>
-                  ) : null}
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-        {energyModeOpen ? (
-          <View style={styles.energyInfoCard}>
-            {birthDateParts ? (
-              <>
-                <View style={styles.energyInfoSection}>
-                  <View style={styles.energyInfoHeader}>
-                    <Text style={styles.energyInfoTitle}>{`Personal Day: ${selectedPersonalDayNumber}`}</Text>
-                  </View>
-                  <Text style={styles.energyInfoText}>{getEnergyMeaning(selectedPersonalDayNumber || 0, 'day')}</Text>
-                </View>
-                <View style={styles.energyInfoSection}>
-                  <View style={styles.energyInfoHeader}>
-                    <Text style={styles.energyInfoTitle}>{`Personal Month: ${personalMonthNumber}`}</Text>
-                  </View>
-                  <Text style={styles.energyInfoText}>{getEnergyMeaning(personalMonthNumber || 0, 'month')}</Text>
-                </View>
-                <View style={styles.energyInfoSection}>
-                  <View style={styles.energyInfoHeader}>
-                    <Text style={styles.energyInfoTitle}>{`Personal Year: ${personalYearNumber}`}</Text>
-                  </View>
-                  <Text style={styles.energyInfoText}>{getEnergyMeaning(personalYearNumber || 0, 'year')}</Text>
-                </View>
-              </>
+        <View
+          ref={calendarGridRef}
+          style={[
+            styles.calendarGridWrap,
+            Platform.OS === 'web'
+              ? ({
+                  touchAction: 'pan-x',
+                  userSelect: 'none',
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  overscrollBehaviorX: 'contain',
+                  overscrollBehaviorY: 'contain',
+                  scrollSnapType: 'x mandatory',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  WebkitOverflowScrolling: 'touch',
+                } as any)
+              : null,
+          ]}
+          onLayout={(event) => {
+            const nextWidth = Math.round(event.nativeEvent.layout.width);
+            logCalendarDebug('calendarGridWrap onLayout', { nextWidth, prevWidth: calendarPagerWidth });
+            if (nextWidth && nextWidth !== calendarPagerWidth) setCalendarPagerWidth(nextWidth);
+          }}
+          {...(Platform.OS === 'web' ? {} : calendarPanResponder.panHandlers)}
+        >
+          {calendarPagerWidth ? (
+            Platform.OS === 'web' ? (
+              <View style={[styles.calendarPagerTrack, styles.calendarPagerTrackWeb]}>
+                {renderCalendarMonthPages()}
+              </View>
             ) : (
-              <>
-                <Text style={styles.energyInfoTitle}>Personal Calculation</Text>
-                <Text style={styles.energyInfoText}>Add your date of birth in the profile to see your personal year, month, and day.</Text>
-              </>
-            )}
-          </View>
-        ) : null}
-        {energyModeOpen && selectedGeneralDayInfo ? (
-          <View style={styles.generalDaysHintBlock}>
-            <View style={styles.generalDaysHintRow}>
-              <Text
+              <Animated.View
                 style={[
-                  styles.generalDaysHintIcon,
-                  selectedGeneralDayInfo.day === 6 ? styles.generalDaysHintHeart : null,
-                  selectedGeneralDayInfo.day === 8 ? styles.generalDayDollarIcon : null,
-                  selectedGeneralDayInfo.day === 3 ? styles.generalDayIdeaIcon : null,
+                  styles.calendarPagerTrack,
+                  {
+                    width: calendarPagerWidth * 3,
+                    transform: [{ translateX: calendarTrackTranslateX }],
+                  },
                 ]}
               >
-                {selectedGeneralDayInfo.icon}
-              </Text>
-              <Text style={styles.generalDaysHintText}>{selectedGeneralDayInfo.description}</Text>
-            </View>
-          </View>
-        ) : null}
+                {renderCalendarMonthPages()}
+              </Animated.View>
+            )
+          ) : null}
+        </View>
         {effectiveCycleTrackingEnabled ? (
           <View style={styles.cycleHintRow}>
             <View style={styles.cycleHintItem}>
-              <View style={[styles.cycleHintDot, { backgroundColor: '#e11d48' }]} />
+              <View style={styles.cycleHintPeriodMarker} />
               <Text style={styles.cycleHintText}>Period</Text>
             </View>
             <View style={styles.cycleHintItem}>
-              <View style={[styles.cycleHintDot, { backgroundColor: '#14b8a6' }]} />
+              <Text style={[styles.cycleHintStarMarker, styles.cycleHintStarMarkerFertile]}>✦</Text>
               <Text style={styles.cycleHintText}>Fertile</Text>
             </View>
             <View style={styles.cycleHintItem}>
-              <View style={[styles.cycleHintDot, styles.cycleHintDotOvulation]} />
+              <View style={styles.cycleHintOvulationMarker} />
               <Text style={styles.cycleHintText}>Ovulation</Text>
             </View>
             <View style={styles.cycleHintItem}>
-              <View style={[styles.cycleHintDot, { backgroundColor: '#a78bfa' }]} />
+              <Text style={[styles.cycleHintStarMarker, styles.cycleHintStarMarkerPms]}>✦</Text>
               <Text style={styles.cycleHintText}>PMS</Text>
             </View>
           </View>
         ) : null}
-        {effectiveCycleTrackingEnabled && selectedCycleInfo ? (
-          <View style={styles.cycleInfoCard}>
-            <View style={styles.cycleInfoHeader}>
-              <View style={[styles.cycleInfoBadge, { backgroundColor: selectedCycleInfo.color }]} />
-              <Text style={styles.cycleInfoTitle}>{selectedCycleInfo.label}</Text>
+        {isMomProfile ? (
+          <Pressable style={styles.cycleEntryCard} onPress={() => setCycleModalOpen(true)}>
+            <View style={styles.cycleEntryHeader}>
+              <Text style={styles.cycleEntryTitle}>Period tracker</Text>
+              <Text style={styles.cycleEntryChevron}>+</Text>
             </View>
-            <Text style={styles.cycleInfoText}>
-              {selectedCycleInfo.phase === 'period'
-                ? 'These days are marked as your expected period window.'
-                : selectedCycleInfo.phase === 'ovulation'
-                  ? 'This is the predicted ovulation day based on your current cycle settings.'
-                  : selectedCycleInfo.phase === 'fertile'
-                    ? 'This day belongs to the predicted fertile window.'
-                    : 'This is part of the expected PMS window before the next cycle.'}
+            <Text style={styles.cycleEntryText}>
+              {selectedCycleEntry
+                ? `Edit ${selectedDateLabel} period details`
+                : `Log period details for ${selectedDateLabel}`}
             </Text>
-          </View>
+            {effectiveCycleLastPeriodStart ? <Text style={styles.cycleEntryMeta}>{`Current start: ${effectiveCycleLastPeriodStart}`}</Text> : null}
+          </Pressable>
         ) : null}
       </SectionCard>
-
-      <Modal visible={generalDayModalNumber !== null} transparent animationType="fade" onRequestClose={() => setGeneralDayModalNumber(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            {generalDayModalNumber && getSpecialGeneralDayInfo(generalDayModalNumber) ? (
-              <>
-                <View style={styles.generalDayModalHeader}>
-                  <Text style={styles.generalDayModalIcon}>{getSpecialGeneralDayInfo(generalDayModalNumber)?.icon}</Text>
-                  <Text style={styles.createTitle}>{`General Day ${generalDayModalNumber}`}</Text>
-                </View>
-                <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator>
-                  <Text style={styles.energyInfoText}>{getSpecialGeneralDayInfo(generalDayModalNumber)?.description}</Text>
-                  {getSpecialGeneralDayInfo(generalDayModalNumber)?.points.map((point) => (
-                    <View key={`modal-${generalDayModalNumber}-${point.label}`} style={styles.generalDayPointRow}>
-                      <Text style={styles.generalDayPointIcon}>{point.icon}</Text>
-                      <Text style={styles.generalDayPointText}>{point.label}</Text>
-                    </View>
-                  ))}
-                </ScrollView>
-                <View style={styles.modalActions}>
-                  <Pressable style={styles.cancelBtn} onPress={() => setGeneralDayModalNumber(null)}>
-                    <Text style={styles.cancelBtnText}>Close</Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={cycleModalOpen} transparent animationType="fade" onRequestClose={() => setCycleModalOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -1303,7 +1507,14 @@ export function CalendarScreen({
                     const date = addDays(baseDate, index - 3);
                     const isSelected = toDateKey(date) === selectedDateKey;
                     return (
-                      <Pressable key={toDateKey(date)} onPress={() => setSelectedDateKey(toDateKey(date))} style={[styles.cyclePanelRangeItem, isSelected && styles.cyclePanelRangeItemActive]}>
+                      <Pressable
+                        key={toDateKey(date)}
+                        onPress={() => {
+                          setSelectedDateKey(toDateKey(date));
+                          setVisibleMonth(date, false, true);
+                        }}
+                        style={[styles.cyclePanelRangeItem, isSelected && styles.cyclePanelRangeItemActive]}
+                      >
                         <Text style={[styles.cyclePanelRangeText, isSelected && styles.cyclePanelRangeTextActive]}>{date.getDate()}</Text>
                       </Pressable>
                     );
@@ -1472,201 +1683,7 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      <Pressable style={styles.nutritionCalendarCard} onPress={() => setNutritionInfoOpen((prev) => !prev)}>
-        <View style={styles.nutritionCalendarHeader}>
-          <View style={styles.nutritionCalendarHeaderCopy}>
-            <Text style={styles.nutritionCalendarTitle}>Nutrition on {selectedDateKey}</Text>
-            <Text style={styles.nutritionCalendarSummary}>
-              {selectedNutritionEntries.length > 0
-                ? `${selectedNutritionTotals.calories}/${nutritionPlan?.calories || 0} kcal · P ${selectedNutritionTotals.protein} · C ${selectedNutritionTotals.carbs} · F ${selectedNutritionTotals.fat}`
-                : 'No food logged yet. Tap + to add meals for this day.'}
-            </Text>
-          </View>
-          <View style={styles.nutritionCalendarActions}>
-            <Pressable
-              style={styles.nutritionCalendarAddBtn}
-              onPress={(event) => {
-                event.stopPropagation();
-                openNutritionCreate('breakfast');
-              }}
-            >
-              <Text style={styles.nutritionCalendarAddText}>+</Text>
-            </Pressable>
-          </View>
-        </View>
-        {nutritionInfoOpen ? (
-          <View style={styles.nutritionCalendarBody}>
-            {selectedNutritionMeals.length > 0 ? (
-              selectedNutritionMeals.map((section) => (
-                <View key={section.key} style={styles.nutritionCalendarMealBlock}>
-                  <View style={styles.nutritionCalendarMealHeader}>
-                    <Text style={styles.nutritionCalendarMealTitle}>{section.title}</Text>
-                    <Pressable
-                      style={styles.nutritionMealInlineAddBtn}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        openNutritionCreate(section.key);
-                      }}
-                    >
-                      <Text style={styles.nutritionMealInlineAddText}>+</Text>
-                    </Pressable>
-                  </View>
-                  {section.entries.map((entry) => (
-                    <Pressable
-                      key={entry.id}
-                      style={styles.nutritionCalendarMealEntryRow}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        openNutritionEdit(entry);
-                      }}
-                    >
-                      <Text style={styles.nutritionCalendarMealEntry}>
-                        {entry.name} · {entry.calories} kcal · P {entry.protein} · F {entry.fat} · C {entry.carbs}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ))
-            ) : (
-              <View style={styles.nutritionCalendarEmptyState}>
-                <Text style={styles.nutritionCalendarEmptyText}>Add breakfast, lunch, dinner, or snacks for this day.</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
-      </Pressable>
-
-      <Modal visible={nutritionEditorOpen} transparent animationType="fade" onRequestClose={() => setNutritionEditorOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.createTitle}>{editingNutritionEntryId ? `Edit Food · ${selectedDateKey}` : `Add Food · ${selectedDateKey}`}</Text>
-            <TextInput
-              placeholder="Search foods"
-              style={styles.oneFieldInput}
-              value={nutritionFoodSearch}
-              onChangeText={setNutritionFoodSearch}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nutritionPresetScroll}>
-              {filteredNutritionFoodPresets.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={styles.nutritionPresetCard}
-                  onPress={() => {
-                    const next = getNutritionValuesForGrams(item, nutritionDraftGrams);
-                    setSelectedNutritionPreset(item);
-                    setNutritionDraftName(item.name);
-                    setNutritionFoodSearch(item.name);
-                    setNutritionDraftCalories(next.calories);
-                    setNutritionDraftProtein(next.protein);
-                    setNutritionDraftFat(next.fat);
-                    setNutritionDraftCarbs(next.carbs);
-                  }}
-                >
-                  <Text style={styles.nutritionPresetTitle}>{item.name}</Text>
-                  <Text style={styles.nutritionPresetMeta}>
-                    {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-            {selectedNutritionPreset ? (
-              <View style={styles.nutritionPresetInfo}>
-                <Text style={styles.nutritionPresetInfoTitle}>{selectedNutritionPreset.name}</Text>
-                <Text style={styles.nutritionPresetInfoMeta}>
-                  per 100 g · {selectedNutritionPreset.caloriesPer100g} kcal · P {selectedNutritionPreset.proteinPer100g} · F {selectedNutritionPreset.fatPer100g} · C {selectedNutritionPreset.carbsPer100g}
-                </Text>
-              </View>
-            ) : null}
-            <View style={styles.row}>
-              {(['breakfast', 'lunch', 'dinner', 'snack'] as NutritionFoodEntry['mealType'][]).map((mealType) => (
-                <Chip
-                  key={mealType}
-                  active={nutritionDraftMealType === mealType}
-                  label={mealType === 'snack' ? 'Snacks' : mealType[0].toUpperCase() + mealType.slice(1)}
-                  onPress={() => setNutritionDraftMealType(mealType)}
-                  styles={styles}
-                />
-              ))}
-            </View>
-            <TextInput placeholder="Product" value={nutritionDraftName} onChangeText={setNutritionDraftName} style={styles.oneFieldInput} />
-            <Text style={styles.inlineInputLabel}>Weight in grams</Text>
-            <TextInput
-              placeholder="100"
-              keyboardType="decimal-pad"
-              value={nutritionDraftGrams}
-              onChangeText={(text) => {
-                const grams = cleanNutritionNumber(text);
-                setNutritionDraftGrams(grams);
-                if (selectedNutritionPreset) {
-                  const next = getNutritionValuesForGrams(selectedNutritionPreset, grams);
-                  setNutritionDraftCalories(next.calories);
-                  setNutritionDraftProtein(next.protein);
-                  setNutritionDraftFat(next.fat);
-                  setNutritionDraftCarbs(next.carbs);
-                }
-              }}
-              style={styles.oneFieldInput}
-            />
-            <View style={styles.row}>
-              <TextInput placeholder="Calories" keyboardType="number-pad" value={nutritionDraftCalories} onChangeText={(text) => setNutritionDraftCalories(text.replace(/[^\d]/g, '').slice(0, 4))} style={[styles.oneFieldInput, styles.halfInput]} />
-              <TextInput placeholder="Protein" keyboardType="decimal-pad" value={nutritionDraftProtein} onChangeText={(text) => setNutritionDraftProtein(cleanNutritionNumber(text))} style={[styles.oneFieldInput, styles.halfInput]} />
-            </View>
-            <View style={styles.row}>
-              <TextInput placeholder="Fat" keyboardType="decimal-pad" value={nutritionDraftFat} onChangeText={(text) => setNutritionDraftFat(cleanNutritionNumber(text))} style={[styles.oneFieldInput, styles.halfInput]} />
-              <TextInput placeholder="Carbs" keyboardType="decimal-pad" value={nutritionDraftCarbs} onChangeText={(text) => setNutritionDraftCarbs(cleanNutritionNumber(text))} style={[styles.oneFieldInput, styles.halfInput]} />
-            </View>
-            <View style={styles.modalActions}>
-              {editingNutritionEntryId ? (
-                <Pressable
-                  style={styles.cancelBtn}
-                  onPress={() => {
-                    onNutritionEntriesChange((prev) => prev.filter((entry) => entry.id !== editingNutritionEntryId));
-                    setNutritionEditorOpen(false);
-                    resetNutritionEditor();
-                  }}
-                >
-                  <Text style={styles.cancelBtnText}>Delete</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={styles.cancelBtn}
-                  onPress={() => {
-                    setNutritionEditorOpen(false);
-                    resetNutritionEditor();
-                  }}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.addBtn}
-                onPress={() => {
-                  if (!nutritionDraftName.trim()) return;
-                  const payload: NutritionFoodEntry = {
-                    id: editingNutritionEntryId || `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    name: `${nutritionDraftName.trim()}${nutritionDraftGrams ? ` • ${nutritionDraftGrams} g` : ''}`,
-                    mealType: nutritionDraftMealType,
-                    date: selectedDateKey,
-                    calories: nutritionDraftCalories || '0',
-                    protein: nutritionDraftProtein || '0',
-                    fat: nutritionDraftFat || '0',
-                    carbs: nutritionDraftCarbs || '0',
-                  };
-                  onNutritionEntriesChange((prev) =>
-                    editingNutritionEntryId ? prev.map((entry) => (entry.id === editingNutritionEntryId ? payload : entry)) : [payload, ...prev],
-                  );
-                  setNutritionEditorOpen(false);
-                  resetNutritionEditor(nutritionDraftMealType);
-                }}
-              >
-                <Text style={styles.addBtnText}>{editingNutritionEntryId ? 'Save' : 'Add'}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <SectionCard title={`Events on ${selectedDateKey}`}>
+      <SectionCard title={selectedDayPlanTitle}>
         {selectedBirthdayNames.length > 0 ? (
           <View style={styles.birthdaySummaryCard}>
             <View style={styles.birthdaySummaryIconWrap}>
@@ -1700,8 +1717,8 @@ export function CalendarScreen({
           </View>
         ) : (
           <View style={styles.eventsHeader}>
-            <Pressable style={styles.addActionBtn} onPress={() => openCreator('general')}>
-              <Text style={styles.addActionBtnText}>+ Add plan</Text>
+            <Pressable style={[styles.addActionBtn, styles.addActionBtnCompact]} onPress={() => openCreator('general')}>
+              <Text style={styles.addActionBtnText}>+</Text>
             </Pressable>
           </View>
         )}
@@ -1745,8 +1762,24 @@ export function CalendarScreen({
             ) : null}
           </Pressable>
         ))}
-        {selectedEvents.length === 0 ? <Text style={styles.empty}>No events for the selected day.</Text> : null}
+        {selectedEvents.length === 0 ? <Text style={styles.empty}>No plans for this day yet.</Text> : null}
       </SectionCard>
+
+      <Pressable
+        style={styles.guidanceEntryCard}
+        onPress={() => {
+          setGuidanceScope('day');
+          setGuidanceOpen(true);
+        }}
+      >
+        <View style={styles.guidanceEntryCopy}>
+          <Text style={styles.guidanceEntryTitle}>Day guidance</Text>
+          <Text style={styles.guidanceEntryText}>
+            {dayGuidancePreview ? dayGuidancePreview.summary : 'Open guidance for the day, month and year.'}
+          </Text>
+        </View>
+        <Text style={styles.guidanceEntryChevron}>›</Text>
+      </Pressable>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -1841,17 +1874,37 @@ export function CalendarScreen({
               )}
               {creatorMode === 'general' ? (
                 <View style={styles.row}>
-                  <Chip active={newAssignee === 'mother'} label={parentLabel} onPress={() => setNewAssignee('mother')} styles={styles} />
+                  <Chip
+                    active={newAssignee === 'mother'}
+                    label={parentLabel}
+                    onPress={() => {
+                      setNewAssignee('mother');
+                      setNewShareToParent(true);
+                    }}
+                    styles={styles}
+                  />
                   {children.map((child) => (
                     <Chip
                       key={child.id}
                       active={newAssignee === `child:${child.id}`}
                       label={child.name}
-                      onPress={() => setNewAssignee(`child:${child.id}`)}
+                      onPress={() => {
+                        setNewAssignee(`child:${child.id}`);
+                        setNewShareToParent(getChildShareDefault(child.id));
+                      }}
                       styles={styles}
                     />
                   ))}
                 </View>
+              ) : null}
+              {creatorMode === 'general' && newAssignee.startsWith('child:') ? (
+                <>
+                  <Text style={styles.label}>Show this event in</Text>
+                  <View style={styles.pillRow}>
+                    <Chip active={!newShareToParent} label="Only child profile" onPress={() => setNewShareToParent(false)} styles={styles} />
+                    <Chip active={newShareToParent} label={`Also in ${parentLabel} Home`} onPress={() => setNewShareToParent(true)} styles={styles} />
+                  </View>
+                </>
               ) : null}
               <View style={styles.modalActions}>
                 <Pressable style={styles.cancelBtn} onPress={() => setCreatorOpen(false)}>
@@ -1875,6 +1928,7 @@ export function CalendarScreen({
                         owner: selectedChild ? 'child' : selectedStaff ? 'staff' : 'mother',
                         ownerName: selectedChild ? selectedChild.name : selectedStaff ? selectedStaff.name : parentLabel,
                         ownerChildProfileId: selectedChild ? selectedChild.id : undefined,
+                        shareToParent: selectedChild ? newShareToParent : undefined,
                         category: isStaffAssignedTask
                           ? `${parentLabel} Task`
                           : isStaffSelfPlan
@@ -1903,6 +1957,7 @@ export function CalendarScreen({
                         visibility: creatorMode === 'staff_self_plan' ? 'staff_private' : 'shared',
                       });
                       setNewTitle('');
+                      setNewShareToParent(true);
                       setCreatorOpen(false);
                     }}
                 >
@@ -1965,13 +2020,24 @@ export function CalendarScreen({
                 <Text style={styles.timeValue}>{editTime}</Text>
               </View>
               <View style={styles.row}>
-                <Chip active={editAssignee === 'mother'} label={parentLabel} onPress={() => setEditAssignee('mother')} styles={styles} />
+                <Chip
+                  active={editAssignee === 'mother'}
+                  label={parentLabel}
+                  onPress={() => {
+                    setEditAssignee('mother');
+                    setEditShareToParent(true);
+                  }}
+                  styles={styles}
+                />
                 {children.map((child) => (
                   <Chip
                     key={`edit-${child.id}`}
                     active={editAssignee === `child:${child.id}`}
                     label={child.name}
-                    onPress={() => setEditAssignee(`child:${child.id}`)}
+                    onPress={() => {
+                      setEditAssignee(`child:${child.id}`);
+                      setEditShareToParent(getChildShareDefault(child.id));
+                    }}
                     styles={styles}
                   />
                 ))}
@@ -1985,9 +2051,25 @@ export function CalendarScreen({
                   />
                 ))}
               </View>
+              {editAssignee.startsWith('child:') ? (
+                <>
+                  <Text style={styles.label}>Show this event in</Text>
+                  <View style={styles.pillRow}>
+                    <Chip active={!editShareToParent} label="Only child profile" onPress={() => setEditShareToParent(false)} styles={styles} />
+                    <Chip active={editShareToParent} label={`Also in ${parentLabel} Home`} onPress={() => setEditShareToParent(true)} styles={styles} />
+                  </View>
+                </>
+              ) : null}
               <View style={styles.modalActions}>
-                <Pressable style={styles.cancelBtn} onPress={() => setEditOpen(false)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Pressable
+                  style={styles.cancelBtn}
+                  onPress={() => {
+                    if (!editingEventId) return;
+                    onDeleteEvent({ id: editingEventId });
+                    setEditOpen(false);
+                  }}
+                >
+                  <Text style={styles.cancelBtnText}>Delete</Text>
                 </Pressable>
                 <Pressable
                   style={styles.addBtn}
@@ -2006,6 +2088,7 @@ export function CalendarScreen({
                       owner: selectedChild ? 'child' : selectedStaff ? 'staff' : 'mother',
                       ownerName: selectedChild ? selectedChild.name : selectedStaff ? selectedStaff.name : parentLabel,
                       ownerChildProfileId: selectedChild ? selectedChild.id : undefined,
+                      shareToParent: selectedChild ? editShareToParent : undefined,
                       category: selectedChild ? selectedChild.name : selectedStaff ? editCategory : 'General',
                       motherColor: selectedStaff
                         ? currentRole === 'mother'
@@ -2202,6 +2285,57 @@ export function CalendarScreen({
           </View>
         </View>
       </Modal>
+
+      <Modal visible={guidanceOpen} transparent animationType="fade" onRequestClose={() => setGuidanceOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.guidanceModalTop}>
+              <View style={styles.guidanceModalTopCopy}>
+                <Text style={styles.createTitle}>{selectedGuidanceTitle}</Text>
+                <Text style={styles.modalSub}>{selectedGuidanceLabel}</Text>
+              </View>
+              <Pressable style={styles.cancelBtn} onPress={() => setGuidanceOpen(false)}>
+                <Text style={styles.cancelBtnText}>Close</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.guidanceTabs}>
+              <Chip active={guidanceScope === 'day'} label="Day" onPress={() => setGuidanceScope('day')} styles={styles} />
+              <Chip active={guidanceScope === 'month'} label="Month" onPress={() => setGuidanceScope('month')} styles={styles} />
+              <Chip active={guidanceScope === 'year'} label="Year" onPress={() => setGuidanceScope('year')} styles={styles} />
+            </View>
+
+            {selectedGuidance && selectedGuidanceNumber ? (
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator>
+                <Text style={styles.guidanceSummary}>{selectedGuidance.summary}</Text>
+                <Text style={styles.guidanceLongText}>{getEnergyMeaning(selectedGuidanceNumber, guidanceScope)}</Text>
+                <View style={styles.guidanceBody}>
+                  <View style={styles.guidanceSection}>
+                    <Text style={styles.guidanceSectionTitle}>Best for</Text>
+                    {selectedGuidance.bestFor.map((item) => (
+                      <Text key={`modal-${guidanceScope}-best-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.guidanceSection}>
+                    <Text style={styles.guidanceSectionTitle}>Be careful with</Text>
+                    {selectedGuidance.beCarefulWith.map((item) => (
+                      <Text key={`modal-${guidanceScope}-careful-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.guidanceSection}>
+                    <Text style={styles.guidanceSectionTitle}>Focus on</Text>
+                    {selectedGuidance.focusOn.map((item) => (
+                      <Text key={`modal-${guidanceScope}-focus-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
+            ) : (
+              <Text style={styles.guidanceEmptyText}>Add your date of birth in Settings → Personal to unlock day, month and year guidance.</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -2251,10 +2385,87 @@ function parseDateKeyParts(dateKey: string) {
   return { year, month, day };
 }
 
+function parseDateKeyToDate(dateKey: string) {
+  const parts = parseDateKeyParts(dateKey);
+  if (!parts) return new Date(NaN);
+  return new Date(parts.year, parts.month - 1, parts.day);
+}
+
+function buildCalendarDaysForMonth(monthDate: Date) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const firstWeekDay = (firstDay.getDay() + 6) % 7;
+  const cells: Array<{ key: string; label: string; dateKey: string | null }> = [];
+
+  for (let i = 0; i < firstWeekDay; i += 1) {
+    cells.push({ key: `${year}-${month}-empty-${i}`, label: '', dateKey: null });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+    cells.push({
+      key: `${year}-${month}-day-${day}`,
+      label: String(day),
+      dateKey: toDateKey(date),
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push({ key: `${year}-${month}-empty-tail-${cells.length}`, label: '', dateKey: null });
+  }
+
+  return cells;
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function clampCalendarMonth(date: Date) {
+  if (date.getFullYear() < MIN_CALENDAR_MONTH.getFullYear()) return new Date(MIN_CALENDAR_MONTH);
+  if (date.getFullYear() === MIN_CALENDAR_MONTH.getFullYear() && date.getMonth() < MIN_CALENDAR_MONTH.getMonth()) {
+    return new Date(MIN_CALENDAR_MONTH);
+  }
+  if (date.getFullYear() > MAX_CALENDAR_MONTH.getFullYear()) return new Date(MAX_CALENDAR_MONTH);
+  if (date.getFullYear() === MAX_CALENDAR_MONTH.getFullYear() && date.getMonth() > MAX_CALENDAR_MONTH.getMonth()) {
+    return new Date(MAX_CALENDAR_MONTH);
+  }
+  return date;
+}
+
+function buildCalendarMonthRange(startMonth: Date, endMonth: Date) {
+  const months: Date[] = [];
+  let cursor = new Date(startMonth.getFullYear(), startMonth.getMonth(), 1);
+  const last = new Date(endMonth.getFullYear(), endMonth.getMonth(), 1);
+
+  while (cursor.getTime() <= last.getTime()) {
+    months.push(new Date(cursor));
+    cursor = addMonths(cursor, 1);
+  }
+
+  return months;
+}
+
+function isSameCalendarMonth(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+}
+
 function formatDateForCycleAction(dateKey: string) {
   const parsed = parseDateKeyParts(dateKey);
   if (!parsed) return dateKey;
   return `${String(parsed.day).padStart(2, '0')}.${String(parsed.month).padStart(2, '0')}.${parsed.year}`;
+}
+
+function formatDayPlanTitle(dateKey: string) {
+  const parsed = parseDateKeyParts(dateKey);
+  if (!parsed) return dateKey;
+  const date = new Date(parsed.year, parsed.month - 1, parsed.day);
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const weekDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${parsed.day} ${monthNames[parsed.month - 1]}, ${weekDayNames[date.getDay()]}`;
 }
 
 function parseBirthDate(value?: string) {
@@ -2366,6 +2577,72 @@ function getPreviewText(text: string) {
   const normalized = text.replace(/\s+/g, ' ').trim();
   const sentence = normalized.split('. ')[0]?.trim() || normalized;
   return sentence.replace(/[.]+$/, '');
+}
+
+function getGuidanceContent(value: number, kind: GuidanceScope) {
+  const guidanceByNumber: Record<
+    number,
+    {
+      bestFor: string[];
+      beCarefulWith: string[];
+      focusOn: string[];
+    }
+  > = {
+    1: {
+      bestFor: ['starting something new', 'taking initiative', 'setting clear direction'],
+      beCarefulWith: ['waiting too long', 'rushing without a plan', 'self-doubt'],
+      focusOn: ['movement', 'clarity', 'self-trust'],
+    },
+    2: {
+      bestFor: ['relationships', 'gentle conversations', 'cooperation'],
+      beCarefulWith: ['reacting emotionally', 'people-pleasing', 'avoiding honest dialogue'],
+      focusOn: ['balance', 'patience', 'connection'],
+    },
+    3: {
+      bestFor: ['analysis', 'planning', 'learning'],
+      beCarefulWith: ['impulsive decisions', 'ignoring details', 'mixed signals'],
+      focusOn: ['logic', 'clarity', 'good judgment'],
+    },
+    4: {
+      bestFor: ['stable routines', 'organizing life', 'grounding yourself'],
+      beCarefulWith: ['negativity', 'scattered emotions', 'overreacting'],
+      focusOn: ['inner balance', 'structure', 'consistency'],
+    },
+    5: {
+      bestFor: ['change', 'movement', 'trying something new'],
+      beCarefulWith: ['chaos', 'distraction', 'risky choices'],
+      focusOn: ['flexibility', 'momentum', 'adaptation'],
+    },
+    6: {
+      bestFor: ['family time', 'relationships', 'beauty and comfort'],
+      beCarefulWith: ['drama', 'emotional overload', 'indecision'],
+      focusOn: ['care', 'harmony', 'warmth'],
+    },
+    7: {
+      bestFor: ['rest', 'reflection', 'health check-ins'],
+      beCarefulWith: ['overloading your schedule', 'anxiety spirals', 'pushing through exhaustion'],
+      focusOn: ['awareness', 'recovery', 'inner clarity'],
+    },
+    8: {
+      bestFor: ['work', 'structure', 'practical progress'],
+      beCarefulWith: ['pressure', 'rigidity', 'money stress'],
+      focusOn: ['discipline', 'results', 'follow-through'],
+    },
+    9: {
+      bestFor: ['finishing tasks', 'decluttering', 'letting go'],
+      beCarefulWith: ['holding on too tightly', 'emotional heaviness', 'forcing new starts'],
+      focusOn: ['closure', 'release', 'space for the new'],
+    },
+  };
+
+  return {
+    summary: getPreviewText(getEnergyMeaning(value, kind)),
+    ...(guidanceByNumber[value] || {
+      bestFor: ['steady progress'],
+      beCarefulWith: ['doing too much at once'],
+      focusOn: ['clarity'],
+    }),
+  };
 }
 
 function getSpecialGeneralDayInfo(value: number) {
@@ -2870,6 +3147,29 @@ const createStyles = (colors: ThemeColors) =>
     gap: 8,
     flexWrap: 'wrap',
   },
+  scopeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  scopeHint: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  label: {
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   filtersBelowRow: {
     marginTop: 14,
     alignItems: 'flex-start',
@@ -2897,6 +3197,31 @@ const createStyles = (colors: ThemeColors) =>
   calendarCloverWrap: {
     alignItems: 'flex-end',
     marginBottom: 8,
+  },
+  periodReminderBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(244,114,182,0.28)',
+    backgroundColor: 'rgba(255,241,242,0.94)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  periodReminderDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#e11d48',
+  },
+  periodReminderText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
   calendarTopActions: {
     flexDirection: 'row',
@@ -2975,8 +3300,25 @@ const createStyles = (colors: ThemeColors) =>
   calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginBottom: 10,
+  },
+  calendarNavButton: {
+    width: 42,
+    height: 42,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.glassStrong,
+  },
+  calendarNavButtonText: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 24,
+    lineHeight: 24,
+    marginTop: -2,
   },
   navRow: {
     flexDirection: 'row',
@@ -3031,6 +3373,60 @@ const createStyles = (colors: ThemeColors) =>
   monthButtonTextActive: {
     color: '#fff',
   },
+  pickerModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  pickerModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: hexToRgba(colors.primary, 0.2) || colors.border,
+    borderRadius: 24,
+    padding: 16,
+    backgroundColor: 'rgba(245, 248, 255, 0.97)',
+    shadowColor: 'rgba(15, 23, 42, 0.28)',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  pickerModalTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  pickerModalSubtitle: {
+    marginTop: 4,
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  pickerModalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerModalCloseText: {
+    color: colors.text,
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
   pickerCard: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -3056,9 +3452,9 @@ const createStyles = (colors: ThemeColors) =>
     maxHeight: 180,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 6,
-    backgroundColor: colors.glassSoft,
+    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   pickerItem: {
     borderWidth: 1,
@@ -3066,7 +3462,7 @@ const createStyles = (colors: ThemeColors) =>
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.glassStrong,
+    backgroundColor: 'rgba(255,255,255,0.94)',
     marginBottom: 6,
     alignSelf: 'center',
     minWidth: 88,
@@ -3088,23 +3484,42 @@ const createStyles = (colors: ThemeColors) =>
   },
   weekHeader: {
     flexDirection: 'row',
-    marginBottom: 6,
+    paddingHorizontal: 0,
+    marginBottom: 12,
+  },
+  weekdayCell: {
+    width: `${100 / 7}%`,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarGridWrap: {
     position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  calendarPagerTrack: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  calendarPagerTrackWeb: {
+    width: '300%',
+    transform: [{ translateX: 0 }],
+  },
+  calendarMonthPage: {
+    flexShrink: 0,
   },
   dayRowGlass: {
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 6,
-    backgroundColor: colors.selection,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   energyDayRowGlass: {
     borderRadius: 18,
@@ -3553,10 +3968,9 @@ const createStyles = (colors: ThemeColors) =>
     borderRadius: 3,
   },
   weekday: {
-    width: `${100 / 7}%`,
     textAlign: 'center',
     color: colors.subtext,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   energyWeekday: {
@@ -3570,11 +3984,11 @@ const createStyles = (colors: ThemeColors) =>
   },
   dayCell: {
     width: `${100 / 7}%`,
-    height: 40,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    marginBottom: 4,
+    borderRadius: 16,
+    marginBottom: 8,
     position: 'relative',
   },
   energyDayCell: {
@@ -3585,6 +3999,11 @@ const createStyles = (colors: ThemeColors) =>
   energyDayCellSelected: {
     backgroundColor: 'transparent',
   },
+  dayCellToday: {
+    borderWidth: 1.5,
+    borderColor: hexToRgba(colors.primary, 0.52) || colors.primary,
+    backgroundColor: 'transparent',
+  },
   dayCellSelected: {
     backgroundColor: colors.primary,
   },
@@ -3592,8 +4011,8 @@ const createStyles = (colors: ThemeColors) =>
     backgroundColor: 'transparent',
   },
   dayNumberWrap: {
-    minWidth: 30,
-    height: 30,
+    minWidth: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 999,
@@ -3650,18 +4069,74 @@ const createStyles = (colors: ThemeColors) =>
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
   },
+  dayNumberWrapFertile: {
+    backgroundColor: 'rgba(204, 251, 241, 0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 184, 166, 0.48)',
+  },
+  dayNumberWrapOvulation: {
+    backgroundColor: 'rgba(254, 249, 195, 0.98)',
+    borderWidth: 1.5,
+    borderColor: '#0f766e',
+    shadowColor: 'rgba(15, 118, 110, 0.14)',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  dayNumberWrapPms: {
+    backgroundColor: 'rgba(243, 232, 255, 0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.5)',
+  },
   dayNumberInnerRing: {
-    minWidth: 24,
-    height: 24,
+    minWidth: 30,
+    height: 30,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(214, 87, 125, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  cycleStarMarker: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    fontSize: 12,
+    lineHeight: 12,
+    fontWeight: '800',
+  },
+  cycleOvulationMarker: {
+    position: 'absolute',
+    top: -4,
+    right: -7,
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#facc15',
+    borderWidth: 1.5,
+    borderColor: '#ca8a04',
+  },
+  cycleStarMarkerFertile: {
+    color: '#16a34a',
+  },
+  cycleStarMarkerPms: {
+    color: '#8b5cf6',
   },
   dayText: {
     color: colors.text,
     fontWeight: '600',
+    fontSize: 17,
+  },
+  dayTextFertile: {
+    color: '#0f766e',
+  },
+  dayTextOvulation: {
+    color: '#134e4a',
+    fontWeight: '800',
+  },
+  dayTextPms: {
+    color: '#6d28d9',
   },
   energyDayText: {
     color: '#111111',
@@ -3699,6 +4174,10 @@ const createStyles = (colors: ThemeColors) =>
     color: '#c24369',
     fontWeight: '800',
   },
+  dayTextToday: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
   dayTextSelected: {
     color: '#fff',
     fontWeight: '700',
@@ -3712,15 +4191,15 @@ const createStyles = (colors: ThemeColors) =>
     fontWeight: '800',
   },
   dayDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: '#fff',
   },
   cycleDayDot: {
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
@@ -3740,18 +4219,18 @@ const createStyles = (colors: ThemeColors) =>
     borderColor: '#0f766e',
   },
   nutritionDayDot: {
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
   },
   dayDotsRow: {
     position: 'absolute',
-    bottom: 2,
+    bottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     pointerEvents: 'none',
   },
   cycleActionCard: {
@@ -3865,6 +4344,31 @@ const createStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     gap: 6,
   },
+  cycleHintPeriodMarker: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#e11d48',
+  },
+  cycleHintStarMarker: {
+    fontSize: 12,
+    lineHeight: 12,
+    fontWeight: '800',
+  },
+  cycleHintStarMarkerFertile: {
+    color: '#16a34a',
+  },
+  cycleHintStarMarkerPms: {
+    color: '#8b5cf6',
+  },
+  cycleHintOvulationMarker: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#facc15',
+    borderWidth: 1.5,
+    borderColor: '#ca8a04',
+  },
   cycleHintDot: {
     width: 8,
     height: 8,
@@ -3879,6 +4383,158 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.subtext,
     fontSize: 11,
     fontWeight: '700',
+  },
+  cycleEntryCard: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: colors.glassStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  cycleEntryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cycleEntryTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  cycleEntryChevron: {
+    color: colors.primary,
+    fontSize: 18,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  cycleEntryText: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  cycleEntryMeta: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  guidanceCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: colors.glassStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 10,
+  },
+  guidanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  guidanceHeaderCopy: {
+    flex: 1,
+    minWidth: 180,
+    gap: 3,
+  },
+  guidanceTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  guidanceMeta: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  guidanceTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  guidanceSummary: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  guidanceBody: {
+    gap: 10,
+  },
+  guidanceSection: {
+    gap: 4,
+  },
+  guidanceSectionTitle: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  guidanceBulletText: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  guidanceEmptyText: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  guidanceLongText: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  guidanceEntryCard: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  guidanceEntryCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  guidanceEntryTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  guidanceEntryText: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  guidanceEntryChevron: {
+    color: colors.primary,
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  guidanceModalTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  guidanceModalTopCopy: {
+    flex: 1,
+    gap: 2,
   },
   cycleInfoCard: {
     marginTop: 10,
@@ -4601,10 +5257,16 @@ const createStyles = (colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: colors.primary,
   },
+  addActionBtnCompact: {
+    minWidth: 36,
+    width: 36,
+    paddingHorizontal: 0,
+  },
   addActionBtnText: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: '700',
+    lineHeight: 22,
   },
   createHint: {
     color: colors.subtext,

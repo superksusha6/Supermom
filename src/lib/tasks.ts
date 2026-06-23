@@ -1,10 +1,19 @@
 import {
+  ActivityLevel,
   ApprovalRequest,
   CalendarEvent,
   ChildProfile,
+  CustomNutritionFood,
   CycleDayEntry,
+  FridgeItem,
+  FridgeItemCategory,
+  FridgeItemStatus,
+  FridgeItemUnit,
   HabitEntry,
   NutritionFoodEntry,
+  NutritionGoal,
+  NutritionPace,
+  NutritionSex,
   PersonalProfile,
   PurchaseRequest,
   Recipe,
@@ -12,6 +21,8 @@ import {
   RecipeMealType,
   Role,
   ShoppingItem,
+  ShoppingItemCategory,
+  ShoppingListType,
   ShoppingListDoc,
   ShoppingShare,
   TaskItem,
@@ -85,6 +96,27 @@ export type StaffReminderNotificationRecord = {
 export type UserPreferencesRecord = {
   parentLabel: 'Mom' | 'Dad';
   themeName?: ThemeName;
+  dailyCardDate?: string;
+  dailyCardId?: string;
+  nutritionGoal?: NutritionGoal;
+  activityLevel?: ActivityLevel;
+  nutritionSex?: NutritionSex;
+  desiredWeight?: string;
+  nutritionPace?: NutritionPace;
+  calorieOverride?: string;
+  activeMealPlanProfile?: string;
+  periodRemindersEnabled?: boolean;
+  periodReminderLeadDays?: number;
+};
+
+export type MealPlanProfileRecord = {
+  key: string;
+  label: string;
+};
+
+export type WeeklyMealPlanRecord = {
+  entries: WeeklyMealPlanEntry[];
+  profiles: MealPlanProfileRecord[];
 };
 
 export type MyProfileRecord = PersonalProfile;
@@ -118,9 +150,42 @@ export async function signInWithEmail(email: string, password: string) {
   if (error) throw error;
 }
 
+function resolveAuthRedirectUrl() {
+  const configured = process.env.EXPO_PUBLIC_APP_URL?.trim();
+  if (configured) return configured;
+
+  const fallback = 'https://supermom-rose.vercel.app';
+  if (typeof globalThis === 'undefined' || !('location' in globalThis) || !globalThis.location) {
+    return fallback;
+  }
+
+  const origin = globalThis.location.origin;
+  const hostname = globalThis.location.hostname?.toLowerCase() || '';
+  const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  const isPrivateLan =
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+  const isHttp = globalThis.location.protocol === 'http:';
+
+  if (!origin || isLoopback || isPrivateLan || isHttp) {
+    return fallback;
+  }
+
+  return origin;
+}
+
 export async function sendPasswordResetEmail(email: string) {
   const client = requireClient();
-  const { error } = await client.auth.resetPasswordForEmail(email);
+  const baseUrl = resolveAuthRedirectUrl().replace(/\/+$/, '');
+  const redirectTo = `${baseUrl}/?auth=recovery`;
+  const { error } = await client.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined);
+  if (error) throw error;
+}
+
+export async function updatePassword(password: string) {
+  const client = requireClient();
+  const { error } = await client.auth.updateUser({ password });
   if (error) throw error;
 }
 
@@ -228,11 +293,24 @@ export async function upsertMyProfile(payload: {
   };
   const fullProfilePayload = {
     ...baseProfilePayload,
-    cycle_tracking_enabled: !!payload.cycleTrackingEnabled,
-    cycle_last_period_start: toStorageBirthDate(payload.cycleLastPeriodStart),
-    cycle_length_days: toNullableInt(payload.cycleLengthDays),
-    cycle_period_length_days: toNullableInt(payload.cyclePeriodLengthDays),
-    cycle_entries_json: payload.cycleEntries || [],
+    cycle_tracking_enabled:
+      typeof payload.cycleTrackingEnabled === 'boolean'
+        ? payload.cycleTrackingEnabled
+        : !!existingProfile?.cycleTrackingEnabled,
+    cycle_last_period_start: toStorageBirthDate(
+      payload.cycleLastPeriodStart !== undefined
+        ? payload.cycleLastPeriodStart
+        : existingProfile?.cycleLastPeriodStart,
+    ),
+    cycle_length_days: toNullableInt(
+      payload.cycleLengthDays !== undefined ? payload.cycleLengthDays : existingProfile?.cycleLengthDays,
+    ),
+    cycle_period_length_days: toNullableInt(
+      payload.cyclePeriodLengthDays !== undefined
+        ? payload.cyclePeriodLengthDays
+        : existingProfile?.cyclePeriodLengthDays,
+    ),
+    cycle_entries_json: payload.cycleEntries !== undefined ? payload.cycleEntries : existingProfile?.cycleEntries || [],
   };
 
   const { error } = await client.from('profiles').upsert(fullProfilePayload, { onConflict: 'id' });
@@ -249,6 +327,72 @@ export async function upsertMyProfile(payload: {
     return;
   }
 
+  if (error) throw error;
+}
+
+export async function listCycleEntries(session: AppSession): Promise<CycleDayEntry[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('cycle_entries')
+    .select('entry_date, flow_level, discharge_type, feelings_json, pains_json, sleep_quality, sleep_hours, sleep_minutes, is_period_start')
+    .eq('user_id', session.userId)
+    .order('entry_date', { ascending: true });
+
+  if (isMissingCycleEntriesTableError(error)) {
+    throw new Error('Supabase cycle entries table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/cycle_entries.sql in the Supabase SQL Editor, then refresh.');
+  }
+  if (error) throw error;
+
+  return ((data ?? []) as Array<{
+    entry_date: string;
+    flow_level?: string | null;
+    discharge_type?: string | null;
+    feelings_json?: unknown;
+    pains_json?: unknown;
+    sleep_quality?: string | null;
+    sleep_hours?: number | null;
+    sleep_minutes?: number | null;
+    is_period_start?: boolean | null;
+  }>).map((row) => ({
+    date: row.entry_date,
+    flowLevel: row.flow_level || undefined,
+    dischargeType: row.discharge_type || undefined,
+    feelings: Array.isArray(row.feelings_json) ? (row.feelings_json as string[]) : undefined,
+    pains: Array.isArray(row.pains_json) ? (row.pains_json as string[]) : undefined,
+    sleepQuality: row.sleep_quality || undefined,
+    sleepHours: typeof row.sleep_hours === 'number' ? row.sleep_hours : undefined,
+    sleepMinutes: typeof row.sleep_minutes === 'number' ? row.sleep_minutes : undefined,
+    isPeriodStart: !!row.is_period_start,
+  }));
+}
+
+export async function replaceCycleEntries(session: AppSession, entries: CycleDayEntry[]) {
+  const client = requireClient();
+  const { error: deleteError } = await client.from('cycle_entries').delete().eq('user_id', session.userId);
+  if (isMissingCycleEntriesTableError(deleteError)) {
+    throw new Error('Supabase cycle entries table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/cycle_entries.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (deleteError) throw deleteError;
+  if (entries.length === 0) return;
+
+  const { error } = await client.from('cycle_entries').insert(
+    entries.map((entry) => ({
+      user_id: session.userId,
+      entry_date: entry.date,
+      flow_level: entry.flowLevel || null,
+      discharge_type: entry.dischargeType || null,
+      feelings_json: entry.feelings || [],
+      pains_json: entry.pains || [],
+      sleep_quality: entry.sleepQuality || null,
+      sleep_hours: typeof entry.sleepHours === 'number' ? entry.sleepHours : null,
+      sleep_minutes: typeof entry.sleepMinutes === 'number' ? entry.sleepMinutes : null,
+      is_period_start: !!entry.isPeriodStart,
+      updated_at: new Date().toISOString(),
+    })),
+  );
+  if (isMissingCycleEntriesTableError(error)) {
+    throw new Error('Supabase cycle entries table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/cycle_entries.sql in the Supabase SQL Editor, then try again.');
+  }
   if (error) throw error;
 }
 
@@ -275,6 +419,16 @@ function isMissingProfileColumnError(error: unknown) {
     message.includes("column 'nickname' of relation 'profiles' does not exist") ||
     message.includes("column 'height_cm' of relation 'profiles' does not exist") ||
     message.includes("column 'weight_kg' of relation 'profiles' does not exist")
+  );
+}
+
+function isMissingCycleEntriesTableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes("relation \"public.cycle_entries\" does not exist") ||
+    message.includes("Could not find the table 'public.cycle_entries'") ||
+    message.includes("Could not find the table 'cycle_entries'")
   );
 }
 
@@ -427,7 +581,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
     const startsAt = new Date(row.starts_at);
     const date = startsAt.toISOString().slice(0, 10);
     const time = formatTime12(startsAt);
-    const owner: Role = row.owner_child_profile_id ? 'child' : (meta.owner as Role) || 'mother';
+    const owner: Role = (meta.owner as Role) || (row.owner_child_profile_id ? 'child' : 'mother');
 
     return {
       id: row.id,
@@ -633,6 +787,12 @@ export async function updateCalendarEvent(
   if (error) throw error;
 }
 
+export async function deleteCalendarEvent(session: AppSession, eventId: string) {
+  const client = requireClient();
+  const { error } = await client.from('events').delete().eq('id', eventId).eq('family_id', session.familyId);
+  if (error) throw error;
+}
+
 export async function deleteChildProfile(session: AppSession, childId: string) {
   const client = requireClient();
 
@@ -778,34 +938,117 @@ export async function createRecipe(session: AppSession, recipe: Recipe) {
   return data.id as string;
 }
 
+export async function updateRecipe(session: AppSession, recipe: Recipe) {
+  const client = requireClient();
+  const basePayload = {
+    family_id: session.familyId,
+    title: recipe.title,
+    description: recipe.description,
+    meal_type: recipe.mealType,
+    cuisine: recipe.cuisine || null,
+    cook_time_minutes: recipe.cookTimeMinutes,
+    servings: recipe.servings,
+    tags_json: recipe.tags,
+    classifiers_json: recipe.classifiers,
+    nutrition_per_serving_json: recipe.nutritionPerServing,
+    ingredients_json: recipe.ingredients,
+    steps_json: recipe.steps,
+    suitable_for_children: !!recipe.suitableForChildren,
+    suitable_for_family: !!recipe.suitableForFamily,
+    photo_url: recipe.photoUri || null,
+  };
+  const { error } = await client.from('recipes').update(basePayload).eq('id', recipe.id).eq('family_id', session.familyId);
+
+  if (isMissingRecipePhotoColumnError(error)) {
+    const { error: fallbackError } = await client
+      .from('recipes')
+      .update({
+        family_id: session.familyId,
+        title: recipe.title,
+        description: recipe.description,
+        meal_type: recipe.mealType,
+        cuisine: recipe.cuisine || null,
+        cook_time_minutes: recipe.cookTimeMinutes,
+        servings: recipe.servings,
+        tags_json: recipe.tags,
+        classifiers_json: recipe.classifiers,
+        nutrition_per_serving_json: recipe.nutritionPerServing,
+        ingredients_json: recipe.ingredients,
+        steps_json: recipe.steps,
+        suitable_for_children: !!recipe.suitableForChildren,
+        suitable_for_family: !!recipe.suitableForFamily,
+      })
+      .eq('id', recipe.id)
+      .eq('family_id', session.familyId);
+    if (fallbackError) throw fallbackError;
+    return;
+  }
+
+  if (error) throw error;
+}
+
+export async function deleteRecipe(session: AppSession, recipeId: string) {
+  const client = requireClient();
+  const { error } = await client.from('recipes').delete().eq('id', recipeId).eq('family_id', session.familyId);
+  if (error) throw error;
+}
+
 function isMissingRecipePhotoColumnError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
   const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
   return message.includes("Could not find the 'photo_url' column of 'recipes'") || message.includes("column 'photo_url' of relation 'recipes' does not exist");
 }
 
-export async function listWeeklyMealPlan(familyId: string): Promise<WeeklyMealPlanEntry[]> {
+export async function getWeeklyMealPlanRecord(familyId: string): Promise<WeeklyMealPlanRecord> {
   const client = requireClient();
-  const { data, error } = await client
+  const fullQuery = await client
     .from('weekly_meal_plans')
-    .select('entries_json')
+    .select('entries_json, profiles_json')
     .eq('family_id', familyId)
     .maybeSingle();
+
+  const { data, error } = isMissingWeeklyMealPlanProfilesColumnError(fullQuery.error)
+    ? await client
+        .from('weekly_meal_plans')
+        .select('entries_json')
+        .eq('family_id', familyId)
+        .maybeSingle()
+    : fullQuery;
 
   if (isMissingWeeklyMealPlanTableError(error)) {
     throw new Error('Supabase weekly meal plan table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/weekly_meal_plans.sql in the Supabase SQL Editor, then refresh.');
   }
   if (error) throw error;
-  if (!data || !Array.isArray(data.entries_json)) return [];
-  return data.entries_json as WeeklyMealPlanEntry[];
+  if (!data) return { entries: [], profiles: [] };
+
+  const record = data as {
+    entries_json?: unknown;
+    profiles_json?: unknown;
+  };
+
+  return {
+    entries: Array.isArray(record.entries_json) ? (record.entries_json as WeeklyMealPlanEntry[]) : [],
+    profiles: Array.isArray(record.profiles_json)
+      ? record.profiles_json.filter(
+          (item): item is MealPlanProfileRecord =>
+            !!item && typeof item === 'object' && 'key' in item && 'label' in item && typeof item.key === 'string' && typeof item.label === 'string',
+        )
+      : [],
+  };
 }
 
-export async function upsertWeeklyMealPlan(session: AppSession, entries: WeeklyMealPlanEntry[]) {
+export async function listWeeklyMealPlan(familyId: string): Promise<WeeklyMealPlanEntry[]> {
+  const record = await getWeeklyMealPlanRecord(familyId);
+  return record.entries;
+}
+
+export async function upsertWeeklyMealPlanRecord(session: AppSession, record: WeeklyMealPlanRecord) {
   const client = requireClient();
   const { error } = await client.from('weekly_meal_plans').upsert(
     {
       family_id: session.familyId,
-      entries_json: entries,
+      entries_json: record.entries,
+      profiles_json: record.profiles,
       updated_by: session.userId,
       updated_at: new Date().toISOString(),
     },
@@ -815,7 +1058,14 @@ export async function upsertWeeklyMealPlan(session: AppSession, entries: WeeklyM
   if (isMissingWeeklyMealPlanTableError(error)) {
     throw new Error('Supabase weekly meal plan table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/weekly_meal_plans.sql in the Supabase SQL Editor, then try again.');
   }
+  if (isMissingWeeklyMealPlanProfilesColumnError(error)) {
+    throw new Error('Supabase weekly meal plan profiles column is missing. Run /Users/ksu/promom/smart-mom-app/supabase/weekly_meal_plans.sql in the Supabase SQL Editor, then try again.');
+  }
   if (error) throw error;
+}
+
+export async function upsertWeeklyMealPlan(session: AppSession, entries: WeeklyMealPlanEntry[]) {
+  await upsertWeeklyMealPlanRecord(session, { entries, profiles: [] });
 }
 
 function isMissingWeeklyMealPlanTableError(error: unknown) {
@@ -825,6 +1075,27 @@ function isMissingWeeklyMealPlanTableError(error: unknown) {
     message.includes("relation \"public.weekly_meal_plans\" does not exist") ||
     message.includes("Could not find the table 'public.weekly_meal_plans'") ||
     message.includes("Could not find the table 'weekly_meal_plans'")
+  );
+}
+
+function isMissingWeeklyMealPlanProfilesColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes("Could not find the 'profiles_json' column of 'weekly_meal_plans'") ||
+    message.includes("Could not find the 'profiles_json' column of 'public.weekly_meal_plans'") ||
+    message.includes("column 'profiles_json' of relation 'weekly_meal_plans' does not exist") ||
+    message.includes("column 'profiles_json' of relation 'public.weekly_meal_plans' does not exist")
+  );
+}
+
+function isMissingFridgeItemsTableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes("relation \"public.fridge_items\" does not exist") ||
+    message.includes("Could not find the table 'public.fridge_items'") ||
+    message.includes("Could not find the table 'fridge_items'")
   );
 }
 
@@ -898,24 +1169,35 @@ export async function replaceGeneratedStaffSchedule(
 
 export async function listShoppingLists(familyId: string): Promise<ShoppingListDoc[]> {
   const client = requireClient();
-  const { data, error } = await client
+  const extendedQuery = await client
     .from('shopping_lists')
-    .select('id, title, created_at, shopping_list_items(id, item_name, quantity, comment, purchased, sort_order, created_at)')
+    .select('id, title, list_type, completed_at, created_at, shopping_list_items(id, item_name, quantity, category, comment, purchased, sort_order, created_at)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
+
+  const { data, error } = isMissingShoppingListItemCategoryColumnError(extendedQuery.error)
+    ? await client
+        .from('shopping_lists')
+        .select('id, title, created_at, shopping_list_items(id, item_name, quantity, comment, purchased, sort_order, created_at)')
+        .eq('family_id', familyId)
+        .order('created_at', { ascending: false })
+    : extendedQuery;
 
   if (error) throw error;
 
   return (data ?? []).map((row) => ({
     id: row.id,
     title: row.title,
+    listType: 'list_type' in row && typeof row.list_type === 'string' ? (row.list_type as ShoppingListType) : undefined,
     createdAt: row.created_at,
+    completedAt: 'completed_at' in row && typeof row.completed_at === 'string' ? row.completed_at : undefined,
     items: [...(row.shopping_list_items ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
       .map((item) => ({
         id: item.id,
         name: item.item_name,
         quantity: item.quantity,
+        category: 'category' in item && typeof item.category === 'string' ? (item.category as ShoppingItemCategory) : undefined,
         comment: item.comment || undefined,
         purchased: item.purchased,
       })),
@@ -925,32 +1207,57 @@ export async function listShoppingLists(familyId: string): Promise<ShoppingListD
 export async function createShoppingList(
   session: AppSession,
   title: string,
-  items: Array<Pick<ShoppingItem, 'name' | 'quantity' | 'comment' | 'purchased'>>,
+  items: Array<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'comment' | 'purchased'>>,
+  options?: {
+    listType?: ShoppingListType;
+    completedAt?: string | null;
+  },
 ) {
   const client = requireClient();
-  const { data, error } = await client
+  const insertPayload = {
+    family_id: session.familyId,
+    title,
+    created_by: session.userId,
+    list_type: options?.listType || 'current',
+    completed_at: options?.completedAt || null,
+  };
+  const fullInsert = await client
     .from('shopping_lists')
-    .insert({
-      family_id: session.familyId,
-      title,
-      created_by: session.userId,
-    })
+    .insert(insertPayload)
     .select('id')
     .single();
+  const { data, error } = isMissingShoppingListsTypeColumnError(fullInsert.error)
+    ? await client
+        .from('shopping_lists')
+        .insert({
+          family_id: session.familyId,
+          title,
+          created_by: session.userId,
+        })
+        .select('id')
+        .single()
+    : fullInsert;
   if (error) throw error;
 
   if (items.length > 0) {
-    const { error: itemsError } = await client.from('shopping_list_items').insert(
+    const extendedInsert = await client.from('shopping_list_items').insert(
       items.map((item, index) => ({
         list_id: data.id,
         item_name: item.name,
         quantity: item.quantity,
+        category: item.category || null,
         comment: item.comment || null,
         purchased: item.purchased,
         sort_order: index,
       })),
     );
-    if (itemsError) throw itemsError;
+    if (isMissingShoppingListItemCategoryColumnError(extendedInsert.error)) {
+      throw new Error(
+        'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.',
+      );
+    } else if (extendedInsert.error) {
+      throw extendedInsert.error;
+    }
   }
 
   return data.id as string;
@@ -963,17 +1270,23 @@ export async function updateShoppingListItems(session: AppSession, listId: strin
 
   if (items.length === 0) return;
 
-  const { error: insertError } = await client.from('shopping_list_items').insert(
+  const extendedInsert = await client.from('shopping_list_items').insert(
     items.map((item, index) => ({
       list_id: listId,
       item_name: item.name,
       quantity: item.quantity,
+      category: item.category || null,
       comment: item.comment || null,
       purchased: item.purchased,
       sort_order: index,
     })),
   );
-  if (insertError) throw insertError;
+  if (isMissingShoppingListItemCategoryColumnError(extendedInsert.error)) {
+    throw new Error(
+      'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.',
+    );
+  }
+  if (extendedInsert.error) throw extendedInsert.error;
 }
 
 export async function deleteShoppingList(session: AppSession, listId: string) {
@@ -982,10 +1295,188 @@ export async function deleteShoppingList(session: AppSession, listId: string) {
   if (error) throw error;
 }
 
+export async function updateShoppingListMeta(
+  session: AppSession,
+  listId: string,
+  payload: {
+    title?: string;
+    listType?: ShoppingListType;
+    completedAt?: string | null;
+  },
+) {
+  const client = requireClient();
+  const updatePayload = {
+    ...(payload.title !== undefined ? { title: payload.title } : {}),
+    ...(payload.listType !== undefined ? { list_type: payload.listType } : {}),
+    ...(payload.completedAt !== undefined ? { completed_at: payload.completedAt } : {}),
+  };
+  if (Object.keys(updatePayload).length === 0) return;
+  const fullUpdate = await client.from('shopping_lists').update(updatePayload).eq('family_id', session.familyId).eq('id', listId);
+  if (isMissingShoppingListsTypeColumnError(fullUpdate.error)) {
+    const fallbackPayload = {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+    };
+    if (Object.keys(fallbackPayload).length === 0) return;
+    const { error } = await client.from('shopping_lists').update(fallbackPayload).eq('family_id', session.familyId).eq('id', listId);
+    if (error) throw error;
+    return;
+  }
+  if (fullUpdate.error) throw fullUpdate.error;
+}
+
 export async function toggleShoppingItemPurchased(itemId: string, purchased: boolean) {
   const client = requireClient();
   const { error } = await client.from('shopping_list_items').update({ purchased }).eq('id', itemId);
   if (error) throw error;
+}
+
+export async function listFridgeItems(familyId: string): Promise<FridgeItem[]> {
+  const client = requireClient();
+  const { data, error } = await client.from('fridge_items').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
+  if (isMissingFridgeItemsTableError(error)) {
+    throw new Error('Supabase fridge table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/fridge_items.sql in the Supabase SQL Editor, then refresh.');
+  }
+  if (error) throw error;
+
+  return ((data ?? []) as Array<{
+    id: string;
+    item_name: string;
+    quantity: string;
+    amount?: number | null;
+    unit?: string | null;
+    category?: string | null;
+    note?: string | null;
+    expires_at?: string | null;
+    opened?: boolean | null;
+    status?: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    name: row.item_name,
+    quantity: row.quantity,
+    amount: typeof row.amount === 'number' ? row.amount : undefined,
+    unit: typeof row.unit === 'string' ? (row.unit as FridgeItemUnit) : undefined,
+    category: (row.category as FridgeItemCategory | null) || undefined,
+    note: typeof row.note === 'string' ? row.note : undefined,
+    expiresAt: typeof row.expires_at === 'string' ? row.expires_at : undefined,
+    opened: typeof row.opened === 'boolean' ? row.opened : undefined,
+    status: (row.status as FridgeItemStatus) || 'full',
+  }));
+}
+
+export async function replaceFridgeItems(session: AppSession, items: FridgeItem[]) {
+  const client = requireClient();
+  const dedupedItems = Array.from(
+    new Map(
+      items.map((item, index) => [
+        item.id || `fridge-${index}-${item.name.trim().toLowerCase()}`,
+        {
+          ...item,
+          id: item.id || `fridge-${index}-${item.name.trim().toLowerCase()}`,
+        },
+      ]),
+    ).values(),
+  );
+
+  const itemIds = dedupedItems.map((item) => item.id);
+
+  if (itemIds.length === 0) {
+    const { error: deleteAllError } = await client.from('fridge_items').delete().eq('family_id', session.familyId);
+    if (isMissingFridgeItemsTableError(deleteAllError)) {
+      throw new Error('Supabase fridge table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/fridge_items.sql in the Supabase SQL Editor, then try again.');
+    }
+    if (deleteAllError) throw deleteAllError;
+    return;
+  }
+
+  const staleIdsFilter = `(${itemIds.map((id) => `"${id}"`).join(',')})`;
+  const { error: deleteError } = await client.from('fridge_items').delete().eq('family_id', session.familyId).not('id', 'in', staleIdsFilter);
+  if (isMissingFridgeItemsTableError(deleteError)) {
+    throw new Error('Supabase fridge table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/fridge_items.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (deleteError) throw deleteError;
+
+  const { error } = await client
+    .from('fridge_items')
+    .upsert(
+      dedupedItems.map((item) => ({
+        id: item.id,
+        family_id: session.familyId,
+        item_name: item.name,
+        quantity: item.quantity,
+        amount: typeof item.amount === 'number' ? item.amount : null,
+        unit: item.unit || null,
+        category: item.category || null,
+        note: item.note || null,
+        expires_at: item.expiresAt || null,
+        opened: typeof item.opened === 'boolean' ? item.opened : false,
+        status: item.status,
+        created_by: session.userId,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'id' },
+    );
+  if (isMissingFridgeItemsColumnError(error)) {
+    const { error: fallbackError } = await client
+      .from('fridge_items')
+      .upsert(
+        dedupedItems.map((item) => ({
+          id: item.id,
+          family_id: session.familyId,
+          item_name: item.name,
+          quantity: item.quantity,
+          category: item.category || null,
+          note: item.note || null,
+          status: item.status,
+          created_by: session.userId,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'id' },
+      );
+    if (isMissingFridgeItemsTableError(fallbackError)) {
+      throw new Error('Supabase fridge table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/fridge_items.sql in the Supabase SQL Editor, then try again.');
+    }
+    if (fallbackError) throw fallbackError;
+    return;
+  }
+  if (isMissingFridgeItemsTableError(error)) {
+    throw new Error('Supabase fridge table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/fridge_items.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (error) throw error;
+}
+
+function isMissingFridgeItemsColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : '';
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    message.includes("column fridge_items.amount does not exist") ||
+    message.includes("column fridge_items.unit does not exist") ||
+    message.includes("column fridge_items.expires_at does not exist") ||
+    message.includes("column fridge_items.opened does not exist") ||
+    message.includes("Could not find the 'amount' column") ||
+    message.includes("Could not find the 'unit' column") ||
+    message.includes("Could not find the 'expires_at' column") ||
+    message.includes("Could not find the 'opened' column")
+  );
+}
+
+function isMissingShoppingListItemCategoryColumnError(error: unknown) {
+  const message = String((error as { message?: string } | undefined)?.message || '').toLowerCase();
+  return (
+    message.includes("column shopping_list_items.category does not exist") ||
+    message.includes("column shopping_lists.list_type does not exist") ||
+    message.includes("column shopping_lists.completed_at does not exist")
+  );
+}
+
+function isMissingShoppingListsTypeColumnError(error: unknown) {
+  const message = String((error as { message?: string } | undefined)?.message || '').toLowerCase();
+  return (
+    message.includes("column shopping_lists.list_type does not exist") ||
+    message.includes("column shopping_lists.completed_at does not exist")
+  );
 }
 
 export async function listShoppingShares(familyId: string): Promise<ShoppingShare[]> {
@@ -1161,16 +1652,44 @@ export async function upsertStaffReminderNotification(
 
 export async function getUserPreferences(session: AppSession): Promise<UserPreferencesRecord | null> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('user_preferences')
-    .select('parent_label, theme_name')
-    .eq('user_id', session.userId)
-    .maybeSingle();
+  const { data, error } = await client.from('user_preferences').select('*').eq('user_id', session.userId).maybeSingle();
+
   if (error) throw error;
   if (!data) return null;
+
+  const record = data as {
+    parent_label: 'Mom' | 'Dad';
+    theme_name?: ThemeName | null;
+    daily_card_date?: string | null;
+    daily_card_id?: string | null;
+    nutrition_goal?: NutritionGoal | null;
+    activity_level?: ActivityLevel | null;
+    nutrition_sex?: NutritionSex | null;
+    desired_weight?: string | number | null;
+    nutrition_pace?: NutritionPace | null;
+    calorie_override?: string | number | null;
+    active_meal_plan_profile?: string | null;
+    period_reminders_enabled?: boolean | null;
+    period_reminder_lead_days?: number | null;
+  };
+
   return {
-    parentLabel: data.parent_label as 'Mom' | 'Dad',
-    themeName: (data.theme_name as ThemeName | null) || undefined,
+    parentLabel: record.parent_label,
+    themeName: record.theme_name || undefined,
+    dailyCardDate: record.daily_card_date || undefined,
+    dailyCardId: record.daily_card_id || undefined,
+    nutritionGoal: record.nutrition_goal || undefined,
+    activityLevel: record.activity_level || undefined,
+    nutritionSex: record.nutrition_sex || undefined,
+    desiredWeight: record.desired_weight != null ? String(record.desired_weight) : undefined,
+    nutritionPace: record.nutrition_pace || undefined,
+    calorieOverride: record.calorie_override != null ? String(record.calorie_override) : undefined,
+    activeMealPlanProfile: record.active_meal_plan_profile || undefined,
+    periodRemindersEnabled: typeof record.period_reminders_enabled === 'boolean' ? record.period_reminders_enabled : undefined,
+    periodReminderLeadDays:
+      typeof record.period_reminder_lead_days === 'number' && Number.isFinite(record.period_reminder_lead_days)
+        ? record.period_reminder_lead_days
+        : undefined,
   };
 }
 
@@ -1179,17 +1698,78 @@ export async function upsertUserPreferences(
   payload: Partial<UserPreferencesRecord>,
 ) {
   const client = requireClient();
+  const fullPayload = {
+    user_id: session.userId,
+    family_id: session.familyId,
+    updated_at: new Date().toISOString(),
+    ...('parentLabel' in payload ? { parent_label: payload.parentLabel || 'Mom' } : {}),
+    ...('themeName' in payload ? { theme_name: payload.themeName || null } : {}),
+    ...('dailyCardDate' in payload ? { daily_card_date: payload.dailyCardDate || null } : {}),
+    ...('dailyCardId' in payload ? { daily_card_id: payload.dailyCardId || null } : {}),
+    ...('nutritionGoal' in payload ? { nutrition_goal: payload.nutritionGoal || null } : {}),
+    ...('activityLevel' in payload ? { activity_level: payload.activityLevel || null } : {}),
+    ...('nutritionSex' in payload ? { nutrition_sex: payload.nutritionSex || null } : {}),
+    ...('desiredWeight' in payload ? { desired_weight: payload.desiredWeight || null } : {}),
+    ...('nutritionPace' in payload ? { nutrition_pace: payload.nutritionPace || null } : {}),
+    ...('calorieOverride' in payload ? { calorie_override: payload.calorieOverride || null } : {}),
+    ...('activeMealPlanProfile' in payload ? { active_meal_plan_profile: payload.activeMealPlanProfile || null } : {}),
+    ...('periodRemindersEnabled' in payload ? { period_reminders_enabled: !!payload.periodRemindersEnabled } : {}),
+    ...('periodReminderLeadDays' in payload ? { period_reminder_lead_days: payload.periodReminderLeadDays || null } : {}),
+  };
+
   const { error } = await client.from('user_preferences').upsert(
-    {
-      user_id: session.userId,
-      family_id: session.familyId,
-      parent_label: payload.parentLabel || 'Mom',
-      theme_name: payload.themeName || null,
-      updated_at: new Date().toISOString(),
-    },
+    fullPayload,
     { onConflict: 'user_id' },
   );
+
+  if (isMissingUserPreferencesColumnError(error)) {
+    const { error: fallbackError } = await client.from('user_preferences').upsert(
+      {
+        user_id: session.userId,
+        family_id: session.familyId,
+        parent_label: payload.parentLabel || 'Mom',
+        theme_name: payload.themeName || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+    if (fallbackError) throw fallbackError;
+    return;
+  }
+
   if (error) throw error;
+}
+
+function isMissingUserPreferencesColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = String((error as { message?: unknown }).message || '');
+  const code = String((error as { code?: unknown }).code || '');
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    message.includes("Could not find the 'daily_card_date' column of 'user_preferences'") ||
+    message.includes("Could not find the 'daily_card_id' column of 'user_preferences'") ||
+    message.includes("Could not find the 'nutrition_goal' column of 'user_preferences'") ||
+    message.includes("Could not find the 'activity_level' column of 'user_preferences'") ||
+    message.includes("Could not find the 'nutrition_sex' column of 'user_preferences'") ||
+    message.includes("Could not find the 'desired_weight' column of 'user_preferences'") ||
+    message.includes("Could not find the 'nutrition_pace' column of 'user_preferences'") ||
+    message.includes("Could not find the 'calorie_override' column of 'user_preferences'") ||
+    message.includes("Could not find the 'active_meal_plan_profile' column of 'user_preferences'") ||
+    message.includes("Could not find the 'period_reminders_enabled' column of 'user_preferences'") ||
+    message.includes("Could not find the 'period_reminder_lead_days' column of 'user_preferences'") ||
+    message.includes("column 'daily_card_date' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'daily_card_id' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'nutrition_goal' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'activity_level' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'nutrition_sex' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'desired_weight' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'nutrition_pace' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'calorie_override' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'active_meal_plan_profile' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'period_reminders_enabled' of relation 'user_preferences' does not exist") ||
+    message.includes("column 'period_reminder_lead_days' of relation 'user_preferences' does not exist")
+  );
 }
 
 export async function listHabitEntries(session: AppSession): Promise<HabitEntry[]> {
@@ -1276,14 +1856,95 @@ export async function listNutritionEntries(session: AppSession): Promise<Nutriti
   }));
 }
 
+export async function listCustomNutritionFoods(session: AppSession): Promise<CustomNutritionFood[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('custom_nutrition_foods')
+    .select('id, name, brand, base_mode, base_quantity, calories, protein, fat, carbs')
+    .eq('user_id', session.userId)
+    .order('updated_at', { ascending: false });
+  if (isMissingCustomNutritionFoodsTableError(error)) {
+    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then refresh.');
+  }
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    brand: row.brand || undefined,
+    baseMode: row.base_mode || '100g',
+    baseQuantity: Number(row.base_quantity) || 100,
+    calories: Number(row.calories) || 0,
+    protein: Number(row.protein) || 0,
+    fat: Number(row.fat) || 0,
+    carbs: Number(row.carbs) || 0,
+  }));
+}
+
+export async function replaceCustomNutritionFoods(session: AppSession, foods: CustomNutritionFood[]) {
+  const client = requireClient();
+  if (foods.length === 0) {
+    const { error: deleteError } = await client.from('custom_nutrition_foods').delete().eq('user_id', session.userId);
+    if (isMissingCustomNutritionFoodsTableError(deleteError)) {
+      throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+    }
+    if (deleteError) throw deleteError;
+    return;
+  }
+
+  const nextIds = new Set(foods.map((food) => food.id));
+  const { error } = await client.from('custom_nutrition_foods').upsert(
+    foods.map((food) => ({
+      id: food.id,
+      user_id: session.userId,
+      family_id: session.familyId,
+      name: food.name,
+      brand: food.brand || null,
+      base_mode: food.baseMode,
+      base_quantity: food.baseQuantity,
+      calories: food.calories,
+      protein: food.protein,
+      fat: food.fat,
+      carbs: food.carbs,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: 'id' },
+  );
+  if (isMissingCustomNutritionFoodsTableError(error)) {
+    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (error) throw error;
+
+  const { data: existingRows, error: existingError } = await client
+    .from('custom_nutrition_foods')
+    .select('id')
+    .eq('user_id', session.userId);
+  if (isMissingCustomNutritionFoodsTableError(existingError)) {
+    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (existingError) throw existingError;
+
+  const staleIds = (existingRows ?? []).map((row) => row.id).filter((id) => !nextIds.has(id));
+  if (!staleIds.length) return;
+
+  const { error: staleDeleteError } = await client.from('custom_nutrition_foods').delete().eq('user_id', session.userId).in('id', staleIds);
+  if (isMissingCustomNutritionFoodsTableError(staleDeleteError)) {
+    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (staleDeleteError) throw staleDeleteError;
+}
+
 export async function replaceNutritionEntries(session: AppSession, entries: NutritionFoodEntry[]) {
   const client = requireClient();
-  const { error: deleteError } = await client.from('nutrition_entries').delete().eq('user_id', session.userId);
-  if (isMissingNutritionEntriesTableError(deleteError)) {
-    throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
+  if (entries.length === 0) {
+    const { error: deleteError } = await client.from('nutrition_entries').delete().eq('user_id', session.userId);
+    if (isMissingNutritionEntriesTableError(deleteError)) {
+      throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
+    }
+    if (deleteError) throw deleteError;
+    return;
   }
-  if (deleteError) throw deleteError;
-  if (entries.length === 0) return;
+
+  const nextIds = new Set(entries.map((entry) => entry.id));
   const { error } = await client.from('nutrition_entries').upsert(
     entries.map((entry) => ({
       id: entry.id,
@@ -1304,6 +1965,24 @@ export async function replaceNutritionEntries(session: AppSession, entries: Nutr
     throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
   }
   if (error) throw error;
+
+  const { data: existingRows, error: existingError } = await client
+    .from('nutrition_entries')
+    .select('id')
+    .eq('user_id', session.userId);
+  if (isMissingNutritionEntriesTableError(existingError)) {
+    throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (existingError) throw existingError;
+
+  const staleIds = (existingRows ?? []).map((row) => row.id).filter((id) => !nextIds.has(id));
+  if (!staleIds.length) return;
+
+  const { error: staleDeleteError } = await client.from('nutrition_entries').delete().eq('user_id', session.userId).in('id', staleIds);
+  if (isMissingNutritionEntriesTableError(staleDeleteError)) {
+    throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
+  }
+  if (staleDeleteError) throw staleDeleteError;
 }
 
 function isMissingHabitEntriesTableError(error: unknown) {
@@ -1323,6 +2002,16 @@ function isMissingNutritionEntriesTableError(error: unknown) {
     message.includes("relation \"public.nutrition_entries\" does not exist") ||
     message.includes("Could not find the table 'public.nutrition_entries'") ||
     message.includes("Could not find the table 'nutrition_entries'")
+  );
+}
+
+function isMissingCustomNutritionFoodsTableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes("relation \"public.custom_nutrition_foods\" does not exist") ||
+    message.includes("Could not find the table 'public.custom_nutrition_foods'") ||
+    message.includes("Could not find the table 'custom_nutrition_foods'")
   );
 }
 

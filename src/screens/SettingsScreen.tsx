@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
+import { getNutritionPlan } from '@/lib/nutrition';
 import { ActivityLevel, HabitEntry, HabitReminderMode, NutritionGoal, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -10,14 +11,20 @@ type StaffSummary = {
   dateOfBirth?: string;
 };
 
+type ChildSummary = {
+  id: string;
+  name: string;
+};
+
 type Props = {
+  parentLabel: 'Mom' | 'Dad';
+  currentRole: 'mother' | 'child' | 'staff' | 'admin';
   staffEnabled: boolean;
   onToggleStaff: () => void;
-  debugSessionUserId?: string | null;
   personalProfile: PersonalProfile;
   personalProfileReadonly: boolean;
   onPersonalProfileChange: Dispatch<SetStateAction<PersonalProfile>>;
-  onSavePersonalProfile: () => void;
+  onSavePersonalProfile: () => Promise<boolean> | boolean;
   onEditPersonalProfile: () => void;
   personalProfileStatus?: string | null;
   personalProfileError?: string | null;
@@ -37,14 +44,27 @@ type Props = {
   onHabitsChange: Dispatch<SetStateAction<HabitEntry[]>>;
   habitRemindersEnabled: boolean;
   onHabitRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
+  periodRemindersEnabled: boolean;
+  onPeriodRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
+  periodReminderLeadDays: number;
+  onPeriodReminderLeadDaysChange: Dispatch<SetStateAction<number>>;
+  children: ChildSummary[];
   staffProfiles: StaffSummary[];
+  activeFamilyViewKey: string;
+  onSelectFamilyView: (target: string) => void;
+  onSelectParentLabel: (label: 'Mom' | 'Dad') => void;
+  onToggleChildProfileSetup: () => void;
+  onToggleStaffProfileSetup: () => void;
   onEditStaffProfile: (staffId: string) => void;
 };
 
+type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'family';
+
 export function SettingsScreen({
+  parentLabel,
+  currentRole,
   staffEnabled,
   onToggleStaff,
-  debugSessionUserId,
   personalProfile,
   personalProfileReadonly,
   onPersonalProfileChange,
@@ -68,15 +88,42 @@ export function SettingsScreen({
   onHabitsChange,
   habitRemindersEnabled,
   onHabitRemindersEnabledChange,
+  periodRemindersEnabled,
+  onPeriodRemindersEnabledChange,
+  periodReminderLeadDays,
+  onPeriodReminderLeadDaysChange,
+  children,
   staffProfiles,
+  activeFamilyViewKey,
+  onSelectFamilyView,
+  onSelectParentLabel,
+  onToggleChildProfileSetup,
+  onToggleStaffProfileSetup,
   onEditStaffProfile,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const showCycleTracking = currentRole === 'mother' && parentLabel === 'Mom';
+  const nutritionPlan = useMemo(
+    () =>
+      getNutritionPlan({
+        dateOfBirth: personalProfile.dateOfBirth,
+        heightCm: personalProfile.heightCm,
+        weightKg: personalProfile.weightKg,
+        goal: nutritionGoal,
+        activityLevel,
+        sex: nutritionSex,
+        desiredWeightKg: desiredWeight,
+        pace: nutritionPace,
+        calorieOverride,
+      }),
+    [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, desiredWeight, nutritionPace, calorieOverride],
+  );
   const [customHabitTitle, setCustomHabitTitle] = useState('');
   const [customHabitTarget, setCustomHabitTarget] = useState('');
   const [customHabitIcon, setCustomHabitIcon] = useState('✨');
   const [customHabitMarkStyle, setCustomHabitMarkStyle] = useState<NonNullable<HabitEntry['markStyle']>>('circle');
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey | null>(null);
   const habitIconOptions = [
     '💧',
     '🛏️',
@@ -148,149 +195,167 @@ export function SettingsScreen({
       } as Record<string, string>
     )[icon] || '19:00';
 
-  const renderInfoRow = (label: string, value?: string) => {
-    if (!value?.trim()) return null;
+  const personalSummary = [personalProfile.fullName?.trim(), personalProfile.dateOfBirth?.trim()].filter(Boolean).join(' • ') || 'Add your main details';
+  const nutritionSummary = nutritionPlan
+    ? `${nutritionGoal === 'lose' ? 'Lose' : nutritionGoal === 'gain' ? 'Gain' : 'Maintain'} • ${activityLevel === 'high' ? 'Active' : activityLevel === 'low' ? 'Low activity' : 'Moderate'} • ${nutritionPlan.calories} kcal`
+    : 'Set your goal and nutrition target';
+  const cycleSummary = personalProfile.cycleTrackingEnabled
+    ? `${personalProfile.cycleLengthDays || '28'} days • ${personalProfile.cyclePeriodLengthDays || '5'} days`
+    : 'Disabled';
+  const notificationsSummary = [
+    habitRemindersEnabled ? 'Habits on' : 'Habits off',
+    periodRemindersEnabled ? `Period ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before` : 'Period off',
+  ].join(' • ');
+  const habitsSummary = `${habits.filter((habit) => habit.enabled).length} active • ${habits.length} total`;
+  const familySummary = [
+    parentLabel,
+    `${children.length} child${children.length === 1 ? '' : 'ren'}`,
+    staffEnabled ? 'staff on' : 'staff off',
+  ].join(' • ');
+
+  const sectionRows: Array<{ key: SettingsSectionKey; title: string; subtitle: string }> = [
+    { key: 'personal', title: 'Personal', subtitle: personalSummary },
+    { key: 'nutrition', title: 'Nutrition', subtitle: nutritionSummary },
+    ...(showCycleTracking ? [{ key: 'cycle' as const, title: 'Cycle', subtitle: cycleSummary }] : []),
+    { key: 'notifications', title: 'Notifications', subtitle: notificationsSummary },
+    { key: 'habits', title: 'Habit trackers', subtitle: habitsSummary },
+    { key: 'family', title: 'Family & Access', subtitle: familySummary },
+  ];
+
+  const activeSectionTitle =
+    activeSection === 'personal'
+      ? 'Personal'
+      : activeSection === 'nutrition'
+        ? 'Nutrition'
+        : activeSection === 'cycle'
+          ? 'Cycle'
+          : activeSection === 'notifications'
+            ? 'Notifications'
+            : activeSection === 'habits'
+              ? 'Habit trackers'
+              : activeSection === 'family'
+                ? 'Family & Access'
+                : '';
+
+  const activeSectionSubtitle =
+    activeSection === 'personal'
+      ? 'Basic personal information and health profile.'
+      : activeSection === 'nutrition'
+        ? 'Your goal, activity level and calorie target.'
+        : activeSection === 'cycle'
+          ? 'Cycle settings and period timing.'
+          : activeSection === 'notifications'
+            ? 'Global reminder behavior.'
+            : activeSection === 'habits'
+              ? 'Enable, edit and create trackers.'
+              : activeSection === 'family'
+                ? 'Family profiles, staff access and workspace.'
+                : '';
+
+  function openSection(section: SettingsSectionKey) {
+    if (section === 'personal' || section === 'cycle') onEditPersonalProfile();
+    setActiveSection(section);
+  }
+
+  function closeSection() {
+    setActiveSection(null);
+  }
+
+  async function handleSaveAndClose() {
+    const didSave = await onSavePersonalProfile();
+    if (didSave) closeSection();
+  }
+
+  function renderPersonalEditor() {
     return (
-      <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    );
-  };
+      <>
+        <Text style={styles.label}>Name</Text>
+        <TextInput
+          placeholder="Your full name"
+          style={styles.input}
+          value={personalProfile.fullName}
+          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, fullName: text }))}
+        />
 
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <SectionCard title="Personal Data">
-        {personalProfileReadonly ? (
-          <View style={styles.readonlyWrap}>
-            {renderInfoRow('Name', personalProfile.fullName)}
-            {renderInfoRow('Nickname', personalProfile.nickname)}
-            {renderInfoRow('Date of Birth', personalProfile.dateOfBirth)}
-            {renderInfoRow('Height', personalProfile.heightCm ? `${personalProfile.heightCm} cm` : undefined)}
-            {renderInfoRow('Weight', personalProfile.weightKg ? `${personalProfile.weightKg} kg` : undefined)}
-            {renderInfoRow('Cycle Tracking', personalProfile.cycleTrackingEnabled ? 'Enabled' : undefined)}
-            {personalProfile.cycleTrackingEnabled ? renderInfoRow('Last Period Start', personalProfile.cycleLastPeriodStart) : null}
-            {personalProfile.cycleTrackingEnabled ? renderInfoRow('Cycle Length', personalProfile.cycleLengthDays ? `${personalProfile.cycleLengthDays} days` : undefined) : null}
-            {personalProfile.cycleTrackingEnabled ? renderInfoRow('Period Length', personalProfile.cyclePeriodLengthDays ? `${personalProfile.cyclePeriodLengthDays} days` : undefined) : null}
-            <Pressable style={styles.secondaryBtn} onPress={onEditPersonalProfile}>
-              <Text style={styles.secondaryBtnText}>Edit</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              placeholder="Your full name"
-              style={styles.input}
-              value={personalProfile.fullName}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, fullName: text }))}
-            />
+        <Text style={styles.label}>Nickname</Text>
+        <TextInput
+          placeholder="Nickname"
+          style={styles.input}
+          value={personalProfile.nickname || ''}
+          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, nickname: text }))}
+        />
 
-            <Text style={styles.label}>Nickname</Text>
-            <TextInput
-              placeholder="Nickname"
-              style={styles.input}
-              value={personalProfile.nickname || ''}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, nickname: text }))}
-            />
+        <Text style={styles.label}>Date of Birth</Text>
+        <TextInput
+          placeholder="DD.MM.YYYY"
+          keyboardType="number-pad"
+          style={styles.input}
+          value={personalProfile.dateOfBirth || ''}
+          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, dateOfBirth: formatBirthDateInput(text) }))}
+        />
 
-            <Text style={styles.label}>Date of Birth</Text>
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Text style={styles.label}>Height (cm)</Text>
             <TextInput
-              placeholder="DD.MM.YYYY"
+              placeholder="170"
               keyboardType="number-pad"
               style={styles.input}
-              value={personalProfile.dateOfBirth || ''}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, dateOfBirth: formatBirthDateInput(text) }))}
+              value={personalProfile.heightCm || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, heightCm: text.replace(/[^\d]/g, '').slice(0, 3) }))}
             />
+          </View>
+          <View style={styles.half}>
+            <Text style={styles.label}>Weight (kg)</Text>
+            <TextInput
+              placeholder="60.5"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              value={personalProfile.weightKg || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, weightKg: text.replace(/[^0-9.,]/g, '').slice(0, 6) }))}
+            />
+          </View>
+        </View>
 
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Height (cm)</Text>
-                <TextInput
-                  placeholder="170"
-                  keyboardType="number-pad"
-                  style={styles.input}
-                  value={personalProfile.heightCm || ''}
-                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, heightCm: text.replace(/[^\d]/g, '').slice(0, 3) }))}
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Weight (kg)</Text>
-                <TextInput
-                  placeholder="60.5"
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                  value={personalProfile.weightKg || ''}
-                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, weightKg: text.replace(/[^0-9.,]/g, '').slice(0, 6) }))}
-                />
-              </View>
-            </View>
-
-            <Text style={styles.label}>Cycle Tracking</Text>
-            <Pressable
-              style={[styles.toggle, personalProfile.cycleTrackingEnabled && styles.toggleOn]}
-              onPress={() => onPersonalProfileChange((prev) => ({ ...prev, cycleTrackingEnabled: !prev.cycleTrackingEnabled }))}
-            >
-              <Text style={styles.toggleText}>{personalProfile.cycleTrackingEnabled ? 'Enabled' : 'Disabled'}</Text>
-            </Pressable>
-
-            {personalProfile.cycleTrackingEnabled ? (
-              <>
-                <Text style={styles.label}>Last Period Start</Text>
-                <TextInput
-                  placeholder="DD.MM.YYYY"
-                  keyboardType="number-pad"
-                  style={styles.input}
-                  value={personalProfile.cycleLastPeriodStart || ''}
-                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLastPeriodStart: formatBirthDateInput(text) }))}
-                />
-
-                <View style={styles.row}>
-                  <View style={styles.half}>
-                    <Text style={styles.label}>Cycle Length (days)</Text>
-                    <TextInput
-                      placeholder="28"
-                      keyboardType="number-pad"
-                      style={styles.input}
-                      value={personalProfile.cycleLengthDays || ''}
-                      onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))}
-                    />
-                  </View>
-                  <View style={styles.half}>
-                    <Text style={styles.label}>Period Length (days)</Text>
-                    <TextInput
-                      placeholder="5"
-                      keyboardType="number-pad"
-                      style={styles.input}
-                      value={personalProfile.cyclePeriodLengthDays || ''}
-                      onChangeText={(text) =>
-                        onPersonalProfileChange((prev) => ({ ...prev, cyclePeriodLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))
-                      }
-                    />
-                  </View>
-                </View>
-              </>
-            ) : null}
-
-            <Pressable style={styles.primaryBtn} onPress={onSavePersonalProfile}>
-              <Text style={styles.primaryBtnText}>Save</Text>
-            </Pressable>
-          </>
-        )}
+        <Pressable style={styles.primaryBtn} onPress={handleSaveAndClose}>
+          <Text style={styles.primaryBtnText}>Save</Text>
+        </Pressable>
         {personalProfileStatus ? <Text style={styles.statusText}>{personalProfileStatus}</Text> : null}
         {personalProfileError ? <Text style={styles.errorText}>{personalProfileError}</Text> : null}
-      </SectionCard>
+      </>
+    );
+  }
 
-      <SectionCard title="Debug Profile">
-        <View style={styles.debugCard}>
-          <Text style={styles.debugLine}>{`session.userId: ${debugSessionUserId || 'null'}`}</Text>
-          <Text style={styles.debugLine}>{`fullName: ${personalProfile.fullName || 'null'}`}</Text>
-          <Text style={styles.debugLine}>{`nickname: ${personalProfile.nickname || 'null'}`}</Text>
-          <Text style={styles.debugLine}>{`dateOfBirth: ${personalProfile.dateOfBirth || 'null'}`}</Text>
-        </View>
-      </SectionCard>
+  function renderNutritionEditor() {
+    return (
+      <>
+        {nutritionPlan ? (
+          <View style={styles.nutritionPlanCard}>
+            <Text style={styles.nutritionPlanTitle}>Calculated daily target</Text>
+            <Text style={styles.nutritionPlanCalories}>{nutritionPlan.calories} kcal</Text>
+            <Text style={styles.nutritionPlanMeta}>
+              {nutritionPlan.effectiveGoal === 'lose' ? 'Weight loss' : nutritionPlan.effectiveGoal === 'gain' ? 'Weight gain' : 'Weight maintenance'}
+              {` • ${Math.round(nutritionPlan.desiredWeight)} kg target`}
+            </Text>
+            <View style={styles.nutritionPlanMacros}>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.protein} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Protein</Text>
+              </View>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.fat} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Fat</Text>
+              </View>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.carbs} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Carbs</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.helpText}>Fill in date of birth, height, and weight in Personal to calculate calories and macros automatically.</Text>
+        )}
 
-      <SectionCard title="Nutrition Settings">
         <Text style={styles.label}>Goal</Text>
         <View style={styles.pillRow}>
           {(['lose', 'maintain', 'gain'] as NutritionGoal[]).map((goal) => (
@@ -302,13 +367,15 @@ export function SettingsScreen({
           ))}
         </View>
 
-        <Text style={styles.label}>Activity</Text>
+        <Text style={styles.label}>Lifestyle / activity</Text>
         <View style={styles.pillRow}>
-          {(['low', 'moderate', 'high'] as ActivityLevel[]).map((level) => (
-            <Pressable key={level} style={[styles.pillBtn, activityLevel === level && styles.pillBtnActive]} onPress={() => onActivityLevelChange(level)}>
-              <Text style={[styles.pillBtnText, activityLevel === level && styles.pillBtnTextActive]}>
-                {level === 'low' ? 'Low' : level === 'high' ? 'High' : 'Moderate'}
-              </Text>
+          {([
+            { key: 'low' as ActivityLevel, label: 'Mostly sitting' },
+            { key: 'moderate' as ActivityLevel, label: 'Mixed routine' },
+            { key: 'high' as ActivityLevel, label: 'Very active' },
+          ]).map((level) => (
+            <Pressable key={level.key} style={[styles.pillBtn, activityLevel === level.key && styles.pillBtnActive]} onPress={() => onActivityLevelChange(level.key)}>
+              <Text style={[styles.pillBtnText, activityLevel === level.key && styles.pillBtnTextActive]}>{level.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -350,11 +417,76 @@ export function SettingsScreen({
           value={calorieOverride}
           onChangeText={(text) => onCalorieOverrideChange(text.replace(/[^\d]/g, '').slice(0, 4))}
         />
-        <Text style={styles.helpText}>Use this only if you want to manually override the calculated calories for the current period.</Text>
-      </SectionCard>
 
-      <SectionCard title="Habit Reminders">
-        <Text style={styles.helpText}>Use smart reminders by default, turn them off completely, or set a custom time only for the habits that really need it.</Text>
+        <Pressable style={styles.primaryBtn} onPress={closeSection}>
+          <Text style={styles.primaryBtnText}>Save</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  function renderCycleEditor() {
+    return (
+      <>
+        <Text style={styles.label}>Cycle Tracking</Text>
+        <Pressable
+          style={[styles.toggle, personalProfile.cycleTrackingEnabled && styles.toggleOn]}
+          onPress={() => onPersonalProfileChange((prev) => ({ ...prev, cycleTrackingEnabled: !prev }))}
+        >
+          <Text style={styles.toggleText}>{personalProfile.cycleTrackingEnabled ? 'Enabled' : 'Disabled'}</Text>
+        </Pressable>
+
+        {personalProfile.cycleTrackingEnabled ? (
+          <>
+            <Text style={styles.label}>Last Period Start</Text>
+            <TextInput
+              placeholder="DD.MM.YYYY"
+              keyboardType="number-pad"
+              style={styles.input}
+              value={personalProfile.cycleLastPeriodStart || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLastPeriodStart: formatBirthDateInput(text) }))}
+            />
+
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Cycle Length (days)</Text>
+                <TextInput
+                  placeholder="28"
+                  keyboardType="number-pad"
+                  style={styles.input}
+                  value={personalProfile.cycleLengthDays || ''}
+                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))}
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Period Length (days)</Text>
+                <TextInput
+                  placeholder="5"
+                  keyboardType="number-pad"
+                  style={styles.input}
+                  value={personalProfile.cyclePeriodLengthDays || ''}
+                  onChangeText={(text) =>
+                    onPersonalProfileChange((prev) => ({ ...prev, cyclePeriodLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))
+                  }
+                />
+              </View>
+            </View>
+          </>
+        ) : null}
+
+        <Pressable style={styles.primaryBtn} onPress={handleSaveAndClose}>
+          <Text style={styles.primaryBtnText}>Save</Text>
+        </Pressable>
+        {personalProfileStatus ? <Text style={styles.statusText}>{personalProfileStatus}</Text> : null}
+        {personalProfileError ? <Text style={styles.errorText}>{personalProfileError}</Text> : null}
+      </>
+    );
+  }
+
+  function renderNotificationsEditor() {
+    return (
+      <>
+        <Text style={styles.helpText}>Control global reminder behavior here. Per-habit reminder details stay inside Habit Trackers.</Text>
         <View style={styles.masterReminderRow}>
           <View style={styles.masterReminderCopy}>
             <Text style={styles.masterReminderTitle}>Habit reminders</Text>
@@ -364,9 +496,55 @@ export function SettingsScreen({
             <Text style={styles.toggleText}>{habitRemindersEnabled ? 'On' : 'Off'}</Text>
           </Pressable>
         </View>
-      </SectionCard>
 
-      <SectionCard title="Habit Trackers">
+        {showCycleTracking ? (
+          <View style={styles.masterReminderRow}>
+            <View style={styles.masterReminderCopy}>
+              <Text style={styles.masterReminderTitle}>Period reminders</Text>
+              <Text style={styles.masterReminderSubtitle}>
+                {periodRemindersEnabled
+                  ? `Remind me ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before my period may start.`
+                  : 'Period reminders are off.'}
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.toggle, periodRemindersEnabled && styles.toggleOn]}
+              onPress={() => onPeriodRemindersEnabledChange((prev) => !prev)}
+            >
+              <Text style={styles.toggleText}>{periodRemindersEnabled ? 'On' : 'Off'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {showCycleTracking && periodRemindersEnabled ? (
+          <>
+            <Text style={styles.label}>Remind me before</Text>
+            <View style={styles.pillRow}>
+              {[1, 2, 3].map((days) => (
+                <Pressable
+                  key={days}
+                  style={[styles.pillBtn, periodReminderLeadDays === days && styles.pillBtnActive]}
+                  onPress={() => onPeriodReminderLeadDaysChange(days)}
+                >
+                  <Text style={[styles.pillBtnText, periodReminderLeadDays === days && styles.pillBtnTextActive]}>
+                    {days} day{days === 1 ? '' : 's'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <Pressable style={styles.primaryBtn} onPress={closeSection}>
+          <Text style={styles.primaryBtnText}>Save</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  function renderHabitsEditor() {
+    return (
+      <>
         <Text style={styles.helpText}>Turn ready-made trackers on only when you need them, edit the target, or add your own custom one.</Text>
         <View style={styles.habitSettingsWrap}>
           {habits.map((habit) => (
@@ -381,9 +559,7 @@ export function SettingsScreen({
                 </View>
                 <Pressable
                   style={[styles.toggle, habit.enabled && styles.toggleOn]}
-                  onPress={() =>
-                    onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, enabled: !item.enabled } : item)))
-                  }
+                  onPress={() => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, enabled: !item.enabled } : item)))}
                 >
                   <Text style={styles.toggleText}>{habit.enabled ? 'On' : 'Off'}</Text>
                 </Pressable>
@@ -426,9 +602,7 @@ export function SettingsScreen({
                     style={[styles.input, !habitRemindersEnabled && styles.inputDimmed]}
                     editable={(habit.reminderMode || 'off') === 'custom' && habitRemindersEnabled}
                     value={(habit.reminderMode || 'off') === 'smart' ? getSmartReminderTime(habit.icon) : habit.reminderTime || '20:00'}
-                    onChangeText={(text) =>
-                      onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, reminderTime: text } : item)))
-                    }
+                    onChangeText={(text) => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, reminderTime: text } : item)))}
                   />
                 </>
               ) : null}
@@ -445,10 +619,7 @@ export function SettingsScreen({
                 ))}
               </View>
               {!habit.builtIn ? (
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => onHabitsChange((prev) => prev.filter((item) => item.id !== habit.id))}
-                >
+                <Pressable style={styles.secondaryBtn} onPress={() => onHabitsChange((prev) => prev.filter((item) => item.id !== habit.id))}>
                   <Text style={styles.secondaryBtnText}>Remove custom tracker</Text>
                 </Pressable>
               ) : null}
@@ -510,9 +681,61 @@ export function SettingsScreen({
             <Text style={styles.primaryBtnText}>Add tracker</Text>
           </Pressable>
         </View>
-      </SectionCard>
+      </>
+    );
+  }
 
-      <SectionCard title="Staff Profiles">
+  function renderFamilyEditor() {
+    return (
+      <>
+        {currentRole === 'mother' ? (
+          <>
+            <Text style={styles.label}>Parent profile</Text>
+            <View style={styles.pillRow}>
+              {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
+                <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
+                  <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Open family workspace</Text>
+            <View style={styles.pillRow}>
+              <Pressable style={[styles.pillBtn, activeFamilyViewKey === 'mother' && styles.pillBtnActive]} onPress={() => onSelectFamilyView('mother')}>
+                <Text style={[styles.pillBtnText, activeFamilyViewKey === 'mother' && styles.pillBtnTextActive]}>{parentLabel}</Text>
+              </Pressable>
+              {children.map((child) => (
+                <Pressable
+                  key={`settings-child-${child.id}`}
+                  style={[styles.pillBtn, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnActive]}
+                  onPress={() => onSelectFamilyView(`child:${child.id}`)}
+                >
+                  <Text style={[styles.pillBtnText, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnTextActive]}>{child.name}</Text>
+                </Pressable>
+              ))}
+              {staffProfiles.map((profile) => (
+                <Pressable
+                  key={`settings-staff-${profile.id}`}
+                  style={[styles.pillBtn, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnActive]}
+                  onPress={() => onSelectFamilyView(`staff:${profile.id}`)}
+                >
+                  <Text style={[styles.pillBtnText, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnTextActive]}>{profile.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.profileActionsRow}>
+              <Pressable style={styles.secondaryBtn} onPress={onToggleChildProfileSetup}>
+                <Text style={styles.secondaryBtnText}>Child Profile Setup</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryBtn} onPress={onToggleStaffProfileSetup}>
+                <Text style={styles.secondaryBtnText}>Staff Profile</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : null}
+
+        <Text style={styles.label}>Staff profiles</Text>
         {staffProfiles.length === 0 ? <Text style={styles.emptyText}>No staff profiles yet.</Text> : null}
         {staffProfiles.map((profile) => (
           <View key={profile.id} style={styles.staffCard}>
@@ -525,15 +748,62 @@ export function SettingsScreen({
             </Pressable>
           </View>
         ))}
-      </SectionCard>
 
-      <SectionCard title="Access">
         <Text style={styles.label}>Enable Staff Access</Text>
         <Pressable style={[styles.toggle, staffEnabled && styles.toggleOn]} onPress={onToggleStaff}>
           <Text style={styles.toggleText}>{staffEnabled ? 'Enabled' : 'Disabled'}</Text>
         </Pressable>
-      </SectionCard>
-    </ScrollView>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.settingsList}>
+          {sectionRows.map((section, index) => (
+            <Pressable
+              key={section.key}
+              style={[styles.settingsRow, index === sectionRows.length - 1 && styles.settingsRowLast]}
+              onPress={() => openSection(section.key)}
+            >
+              <View style={styles.settingsRowCopy}>
+                <Text style={styles.settingsRowTitle}>{section.title}</Text>
+                <Text style={styles.settingsRowSubtitle}>{section.subtitle}</Text>
+              </View>
+              <Text style={styles.settingsRowChevron}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+
+      <Modal visible={!!activeSection} transparent animationType="fade" onRequestClose={closeSection}>
+        <View style={styles.editorModalRoot}>
+          <Pressable style={styles.editorModalBackdrop} onPress={closeSection} />
+          <View style={styles.editorModalLayer}>
+            <View style={styles.editorModalCard}>
+              <View style={styles.editorModalHeader}>
+                <View style={styles.editorModalHeaderCopy}>
+                  <Text style={styles.editorModalTitle}>{activeSectionTitle}</Text>
+                  <Text style={styles.editorModalSubtitle}>{activeSectionSubtitle}</Text>
+                </View>
+                <Pressable style={styles.secondaryBtn} onPress={closeSection}>
+                  <Text style={styles.secondaryBtnText}>Close</Text>
+                </Pressable>
+              </View>
+              <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorScrollContent} showsVerticalScrollIndicator={false}>
+                {activeSection === 'personal' ? renderPersonalEditor() : null}
+                {activeSection === 'nutrition' ? renderNutritionEditor() : null}
+                {activeSection === 'cycle' ? renderCycleEditor() : null}
+                {activeSection === 'notifications' ? renderNotificationsEditor() : null}
+                {activeSection === 'habits' ? renderHabitsEditor() : null}
+                {activeSection === 'family' ? renderFamilyEditor() : null}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -546,9 +816,117 @@ function formatBirthDateInput(value: string) {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    screen: {
+      flex: 1,
+      minHeight: 0,
+    },
     content: {
+      flexGrow: 1,
       gap: 14,
       paddingBottom: 32,
+    },
+    settingsList: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      overflow: 'hidden',
+    },
+    settingsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    settingsRowLast: {
+      borderBottomWidth: 0,
+    },
+    settingsRowCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    settingsRowTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    settingsRowSubtitle: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
+    settingsRowChevron: {
+      color: colors.subtext,
+      fontSize: 22,
+      lineHeight: 22,
+      fontWeight: '700',
+    },
+    editorModalRoot: {
+      flex: 1,
+      position: 'relative',
+    },
+    editorModalBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    },
+    editorModalLayer: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: 16,
+    },
+    editorModalCard: {
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 880,
+      maxHeight: '88%',
+      minHeight: '62%',
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.98)',
+      backgroundColor: 'rgba(248,250,252,0.995)',
+      padding: 16,
+      gap: 12,
+      overflow: 'hidden',
+    },
+    editorModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    editorModalHeaderCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    editorModalTitle: {
+      color: colors.text,
+      fontSize: 24,
+      fontWeight: '800',
+    },
+    editorModalSubtitle: {
+      color: colors.subtext,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: '600',
+    },
+    editorScroll: {
+      flex: 1,
+      minHeight: 0,
+    },
+    editorScrollContent: {
+      flexGrow: 1,
+      gap: 10,
+      paddingBottom: 12,
+    },
+    profileActionsRow: {
+      flexDirection: 'row',
+      gap: 12,
+      flexWrap: 'wrap',
     },
     row: {
       flexDirection: 'row',
@@ -608,20 +986,6 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: 10,
       fontWeight: '700',
     },
-    debugCard: {
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      padding: 12,
-      gap: 6,
-    },
-    debugLine: {
-      color: colors.text,
-      fontSize: 13,
-      lineHeight: 18,
-      fontFamily: 'Menlo',
-    },
     secondaryBtn: {
       borderRadius: 12,
       borderWidth: 1,
@@ -664,6 +1028,59 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
       fontSize: 12,
       lineHeight: 18,
+    },
+    nutritionPlanCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      padding: 14,
+      gap: 8,
+      marginBottom: 14,
+    },
+    nutritionPlanTitle: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    nutritionPlanCalories: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: '900',
+    },
+    nutritionPlanMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '600',
+    },
+    nutritionPlanMacros: {
+      flexDirection: 'row',
+      gap: 10,
+      flexWrap: 'wrap',
+      marginTop: 2,
+    },
+    nutritionPlanMacro: {
+      flex: 1,
+      minWidth: 92,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      gap: 2,
+    },
+    nutritionPlanMacroValue: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    nutritionPlanMacroLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
     },
     habitSettingsWrap: {
       gap: 10,

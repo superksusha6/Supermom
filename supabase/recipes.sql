@@ -6,7 +6,27 @@ create table if not exists public.recipes (
   family_id uuid not null references public.families(id) on delete cascade,
   title text not null,
   description text not null default 'Custom recipe',
-  meal_type text not null check (meal_type in ('breakfast', 'lunch', 'main_dish', 'soups', 'desserts', 'baking')),
+  meal_type text not null check (
+    meal_type in (
+      'breakfast',
+      'brunch',
+      'lunch',
+      'dinner',
+      'main_dish',
+      'soups',
+      'salads',
+      'sides',
+      'appetizers',
+      'sandwiches',
+      'pasta',
+      'pizza',
+      'desserts',
+      'baking',
+      'drinks',
+      'sauces',
+      'meal_prep'
+    )
+  ),
   cuisine text,
   cook_time_minutes int not null default 0,
   servings int not null default 1,
@@ -24,6 +44,9 @@ create table if not exists public.recipes (
 alter table public.recipes add column if not exists photo_url text;
 
 alter table public.recipes enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.recipes to authenticated;
 
 drop policy if exists "recipes_select_members" on public.recipes;
 create policy "recipes_select_members" on public.recipes

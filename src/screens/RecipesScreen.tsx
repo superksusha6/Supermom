@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
+import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
 import { Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
 import { cleanNutritionNumber, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
@@ -9,26 +10,11 @@ import { ThemeColors, useThemeColors } from '@/theme/theme';
 type Props = {
   recipes: Recipe[];
   onRecipeCreate: (recipe: Recipe) => Promise<Recipe> | Recipe;
+  onRecipeUpdate: (recipe: Recipe) => Promise<Recipe> | Recipe;
+  onRecipeDelete: (recipeId: string) => Promise<void> | void;
 };
 
-const MEAL_FILTERS: Array<{ key: RecipeMealType | 'all'; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'main_dish', label: 'Main Dish' },
-  { key: 'soups', label: 'Soups' },
-  { key: 'desserts', label: 'Desserts' },
-  { key: 'baking', label: 'Baking' },
-];
-
-const CLASSIFIER_FILTERS: Array<{ key: RecipeClassifier | 'all'; label: string }> = [
-  { key: 'all', label: 'All types' },
-  { key: 'kids', label: 'Kids' },
-  { key: 'healthy', label: 'Healthy' },
-  { key: 'vegetarian', label: 'Vegetarian' },
-  { key: 'family', label: 'Family' },
-  { key: 'quick', label: 'Quick' },
-];
+type RecipeLayoutMode = 'list' | 'grid';
 
 type IngredientUnit = 'g' | 'ml' | 'pcs' | 'tbsp' | 'tsp';
 
@@ -55,6 +41,31 @@ function createDraftIngredientRow(): DraftIngredientRow {
     grams: '0',
     unit: 'g',
     preset: null,
+  };
+}
+
+function createDraftIngredientRowFromRecipe(ingredient: Recipe['ingredients'][number]): DraftIngredientRow {
+  const amountMatch = ingredient.amount.trim().match(/^(\d+(?:[.,]\d+)?)\s*(g|ml|pc|pcs|tbsp|tsp)$/i);
+  const normalizedUnit = (amountMatch?.[2] || 'g').toLowerCase();
+  const unit: IngredientUnit =
+    normalizedUnit === 'pc' || normalizedUnit === 'pcs'
+      ? 'pcs'
+      : normalizedUnit === 'ml'
+        ? 'ml'
+        : normalizedUnit === 'tbsp'
+          ? 'tbsp'
+          : normalizedUnit === 'tsp'
+            ? 'tsp'
+            : 'g';
+  const preset =
+    NUTRITION_FOOD_PRESETS.find((item) => item.name.trim().toLowerCase() === ingredient.name.trim().toLowerCase()) || null;
+
+  return {
+    id: `draft-ingredient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    query: ingredient.name,
+    grams: amountMatch?.[1]?.replace(',', '.') || '',
+    unit,
+    preset,
   };
 }
 
@@ -99,16 +110,66 @@ function formatIngredientAmount(row: DraftIngredientRow) {
   return `${amount} ${row.unit === 'pcs' ? 'pc' : row.unit}`;
 }
 
-export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
+function getRecipeDisplayTags(recipe: Recipe) {
+  const tags = [...recipe.classifiers, ...recipe.tags]
+    .filter(Boolean)
+    .filter((tag) => !['beginner_cook', 'easy', '60_mins', 'very_low_carbs', 'brunch'].includes(tag.toLowerCase()));
+  const seen = new Set<string>();
+  return tags.filter((tag) => {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 2);
+}
+
+function getRecipePlaceholderTone(mealType: RecipeMealType) {
+  switch (mealType) {
+    case 'breakfast':
+    case 'brunch':
+      return { bg: '#fff7ed', accent: '#f59e0b' };
+    case 'soups':
+    case 'salads':
+      return { bg: '#ecfdf5', accent: '#10b981' };
+    case 'desserts':
+    case 'baking':
+      return { bg: '#fdf2f8', accent: '#ec4899' };
+    case 'drinks':
+      return { bg: '#eff6ff', accent: '#3b82f6' };
+    default:
+      return { bg: '#eef2ff', accent: '#6366f1' };
+  }
+}
+
+function getShortRecipeDescription(recipe: Recipe) {
+  const text = recipe.description.trim();
+  if (!text) return '';
+  const compact = text
+    .replace(/\s+/g, ' ')
+    .replace(/^this\s+/i, '')
+    .replace(/^these\s+/i, '')
+    .trim();
+  if (compact.length <= 88) return compact;
+  return `${compact.slice(0, 85).trimEnd()}...`;
+}
+
+export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete }: Props) {
   const colors = useThemeColors();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 760;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [search, setSearch] = useState('');
+  const [ingredientSearch, setIngredientSearch] = useState('');
+  const [selectedIngredient, setSelectedIngredient] = useState('');
   const [mealFilter, setMealFilter] = useState<RecipeMealType | 'all'>('all');
   const [classifierFilter, setClassifierFilter] = useState<RecipeClassifier | 'all'>('all');
+  const [layoutMode, setLayoutMode] = useState<RecipeLayoutMode>('list');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [builderSaving, setBuilderSaving] = useState(false);
   const [builderError, setBuilderError] = useState<string | null>(null);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftPhotoUri, setDraftPhotoUri] = useState('');
   const [draftMealType, setDraftMealType] = useState<RecipeMealType>('breakfast');
@@ -118,6 +179,30 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
   const [draftClassifiers, setDraftClassifiers] = useState<RecipeClassifier[]>([]);
   const [draftIngredientRows, setDraftIngredientRows] = useState<DraftIngredientRow[]>([createDraftIngredientRow()]);
   const [unitPickerOpenFor, setUnitPickerOpenFor] = useState<string | null>(null);
+
+  const starterRecipes = useMemo(
+    () => STARTER_RECIPE_LIBRARY.filter((recipe) => !recipes.some((saved) => saved.id === recipe.id)),
+    [recipes],
+  );
+  const ownedRecipeIds = useMemo(() => new Set(recipes.map((recipe) => recipe.id)), [recipes]);
+  const catalogRecipes = useMemo(() => [...recipes, ...starterRecipes], [recipes, starterRecipes]);
+  const editingRecipe = useMemo(() => (editingRecipeId ? recipes.find((recipe) => recipe.id === editingRecipeId) || null : null), [editingRecipeId, recipes]);
+  const ingredientSuggestions = useMemo(() => {
+    const query = ingredientSearch.trim().toLowerCase();
+    if (!query) return [];
+    const seen = new Set<string>();
+    return catalogRecipes
+      .flatMap((recipe) => recipe.ingredients.map((ingredient) => ingredient.name.trim()))
+      .filter((name) => {
+        const normalized = name.toLowerCase();
+        if (!normalized.includes(query)) return false;
+        if (seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .sort((left, right) => left.localeCompare(right))
+      .slice(0, 8);
+  }, [catalogRecipes, ingredientSearch]);
 
   const draftNutrition = useMemo(() => {
     return draftIngredientRows.reduce(
@@ -179,6 +264,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
   }
 
   function resetBuilder() {
+    setEditingRecipeId(null);
     setDraftTitle('');
     setDraftPhotoUri('');
     setDraftMealType('breakfast');
@@ -188,6 +274,49 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
     setDraftClassifiers([]);
     setDraftIngredientRows([createDraftIngredientRow()]);
     setUnitPickerOpenFor(null);
+  }
+
+  function openBuilderForCreate() {
+    resetBuilder();
+    setBuilderError(null);
+    setBuilderOpen(true);
+  }
+
+  function openBuilderForEdit(recipe: Recipe) {
+    setEditingRecipeId(recipe.id);
+    setDraftTitle(recipe.title);
+    setDraftPhotoUri(recipe.photoUri || '');
+    setDraftMealType(recipe.mealType);
+    setDraftCookTime(recipe.cookTimeMinutes ? String(recipe.cookTimeMinutes) : '');
+    setDraftServings(recipe.servings ? String(recipe.servings) : '1');
+    setDraftSteps(recipe.steps.map((step) => step.text).join('\n'));
+    setDraftClassifiers(recipe.classifiers);
+    setDraftIngredientRows(
+      recipe.ingredients.length ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient)) : [createDraftIngredientRow()],
+    );
+    setUnitPickerOpenFor(null);
+    setBuilderError(null);
+    setSelectedRecipeId(null);
+    setBuilderOpen(true);
+  }
+
+  async function handleDeleteRecipePress(recipe: Recipe) {
+    Alert.alert('Delete recipe?', 'This will remove your custom recipe.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await onRecipeDelete(recipe.id);
+            setSelectedRecipeId(null);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not delete recipe.';
+            Alert.alert('Delete failed', message);
+          }
+        },
+      },
+    ]);
   }
 
   async function saveDraftRecipe() {
@@ -200,7 +329,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
       .filter(Boolean);
 
     const nextRecipe: Recipe = {
-      id: `recipe-${Date.now()}`,
+      id: editingRecipeId || `recipe-${Date.now()}`,
       title,
       description: stepLines[0] || 'Custom recipe',
       mealType: draftMealType,
@@ -231,7 +360,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
     try {
       setBuilderSaving(true);
       setBuilderError(null);
-      const savedRecipe = await onRecipeCreate(nextRecipe);
+      const savedRecipe = editingRecipeId ? await onRecipeUpdate(nextRecipe) : await onRecipeCreate(nextRecipe);
       setSelectedRecipeId(savedRecipe.id);
       setBuilderOpen(false);
       resetBuilder();
@@ -249,9 +378,16 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
 
   const filteredRecipes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return recipes.filter((recipe) => {
+    const selectedIngredientQuery = selectedIngredient.trim().toLowerCase();
+    return catalogRecipes.filter((recipe) => {
       if (mealFilter !== 'all' && recipe.mealType !== mealFilter) return false;
       if (classifierFilter !== 'all' && !recipe.classifiers.includes(classifierFilter)) return false;
+      if (
+        selectedIngredientQuery &&
+        !recipe.ingredients.some((item) => item.name.toLowerCase().includes(selectedIngredientQuery))
+      ) {
+        return false;
+      }
       if (!query) return true;
       const haystack = [
         recipe.title,
@@ -265,25 +401,21 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [classifierFilter, mealFilter, recipes, search]);
+  }, [catalogRecipes, classifierFilter, mealFilter, search, selectedIngredient]);
 
-  const selectedRecipe = selectedRecipeId ? filteredRecipes.find((recipe) => recipe.id === selectedRecipeId) || null : null;
+  const selectedRecipe = selectedRecipeId ? catalogRecipes.find((recipe) => recipe.id === selectedRecipeId) || null : null;
 
   return (
     <>
       <ScrollView contentContainerStyle={styles.content}>
         <SectionCard
-          title="Recipe Library"
+          title="Recipes"
           headerRight={
-            <Pressable style={styles.addRecipeBtn} onPress={() => setBuilderOpen(true)}>
+            <Pressable style={styles.addRecipeBtn} onPress={openBuilderForCreate}>
               <Text style={styles.addRecipeBtnText}>Add recipe</Text>
             </Pressable>
           }
         >
-          <Text style={styles.heroText}>
-            Start building your family recipe base here. Next we will connect this library to weekly meal plans and staff assignments.
-          </Text>
-
           <TextInput
             placeholder="Search recipes or ingredients"
             placeholderTextColor={colors.subtext}
@@ -292,81 +424,187 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
             onChangeText={setSearch}
           />
 
-          <View style={styles.filterRow}>
-            {MEAL_FILTERS.map((filter) => {
-              const active = mealFilter === filter.key;
-              return (
-                <Pressable key={filter.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setMealFilter(filter.key)}>
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter.label}</Text>
+          <TextInput
+            placeholder="Choose a product to see matching recipes"
+            placeholderTextColor={colors.subtext}
+            style={styles.searchInput}
+            value={ingredientSearch}
+            onChangeText={(value) => {
+              setIngredientSearch(value);
+              if (!value.trim()) setSelectedIngredient('');
+            }}
+          />
+          {ingredientSuggestions.length > 0 ? (
+            <View style={styles.ingredientSuggestionMenu}>
+              {ingredientSuggestions.map((ingredient) => (
+                <Pressable
+                  key={ingredient}
+                  style={styles.ingredientSuggestionItem}
+                  onPress={() => {
+                    setSelectedIngredient(ingredient);
+                    setIngredientSearch(ingredient);
+                  }}
+                >
+                  <Text style={styles.ingredientSuggestionText}>{ingredient}</Text>
                 </Pressable>
-              );
-            })}
+              ))}
+            </View>
+          ) : null}
+          {selectedIngredient ? (
+            <View style={styles.selectedIngredientRow}>
+              <View style={styles.selectedIngredientBadge}>
+                <Text style={styles.selectedIngredientBadgeText}>{selectedIngredient}</Text>
+              </View>
+              <Pressable
+                style={styles.clearIngredientBtn}
+                onPress={() => {
+                  setSelectedIngredient('');
+                  setIngredientSearch('');
+                }}
+              >
+                <Text style={styles.clearIngredientBtnText}>Clear product</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.filtersToggleRow}>
+            <Pressable style={[styles.filtersToggleBtn, filtersOpen && styles.filtersToggleBtnActive]} onPress={() => setFiltersOpen((value) => !value)}>
+              <Text style={[styles.filtersToggleBtnText, filtersOpen && styles.filtersToggleBtnTextActive]}>
+                {filtersOpen ? 'Hide filters' : 'Show filters'}
+              </Text>
+            </Pressable>
+            {(mealFilter !== 'all' || classifierFilter !== 'all') ? (
+              <Pressable
+                style={styles.clearIngredientBtn}
+                onPress={() => {
+                  setMealFilter('all');
+                  setClassifierFilter('all');
+                }}
+              >
+                <Text style={styles.clearIngredientBtnText}>Clear filters</Text>
+              </Pressable>
+            ) : null}
           </View>
 
-          <Text style={styles.classifierLabel}>Recipe type</Text>
-          <View style={styles.filterRow}>
-            {CLASSIFIER_FILTERS.map((filter) => {
-              const active = classifierFilter === filter.key;
-              return (
-                <Pressable key={filter.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setClassifierFilter(filter.key)}>
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          {filtersOpen ? (
+            <>
+              <View style={styles.filterRow}>
+                {RECIPE_SECTION_FILTERS.map((filter) => {
+                  const active = mealFilter === filter.key;
+                  return (
+                    <Pressable key={filter.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setMealFilter(filter.key)}>
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{recipes.length}</Text>
-              <Text style={styles.summaryLabel}>Recipes</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{recipes.filter((item) => item.suitableForChildren).length}</Text>
-              <Text style={styles.summaryLabel}>Kids-ready</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{recipes.filter((item) => item.suitableForFamily).length}</Text>
-              <Text style={styles.summaryLabel}>Family meals</Text>
+              <Text style={styles.classifierLabel}>Recipe type</Text>
+              <View style={styles.filterRow}>
+                {RECIPE_CLASSIFIER_FILTERS.map((filter) => {
+                  const active = classifierFilter === filter.key;
+                  return (
+                    <Pressable key={filter.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setClassifierFilter(filter.key)}>
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          <View style={[styles.catalogToolbar, isMobile && styles.catalogToolbarMobile]}>
+            <Text style={styles.catalogCountText}>{filteredRecipes.length} recipes</Text>
+            <View style={styles.layoutToggle}>
+              <Pressable
+                style={[styles.layoutToggleBtn, layoutMode === 'list' && styles.layoutToggleBtnActive]}
+                onPress={() => setLayoutMode('list')}
+              >
+                <Text style={[styles.layoutToggleBtnText, styles.layoutToggleIcon, layoutMode === 'list' && styles.layoutToggleBtnTextActive]}>≣</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.layoutToggleBtn, layoutMode === 'grid' && styles.layoutToggleBtnActive]}
+                onPress={() => setLayoutMode('grid')}
+              >
+                <Text style={[styles.layoutToggleBtnText, styles.layoutToggleIcon, layoutMode === 'grid' && styles.layoutToggleBtnTextActive]}>□□</Text>
+              </Pressable>
             </View>
           </View>
         </SectionCard>
 
-        <SectionCard title="Saved Recipes">
+        <SectionCard title="Catalog">
           {filteredRecipes.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No recipes match this search</Text>
               <Text style={styles.emptyText}>Try another ingredient, meal type, or clear the filter.</Text>
             </View>
           ) : (
-            <View style={styles.recipeList}>
+            <View style={[styles.recipeList, layoutMode === 'grid' && styles.recipeGrid]}>
               {filteredRecipes.map((recipe) => {
                 const active = selectedRecipe?.id === recipe.id;
+                const displayTags = getRecipeDisplayTags(recipe);
+                const placeholderTone = getRecipePlaceholderTone(recipe.mealType);
+                const shortDescription = getShortRecipeDescription(recipe);
+                const gridMode = layoutMode === 'grid';
                 return (
-                  <Pressable key={recipe.id} style={[styles.recipeCard, active && styles.recipeCardActive]} onPress={() => setSelectedRecipeId(recipe.id)}>
-                    {recipe.photoUri ? <Image source={{ uri: recipe.photoUri }} style={styles.recipeCardPhoto} resizeMode="cover" /> : null}
+                  <Pressable
+                    key={recipe.id}
+                    style={[styles.recipeCard, gridMode && styles.recipeCardGrid, gridMode && isMobile && styles.recipeCardGridMobile, active && styles.recipeCardActive]}
+                    onPress={() => setSelectedRecipeId(recipe.id)}
+                  >
+                    {recipe.photoUri ? (
+                      <View style={[styles.recipeCardPhotoFrame, gridMode && styles.recipeCardPhotoFrameGrid]}>
+                        <Image source={{ uri: recipe.photoUri }} style={[styles.recipeCardPhoto, gridMode && styles.recipeCardPhotoGrid]} resizeMode="cover" />
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.recipeCardPhotoFallback,
+                          gridMode && styles.recipeCardPhotoFallbackGrid,
+                          { backgroundColor: placeholderTone.bg },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.recipeCardPhotoOrb,
+                            gridMode && styles.recipeCardPhotoOrbGrid,
+                            { backgroundColor: `${placeholderTone.accent}22` },
+                          ]}
+                        />
+                        <Text style={[styles.recipeCardPhotoLabel, gridMode && styles.recipeCardPhotoLabelGrid, { color: placeholderTone.accent }]}>
+                          {selectedMealTypeLabel(recipe.mealType)}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.recipeCardTop}>
                       <View style={styles.recipeMetaWrap}>
-                        <Text style={styles.recipeMealType}>{recipe.mealType}</Text>
-                        <Text style={styles.recipeTitle}>{recipe.title}</Text>
-                        <Text style={styles.recipeDescription}>{recipe.description}</Text>
+                        <Text style={[styles.recipeTitle, gridMode && styles.recipeTitleGrid]} numberOfLines={gridMode ? 2 : 3}>
+                          {recipe.title}
+                        </Text>
+                        {shortDescription ? (
+                          <Text style={[styles.recipeDescription, gridMode && styles.recipeDescriptionGrid]} numberOfLines={gridMode ? 2 : 2}>
+                            {shortDescription}
+                          </Text>
+                        ) : null}
                       </View>
-                      <Pressable style={styles.openBtn} onPress={() => setSelectedRecipeId(recipe.id)}>
-                        <Text style={styles.openBtnText}>Open</Text>
+                      <Pressable style={[styles.openBtn, gridMode && styles.openBtnGrid]} onPress={() => setSelectedRecipeId(recipe.id)}>
+                        <Text style={[styles.openBtnText, gridMode && styles.openBtnTextGrid]}>Open</Text>
                       </Pressable>
                     </View>
-                    <View style={styles.recipeStatsRow}>
-                      <Text style={styles.recipeStat}>{selectedMealTypeLabel(recipe.mealType)}</Text>
+                    <View style={[styles.recipeStatsRow, gridMode && styles.recipeStatsRowGrid]}>
                       <Text style={styles.recipeStat}>{recipe.cookTimeMinutes} min</Text>
                       <Text style={styles.recipeStat}>{recipe.servings} servings</Text>
                       <Text style={styles.recipeStat}>{recipe.nutritionPerServing.calories} kcal</Text>
                     </View>
-                    <View style={styles.tagRow}>
-                      {recipe.tags.map((tag) => (
-                        <View key={`${recipe.id}-${tag}`} style={styles.tagChip}>
-                          <Text style={styles.tagChipText}>{tag}</Text>
-                        </View>
-                      ))}
-                    </View>
+                    {displayTags.length ? (
+                      <View style={[styles.tagRow, gridMode && styles.tagRowGrid]}>
+                        {displayTags.map((tag) => (
+                          <View key={`${recipe.id}-${tag}`} style={[styles.tagChip, gridMode && styles.tagChipGrid]}>
+                            <Text style={styles.tagChipText}>{formatTagLabel(tag)}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -379,9 +617,9 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
         <View style={styles.modalRoot}>
           <Pressable style={styles.modalBackdrop} onPress={() => setSelectedRecipeId(null)} />
           {selectedRecipe ? (
-            <View style={styles.modalCard}>
+            <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
               <View style={styles.modalHandle} />
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, isMobile && styles.modalHeaderMobile]}>
                 <View style={styles.modalTitleWrap}>
                   <Text style={styles.modalMealType}>{selectedRecipe.mealType}</Text>
                   <Text style={styles.modalTitle}>{selectedRecipe.title}</Text>
@@ -392,9 +630,9 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
                 </Pressable>
               </View>
 
-              {selectedRecipe.photoUri ? <Image source={{ uri: selectedRecipe.photoUri }} style={styles.modalRecipePhoto} resizeMode="cover" /> : null}
+              {selectedRecipe.photoUri ? <Image source={{ uri: selectedRecipe.photoUri }} style={[styles.modalRecipePhoto, isMobile && styles.modalRecipePhotoMobile]} resizeMode="cover" /> : null}
 
-              <View style={styles.modalStatsRow}>
+              <View style={[styles.modalStatsRow, isMobile && styles.modalStatsRowMobile]}>
                 <View style={styles.modalStatCard}>
                   <Text style={styles.modalStatValue}>{selectedRecipe.cookTimeMinutes}</Text>
                   <Text style={styles.modalStatLabel}>minutes</Text>
@@ -409,26 +647,37 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
                 </View>
               </View>
 
-              <View style={styles.nutritionRow}>
-                <View style={styles.nutritionCard}>
+              <View style={[styles.nutritionRow, isMobile && styles.nutritionRowMobile]}>
+                <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
                   <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.calories}</Text>
                   <Text style={styles.nutritionLabel}>kcal</Text>
                 </View>
-                <View style={styles.nutritionCard}>
+                <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
                   <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.protein} g</Text>
                   <Text style={styles.nutritionLabel}>protein</Text>
                 </View>
-                <View style={styles.nutritionCard}>
+                <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
                   <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.fat} g</Text>
                   <Text style={styles.nutritionLabel}>fat</Text>
                 </View>
-                <View style={styles.nutritionCard}>
+                <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
                   <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.carbs} g</Text>
                   <Text style={styles.nutritionLabel}>carbs</Text>
                 </View>
               </View>
 
               <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+                {ownedRecipeIds.has(selectedRecipe.id) ? (
+                  <View style={styles.recipeOwnerActions}>
+                    <Pressable style={styles.builderSecondaryBtn} onPress={() => openBuilderForEdit(selectedRecipe)}>
+                      <Text style={styles.builderSecondaryBtnText}>Edit recipe</Text>
+                    </Pressable>
+                    <Pressable style={styles.recipeDeleteBtn} onPress={() => handleDeleteRecipePress(selectedRecipe)}>
+                      <Text style={styles.recipeDeleteBtnText}>Delete recipe</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailHint}>Nutrition values are shown per serving.</Text>
                 </View>
@@ -470,11 +719,13 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
 
       <Modal visible={builderOpen} animationType="slide" onRequestClose={() => setBuilderOpen(false)}>
         <View style={styles.builderScreen}>
-          <View style={styles.builderScreenHeader}>
+          <View style={[styles.builderScreenHeader, isMobile && styles.builderScreenHeaderMobile]}>
             <View style={styles.builderScreenTitleWrap}>
               <Text style={styles.modalMealType}>Custom recipe</Text>
-              <Text style={styles.modalTitle}>Recipe Constructor</Text>
-              <Text style={styles.modalSubtitle}>Add your own recipe with nutrition, ingredients, and steps.</Text>
+              <Text style={styles.modalTitle}>{editingRecipeId ? 'Edit recipe' : 'Recipe Constructor'}</Text>
+              <Text style={styles.modalSubtitle}>
+                {editingRecipeId ? 'Update your recipe, ingredients, nutrition and steps.' : 'Add your own recipe with nutrition, ingredients, and steps.'}
+              </Text>
             </View>
             <Pressable style={styles.closeBtn} onPress={() => setBuilderOpen(false)}>
               <Text style={styles.closeBtnText}>×</Text>
@@ -485,7 +736,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
             <View style={styles.builderSectionCard}>
               <TextInput placeholder="Recipe title" placeholderTextColor={colors.subtext} style={styles.builderInput} value={draftTitle} onChangeText={setDraftTitle} />
               {draftPhotoUri ? <Image source={{ uri: draftPhotoUri }} style={styles.photoPreview} resizeMode="cover" /> : null}
-              <View style={styles.photoActionRow}>
+              <View style={[styles.photoActionRow, isMobile && styles.photoActionRowMobile]}>
                 <Pressable style={styles.builderSecondaryBtn} onPress={pickDraftPhoto}>
                   <Text style={styles.builderSecondaryBtnText}>{draftPhotoUri ? 'Change photo' : 'Add photo'}</Text>
                 </Pressable>
@@ -506,7 +757,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
             </View>
 
             <View style={styles.builderSectionCard}>
-              <View style={styles.builderSectionHeaderRow}>
+              <View style={[styles.builderSectionHeaderRow, isMobile && styles.builderSectionHeaderRowMobile]}>
                 <Text style={styles.builderSectionTitle}>2. Ingredients</Text>
                 <Pressable style={styles.addIngredientTopBtn} onPress={addDraftIngredientRow}>
                   <Text style={styles.addIngredientTopBtnText}>+ Add ingredient</Text>
@@ -521,11 +772,11 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
                 const calculationGrams = getIngredientCalculationGrams(row);
                 return (
                   <View key={row.id} style={[styles.ingredientBuilderCard, unitPickerOpenFor === row.id && styles.ingredientBuilderCardOpen]}>
-                    <View style={styles.ingredientTopRow}>
+                    <View style={[styles.ingredientTopRow, isMobile && styles.ingredientTopRowMobile]}>
                       <TextInput
                         placeholder="Product"
                         placeholderTextColor={colors.subtext}
-                        style={[styles.builderInput, styles.builderInputWide]}
+                        style={[styles.builderInput, styles.builderInputWide, isMobile && styles.builderInputWideMobile]}
                         value={row.query}
                         onChangeText={(text) =>
                           updateDraftIngredientRow(row.id, (current) => ({
@@ -539,13 +790,13 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
                         placeholder="0"
                         placeholderTextColor={colors.subtext}
                         keyboardType="number-pad"
-                        style={[styles.builderInput, styles.ingredientAmountInput]}
+                        style={[styles.builderInput, styles.ingredientAmountInput, isMobile && styles.ingredientAmountInputMobile]}
                         value={row.grams}
                         onFocus={() => updateDraftIngredientRow(row.id, (current) => (current.grams === '0' ? { ...current, grams: '' } : current))}
                         onChangeText={(text) => updateDraftIngredientRow(row.id, (current) => ({ ...current, grams: cleanNutritionNumber(text) }))}
                       />
                       <Pressable
-                        style={styles.unitSelectBox}
+                        style={[styles.unitSelectBox, isMobile && styles.unitSelectBoxMobile]}
                         onPress={() => setUnitPickerOpenFor((current) => (current === row.id ? null : row.id))}
                       >
                         <Text style={styles.unitSelectText}>{INGREDIENT_UNITS.find((unit) => unit.key === row.unit)?.label || row.unit}</Text>
@@ -636,7 +887,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
               <Text style={styles.builderSectionTitle}>4. Recipe type</Text>
               <Text style={styles.builderMiniLabel}>Section</Text>
               <View style={styles.filterRow}>
-                {MEAL_FILTERS.filter((item) => item.key !== 'all').map((filter) => {
+                {RECIPE_SECTION_FILTERS.filter((item) => item.key !== 'all').map((filter) => {
                   const active = draftMealType === filter.key;
                   return (
                     <Pressable key={`draft-${filter.key}`} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setDraftMealType(filter.key as RecipeMealType)}>
@@ -648,7 +899,7 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
 
               <Text style={styles.builderMiniLabel}>Recipe type</Text>
               <View style={styles.filterRow}>
-                {CLASSIFIER_FILTERS.filter((item) => item.key !== 'all').map((filter) => {
+                {RECIPE_CLASSIFIER_FILTERS.filter((item) => item.key !== 'all').map((filter) => {
                   const active = draftClassifiers.includes(filter.key as RecipeClassifier);
                   return (
                     <Pressable
@@ -664,11 +915,22 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
             </View>
 
             <View style={styles.builderActions}>
-              <Pressable style={styles.builderSecondaryBtn} onPress={resetBuilder}>
-                <Text style={styles.builderSecondaryBtnText}>Clear</Text>
+              <Pressable
+                style={styles.builderSecondaryBtn}
+                onPress={() => {
+                  if (editingRecipe) {
+                    openBuilderForEdit(editingRecipe);
+                    return;
+                  }
+                  resetBuilder();
+                }}
+              >
+                <Text style={styles.builderSecondaryBtnText}>{editingRecipe ? 'Reset' : 'Clear'}</Text>
               </Pressable>
               <Pressable style={styles.addRecipeBtn} onPress={saveDraftRecipe}>
-                <Text style={styles.addRecipeBtnText}>{builderSaving ? 'Saving...' : 'Save recipe'}</Text>
+                <Text style={styles.addRecipeBtnText}>
+                  {builderSaving ? 'Saving...' : editingRecipeId ? 'Save changes' : 'Save recipe'}
+                </Text>
               </Pressable>
             </View>
             {builderError ? <Text style={styles.builderErrorText}>{builderError}</Text> : null}
@@ -681,14 +943,36 @@ export function RecipesScreen({ recipes, onRecipeCreate }: Props) {
 
 function selectedMealTypeLabel(value: RecipeMealType) {
   switch (value) {
+    case 'brunch':
+      return 'Brunch';
+    case 'dinner':
+      return 'Dinner';
     case 'main_dish':
       return 'Main dish';
     case 'soups':
       return 'Soup';
+    case 'salads':
+      return 'Salad';
+    case 'sides':
+      return 'Side';
+    case 'appetizers':
+      return 'Appetizer';
+    case 'sandwiches':
+      return 'Sandwich';
+    case 'pasta':
+      return 'Pasta';
+    case 'pizza':
+      return 'Pizza';
     case 'desserts':
       return 'Dessert';
     case 'baking':
       return 'Baking';
+    case 'drinks':
+      return 'Drink';
+    case 'sauces':
+      return 'Sauce';
+    case 'meal_prep':
+      return 'Meal prep';
     case 'breakfast':
       return 'Breakfast';
     case 'lunch':
@@ -696,6 +980,12 @@ function selectedMealTypeLabel(value: RecipeMealType) {
     default:
       return value;
   }
+}
+
+function formatTagLabel(value: string) {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 const createStyles = (colors: ThemeColors) =>
@@ -732,11 +1022,132 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 15,
       marginBottom: 12,
     },
+    catalogCountText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    catalogToolbar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12,
+    },
+    layoutToggle: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    layoutToggleBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    layoutToggleBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    layoutToggleBtnText: {
+      color: colors.subtext,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    layoutToggleIcon: {
+      fontSize: 12,
+      lineHeight: 12,
+    },
+    layoutToggleBtnTextActive: {
+      color: colors.text,
+    },
+    ingredientSuggestionMenu: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      borderRadius: 16,
+      overflow: 'hidden',
+      marginTop: -4,
+      marginBottom: 12,
+    },
+    ingredientSuggestionItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    ingredientSuggestionText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    selectedIngredientRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 12,
+    },
+    selectedIngredientBadge: {
+      borderRadius: 999,
+      backgroundColor: colors.selection,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    selectedIngredientBadgeText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    clearIngredientBtn: {
+      borderRadius: 12,
+      backgroundColor: colors.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    clearIngredientBtnText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+    },
     filterRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
       marginBottom: 14,
+    },
+    filtersToggleRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 14,
+    },
+    filtersToggleBtn: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.glassSoft,
+    },
+    filtersToggleBtnActive: {
+      backgroundColor: colors.selection,
+      borderColor: colors.primary,
+    },
+    filtersToggleBtnText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    filtersToggleBtnTextActive: {
+      color: colors.text,
     },
     classifierLabel: {
       color: colors.text,
@@ -790,23 +1201,99 @@ const createStyles = (colors: ThemeColors) =>
     recipeList: {
       gap: 12,
     },
+    recipeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: 12,
+    },
+    catalogToolbarMobile: {
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+    },
     recipeCard: {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 20,
       padding: 14,
       backgroundColor: colors.glassSoft,
+      overflow: 'hidden',
+    },
+    recipeCardGrid: {
+      width: '31.8%',
+      padding: 10,
+    },
+    recipeCardGridMobile: {
+      width: '48.2%',
     },
     recipeCardActive: {
       borderColor: colors.primary,
       backgroundColor: colors.selection,
     },
-    recipeCardPhoto: {
+    recipeCardPhotoFrame: {
       width: '100%',
-      height: 150,
+      height: 190,
       borderRadius: 16,
       marginBottom: 12,
-      backgroundColor: '#e8eef7',
+      backgroundColor: 'transparent',
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    recipeCardPhotoFrameGrid: {
+      height: undefined,
+      aspectRatio: 1.18,
+      marginBottom: 8,
+    },
+    recipeCardPhoto: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'transparent',
+    },
+    recipeCardPhotoGrid: {
+      width: '100%',
+      height: '100%',
+    },
+    recipeCardPhotoFallback: {
+      width: '100%',
+      height: 190,
+      borderRadius: 16,
+      marginBottom: 12,
+      overflow: 'hidden',
+      alignItems: 'flex-start',
+      justifyContent: 'flex-end',
+      padding: 18,
+      position: 'relative',
+    },
+    recipeCardPhotoFallbackGrid: {
+      height: undefined,
+      aspectRatio: 1.18,
+      padding: 12,
+      marginBottom: 8,
+    },
+    recipeCardPhotoOrb: {
+      position: 'absolute',
+      width: 180,
+      height: 180,
+      borderRadius: 999,
+      top: -36,
+      right: -28,
+    },
+    recipeCardPhotoOrbGrid: {
+      width: 92,
+      height: 92,
+      top: -18,
+      right: -14,
+    },
+    recipeCardPhotoLabel: {
+      fontSize: 13,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
+    recipeCardPhotoLabelGrid: {
+      fontSize: 11,
+      letterSpacing: 0.6,
     },
     recipeCardTop: {
       flexDirection: 'row',
@@ -816,7 +1303,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     recipeMetaWrap: {
       flex: 1,
-      gap: 4,
+      gap: 6,
     },
     recipeMealType: {
       color: colors.primary,
@@ -826,13 +1313,21 @@ const createStyles = (colors: ThemeColors) =>
     },
     recipeTitle: {
       color: colors.text,
-      fontSize: 17,
+      fontSize: 18,
       fontWeight: '800',
+    },
+    recipeTitleGrid: {
+      fontSize: 14,
+      lineHeight: 18,
     },
     recipeDescription: {
       color: colors.subtext,
-      fontSize: 14,
-      lineHeight: 20,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    recipeDescriptionGrid: {
+      fontSize: 11,
+      lineHeight: 15,
     },
     openBtn: {
       borderRadius: 12,
@@ -840,21 +1335,32 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 8,
     },
+    openBtnGrid: {
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
     openBtnText: {
       color: '#ffffff',
       fontSize: 13,
       fontWeight: '700',
     },
+    openBtnTextGrid: {
+      fontSize: 11,
+    },
     recipeStatsRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 10,
+      gap: 14,
       marginTop: 12,
+    },
+    recipeStatsRowGrid: {
+      gap: 8,
+      marginTop: 8,
     },
     recipeStat: {
       color: colors.subtext,
       fontSize: 13,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     tagRow: {
       flexDirection: 'row',
@@ -862,16 +1368,26 @@ const createStyles = (colors: ThemeColors) =>
       gap: 8,
       marginTop: 12,
     },
+    tagRowGrid: {
+      gap: 5,
+      marginTop: 8,
+    },
     tagChip: {
       borderRadius: 999,
-      backgroundColor: colors.glassStrong,
+      backgroundColor: 'rgba(255,255,255,0.7)',
+      borderWidth: 1,
+      borderColor: colors.border,
       paddingHorizontal: 10,
       paddingVertical: 6,
     },
+    tagChipGrid: {
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+    },
     tagChipText: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: '600',
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
     },
     emptyCard: {
       borderRadius: 16,
@@ -916,6 +1432,14 @@ const createStyles = (colors: ThemeColors) =>
       shadowOffset: { width: 0, height: 14 },
       elevation: 24,
     },
+    modalCardMobile: {
+      maxHeight: '92%',
+      padding: 14,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderBottomLeftRadius: 18,
+      borderBottomRightRadius: 18,
+    },
     modalHandle: {
       width: 52,
       height: 5,
@@ -929,6 +1453,9 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
       gap: 12,
       marginBottom: 16,
+    },
+    modalHeaderMobile: {
+      alignItems: 'flex-start',
     },
     modalTitleWrap: {
       flex: 1,
@@ -956,6 +1483,10 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 22,
       marginBottom: 14,
       backgroundColor: '#e8eef7',
+    },
+    modalRecipePhotoMobile: {
+      height: 170,
+      borderRadius: 18,
     },
     closeBtn: {
       width: 34,
@@ -987,6 +1518,10 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       gap: 10,
       marginBottom: 10,
+    },
+    builderSectionHeaderRowMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
     },
     addIngredientTopBtn: {
       borderRadius: 12,
@@ -1042,6 +1577,9 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       gap: 10,
     },
+    photoActionRowMobile: {
+      flexDirection: 'column',
+    },
     builderTextarea: {
       minHeight: 88,
       textAlignVertical: 'top',
@@ -1062,6 +1600,9 @@ const createStyles = (colors: ThemeColors) =>
       gap: 12,
       paddingHorizontal: 18,
       paddingBottom: 14,
+    },
+    builderScreenHeaderMobile: {
+      alignItems: 'stretch',
     },
     builderScreenTitleWrap: {
       flex: 1,
@@ -1097,15 +1638,26 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       minWidth: 220,
     },
+    builderInputWideMobile: {
+      width: '100%',
+      minWidth: 0,
+    },
     ingredientTopRow: {
       flexDirection: 'row',
       gap: 10,
       alignItems: 'flex-start',
       marginBottom: 4,
     },
+    ingredientTopRowMobile: {
+      flexWrap: 'wrap',
+    },
     ingredientAmountInput: {
       width: 94,
       textAlign: 'center',
+    },
+    ingredientAmountInputMobile: {
+      width: '100%',
+      textAlign: 'left',
     },
     unitSelectBox: {
       width: 86,
@@ -1121,6 +1673,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 10,
       paddingVertical: 12,
       marginBottom: 12,
+    },
+    unitSelectBoxMobile: {
+      width: 100,
     },
     unitSelectText: {
       color: colors.text,
@@ -1250,6 +1805,9 @@ const createStyles = (colors: ThemeColors) =>
       gap: 10,
       marginBottom: 12,
     },
+    modalStatsRowMobile: {
+      gap: 8,
+    },
     modalStatCard: {
       flex: 1,
       minWidth: 94,
@@ -1279,6 +1837,9 @@ const createStyles = (colors: ThemeColors) =>
       gap: 10,
       marginBottom: 12,
     },
+    nutritionRowMobile: {
+      gap: 8,
+    },
     nutritionCard: {
       minWidth: '22%',
       flex: 1,
@@ -1288,6 +1849,10 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: '#d9e4f2',
       backgroundColor: '#ffffff',
       alignItems: 'center',
+    },
+    nutritionCardMobile: {
+      minWidth: '47%',
+      padding: 10,
     },
     nutritionValue: {
       color: colors.text,
@@ -1311,6 +1876,27 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 18,
       backgroundColor: '#ffffff',
       padding: 14,
+    },
+    recipeOwnerActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginBottom: 2,
+    },
+    recipeDeleteBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(239, 68, 68, 0.28)',
+      backgroundColor: 'rgba(254, 242, 242, 0.92)',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    recipeDeleteBtnText: {
+      color: '#dc2626',
+      fontSize: 13,
+      fontWeight: '800',
     },
     detailSectionTitle: {
       color: colors.text,

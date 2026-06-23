@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useMemo, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { HabitChallenge, HabitEntry, HabitReminderMode } from '@/types/app';
@@ -9,6 +9,7 @@ type Props = {
   onHabitsChange: Dispatch<SetStateAction<HabitEntry[]>>;
   challenges: HabitChallenge[];
   habitRemindersEnabled: boolean;
+  quickActionRequest?: { type: 'create-habit'; token: number } | null;
 };
 
 const HABIT_ICON_TITLE_SUGGESTIONS: Record<string, string> = {
@@ -73,7 +74,7 @@ const HABIT_SMART_REMINDER_TIMES: Record<string, string> = {
   '❤️': '20:30',
 };
 
-export function HabitsScreen({ habits, onHabitsChange, challenges, habitRemindersEnabled }: Props) {
+export function HabitsScreen({ habits, onHabitsChange, challenges, habitRemindersEnabled, quickActionRequest }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const activeHabits = habits.filter((item) => item.enabled);
@@ -136,6 +137,11 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
     if (habit.reminderMode === 'smart') return `Smart reminder ${habit.reminderTime || getSmartReminderTime(habit.icon)}`;
     return `Custom reminder ${habit.reminderTime || '20:00'}`;
   }
+
+  useEffect(() => {
+    if (!quickActionRequest || quickActionRequest.type !== 'create-habit') return;
+    openCreateHabit();
+  }, [quickActionRequest]);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>

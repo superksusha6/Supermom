@@ -168,20 +168,28 @@ create table if not exists shopping_lists (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references families(id) on delete cascade,
   title text not null default 'Shopping List',
+  list_type text not null default 'current',
+  completed_at timestamptz,
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now()
 );
+
+alter table shopping_lists add column if not exists list_type text not null default 'current';
+alter table shopping_lists add column if not exists completed_at timestamptz;
 
 create table if not exists shopping_list_items (
   id uuid primary key default gen_random_uuid(),
   list_id uuid not null references shopping_lists(id) on delete cascade,
   item_name text not null,
   quantity text not null,
+  category text,
   comment text,
   purchased boolean not null default false,
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
+
+alter table shopping_list_items add column if not exists category text;
 
 create table if not exists shopping_shares (
   id uuid primary key default gen_random_uuid(),
@@ -205,6 +213,23 @@ create table if not exists purchase_requests (
   requested_by text not null,
   status text not null default 'new' check (status in ('new', 'added', 'dismissed')),
   created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists fridge_items (
+  id text primary key,
+  family_id uuid not null references families(id) on delete cascade,
+  item_name text not null,
+  quantity text not null,
+  amount numeric(10,2),
+  unit text,
+  category text,
+  note text,
+  expires_at date,
+  opened boolean not null default false,
+  status text not null default 'full' check (status in ('full', 'low', 'out')),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -237,9 +262,32 @@ create table if not exists user_preferences (
   family_id uuid not null references families(id) on delete cascade,
   parent_label text not null default 'Mom' check (parent_label in ('Mom', 'Dad')),
   theme_name text,
+  daily_card_date date,
+  daily_card_id text,
+  nutrition_goal text,
+  activity_level text,
+  nutrition_sex text,
+  desired_weight text,
+  nutrition_pace text,
+  calorie_override text,
+  active_meal_plan_profile text,
+  period_reminders_enabled boolean not null default false,
+  period_reminder_lead_days int,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+alter table user_preferences add column if not exists daily_card_date date;
+alter table user_preferences add column if not exists daily_card_id text;
+alter table user_preferences add column if not exists nutrition_goal text;
+alter table user_preferences add column if not exists activity_level text;
+alter table user_preferences add column if not exists nutrition_sex text;
+alter table user_preferences add column if not exists desired_weight text;
+alter table user_preferences add column if not exists nutrition_pace text;
+alter table user_preferences add column if not exists calorie_override text;
+alter table user_preferences add column if not exists active_meal_plan_profile text;
+alter table user_preferences add column if not exists period_reminders_enabled boolean not null default false;
+alter table user_preferences add column if not exists period_reminder_lead_days int;
 
 create table if not exists push_tokens (
   id uuid primary key default gen_random_uuid(),
@@ -271,7 +319,27 @@ create table if not exists recipes (
   family_id uuid not null references families(id) on delete cascade,
   title text not null,
   description text not null default 'Custom recipe',
-  meal_type text not null check (meal_type in ('breakfast', 'lunch', 'main_dish', 'soups', 'desserts', 'baking')),
+  meal_type text not null check (
+    meal_type in (
+      'breakfast',
+      'brunch',
+      'lunch',
+      'dinner',
+      'main_dish',
+      'soups',
+      'salads',
+      'sides',
+      'appetizers',
+      'sandwiches',
+      'pasta',
+      'pizza',
+      'desserts',
+      'baking',
+      'drinks',
+      'sauces',
+      'meal_prep'
+    )
+  ),
   cuisine text,
   cook_time_minutes int not null default 0,
   servings int not null default 1,
@@ -291,9 +359,12 @@ alter table recipes add column if not exists photo_url text;
 create table if not exists weekly_meal_plans (
   family_id uuid primary key references families(id) on delete cascade,
   entries_json jsonb not null default '[]'::jsonb,
+  profiles_json jsonb not null default '[]'::jsonb,
   updated_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now()
 );
+
+alter table weekly_meal_plans add column if not exists profiles_json jsonb not null default '[]'::jsonb;
 
 create table if not exists habit_entries (
   id uuid primary key default gen_random_uuid(),
@@ -327,6 +398,23 @@ create table if not exists nutrition_entries (
   carbs numeric(8,2) not null default 0,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
+);
+
+create table if not exists cycle_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  entry_date date not null,
+  flow_level text,
+  discharge_type text,
+  feelings_json jsonb not null default '[]'::jsonb,
+  pains_json jsonb not null default '[]'::jsonb,
+  sleep_quality text,
+  sleep_hours int,
+  sleep_minutes int,
+  is_period_start boolean not null default false,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (user_id, entry_date)
 );
 
 -- Helpers
@@ -392,6 +480,7 @@ alter table shopping_lists enable row level security;
 alter table shopping_list_items enable row level security;
 alter table shopping_shares enable row level security;
 alter table purchase_requests enable row level security;
+alter table fridge_items enable row level security;
 alter table completed_task_notifications enable row level security;
 alter table staff_reminder_notifications enable row level security;
 alter table user_preferences enable row level security;
@@ -400,6 +489,45 @@ alter table recipes enable row level security;
 alter table weekly_meal_plans enable row level security;
 alter table habit_entries enable row level security;
 alter table nutrition_entries enable row level security;
+alter table cycle_entries enable row level security;
+
+-- API grants
+grant usage on schema public to anon, authenticated;
+
+alter default privileges for role postgres in schema public
+grant select, insert, update, delete on tables to authenticated;
+
+alter default privileges for role postgres in schema public
+grant usage, select on sequences to authenticated;
+
+alter default privileges for role postgres in schema public
+grant execute on functions to authenticated;
+
+grant select, insert, update, delete on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.families to authenticated;
+grant select, insert, update, delete on table public.family_members to authenticated;
+grant select, insert, update, delete on table public.child_profiles to authenticated;
+grant select, insert, update, delete on table public.child_activities to authenticated;
+grant select, insert, update, delete on table public.events to authenticated;
+grant select, insert, update, delete on table public.tasks to authenticated;
+grant select, insert, update, delete on table public.approval_requests to authenticated;
+grant select, insert, update, delete on table public.shopping_items to authenticated;
+grant select, insert, update, delete on table public.push_tokens to authenticated;
+grant select, insert, update, delete on table public.staff_profiles to authenticated;
+grant select, insert, update, delete on table public.shopping_lists to authenticated;
+grant select, insert, update, delete on table public.shopping_list_items to authenticated;
+grant select, insert, update, delete on table public.shopping_shares to authenticated;
+grant select, insert, update, delete on table public.purchase_requests to authenticated;
+grant select, insert, update, delete on table public.fridge_items to authenticated;
+grant select, insert, update, delete on table public.completed_task_notifications to authenticated;
+grant select, insert, update, delete on table public.staff_reminder_notifications to authenticated;
+grant select, insert, update, delete on table public.user_preferences to authenticated;
+grant select, insert, update, delete on table public.imported_email_events to authenticated;
+grant select, insert, update, delete on table public.recipes to authenticated;
+grant select, insert, update, delete on table public.weekly_meal_plans to authenticated;
+grant select, insert, update, delete on table public.habit_entries to authenticated;
+grant select, insert, update, delete on table public.nutrition_entries to authenticated;
+grant select, insert, update, delete on table public.cycle_entries to authenticated;
 
 -- profiles
 drop policy if exists "profiles_select_own" on profiles;
@@ -623,6 +751,15 @@ drop policy if exists "purchase_requests_manage_members" on purchase_requests;
 create policy "purchase_requests_manage_members" on purchase_requests
 for all using (is_family_member(family_id)) with check (is_family_member(family_id));
 
+-- fridge_items
+drop policy if exists "fridge_items_select_members" on fridge_items;
+create policy "fridge_items_select_members" on fridge_items
+for select using (is_family_member(family_id));
+
+drop policy if exists "fridge_items_manage_members" on fridge_items;
+create policy "fridge_items_manage_members" on fridge_items
+for all using (is_family_member(family_id)) with check (is_family_member(family_id));
+
 -- completed_task_notifications
 drop policy if exists "completed_task_notifications_select_members" on completed_task_notifications;
 create policy "completed_task_notifications_select_members" on completed_task_notifications
@@ -702,6 +839,15 @@ for select using (user_id = auth.uid());
 
 drop policy if exists "nutrition_entries_manage_own" on nutrition_entries;
 create policy "nutrition_entries_manage_own" on nutrition_entries
+for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- cycle_entries
+drop policy if exists "cycle_entries_select_own" on cycle_entries;
+create policy "cycle_entries_select_own" on cycle_entries
+for select using (user_id = auth.uid());
+
+drop policy if exists "cycle_entries_manage_own" on cycle_entries;
+create policy "cycle_entries_manage_own" on cycle_entries
 for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Bootstrap helpers for app onboarding
@@ -857,3 +1003,31 @@ end;
 $$;
 
 grant execute on function seed_demo_data() to authenticated;
+
+create table if not exists public.custom_nutrition_foods (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  family_id uuid not null references public.families(id) on delete cascade,
+  name text not null,
+  brand text,
+  base_mode text not null default '100g' check (base_mode in ('100g', '100ml', 'serving')),
+  base_quantity numeric(8,2) not null default 100,
+  calories numeric(8,2) not null default 0,
+  protein numeric(8,2) not null default 0,
+  fat numeric(8,2) not null default 0,
+  carbs numeric(8,2) not null default 0,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+alter table public.custom_nutrition_foods enable row level security;
+
+grant select, insert, update, delete on table public.custom_nutrition_foods to authenticated;
+
+drop policy if exists "custom_nutrition_foods_select_own" on public.custom_nutrition_foods;
+create policy "custom_nutrition_foods_select_own" on public.custom_nutrition_foods
+for select using (user_id = auth.uid());
+
+drop policy if exists "custom_nutrition_foods_manage_own" on public.custom_nutrition_foods;
+create policy "custom_nutrition_foods_manage_own" on public.custom_nutrition_foods
+for all using (user_id = auth.uid()) with check (user_id = auth.uid());

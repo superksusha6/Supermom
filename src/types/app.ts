@@ -3,7 +3,7 @@ export type Role = 'mother' | 'child' | 'staff' | 'admin';
 export type TaskPriority = 'urgent' | 'non_urgent';
 export type TaskStatus = 'new' | 'in_progress' | 'done';
 
-export type CalendarScope = 'my_only' | 'all';
+export type CalendarScope = 'my' | 'family';
 export type WeekDayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 export type ChildActivity = {
@@ -54,7 +54,7 @@ export type NutritionGoal = 'lose' | 'maintain' | 'gain';
 export type ActivityLevel = 'low' | 'moderate' | 'high';
 export type NutritionSex = 'female' | 'male';
 export type NutritionPace = 'fast' | 'flexible';
-export type NutritionMealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type NutritionMealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other';
 export type HabitReminderMode = 'off' | 'smart' | 'custom';
 
 export type NutritionFoodEntry = {
@@ -66,6 +66,18 @@ export type NutritionFoodEntry = {
   protein: string;
   fat: string;
   carbs: string;
+};
+
+export type CustomNutritionFood = {
+  id: string;
+  name: string;
+  brand?: string;
+  baseMode: '100g' | '100ml' | 'serving';
+  baseQuantity: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
 };
 
 export type HabitEntry = {
@@ -148,14 +160,36 @@ export type ShoppingItem = {
   id: string;
   name: string;
   quantity: string;
+  category?: ShoppingItemCategory;
   comment?: string;
   purchased: boolean;
 };
 
+export type ShoppingPurchaseEvent = {
+  purchasedAt: string;
+  quantity: string;
+};
+
+export type ShoppingItemInsight = {
+  normalizedName: string;
+  displayName: string;
+  category?: ShoppingItemCategory;
+  purchaseCount: number;
+  lastPurchasedAt: string;
+  averageRestockDays?: number;
+  events: ShoppingPurchaseEvent[];
+};
+
+export type ShoppingItemCategory = 'products' | 'pharmacy' | 'household' | 'personal_care' | 'kids' | 'drinks' | 'other';
+
+export type ShoppingListType = 'base' | 'current' | 'history';
+
 export type ShoppingListDoc = {
   id: string;
   title: string;
+  listType?: ShoppingListType;
   createdAt: string;
+  completedAt?: string;
   items: ShoppingItem[];
 };
 
@@ -182,17 +216,68 @@ export type PurchaseRequest = {
 
 export type FridgeItemStatus = 'full' | 'low' | 'out';
 
+export type FridgeItemUnit = 'pcs' | 'g' | 'kg' | 'ml' | 'l' | 'pack' | 'bottle' | 'jar';
+
+export type FridgeItemCategory =
+  | 'Dairy'
+  | 'Meat / Fish'
+  | 'Vegetables'
+  | 'Fruits'
+  | 'Drinks'
+  | 'Snacks'
+  | 'Frozen'
+  | 'Pantry'
+  | 'Home stock'
+  | 'Pharmacy'
+  | 'Baby / Kids'
+  | 'Other';
+
 export type FridgeItem = {
   id: string;
   name: string;
   quantity: string;
-  category?: string;
+  amount?: number;
+  unit?: FridgeItemUnit;
+  category?: FridgeItemCategory;
   note?: string;
+  expiresAt?: string;
+  opened?: boolean;
   status: FridgeItemStatus;
 };
 
-export type RecipeMealType = 'breakfast' | 'lunch' | 'main_dish' | 'soups' | 'desserts' | 'baking';
-export type RecipeClassifier = 'kids' | 'healthy' | 'vegetarian' | 'family' | 'quick';
+export type RecipeMealType =
+  | 'breakfast'
+  | 'brunch'
+  | 'lunch'
+  | 'dinner'
+  | 'main_dish'
+  | 'soups'
+  | 'salads'
+  | 'sides'
+  | 'appetizers'
+  | 'sandwiches'
+  | 'pasta'
+  | 'pizza'
+  | 'desserts'
+  | 'baking'
+  | 'drinks'
+  | 'sauces'
+  | 'meal_prep';
+export type RecipeClassifier =
+  | 'kids'
+  | 'healthy'
+  | 'vegetarian'
+  | 'family'
+  | 'quick'
+  | 'vegan'
+  | 'gluten_free'
+  | 'dairy_free'
+  | 'high_protein'
+  | 'low_sugar'
+  | 'budget'
+  | 'lunchbox'
+  | 'freezer_friendly'
+  | 'holiday';
 
 export type RecipeIngredient = {
   id: string;
@@ -218,6 +303,8 @@ export type Recipe = {
   title: string;
   description: string;
   mealType: RecipeMealType;
+  mealSlot?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' | 'snack';
+  subtype?: string;
   cuisine?: string;
   cookTimeMinutes: number;
   servings: number;
@@ -236,6 +323,7 @@ export type MealPlanSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type WeeklyMealPlanEntry = {
   id: string;
   profileKey?: string;
+  profileLabel?: string;
   dayKey: string;
   dayLabel: string;
   slot: MealPlanSlot;

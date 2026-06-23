@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
 import { MealPlanSlot, Recipe, WeeklyMealPlanEntry } from '@/types/app';
@@ -9,6 +9,10 @@ type Props = {
   recipes: Recipe[];
   weeklyPlan: WeeklyMealPlanEntry[];
   onWeeklyPlanChange: Dispatch<SetStateAction<WeeklyMealPlanEntry[]>>;
+  planProfiles: MealPlanProfile[];
+  onPlanProfilesChange: Dispatch<SetStateAction<MealPlanProfile[]>>;
+  activeProfileKey: string;
+  onActiveProfileKeyChange: Dispatch<SetStateAction<string>>;
 };
 
 const DAYS: Array<{ key: string; label: string }> = [
@@ -38,6 +42,7 @@ const DEFAULT_PLAN_PROFILES: MealPlanProfile[] = [
   { key: 'adults', label: 'Adults' },
   { key: 'kids', label: 'Kids' },
 ];
+const DEFAULT_PLAN_PROFILE_KEYS = new Set(DEFAULT_PLAN_PROFILES.map((profile) => profile.key));
 
 const SIMPLE_MEAL_PRESET_IDS = new Set([
   'preset-oatmeal-porridge-water',
@@ -138,18 +143,26 @@ function getCustomItemsSummary(items: Array<{ title: string; grams?: number; cal
   };
 }
 
-export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: Props) {
+export function MealPlannerScreen({
+  recipes,
+  weeklyPlan,
+  onWeeklyPlanChange,
+  planProfiles,
+  onPlanProfilesChange,
+  activeProfileKey,
+  onActiveProfileKeyChange,
+}: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const isMobile = width < 760;
   const simpleMealScrollRef = useRef<ScrollView | null>(null);
   const simpleMealInputRefs = useRef<Record<string, TextInput | null>>({});
   const [pickerTarget, setPickerTarget] = useState<{ dayKey: string; slot: MealPlanSlot } | null>(null);
-  const [staffExportOpen, setStaffExportOpen] = useState(false);
   const [selectedApplyDays, setSelectedApplyDays] = useState<string[]>([]);
   const [recipeSort, setRecipeSort] = useState<'default' | 'kcal_asc' | 'kcal_desc'>('default');
-  const [planProfiles, setPlanProfiles] = useState<MealPlanProfile[]>(DEFAULT_PLAN_PROFILES);
-  const [activeProfileKey, setActiveProfileKey] = useState('family');
   const [newProfileName, setNewProfileName] = useState('');
+  const [profileActionTargetKey, setProfileActionTargetKey] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot } | null>(null);
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
   const [recipeSearch, setRecipeSearch] = useState('');
@@ -194,6 +207,7 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
           next[existingIndex] = {
             ...next[existingIndex],
             profileKey: activeProfileKey,
+            profileLabel: activeProfile.label,
             recipeId,
             customTitle: undefined,
             customCalories: undefined,
@@ -208,6 +222,7 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
         next.push({
           id: `meal-plan-${activeProfileKey}-${targetDayKey}-${slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           profileKey: activeProfileKey,
+          profileLabel: activeProfile.label,
           dayKey: targetDayKey,
           dayLabel: day?.label || targetDayKey,
           slot,
@@ -251,6 +266,7 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
           next[existingIndex] = {
             ...next[existingIndex],
             profileKey: activeProfileKey,
+            profileLabel: activeProfile.label,
             recipeId: undefined,
             customItems: normalizedItems,
             customTitle: summary.title,
@@ -265,6 +281,7 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
         next.push({
           id: `meal-plan-${activeProfileKey}-${targetDayKey}-${slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           profileKey: activeProfileKey,
+          profileLabel: activeProfile.label,
           dayKey: targetDayKey,
           dayLabel: day?.label || targetDayKey,
           slot,
@@ -341,12 +358,66 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
     const label = newProfileName.trim();
     if (!label) return;
     const key = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setPlanProfiles((prev) => [...prev, { key, label }]);
-    setActiveProfileKey(key);
+    onPlanProfilesChange((prev) => [...prev, { key, label }]);
+    onActiveProfileKeyChange(key);
+    setProfileActionTargetKey(null);
     setNewProfileName('');
   }
 
+  function handlePlanProfilePress(profile: MealPlanProfile) {
+    if (DEFAULT_PLAN_PROFILE_KEYS.has(profile.key)) {
+      setProfileActionTargetKey(null);
+      onActiveProfileKeyChange(profile.key);
+      return;
+    }
+    onActiveProfileKeyChange(profile.key);
+    setProfileActionTargetKey((current) => (current === profile.key ? null : profile.key));
+  }
+
+  function deleteCustomPlanProfile(profileKey: string) {
+    setProfileActionTargetKey(null);
+    onPlanProfilesChange((prev) => prev.filter((item) => item.key !== profileKey));
+    onWeeklyPlanChange((prev) => prev.filter((entry) => (entry.profileKey || 'family') !== profileKey));
+    onActiveProfileKeyChange((current) => (current === profileKey ? 'family' : current));
+  }
+
   const staffPlanText = useMemo(() => buildStaffMealPlanText(activeWeeklyPlan, recipesById, activeProfile.label), [activeProfile.label, activeWeeklyPlan, recipesById]);
+
+  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false) => {
+    const entry = activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
+    const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
+    const customItems = getEntryCustomItems(entry);
+    const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
+    const customMealTitle = customSummary.title || entry?.customTitle;
+    const hasMeal = Boolean(recipe || customMealTitle);
+
+    return (
+      <Pressable
+        key={`${dayKey}-${slot.key}`}
+        style={[
+          styles.weekGridMealCell,
+          compact && styles.weekGridMealCellCompact,
+          hasMeal && styles.weekGridMealCellFilled,
+        ]}
+        onPress={() => openSlot(dayKey, slot.key, entry)}
+      >
+        {compact ? <Text style={styles.mobileSlotLabel}>{slot.label}</Text> : null}
+        {recipe ? (
+          <>
+            <Text style={[styles.weekGridRecipeTitle, compact && styles.weekGridRecipeTitleCompact]}>{recipe.title}</Text>
+            <Text style={styles.weekGridRecipeMeta}>{recipe.nutritionPerServing.calories} kcal</Text>
+          </>
+        ) : customMealTitle ? (
+          <>
+            <Text style={[styles.weekGridRecipeTitle, compact && styles.weekGridRecipeTitleCompact]}>{customMealTitle}</Text>
+            <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
+          </>
+        ) : (
+          <Text style={[styles.weekGridEmptyText, compact && styles.weekGridEmptyTextCompact]}>+</Text>
+        )}
+      </Pressable>
+    );
+  };
 
   return (
     <>
@@ -358,95 +429,123 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
           <View style={styles.profileTabs}>
             {planProfiles.map((profile) => {
               const active = activeProfileKey === profile.key;
+              const showDelete = profileActionTargetKey === profile.key && !DEFAULT_PLAN_PROFILE_KEYS.has(profile.key);
               return (
-                <Pressable key={profile.key} style={[styles.profileTab, active && styles.profileTabActive]} onPress={() => setActiveProfileKey(profile.key)}>
-                  <Text style={[styles.profileTabText, active && styles.profileTabTextActive]}>{profile.label}</Text>
-                </Pressable>
+                <View key={profile.key} style={styles.profileTabWrap}>
+                  <Pressable style={[styles.profileTab, active && styles.profileTabActive]} onPress={() => handlePlanProfilePress(profile)}>
+                    <Text style={[styles.profileTabText, active && styles.profileTabTextActive]}>{profile.label}</Text>
+                  </Pressable>
+                  {showDelete ? (
+                    <Pressable style={styles.profileDeleteInlineBtn} onPress={() => deleteCustomPlanProfile(profile.key)}>
+                      <Text style={styles.profileDeleteInlineText}>Delete</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               );
             })}
           </View>
-          <View style={styles.addProfileRow}>
+          <View style={[styles.addProfileRow, isMobile && styles.addProfileRowMobile]}>
             <TextInput
               placeholder="Add profile name, e.g. Emma or Staff diet"
               placeholderTextColor={colors.subtext}
-              style={styles.profileInput}
+              style={[styles.profileInput, isMobile && styles.profileInputMobile]}
               value={newProfileName}
               onChangeText={setNewProfileName}
             />
-            <Pressable style={styles.addProfileBtn} onPress={addPlanProfile}>
+            <Pressable style={[styles.addProfileBtn, isMobile && styles.addProfileBtnMobile]} onPress={addPlanProfile}>
               <Text style={styles.addProfileBtnText}>Add</Text>
             </Pressable>
           </View>
 
-          <View style={styles.staffExportCard}>
+          <View style={[styles.staffExportCard, isMobile && styles.staffExportCardMobile]}>
             <View style={styles.staffExportCopy}>
               <Text style={styles.staffExportTitle}>Staff meal plan</Text>
               <Text style={styles.staffExportText}>Prepare a clean weekly menu for {activeProfile.label} with recipes and ingredients for staff.</Text>
             </View>
-            <Pressable style={styles.staffExportBtn} onPress={() => setStaffExportOpen(true)}>
-              <Text style={styles.staffExportBtnText}>Preview</Text>
-            </Pressable>
+            <View style={[styles.staffExportActions, isMobile && styles.staffExportActionsMobile]}>
               <Pressable
-                style={styles.staffExportBtn}
+                style={[styles.staffExportBtn, isMobile && styles.staffExportBtnMobile]}
                 onPress={() => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText })}
               >
                 <Text style={styles.staffExportBtnText}>Send</Text>
               </Pressable>
-              <Pressable style={styles.staffExportBtn} onPress={() => printStaffMealPlan(staffPlanText)}>
+              <Pressable
+                style={[styles.staffExportBtn, isMobile && styles.staffExportBtnMobile]}
+                onPress={() => printStaffMealPlan(activeWeeklyPlan, recipesById, activeProfile.label)}
+              >
                 <Text style={styles.staffExportBtnText}>PDF</Text>
               </Pressable>
+            </View>
           </View>
         </SectionCard>
 
-        <SectionCard title={`${activeProfile.label} Weekly Menu`}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.weekGrid}>
-              <View style={styles.weekGridHeaderRow}>
-                <View style={[styles.weekGridHeaderCell, styles.weekGridDayHeaderCell]}>
-                  <Text style={styles.weekGridHeaderText}>Day</Text>
-                </View>
-                {SLOTS.map((slot) => (
-                  <View key={`header-${slot.key}`} style={styles.weekGridHeaderCell}>
-                    <Text style={styles.weekGridHeaderText}>{slot.label}</Text>
-                  </View>
-                ))}
-              </View>
-
+        <View style={styles.weekMenuSection}>
+          <View style={styles.weekMenuHeader}>
+            <Text style={styles.weekMenuTitle}>{activeProfile.label} Weekly Menu</Text>
+          </View>
+          {isMobile ? (
+            <View style={styles.mobileWeekList}>
               {DAYS.map((day) => (
-                <View key={day.key} style={styles.weekGridRow}>
-                  <View style={styles.weekGridDayCell}>
-                    <Text style={styles.weekGridDayText}>{day.label}</Text>
+                <View key={day.key} style={styles.mobileDayCard}>
+                  <Text style={styles.mobileDayTitle}>{day.label}</Text>
+                  <View style={styles.mobileDaySlots}>
+                    {SLOTS.map((slot) => renderMealCell(day.key, slot, true))}
                   </View>
-                  {SLOTS.map((slot) => {
-                    const entry = activeWeeklyPlan.find((item) => item.dayKey === day.key && item.slot === slot.key);
-                    const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
-                    const customItems = getEntryCustomItems(entry);
-                    const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
-                    const customMealTitle = customSummary.title || entry?.customTitle;
-                    const hasMeal = Boolean(recipe || customMealTitle);
-                    return (
-                      <Pressable key={`${day.key}-${slot.key}`} style={[styles.weekGridMealCell, hasMeal && styles.weekGridMealCellFilled]} onPress={() => openSlot(day.key, slot.key, entry)}>
-                        {recipe ? (
-                          <>
-                            <Text style={styles.weekGridRecipeTitle}>{recipe.title}</Text>
-                            <Text style={styles.weekGridRecipeMeta}>{recipe.nutritionPerServing.calories} kcal</Text>
-                          </>
-                        ) : customMealTitle ? (
-                          <>
-                            <Text style={styles.weekGridRecipeTitle}>{customMealTitle}</Text>
-                            <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
-                          </>
-                        ) : (
-                          <Text style={styles.weekGridEmptyText}>+</Text>
-                        )}
-                      </Pressable>
-                    );
-                  })}
                 </View>
               ))}
             </View>
-          </ScrollView>
-        </SectionCard>
+          ) : (
+            <View style={[styles.weekGrid, styles.weekGridWide]}>
+                <View style={styles.weekGridHeaderRow}>
+                  <View style={[styles.weekGridHeaderCell, styles.weekGridDayHeaderCell, styles.weekGridDayHeaderCellWide]}>
+                    <Text style={styles.weekGridHeaderText}>Day</Text>
+                  </View>
+                  {SLOTS.map((slot) => (
+                    <View key={`header-${slot.key}`} style={[styles.weekGridHeaderCell, styles.weekGridHeaderCellWide]}>
+                      <Text style={styles.weekGridHeaderText}>{slot.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {DAYS.map((day) => (
+                  <View key={day.key} style={styles.weekGridRow}>
+                    <View style={[styles.weekGridDayCell, styles.weekGridDayCellWide]}>
+                      <Text style={styles.weekGridDayText}>{day.label}</Text>
+                    </View>
+                    {SLOTS.map((slot) => {
+                      const entry = activeWeeklyPlan.find((item) => item.dayKey === day.key && item.slot === slot.key);
+                      const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
+                      const customItems = getEntryCustomItems(entry);
+                      const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
+                      const customMealTitle = customSummary.title || entry?.customTitle;
+                      const hasMeal = Boolean(recipe || customMealTitle);
+                      return (
+                        <Pressable
+                          key={`${day.key}-${slot.key}`}
+                          style={[styles.weekGridMealCell, styles.weekGridMealCellWide, hasMeal && styles.weekGridMealCellFilled]}
+                          onPress={() => openSlot(day.key, slot.key, entry)}
+                        >
+                          {recipe ? (
+                            <>
+                              <Text style={styles.weekGridRecipeTitle}>{recipe.title}</Text>
+                              <Text style={styles.weekGridRecipeMeta}>{recipe.nutritionPerServing.calories} kcal</Text>
+                            </>
+                          ) : customMealTitle ? (
+                            <>
+                              <Text style={styles.weekGridRecipeTitle}>{customMealTitle}</Text>
+                              <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
+                            </>
+                          ) : (
+                            <Text style={styles.weekGridEmptyText}>+</Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       <Modal visible={!!pickerTarget} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
@@ -745,33 +844,6 @@ export function MealPlannerScreen({ recipes, weeklyPlan, onWeeklyPlanChange }: P
         </View>
       </Modal>
 
-      <Modal visible={staffExportOpen} transparent animationType="fade" onRequestClose={() => setStaffExportOpen(false)}>
-        <View style={styles.modalRoot}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setStaffExportOpen(false)} />
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Staff export</Text>
-              <Pressable style={styles.closeBtn} onPress={() => setStaffExportOpen(false)}>
-                <Text style={styles.closeBtnText}>×</Text>
-              </Pressable>
-            </View>
-            <ScrollView contentContainerStyle={styles.exportPreviewCard}>
-              <Text style={styles.exportPreviewText}>{staffPlanText}</Text>
-            </ScrollView>
-            <View style={styles.exportActions}>
-              <Pressable style={styles.staffExportBtn} onPress={() => setStaffExportOpen(false)}>
-                <Text style={styles.staffExportBtnText}>Close</Text>
-              </Pressable>
-              <Pressable style={styles.staffExportBtnPrimary} onPress={() => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText })}>
-                <Text style={styles.staffExportBtnPrimaryText}>Send to staff</Text>
-              </Pressable>
-              <Pressable style={styles.staffExportBtnPrimary} onPress={() => printStaffMealPlan(staffPlanText)}>
-                <Text style={styles.staffExportBtnPrimaryText}>Print / PDF</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }
@@ -821,7 +893,177 @@ function buildSingleRecipeText(recipe: Recipe) {
   return lines.join('\n').trim();
 }
 
-function printStaffMealPlan(text: string) {
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildStaffMealPlanTableHtml(weeklyPlan: WeeklyMealPlanEntry[], recipesById: Record<string, Recipe>, profileLabel: string) {
+  const headerCells = SLOTS.map((slot) => `<th>${escapeHtml(slot.label)}</th>`).join('');
+  const rows = DAYS.map((day) => {
+    const slotCells = SLOTS.map((slot) => {
+      const entry = weeklyPlan.find((item) => item.dayKey === day.key && item.slot === slot.key);
+      const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
+      const customItems = getEntryCustomItems(entry);
+      const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
+      const customTitle = customSummary.title || entry?.customTitle;
+
+      if (recipe) {
+        return `
+          <td>
+            <div class="meal-title">${escapeHtml(recipe.title)}</div>
+            <div class="meal-meta">${escapeHtml(`${recipe.nutritionPerServing.calories} kcal`)}</div>
+          </td>
+        `;
+      }
+
+      if (customTitle) {
+        const note = entry?.customNote ? `<div class="meal-note">${escapeHtml(entry.customNote)}</div>` : '';
+        return `
+          <td>
+            <div class="meal-title">${escapeHtml(customTitle)}</div>
+            <div class="meal-meta">${escapeHtml(customSummary.meta)}</div>
+            ${note}
+          </td>
+        `;
+      }
+
+      return `<td><div class="meal-empty">—</div></td>`;
+    }).join('');
+
+    return `
+      <tr>
+        <th class="day-cell">${escapeHtml(day.label)}</th>
+        ${slotCells}
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Weekly Meal Plan</title>
+        <style>
+          body {
+            margin: 32px;
+            color: #172033;
+            font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+            background: #ffffff;
+          }
+          .header {
+            margin-bottom: 18px;
+          }
+          .eyebrow {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #4f7cff;
+            margin-bottom: 8px;
+          }
+          h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+            line-height: 1.1;
+          }
+          .subtitle {
+            font-size: 14px;
+            color: #5d6b86;
+          }
+          table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            table-layout: fixed;
+            border: 1px solid #d9e4f2;
+            border-radius: 18px;
+            overflow: hidden;
+          }
+          thead th {
+            background: #3f6df2;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 12px;
+            border-right: 1px solid rgba(255,255,255,0.16);
+          }
+          thead th:last-child {
+            border-right: 0;
+          }
+          tbody th,
+          tbody td {
+            vertical-align: top;
+            padding: 14px 12px;
+            border-top: 1px solid #e4edf8;
+            border-right: 1px solid #edf2f7;
+          }
+          tbody td:last-child {
+            border-right: 0;
+          }
+          .day-cell {
+            width: 116px;
+            background: #f8fbff;
+            font-size: 13px;
+            font-weight: 800;
+            text-align: left;
+          }
+          .meal-title {
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.35;
+            margin-bottom: 4px;
+          }
+          .meal-meta {
+            font-size: 11px;
+            font-weight: 700;
+            color: #5d6b86;
+            line-height: 1.4;
+          }
+          .meal-note {
+            margin-top: 6px;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #7a889f;
+          }
+          .meal-empty {
+            font-size: 13px;
+            color: #9aa7bc;
+          }
+          @media print {
+            body { margin: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="eyebrow">Staff meal plan</div>
+          <h1>Family Weekly Menu</h1>
+          <div class="subtitle">Profile: ${escapeHtml(profileLabel)}</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:116px">Day</th>
+              ${headerCells}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+}
+
+function printStaffMealPlan(weeklyPlan: WeeklyMealPlanEntry[], recipesById: Record<string, Recipe>, profileLabel: string) {
+  const text = buildStaffMealPlanText(weeklyPlan, recipesById, profileLabel);
   if (typeof window === 'undefined') {
     Share.share({ title: 'Weekly Meal Plan', message: text });
     return;
@@ -833,44 +1075,7 @@ function printStaffMealPlan(text: string) {
     return;
   }
 
-  const escapedText = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  printWindow.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <title>Weekly Meal Plan</title>
-        <style>
-          body {
-            margin: 40px;
-            color: #172033;
-            font-family: Georgia, "Times New Roman", serif;
-            background: #ffffff;
-          }
-          h1 {
-            margin: 0 0 18px;
-            font-size: 28px;
-          }
-          pre {
-            white-space: pre-wrap;
-            font-family: inherit;
-            font-size: 14px;
-            line-height: 1.55;
-          }
-          @media print {
-            body { margin: 24px; }
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Weekly Meal Plan</h1>
-        <pre>${escapedText}</pre>
-      </body>
-    </html>
-  `);
+  printWindow.document.write(buildStaffMealPlanTableHtml(weeklyPlan, recipesById, profileLabel));
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();
@@ -899,6 +1104,11 @@ const createStyles = (colors: ThemeColors) =>
       gap: 8,
       marginBottom: 10,
     },
+    profileTabWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     profileTab: {
       borderWidth: 1,
       borderColor: colors.border,
@@ -919,10 +1129,25 @@ const createStyles = (colors: ThemeColors) =>
     profileTabTextActive: {
       color: colors.primary,
     },
+    profileDeleteInlineBtn: {
+      borderRadius: 999,
+      backgroundColor: '#fff1f1',
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    profileDeleteInlineText: {
+      color: '#c24646',
+      fontSize: 11,
+      fontWeight: '800',
+    },
     addProfileRow: {
       flexDirection: 'row',
       gap: 10,
       marginBottom: 14,
+    },
+    addProfileRowMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
     },
     profileInput: {
       flex: 1,
@@ -936,12 +1161,19 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '600',
     },
+    profileInputMobile: {
+      width: '100%',
+    },
     addProfileBtn: {
       borderRadius: 14,
       backgroundColor: colors.primary,
       paddingHorizontal: 14,
       paddingVertical: 10,
       justifyContent: 'center',
+    },
+    addProfileBtnMobile: {
+      alignItems: 'center',
+      width: '100%',
     },
     addProfileBtnText: {
       color: '#ffffff',
@@ -959,10 +1191,23 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: '#ffffff',
       padding: 14,
     },
+    staffExportCardMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    },
     staffExportCopy: {
       flex: 1,
       minWidth: 210,
       gap: 4,
+    },
+    staffExportActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    staffExportActionsMobile: {
+      width: '100%',
+      justifyContent: 'space-between',
     },
     staffExportTitle: {
       color: colors.text,
@@ -983,6 +1228,10 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       alignItems: 'center',
     },
+    staffExportBtnMobile: {
+      flex: 1,
+      minWidth: 92,
+    },
     staffExportBtnText: {
       color: colors.text,
       fontSize: 13,
@@ -1000,17 +1249,31 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '800',
     },
+    weekMenuSection: {
+      marginBottom: 12,
+    },
+    weekMenuHeader: {
+      marginBottom: 10,
+      paddingHorizontal: 2,
+    },
+    weekMenuTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+    },
     weekGrid: {
-      minWidth: 760,
-      borderWidth: 1,
-      borderColor: '#d9e4f2',
-      borderRadius: 22,
       overflow: 'hidden',
-      backgroundColor: '#ffffff',
+      backgroundColor: 'transparent',
+    },
+    weekGridWide: {
+      width: '100%',
     },
     weekGridHeaderRow: {
       flexDirection: 'row',
       backgroundColor: colors.primary,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      overflow: 'hidden',
     },
     weekGridHeaderCell: {
       width: 150,
@@ -1021,9 +1284,18 @@ const createStyles = (colors: ThemeColors) =>
       borderLeftWidth: 1,
       borderLeftColor: 'rgba(255,255,255,0.18)',
     },
+    weekGridHeaderCellWide: {
+      flex: 1,
+      width: 'auto',
+    },
     weekGridDayHeaderCell: {
       width: 130,
       borderLeftWidth: 0,
+    },
+    weekGridDayHeaderCellWide: {
+      width: 130,
+      flexShrink: 0,
+      flexGrow: 0,
     },
     weekGridHeaderText: {
       color: '#ffffff',
@@ -1034,17 +1306,21 @@ const createStyles = (colors: ThemeColors) =>
     },
     weekGridRow: {
       flexDirection: 'row',
-      borderTopWidth: 1,
-      borderTopColor: '#e4edf8',
       minHeight: 104,
     },
     weekGridDayCell: {
       width: 130,
-      backgroundColor: '#f8fbff',
+      backgroundColor: 'rgba(248,251,255,0.84)',
       borderRightWidth: 1,
       borderRightColor: '#e4edf8',
+      borderBottomWidth: 1,
+      borderBottomColor: '#e4edf8',
       padding: 12,
       justifyContent: 'center',
+    },
+    weekGridDayCellWide: {
+      width: 140,
+      flexShrink: 0,
     },
     weekGridDayText: {
       color: colors.text,
@@ -1056,8 +1332,25 @@ const createStyles = (colors: ThemeColors) =>
       padding: 10,
       borderRightWidth: 1,
       borderRightColor: '#edf2f7',
+      borderBottomWidth: 1,
+      borderBottomColor: '#edf2f7',
       justifyContent: 'center',
-      backgroundColor: '#ffffff',
+      backgroundColor: 'rgba(255,255,255,0.72)',
+    },
+    weekGridMealCellWide: {
+      flex: 1,
+      width: 'auto',
+    },
+    weekGridMealCellCompact: {
+      width: '100%',
+      borderRightWidth: 0,
+      borderWidth: 1,
+      borderColor: '#edf2f7',
+      borderRadius: 16,
+      padding: 12,
+      minHeight: 82,
+      justifyContent: 'flex-start',
+      gap: 4,
     },
     weekGridMealCellFilled: {
       backgroundColor: colors.selection,
@@ -1074,11 +1367,46 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 11,
       fontWeight: '800',
     },
+    weekGridRecipeTitleCompact: {
+      marginBottom: 2,
+    },
     weekGridEmptyText: {
       color: colors.primary,
       fontSize: 24,
       fontWeight: '800',
       textAlign: 'center',
+    },
+    weekGridEmptyTextCompact: {
+      textAlign: 'left',
+      fontSize: 22,
+      lineHeight: 24,
+    },
+    mobileWeekList: {
+      gap: 12,
+    },
+    mobileDayCard: {
+      borderWidth: 1,
+      borderColor: '#d9e4f2',
+      borderRadius: 18,
+      backgroundColor: '#ffffff',
+      padding: 12,
+      gap: 10,
+    },
+    mobileDayTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '900',
+    },
+    mobileDaySlots: {
+      gap: 8,
+    },
+    mobileSlotLabel: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: 2,
     },
     modalRoot: {
       flex: 1,

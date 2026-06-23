@@ -1,10 +1,12 @@
 import { useEffect, useMemo as useReactMemo, useRef, useState } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { analyzeFridgePhoto } from '@/lib/fridgeVision';
+import { STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
+import { SHOPPING_CATEGORY_OPTIONS, getShoppingItemCategoryLabel, inferShoppingItemCategory } from '@/lib/shopping';
 import { SectionCard } from '@/components/SectionCard';
-import { FridgeItem, FridgeItemStatus, PurchaseRequest, Role, ShoppingItem, ShoppingListDoc, ShoppingShare } from '@/types/app';
+import { FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemCategory, ShoppingListDoc, ShoppingShare } from '@/types/app';
 import { ThemeColors, ThemeName, useTheme, useThemeColors } from '@/theme/theme';
 
 const SHOPPING_SUGGESTIONS = [
@@ -414,6 +416,8 @@ const SHOPPING_SUGGESTIONS = [
 
 const UNIT_OPTIONS = ['pcs', 'g', 'kg', 'packs'] as const;
 type UnitOption = (typeof UNIT_OPTIONS)[number];
+const FRIDGE_UNIT_OPTIONS: FridgeItemUnit[] = ['pcs', 'g', 'kg', 'ml', 'l', 'pack', 'bottle', 'jar'];
+const FRIDGE_CATEGORY_OPTIONS: FridgeItemCategory[] = ['Dairy', 'Meat / Fish', 'Vegetables', 'Fruits', 'Drinks', 'Snacks', 'Frozen', 'Pantry', 'Home stock', 'Pharmacy', 'Baby / Kids', 'Other'];
 
 type DraftRow = {
   id: string;
@@ -426,6 +430,7 @@ type DraftRow = {
 type Props = {
   lists: ShoppingListDoc[];
   fridgeItems: FridgeItem[];
+  recipes: Recipe[];
   onImportFridgeItems: (items: Array<Omit<FridgeItem, 'id'>>) => void;
   shareTargets: Array<{ key: string; label: string }>;
   sharedInbox: ShoppingShare[];
@@ -434,30 +439,59 @@ type Props = {
   currentActorLabel: string;
   purchaseRequests: PurchaseRequest[];
   onUpdateFridgeItemStatus: (itemId: string, status: FridgeItemStatus) => void;
+  onAddFridgeItemToShopping: (itemId: string) => void;
+  onAddAllLowFridgeItemsToShopping: () => void;
+  onUpdateFridgeItem: (item: FridgeItem) => void;
   onUseFridgeItem: (itemId: string) => void;
   onTogglePurchased: (listId: string, itemId: string) => void;
-  onCreateList: (items: Array<{ name: string; quantity: string }>, targetListId?: string | null) => void;
+  onCreateList: (
+    items: Array<{ name: string; quantity: string; category?: ShoppingItemCategory }>,
+    targetListId?: string | null,
+    createBehavior?: 'default' | 'force-current',
+  ) => void;
   onUpdateList: (listId: string, items: ShoppingItem[]) => void;
   onDeleteList: (listId: string) => void;
+  onSaveAsBaseList: (listId: string) => void;
+  onStartFromBaseList: () => void;
+  onUsePastList: (listId: string) => void;
   onShareListToProfile: (listId: string, recipientKey: string) => void;
   onImportSharedList: (shareId: string) => void;
   onDismissSharedList: (shareId: string) => void;
   onCreatePurchaseRequest: (payload: { itemName: string; quantity: string; comment: string }) => void;
   onAddPurchaseRequestToList: (requestId: string) => void;
   onDismissPurchaseRequest: (requestId: string) => void;
+  quickActionRequest?: { type: 'add-item' | 'create-basket' | 'use-basket'; token: number } | null;
 };
 
 type Filter = 'active' | 'purchased';
 type ShoppingView = 'list' | 'fridge';
-type FridgeView = 'in_fridge' | 'need_to_buy' | 'out';
+type InventoryFilter = 'all' | 'low' | 'use_soon';
+type ShoppingCategory = 'all' | 'products' | 'pharmacy' | 'household' | 'personal_care' | 'kids' | 'drinks' | 'other';
 
 type EditShoppingRow = {
   key: string;
   sourceId: string | null;
   name: string;
   quantity: string;
+  amount: string;
+  unit: UnitOption;
+  category: ShoppingItemCategory;
   purchased: boolean;
 };
+
+type FridgeEditDraft = {
+  id: string;
+  name: string;
+  amount: string;
+  unit: FridgeItemUnit;
+  category: FridgeItemCategory;
+  expiresAt: string;
+  note: string;
+  opened: boolean;
+  status: FridgeItemStatus;
+};
+
+type ComposerMode = 'list' | 'basket';
 
 function createDraftRow(index: number): DraftRow {
   return {
@@ -469,9 +503,70 @@ function createDraftRow(index: number): DraftRow {
   };
 }
 
+function getDraftAmountStep(unit: UnitOption, amount: number) {
+  if (unit === 'g') {
+    if (amount >= 500) return 50;
+    if (amount >= 100) return 20;
+    return 10;
+  }
+  if (unit === 'kg') return 1;
+  return 1;
+}
+
+function normalizeAmountForUnit(unit: UnitOption, amount: number) {
+  if (unit === 'g') {
+    if (amount <= 1) return 100;
+    return Math.max(10, amount);
+  }
+  return Math.max(1, amount);
+}
+
+function parseShoppingQuantityText(value: string): { amount: string; unit: UnitOption } {
+  const normalized = value.trim().toLowerCase();
+  const match = normalized.match(/^(\d+(?:[.,]\d+)?)\s*([a-zа-я]+)?$/i);
+  if (!match) return { amount: '1', unit: 'pcs' };
+  const rawAmount = match[1]?.replace(',', '.') || '1';
+  const rawUnit = match[2] || 'pcs';
+  if (rawUnit === 'g') return { amount: rawAmount, unit: 'g' };
+  if (rawUnit === 'kg') return { amount: rawAmount, unit: 'kg' };
+  if (rawUnit === 'pack' || rawUnit === 'packs' || rawUnit === 'package' || rawUnit === 'packages') {
+    return { amount: rawAmount, unit: 'packs' };
+  }
+  return { amount: rawAmount, unit: 'pcs' };
+}
+
+function formatShoppingQuantity(amount: string, unit: UnitOption) {
+  const trimmed = amount.trim() || '1';
+  return `${trimmed} ${unit}`;
+}
+
+function mergeShoppingItemsByName(primary: ShoppingItem[], secondary: ShoppingItem[]) {
+  const seen = new Set<string>();
+  const merged: ShoppingItem[] = [];
+
+  const append = (items: ShoppingItem[]) => {
+    items.forEach((item, index) => {
+      const normalizedName = item.name.trim().toLowerCase();
+      if (!normalizedName || seen.has(normalizedName)) return;
+      seen.add(normalizedName);
+      merged.push({
+        ...item,
+        id: item.id || `si-local-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        category: item.category || inferShoppingItemCategory(item.name),
+      });
+    });
+  };
+
+  append(primary);
+  append(secondary);
+
+  return merged;
+}
+
 export function ShoppingScreen({
   lists,
   fridgeItems,
+  recipes,
   onImportFridgeItems,
   shareTargets,
   sharedInbox,
@@ -480,34 +575,54 @@ export function ShoppingScreen({
   currentActorLabel,
   purchaseRequests,
   onUpdateFridgeItemStatus,
+  onAddFridgeItemToShopping,
+  onAddAllLowFridgeItemsToShopping,
+  onUpdateFridgeItem,
   onUseFridgeItem,
   onTogglePurchased,
   onCreateList,
   onUpdateList,
   onDeleteList,
+  onSaveAsBaseList,
+  onStartFromBaseList,
+  onUsePastList,
   onShareListToProfile,
   onImportSharedList,
   onDismissSharedList,
   onCreatePurchaseRequest,
   onAddPurchaseRequestToList,
   onDismissPurchaseRequest,
+  quickActionRequest,
 }: Props) {
   const { themeName } = useTheme();
   const colors = useThemeColors();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 760;
   const styles = useReactMemo(() => createStyles(colors, themeName), [colors, themeName]);
   const [filter, setFilter] = useState<Filter>('active');
   const [shoppingView, setShoppingView] = useState<ShoppingView>('list');
-  const [fridgeView, setFridgeView] = useState<FridgeView>('in_fridge');
+  const [inventoryFilter, setInventoryFilter] = useState<InventoryFilter>('all');
+  const [shoppingCategory, setShoppingCategory] = useState<ShoppingCategory>('all');
+  const [baseListOpen, setBaseListOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [addComposerOpen, setAddComposerOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<ComposerMode>('list');
+  const [pendingCreateBehavior, setPendingCreateBehavior] = useState<'default' | 'force-current'>('default');
   const [fridgePhotoUri, setFridgePhotoUri] = useState<string | null>(null);
   const [fridgePhotoScanOpen, setFridgePhotoScanOpen] = useState(false);
   const [fridgePhotoLoading, setFridgePhotoLoading] = useState(false);
+  const [fridgeEditOpen, setFridgeEditOpen] = useState(false);
   const [recognizedFridgeItems, setRecognizedFridgeItems] = useState<Array<Omit<FridgeItem, 'id'>>>([]);
+  const [fridgeEditDraft, setFridgeEditDraft] = useState<FridgeEditDraft | null>(null);
   const [fridgeScanSource, setFridgeScanSource] = useState<'ai' | 'fallback' | null>(null);
   const [fridgeScanError, setFridgeScanError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [draftRows, setDraftRows] = useState<DraftRow[]>(() => [createDraftRow(0)]);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  const [focusedEditRowKey, setFocusedEditRowKey] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [editTargetListId, setEditTargetListId] = useState<string | null>(null);
+  const [editTargetListTitle, setEditTargetListTitle] = useState('Shopping List');
   const [shareOpen, setShareOpen] = useState(false);
   const [requestItemName, setRequestItemName] = useState('');
   const [requestQuantity, setRequestQuantity] = useState('1 pcs');
@@ -516,33 +631,153 @@ export function ShoppingScreen({
   const [noteHover, setNoteHover] = useState(false);
   const [notePulse, setNotePulse] = useState({ scale: 0.82, y: 0, rotate: 0, sway: 0 });
   const [editRows, setEditRows] = useState<EditShoppingRow[]>([]);
-  const [historyOffset, setHistoryOffset] = useState(0);
   const draftInputRefs = useRef<Record<string, TextInput | null>>({});
+  const editInputRefs = useRef<Record<string, TextInput | null>>({});
   const cameraRef = useRef<CameraView | null>(null);
   const pendingFocusRowIdRef = useRef<string | null>(null);
+  const pendingEditSourceIdRef = useRef<string | null>(null);
+  const pendingEditRowKeyRef = useRef<string | null>(null);
   const pulseFrameRef = useRef(0);
   const shareHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
-  const activeList = lists.length > 0 ? lists[0] : null;
-  const previousLists = lists.slice(1);
+  const baseList = useReactMemo(
+    () => lists.find((list) => list.listType === 'base' || list.title === 'Family base list' || list.title === 'Usual basket') || null,
+    [lists],
+  );
+  const nonBaseLists = useReactMemo(
+    () => lists.filter((list) => list.id !== baseList?.id),
+    [baseList?.id, lists],
+  );
+  const activeList = useReactMemo(
+    () => nonBaseLists.find((list) => list.listType === 'current') || nonBaseLists[0] || null,
+    [nonBaseLists],
+  );
+  const historyLists = useReactMemo(
+    () =>
+      nonBaseLists.filter(
+        (list) =>
+          list.id !== activeList?.id &&
+          (list.listType === 'history' || list.listType === undefined),
+      ),
+    [activeList?.id, nonBaseLists],
+  );
+  const needsBasketOnboarding = !baseList;
+  const canStartFromBasket = !!baseList && !activeList;
   const fridgeActionLabel = currentRole === 'staff' ? 'Send request' : 'Add to list';
-  const visibleFridgeItems = useReactMemo(() => {
-    if (fridgeView === 'in_fridge') return fridgeItems.filter((item) => item.status !== 'out');
-    if (fridgeView === 'need_to_buy') return fridgeItems.filter((item) => item.status === 'low');
-    return fridgeItems.filter((item) => item.status === 'out');
-  }, [fridgeItems, fridgeView]);
-  const normalizedOffset = previousLists.length > 0 ? historyOffset % previousLists.length : 0;
-  const leftNearList = previousLists[normalizedOffset] || null;
-  const leftFarList = previousLists[(normalizedOffset + 1) % previousLists.length] || null;
+  const recipeCatalog = useReactMemo(
+    () => [...recipes, ...STARTER_RECIPE_LIBRARY.filter((recipe) => !recipes.some((saved) => saved.id === recipe.id))],
+    [recipes],
+  );
+  const visibleFridgeItems = useReactMemo(
+    () =>
+      fridgeItems
+        .filter((item) => item.status !== 'out')
+        .filter((item) => {
+          if (inventoryFilter === 'low') return item.status === 'low';
+          if (inventoryFilter === 'use_soon') return isFridgeItemUseSoon(item);
+          return true;
+        })
+        .sort((left, right) => {
+          const leftUrgency = isFridgeItemUseSoon(left) ? 2 : left.status === 'low' ? 1 : 0;
+          const rightUrgency = isFridgeItemUseSoon(right) ? 2 : right.status === 'low' ? 1 : 0;
+          return rightUrgency - leftUrgency;
+        }),
+    [fridgeItems, inventoryFilter],
+  );
+
+  useEffect(() => {
+    if (!quickActionRequest) return;
+    closeShareMenu();
+    setMoreOpen(false);
+    setBaseListOpen(false);
+
+    if (quickActionRequest.type === 'use-basket') {
+      if (baseList && !activeList) {
+        onStartFromBaseList();
+        return;
+      }
+      if (baseList) {
+        setBaseListOpen(true);
+        return;
+      }
+      openAddComposer('basket');
+      return;
+    }
+
+    if (quickActionRequest.type === 'create-basket') {
+      openAddComposer('basket');
+      return;
+    }
+
+    openAddComposer('list', 'force-current');
+  }, [quickActionRequest]);
+  const visibleFridgeSections = useReactMemo(() => {
+    const groups = new Map<string, FridgeItem[]>();
+    visibleFridgeItems.forEach((item) => {
+      const key = item.category || 'Other';
+      const bucket = groups.get(key) || [];
+      bucket.push(item);
+      groups.set(key, bucket);
+    });
+    return Array.from(groups.entries()).map(([title, items]) => ({ title, items }));
+  }, [visibleFridgeItems]);
+  const restockItems = useReactMemo(() => fridgeItems.filter((item) => item.status === 'low'), [fridgeItems]);
+  const fridgeInStockCount = useReactMemo(() => fridgeItems.filter((item) => item.status !== 'out').length, [fridgeItems]);
+  const fridgeLowCount = useReactMemo(() => fridgeItems.filter((item) => item.status === 'low').length, [fridgeItems]);
+  const fridgeUseSoonCount = useReactMemo(
+    () => fridgeItems.filter((item) => item.status !== 'out' && isFridgeItemUseSoon(item)).length,
+    [fridgeItems],
+  );
   const visibleItems = useReactMemo(
-    () => (activeList ? activeList.items.filter((item) => item.purchased === (filter === 'purchased')) : []),
+    () =>
+      activeList
+        ? filter === 'purchased'
+          ? activeList.items.filter((item) => item.purchased)
+          : activeList.items.filter((item) => !item.purchased)
+        : [],
     [activeList, filter],
   );
+  const filteredShoppingItems = useReactMemo(
+    () => visibleItems.filter((item) => shoppingCategory === 'all' || (item.category || inferShoppingItemCategory(item.name)) === shoppingCategory),
+    [shoppingCategory, visibleItems],
+  );
+  const groupedShoppingItems = useReactMemo(() => {
+    const buckets = new Map<ShoppingCategory, ShoppingItem[]>();
+    filteredShoppingItems.forEach((item) => {
+      const category = item.category || inferShoppingItemCategory(item.name);
+      const current = buckets.get(category) || [];
+      current.push(item);
+      buckets.set(category, current);
+    });
+    return SHOPPING_CATEGORY_OPTIONS
+      .filter((option) => option.key !== 'all')
+      .map((option) => ({
+        ...option,
+        items: buckets.get(option.key) || [],
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [filteredShoppingItems]);
+  const totalShoppingItemsCount = activeList?.items.length ?? 0;
+  const purchasedShoppingItemsCount = useReactMemo(
+    () => (activeList ? activeList.items.filter((item) => item.purchased).length : 0),
+    [activeList],
+  );
+  const remainingShoppingItemsCount = Math.max(totalShoppingItemsCount - purchasedShoppingItemsCount, 0);
+  const activeCategoryOption = SHOPPING_CATEGORY_OPTIONS.find((option) => option.key === shoppingCategory);
   const visiblePurchaseRequests = useReactMemo(
     () => purchaseRequests.filter((request) => request.status === 'new'),
     [purchaseRequests],
   );
+  const cookFromFridgeSuggestions = useReactMemo(() => getCookFromFridgeSuggestions(fridgeItems, recipeCatalog), [fridgeItems, recipeCatalog]);
+  const fridgeEditRecipeIdeas = useReactMemo(() => {
+    if (!fridgeEditDraft) return [];
+    const normalizedName = fridgeEditDraft.name.trim().toLowerCase();
+    if (!normalizedName) return [];
+    return cookFromFridgeSuggestions
+      .filter((item) => item.availableIngredients.some((ingredient) => isIngredientMatched(normalizedName, ingredient.toLowerCase())))
+      .slice(0, 3);
+  }, [cookFromFridgeSuggestions, fridgeEditDraft]);
   const purchaseRequestSuggestions = useReactMemo(() => {
     const query = requestItemName.trim().toLowerCase();
     if (!query) return [];
@@ -552,10 +787,6 @@ export function ShoppingScreen({
       return normalized.split(' ').some((word) => word.startsWith(query));
     }).slice(0, 6);
   }, [requestItemName]);
-
-  useEffect(() => {
-    setHistoryOffset(0);
-  }, [lists.length]);
 
   useEffect(() => {
     if (!noteHover) {
@@ -589,6 +820,19 @@ export function ShoppingScreen({
     });
     return Object.fromEntries(entries) as Record<string, string[]>;
   }, [draftRows]);
+  const editSuggestionsByRow = useReactMemo(() => {
+    const entries = editRows.map((row) => {
+      const query = row.name.trim().toLowerCase();
+      if (!query) return [row.key, []] as const;
+      const matches = SHOPPING_SUGGESTIONS.filter((item) => {
+        const normalized = item.toLowerCase();
+        if (normalized.startsWith(query)) return true;
+        return normalized.split(' ').some((word) => word.startsWith(query));
+      }).slice(0, 6);
+      return [row.key, matches] as const;
+    });
+    return Object.fromEntries(entries) as Record<string, string[]>;
+  }, [editRows]);
 
   useEffect(() => {
     if (!pendingFocusRowIdRef.current) return;
@@ -599,6 +843,28 @@ export function ShoppingScreen({
     }, 0);
     return () => clearTimeout(timer);
   }, [draftRows]);
+
+  useEffect(() => {
+    if (!editOpen || !pendingEditSourceIdRef.current) return;
+    const sourceId = pendingEditSourceIdRef.current;
+    const timer = setTimeout(() => {
+      const targetRow = editRows.find((row) => row.sourceId === sourceId);
+      if (!targetRow) return;
+      editInputRefs.current[targetRow.key]?.focus();
+      pendingEditSourceIdRef.current = null;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [editOpen, editRows]);
+
+  useEffect(() => {
+    if (!editOpen || !pendingEditRowKeyRef.current) return;
+    const rowKey = pendingEditRowKeyRef.current;
+    const timer = setTimeout(() => {
+      editInputRefs.current[rowKey]?.focus();
+      pendingEditRowKeyRef.current = null;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [editOpen, editRows]);
 
   function updateRow(rowId: string, updater: (row: DraftRow) => DraftRow) {
     setDraftRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
@@ -615,11 +881,44 @@ export function ShoppingScreen({
     setFocusedRowId(nextRow.id);
   }
 
+  function focusDraftComposer() {
+    const targetId = draftRows[0]?.id;
+    if (!targetId) {
+      insertFreshTopRow();
+      return;
+    }
+    pendingFocusRowIdRef.current = targetId;
+    setFocusedRowId(targetId);
+    setTimeout(() => {
+      draftInputRefs.current[targetId]?.focus();
+    }, 0);
+  }
+
+  function openAddComposer(mode: ComposerMode = 'list', createBehavior: 'default' | 'force-current' = 'default') {
+    setComposerMode(mode);
+    setPendingCreateBehavior(createBehavior);
+    setDraftRows((prev) => (prev.length > 0 ? prev : [createDraftRow(0)]));
+    setAddComposerOpen(true);
+    setTimeout(() => {
+      focusDraftComposer();
+    }, 0);
+  }
+
   function promoteTopFilledRow(rowId: string, rowName: string, index: number) {
+    if (composerMode === 'basket') return false;
     if (index !== 0 || rowName.trim().length === 0) return false;
-    draftInputRefs.current[rowId]?.blur();
-    insertFreshTopRow();
-    return true;
+    let inserted = false;
+    setDraftRows((prev) => {
+      if (prev[0]?.id !== rowId) return prev;
+      const nextRow = createDraftRow(prev.length);
+      pendingFocusRowIdRef.current = nextRow.id;
+      inserted = true;
+      return [nextRow, ...prev];
+    });
+    if (inserted) {
+      setFocusedRowId(null);
+    }
+    return inserted;
   }
 
   function saveDraftRows() {
@@ -627,32 +926,85 @@ export function ShoppingScreen({
       .map((row) => ({
         name: row.name.trim(),
         quantity: `${row.amount} ${row.unit}`,
+        category: inferShoppingItemCategory(row.name),
       }))
       .filter((row) => row.name.length > 0);
 
     if (prepared.length === 0) return;
 
-    onCreateList(prepared, activeList?.id ?? null);
+    if (composerMode === 'basket') {
+      if (baseList) {
+        const merged = mergeShoppingItemsByName(
+          baseList.items,
+          prepared.map((item, index) => ({
+            id: `basket-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+            name: item.name,
+            quantity: item.quantity,
+            category: item.category,
+            purchased: false,
+          })),
+        );
+        onUpdateList(baseList.id, merged);
+      } else {
+        onCreateList(prepared, null);
+      }
+    } else {
+      onCreateList(prepared, activeList?.id ?? null, pendingCreateBehavior);
+    }
     setDraftRows([createDraftRow(0)]);
     setFocusedRowId(null);
-    setHistoryOffset(0);
+    setAddComposerOpen(false);
+    setComposerMode('list');
+    setPendingCreateBehavior('default');
   }
 
-  function openEditor() {
-    if (!activeList) return;
+  function closeBaseListPanel() {
+    setBaseListOpen(false);
+  }
+
+  function useSingleBaseListItem(item: ShoppingItem) {
+    onCreateList(
+      [
+        {
+          name: item.name,
+          quantity: item.quantity,
+          category: item.category || inferShoppingItemCategory(item.name),
+        },
+      ],
+      activeList?.id ?? null,
+    );
+  }
+
+  function closeEditModal() {
+    setEditOpen(false);
+    setEditRows([]);
+    setEditTargetListId(null);
+    setFocusedEditRowKey(null);
+    setNoteHover(false);
+  }
+
+  function openEditor(options?: { itemId?: string; listId?: string }) {
+    const targetList = options?.listId ? lists.find((list) => list.id === options.listId) || null : activeList;
+    if (!targetList) return;
+    pendingEditSourceIdRef.current = options?.itemId ?? null;
+    setEditTargetListId(targetList.id);
+    setEditTargetListTitle(targetList.title);
     setEditRows(
-      activeList.items.map((item, index) => ({
+      targetList.items.map((item, index) => ({
         key: `edit-${item.id}-${index}`,
         sourceId: item.id,
         name: item.name,
         quantity: item.quantity,
+        ...parseShoppingQuantityText(item.quantity),
+        category: item.category || inferShoppingItemCategory(item.name),
         purchased: item.purchased,
       })),
     );
+    setFocusedEditRowKey(null);
     setEditOpen(true);
   }
 
-  function showShareMenu() {
+  function openShareMenu() {
     if (shareHoverTimeoutRef.current) {
       clearTimeout(shareHoverTimeoutRef.current);
       shareHoverTimeoutRef.current = null;
@@ -660,12 +1012,18 @@ export function ShoppingScreen({
     setShareOpen(true);
   }
 
-  function hideShareMenu() {
+  function closeShareMenu() {
     if (shareHoverTimeoutRef.current) clearTimeout(shareHoverTimeoutRef.current);
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareOpen(false);
-      shareHoverTimeoutRef.current = null;
-    }, 140);
+    shareHoverTimeoutRef.current = null;
+    setShareOpen(false);
+  }
+
+  function toggleShareMenu() {
+    if (shareOpen) {
+      closeShareMenu();
+      return;
+    }
+    openShareMenu();
   }
 
   function formatShareText(list: ShoppingListDoc) {
@@ -693,42 +1051,139 @@ export function ShoppingScreen({
     }
   }
 
-  function cycleList(direction: 'left' | 'right') {
-    if (previousLists.length === 0) return;
-    setHistoryOffset((prev) => {
-      if (direction === 'left') return (prev + 1) % previousLists.length;
-      return (prev - 1 + previousLists.length) % previousLists.length;
+  function addEditRow() {
+    const nextRow = {
+      key: `new-${Date.now()}-${editRows.length}`,
+      sourceId: null,
+      name: '',
+      quantity: '1 pcs',
+      amount: '1',
+      unit: 'pcs' as UnitOption,
+      category: 'products' as ShoppingItemCategory,
+      purchased: false,
+    };
+    pendingEditRowKeyRef.current = nextRow.key;
+    setEditRows((prev) => [nextRow, ...prev]);
+    setFocusedEditRowKey(nextRow.key);
+  }
+
+  function ensureFreshEditTopRow(rowKey: string, text: string, index: number) {
+    if (editTargetListId === baseList?.id) return;
+    if (index !== 0 || text.trim().length === 0) return;
+    const nextRow = {
+      key: `new-${Date.now()}-${editRows.length}`,
+      sourceId: null,
+      name: '',
+      quantity: '1 pcs',
+      amount: '1',
+      unit: 'pcs' as UnitOption,
+      category: 'products' as ShoppingItemCategory,
+      purchased: false,
+    };
+    setEditRows((prev) => {
+      if (prev[0]?.key !== rowKey) return prev;
+      return [nextRow, ...prev];
     });
   }
 
-  function addEditRow() {
-    setEditRows((prev) => [
-      ...prev,
-      {
-        key: `new-${Date.now()}-${prev.length}`,
-        sourceId: null,
-        name: '',
-        quantity: '1 pcs',
-        purchased: false,
-      },
-    ]);
+  function promoteEditTopRowOnSubmit(rowKey: string, rowName: string, index: number) {
+    if (editTargetListId !== baseList?.id) return false;
+    if (index !== 0 || rowName.trim().length === 0) return false;
+    const nextRow = {
+      key: `new-${Date.now()}-${editRows.length}`,
+      sourceId: null,
+      name: '',
+      quantity: '1 pcs',
+      amount: '1',
+      unit: 'pcs' as UnitOption,
+      category: 'products' as ShoppingItemCategory,
+      purchased: false,
+    };
+    pendingEditRowKeyRef.current = nextRow.key;
+    setEditRows((prev) => {
+      if (prev[0]?.key !== rowKey) return prev;
+      return [nextRow, ...prev];
+    });
+    setFocusedEditRowKey(nextRow.key);
+    return true;
   }
 
   function saveEditedList() {
-    if (!activeList) return;
+    if (!editTargetListId) return;
     const cleaned = editRows
       .map((row) => ({
         id: row.sourceId || `si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: row.name.trim(),
-        quantity: row.quantity.trim() || '1 pcs',
+        quantity: formatShoppingQuantity(row.amount, row.unit),
+        category: row.category,
         purchased: row.purchased,
       }))
       .filter((row) => row.name.length > 0);
 
-    onUpdateList(activeList.id, cleaned);
+    onUpdateList(editTargetListId, cleaned);
     setEditOpen(false);
     setEditRows([]);
+    setEditTargetListId(null);
+    setFocusedEditRowKey(null);
     setNoteHover(false);
+  }
+
+  function openFridgeEditor(item: FridgeItem) {
+    setFridgeEditDraft({
+      id: item.id,
+      name: item.name,
+      amount: typeof item.amount === 'number' ? String(item.amount) : '',
+      unit: item.unit || 'pcs',
+      category: item.category || 'Other',
+      expiresAt: item.expiresAt || '',
+      note: item.note || '',
+      opened: !!item.opened,
+      status: item.status,
+    });
+    setFridgeEditOpen(true);
+  }
+
+  function closeFridgeEditor() {
+    setFridgeEditOpen(false);
+    setFridgeEditDraft(null);
+  }
+
+  function adjustFridgeItemAmount(item: FridgeItem, delta: number) {
+    const parsed = getCountableFridgeAmount(item);
+    if (!parsed) {
+      openFridgeEditor(item);
+      return;
+    }
+    const nextAmount = Math.max(0, parsed.amount + delta);
+    const nextStatus: FridgeItemStatus = nextAmount === 0 ? 'out' : nextAmount <= 2 ? 'low' : 'full';
+    onUpdateFridgeItem({
+      ...item,
+      amount: nextAmount,
+      unit: parsed.unit,
+      quantity: `${nextAmount} ${parsed.unit}`,
+      status: nextStatus,
+    });
+  }
+
+  function saveFridgeEditor() {
+    if (!fridgeEditDraft) return;
+    const trimmedName = fridgeEditDraft.name.trim();
+    if (!trimmedName) return;
+    const normalizedAmount = Number(fridgeEditDraft.amount.replace(',', '.'));
+    const hasAmount = Number.isFinite(normalizedAmount) && normalizedAmount > 0;
+    onUpdateFridgeItem({
+      id: fridgeEditDraft.id,
+      name: trimmedName,
+      quantity: hasAmount ? `${normalizedAmount} ${fridgeEditDraft.unit}` : fridgeEditDraft.unit === 'pcs' ? '1 pcs' : `1 ${fridgeEditDraft.unit}`,
+      amount: hasAmount ? normalizedAmount : undefined,
+      unit: fridgeEditDraft.unit,
+      category: fridgeEditDraft.category,
+      expiresAt: fridgeEditDraft.expiresAt || undefined,
+      note: fridgeEditDraft.note.trim() || undefined,
+      opened: fridgeEditDraft.opened,
+      status: fridgeEditDraft.status,
+    });
+    closeFridgeEditor();
   }
 
   function submitPurchaseRequest() {
@@ -906,187 +1361,245 @@ export function ShoppingScreen({
         </SectionCard>
       ) : null}
 
-      <View style={styles.shoppingModeSwitch}>
-        <Pressable
-          style={[styles.shoppingModeBtn, shoppingView === 'list' && styles.shoppingModeBtnActive]}
-          onPress={() => setShoppingView('list')}
-        >
-          <ShoppingModeIcon active={shoppingView === 'list'} />
-          <Text style={[styles.shoppingModeText, shoppingView === 'list' && styles.shoppingModeTextActive]}>Shopping List</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.shoppingModeBtn, shoppingView === 'fridge' && styles.shoppingModeBtnActive]}
-          onPress={() => setShoppingView('fridge')}
-        >
-          <FridgeModeIcon active={shoppingView === 'fridge'} />
-          <Text style={[styles.shoppingModeText, shoppingView === 'fridge' && styles.shoppingModeTextActive]}>Smart Fridge</Text>
-        </Pressable>
-      </View>
-
-      {shoppingView === 'list' ? (
-      <View style={styles.listsStage}>
-        {activeList ? (
-          <View style={styles.headerActionsStack}>
-            <Pressable style={styles.headerEditBtn} onPress={openEditor}>
-              <Text style={styles.headerEditBtnText}>⋮</Text>
-            </Pressable>
-            <Pressable
-              style={styles.headerShareBtn}
-              onHoverIn={showShareMenu}
-              onHoverOut={hideShareMenu}
-              onPress={() => setShareOpen((prev) => !prev)}
-            >
-              <Text style={styles.headerShareBtnText}>⤴</Text>
-            </Pressable>
-            {shareOpen ? (
-              <Pressable style={styles.shareMenu} onHoverIn={showShareMenu} onHoverOut={hideShareMenu}>
-                <Pressable style={styles.shareMenuItem} onPress={() => shareListToApps('whatsapp')}>
-                  <Text style={styles.shareMenuItemText}>WhatsApp</Text>
-                </Pressable>
-                <Pressable style={styles.shareMenuItem} onPress={() => shareListToApps('apps')}>
-                  <Text style={styles.shareMenuItemText}>Other apps</Text>
-                </Pressable>
-                <View style={styles.shareMenuDivider} />
-                {shareTargets
-                  .filter((target) => target.key !== activeRecipientKey)
-                  .map((target) => (
-                    <Pressable
-                      key={target.key}
-                      style={styles.shareMenuItem}
-                      onHoverIn={showShareMenu}
-                      onHoverOut={hideShareMenu}
-                      onPress={() => {
-                        if (!activeList) return;
-                        onShareListToProfile(activeList.id, target.key);
-                        setShareOpen(false);
-                      }}
-                    >
-                      <Text style={styles.shareMenuItemText}>Send to {target.label}</Text>
-                    </Pressable>
-                  ))}
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-        {sharedInbox.length > 0 ? (
-          <View style={styles.sharedInboxWrap}>
-            <Text style={styles.sharedInboxTitle}>Shared With This Profile</Text>
-            {sharedInbox.slice(0, 2).map((share) => (
-              <View key={share.id} style={styles.sharedInboxCard}>
-                <View style={styles.sharedInboxTextWrap}>
-                  <Text style={styles.sharedInboxCardTitle}>{share.title}</Text>
-                  <Text style={styles.sharedInboxMeta}>from {share.senderLabel}</Text>
-                </View>
-                <View style={styles.sharedInboxActions}>
-                  <Pressable style={styles.sharedInboxBtn} onPress={() => onImportSharedList(share.id)}>
-                    <Text style={styles.sharedInboxBtnText}>Add</Text>
-                  </Pressable>
-                  <Pressable style={[styles.sharedInboxBtn, styles.sharedInboxDismissBtn]} onPress={() => onDismissSharedList(share.id)}>
-                    <Text style={styles.sharedInboxDismissText}>Hide</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        <View style={styles.row}>
-          <Tab active={filter === 'active'} label="Active" onPress={() => setFilter('active')} />
-          <Tab active={filter === 'purchased'} label="Purchased" onPress={() => setFilter('purchased')} />
-        </View>
-
-        <View style={styles.carouselWrap}>
-          <View style={styles.carouselHalo} />
-          <View style={styles.carouselGlow} />
-          <View style={styles.carouselRail} />
-          <Pressable style={styles.carouselHotspotLeft} onPress={() => cycleList('left')}>
-            <Text style={styles.carouselArrow}>‹</Text>
-          </Pressable>
-          <Pressable style={styles.carouselHotspotRight} onPress={() => cycleList('right')}>
-            <Text style={styles.carouselArrow}>›</Text>
-          </Pressable>
-
-          {leftFarList ? (
-            <View style={[styles.noteSheet, styles.noteSheetFarLeft, styles.noteSheetGhost]}>
-              <View style={styles.notePin} />
-              <Text style={styles.noteGhostLabel}>{leftFarList.title}</Text>
-            </View>
-          ) : null}
-          {leftNearList ? (
-            <View style={[styles.noteSheet, styles.noteSheetLeft, styles.noteSheetGhost]}>
-              <View style={styles.notePin} />
-              <Text style={styles.noteGhostLabel}>{leftNearList.title}</Text>
-            </View>
-          ) : null}
-
+      <View style={[styles.shoppingListSection, isMobile && styles.shoppingListSectionMobile]}>
+        <View style={styles.shoppingTopTabs}>
           <Pressable
-            style={[
-              styles.noteSheet,
-              styles.noteSheetFront,
-              noteHover && styles.noteSheetHover,
-              {
-                transform: [
-                  { perspective: 1200 },
-                  { rotateZ: `${notePulse.rotate}deg` },
-                  { rotateY: `${notePulse.sway * 0.16}deg` },
-                  { translateX: notePulse.sway },
-                  { translateY: notePulse.y },
-                  { scale: notePulse.scale },
-                ],
-              },
-            ]}
-            onHoverIn={() => setNoteHover(true)}
-            onHoverOut={() => {
-              setNoteHover(false);
-            }}
-            onPress={openEditor}
+            style={[styles.shoppingTopTab, shoppingView === 'list' && styles.shoppingTopTabActive]}
+            onPress={() => setShoppingView('list')}
           >
-            <View style={styles.notePin} />
-            <Text style={styles.noteTitle}>SHOPPING{'\n'}LIST</Text>
-
-            {visibleItems.length === 0 ? (
-              <View style={styles.noteEmptyRow}>
-                <View style={styles.noteCheckbox} />
-                <View style={styles.noteLine} />
-                <Text style={styles.noteEmptyText}>No items yet</Text>
-              </View>
-            ) : (
-              visibleItems.slice(0, 12).map((item) => (
-                <View key={item.id} style={styles.noteRow}>
-                  <View style={[styles.noteCheckbox, item.purchased && styles.noteCheckboxActive]}>
-                    {item.purchased ? <View style={styles.noteCheckboxDot} /> : null}
-                  </View>
-                  <View style={styles.noteRowTextWrap}>
-                    <View style={styles.noteLine} />
-                    <View style={styles.noteTextRow}>
-                      <Text style={[styles.noteItemName, item.purchased && styles.noteItemNameDone]}>{item.name}</Text>
-                      <Text style={[styles.noteItemQty, item.purchased && styles.noteItemQtyDone]}>{item.quantity}</Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-
-            <View style={styles.noteLeafLeft} />
-            <View style={styles.noteLeafRight} />
+            <Text style={[styles.shoppingTopTabText, shoppingView === 'list' && styles.shoppingTopTabTextActive]}>Shopping List</Text>
           </Pressable>
+          <Pressable
+            style={[styles.shoppingTopTab, shoppingView === 'fridge' && styles.shoppingTopTabActive]}
+            onPress={() => setShoppingView('fridge')}
+          >
+            <Text style={[styles.shoppingTopTabText, shoppingView === 'fridge' && styles.shoppingTopTabTextActive]}>Inventory</Text>
+          </Pressable>
+        </View>
 
-          <View style={[styles.noteSheet, styles.noteSheetRight, styles.noteSheetEmpty]}>
-            <View style={styles.notePin} />
-            <Text style={styles.notePlaceholderLabel}>new list</Text>
+        {shoppingView === 'list' ? (
+        <>
+        {moreOpen || shareOpen ? (
+          <Pressable
+            style={styles.shoppingPanelsBackdrop}
+            onPress={() => {
+              closeShareMenu();
+              setMoreOpen(false);
+            }}
+          />
+        ) : null}
+        <View style={[styles.shoppingListHeader, isMobile && styles.shoppingListHeaderMobile]}>
+          <View style={styles.shoppingListHeaderCopy}>
+            <Text style={styles.shoppingListTitle}>Shopping List</Text>
+            <Text style={styles.shoppingListSubtitle}>
+              {needsBasketOnboarding
+                ? 'Create your usual grocery basket'
+                : canStartFromBasket
+                  ? `${baseList?.items.length ?? 0} items ready in your usual basket`
+                  : filter === 'active'
+                    ? `${remainingShoppingItemsCount} to buy`
+                    : `${purchasedShoppingItemsCount} purchased`}
+            </Text>
           </View>
-          <View style={[styles.noteSheet, styles.noteSheetFarRight, styles.noteSheetEmpty]}>
-            <View style={styles.notePin} />
-            <Text style={styles.notePlaceholderLabel}>new list</Text>
+          <Pressable
+            style={styles.shoppingPrimaryBtn}
+            onPress={needsBasketOnboarding ? () => openAddComposer('basket') : canStartFromBasket ? onStartFromBaseList : () => openAddComposer('list')}
+          >
+            <Text style={styles.shoppingPrimaryBtnText}>
+              {needsBasketOnboarding ? 'Create basket' : canStartFromBasket ? 'Use basket' : 'Add'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {needsBasketOnboarding ? (
+          <View style={styles.basketOnboardingCard}>
+            <Text style={styles.basketOnboardingTitle}>Start with your usual products</Text>
+            <Text style={styles.basketOnboardingText}>
+              Add the groceries you buy most often. We will keep this basket handy and use it later for quick shopping starts and smart restock suggestions.
+            </Text>
+            <View style={styles.basketOnboardingActions}>
+              <Pressable style={styles.shoppingPrimaryBtn} onPress={() => openAddComposer('basket')}>
+                <Text style={styles.shoppingPrimaryBtnText}>Build my basket</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {!needsBasketOnboarding && !canStartFromBasket ? (
+        <View style={styles.shoppingControlsBlock}>
+          <View style={styles.row}>
+            <Tab active={filter === 'active'} label="To buy" onPress={() => setFilter('active')} />
+            <Tab active={filter === 'purchased'} label="Purchased" onPress={() => setFilter('purchased')} />
           </View>
         </View>
-      </View>
-      ) : (
-        <SectionCard title="Smart Fridge">
-          <View style={styles.fridgeHeaderRow}>
+        ) : null}
+
+        {!needsBasketOnboarding && !canStartFromBasket ? (
+        <View style={styles.shoppingBoard}>
+          {visibleItems.length === 0 ? (
+            <View style={styles.shoppingEmptyState}>
+              <Text style={styles.shoppingEmptyTitle}>Nothing here yet</Text>
+              <Text style={styles.shoppingEmptyText}>
+                {filter === 'active'
+                  ? 'Add your first item to start your shopping list.'
+                  : 'Purchased items will appear here after you check them off.'}
+              </Text>
+            </View>
+          ) : (
+            visibleItems.map((item) => (
+              <View key={item.id} style={[styles.shoppingRow, isMobile && styles.shoppingRowMobile]}>
+                <Pressable
+                  style={[styles.shoppingCheckbox, isMobile && styles.shoppingCheckboxMobile, item.purchased && styles.shoppingCheckboxActive]}
+                  onPress={() => {
+                    if (activeList) onTogglePurchased(activeList.id, item.id);
+                  }}
+                >
+                  {item.purchased ? <View style={styles.shoppingCheckboxDot} /> : null}
+                </Pressable>
+                <Pressable style={[styles.shoppingRowBody, isMobile && styles.shoppingRowBodyMobile]} onPress={() => openEditor({ itemId: item.id })}>
+                  <View style={styles.shoppingRowTextWrap}>
+                    <Text style={[styles.shoppingRowName, isMobile && styles.shoppingRowNameMobile, item.purchased && styles.shoppingRowNameDone]}>{item.name}</Text>
+                    <Text style={[styles.shoppingRowSubtext, isMobile && styles.shoppingRowSubtextMobile, item.purchased && styles.shoppingRowQtyDone]}>
+                      {item.category ? getShoppingItemCategoryLabel(item.category) : 'Tap to edit'}
+                    </Text>
+                  </View>
+                  <View style={[styles.shoppingRowMeta, isMobile && styles.shoppingRowMetaMobile]}>
+                    <Text style={[styles.shoppingRowQty, isMobile && styles.shoppingRowQtyMobile, item.purchased && styles.shoppingRowQtyDone]}>{item.quantity}</Text>
+                  </View>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+        ) : null}
+
+        {!needsBasketOnboarding ? (
+        <View style={styles.moreSection}>
+          <Pressable
+            style={[styles.moreToggleBtn, moreOpen && styles.moreToggleBtnActive]}
+            onPress={() => {
+              if (moreOpen) closeShareMenu();
+              setMoreOpen((prev) => !prev);
+            }}
+          >
+            <Text style={[styles.moreToggleBtnText, moreOpen && styles.moreToggleBtnTextActive]}>More</Text>
+            <Text style={[styles.moreToggleBtnChevron, moreOpen && styles.moreToggleBtnTextActive]}>{moreOpen ? '−' : '+'}</Text>
+          </Pressable>
+
+          {moreOpen ? (
+            <View style={styles.morePanel}>
+              <View style={styles.moreActionGrid}>
+                {activeList ? (
+                  <Pressable style={styles.moreActionBtn} onPress={() => openEditor()}>
+                    <Text style={styles.moreActionBtnText}>Edit list</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={styles.moreActionBtn}
+                  onPress={() => {
+                    closeShareMenu();
+                    setBaseListOpen(true);
+                  }}
+                >
+                  <Text style={styles.moreActionBtnText}>Usual basket</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.moreInlineActions}>
+                <Pressable
+                  style={styles.moreSecondaryBtn}
+                  onPress={toggleShareMenu}
+                >
+                  <Text style={styles.moreSecondaryBtnText}>Share</Text>
+                </Pressable>
+                {historyLists[0] ? (
+                  <Pressable style={styles.moreSecondaryBtn} onPress={() => onUsePastList(historyLists[0].id)}>
+                    <Text style={styles.moreSecondaryBtnText}>Use last list</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {shareOpen ? (
+                <View style={styles.shareMenu}>
+                  <Pressable style={styles.shareMenuItem} onPress={() => shareListToApps('whatsapp')}>
+                    <Text style={styles.shareMenuItemText}>WhatsApp</Text>
+                  </Pressable>
+                  <Pressable style={styles.shareMenuItem} onPress={() => shareListToApps('apps')}>
+                    <Text style={styles.shareMenuItemText}>Other apps</Text>
+                  </Pressable>
+                  <View style={styles.shareMenuDivider} />
+                  {shareTargets
+                    .filter((target) => target.key !== activeRecipientKey)
+                    .map((target) => (
+                      <Pressable
+                        key={target.key}
+                        style={styles.shareMenuItem}
+                        onPress={() => {
+                          if (!activeList) return;
+                          onShareListToProfile(activeList.id, target.key);
+                          closeShareMenu();
+                        }}
+                      >
+                        <Text style={styles.shareMenuItemText}>Send to {target.label}</Text>
+                      </Pressable>
+                    ))}
+                </View>
+              ) : null}
+
+              {sharedInbox.length > 0 ? (
+                <View style={styles.moreSubsection}>
+                  <Text style={styles.moreSubsectionTitle}>Shared with you</Text>
+                  {sharedInbox.slice(0, 2).map((share) => (
+                    <View key={share.id} style={styles.sharedInboxCard}>
+                      <View style={styles.sharedInboxTextWrap}>
+                        <Text style={styles.sharedInboxCardTitle}>{share.title}</Text>
+                        <Text style={styles.sharedInboxMeta}>from {share.senderLabel}</Text>
+                      </View>
+                      <View style={styles.sharedInboxActions}>
+                        <Pressable style={styles.sharedInboxBtn} onPress={() => onImportSharedList(share.id)}>
+                          <Text style={styles.sharedInboxBtnText}>Add</Text>
+                        </Pressable>
+                        <Pressable style={[styles.sharedInboxBtn, styles.sharedInboxDismissBtn]} onPress={() => onDismissSharedList(share.id)}>
+                          <Text style={styles.sharedInboxDismissText}>Hide</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {historyLists.length > 0 ? (
+                <View style={styles.moreSubsection}>
+                  <Text style={styles.moreSubsectionTitle}>Past lists</Text>
+                  <View style={styles.shoppingHistoryList}>
+                    {historyLists.slice(0, 2).map((list) => (
+                      <View key={list.id} style={styles.shoppingHistoryCard}>
+                        <View style={styles.shoppingHistoryCopy}>
+                          <Text style={styles.shoppingHistoryCardTitle}>{list.title}</Text>
+                          <Text style={styles.shoppingHistoryMeta}>
+                            {list.items.length} item{list.items.length === 1 ? '' : 's'}
+                          </Text>
+                        </View>
+                        <Pressable style={styles.shoppingHistoryBtn} onPress={() => onUsePastList(list.id)}>
+                          <Text style={styles.shoppingHistoryBtnText}>Use again</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+        ) : null}
+        </>
+        ) : (
+        <SectionCard title="Inventory">
+          <View style={[styles.fridgeHeaderRow, isMobile && styles.fridgeHeaderRowMobile]}>
             <Text style={styles.fridgeHint}>
-              Track what is full, running low, or out. Send low-stock items to shopping in one tap.
+              Track what you have at home, what is running low, and what should be used soon before it expires.
             </Text>
-            <View style={styles.fridgeHeaderActions}>
+            <View style={[styles.fridgeHeaderActions, isMobile && styles.fridgeHeaderActionsMobile]}>
               <Pressable style={styles.fridgeUploadBtn} onPress={openFridgeCamera}>
                 <Text style={styles.fridgeUploadBtnText}>Camera</Text>
               </Pressable>
@@ -1095,77 +1608,160 @@ export function ShoppingScreen({
               </Pressable>
             </View>
           </View>
-          <Text style={styles.fridgePhotoTip}>Tip: capture the whole fridge front-on, with visible shelves and labels, and avoid cropping.</Text>
-          <View style={styles.fridgeTabsRow}>
-            <Pressable style={[styles.fridgeTabBtn, fridgeView === 'in_fridge' && styles.fridgeTabBtnActive]} onPress={() => setFridgeView('in_fridge')}>
-              <Text style={[styles.fridgeTabText, fridgeView === 'in_fridge' && styles.fridgeTabTextActive]}>In Fridge</Text>
+          <Text style={styles.fridgePhotoTip}>Tip: capture shelves or products front-on, with visible labels, and avoid cropping.</Text>
+          <View style={[styles.fridgeSummaryRow, isMobile && styles.fridgeSummaryRowMobile]}>
+            <Pressable
+              style={[styles.fridgeSummaryChip, inventoryFilter === 'all' && styles.fridgeSummaryChipActive]}
+              onPress={() => setInventoryFilter('all')}
+            >
+              <Text style={styles.fridgeSummaryValue}>{fridgeInStockCount}</Text>
+              <Text style={[styles.fridgeSummaryLabel, inventoryFilter === 'all' && styles.fridgeSummaryLabelActive]}>In stock</Text>
             </Pressable>
             <Pressable
-              style={[styles.fridgeTabBtn, fridgeView === 'need_to_buy' && styles.fridgeTabBtnActive]}
-              onPress={() => setFridgeView('need_to_buy')}
+              style={[styles.fridgeSummaryChip, inventoryFilter === 'low' && styles.fridgeSummaryChipActive]}
+              onPress={() => setInventoryFilter('low')}
             >
-              <Text style={[styles.fridgeTabText, fridgeView === 'need_to_buy' && styles.fridgeTabTextActive]}>Need To Buy</Text>
+              <Text style={styles.fridgeSummaryValue}>{fridgeLowCount}</Text>
+              <Text style={[styles.fridgeSummaryLabel, inventoryFilter === 'low' && styles.fridgeSummaryLabelActive]}>Low</Text>
             </Pressable>
-            <Pressable style={[styles.fridgeTabBtn, fridgeView === 'out' && styles.fridgeTabBtnActive]} onPress={() => setFridgeView('out')}>
-              <Text style={[styles.fridgeTabText, fridgeView === 'out' && styles.fridgeTabTextActive]}>Out</Text>
+            <Pressable
+              style={[styles.fridgeSummaryChip, inventoryFilter === 'use_soon' && styles.fridgeSummaryChipActive]}
+              onPress={() => setInventoryFilter('use_soon')}
+            >
+              <Text style={styles.fridgeSummaryValue}>{fridgeUseSoonCount}</Text>
+              <Text style={[styles.fridgeSummaryLabel, inventoryFilter === 'use_soon' && styles.fridgeSummaryLabelActive]}>Use soon</Text>
             </Pressable>
           </View>
           <View style={styles.fridgeList}>
             {visibleFridgeItems.length === 0 ? (
               <View style={styles.fridgeEmptyCard}>
                 <Text style={styles.fridgeEmptyTitle}>Nothing here yet</Text>
-                <Text style={styles.fridgeEmptyText}>
-                  {fridgeView === 'in_fridge'
-                    ? 'Add products or scan a fridge photo to start tracking what you have.'
-                    : fridgeView === 'need_to_buy'
-                      ? 'Items marked as low will appear here so you can shop faster.'
-                      : 'Items marked as out will appear here after they run out.'}
-                </Text>
+                <Text style={styles.fridgeEmptyText}>Add products or scan a shelf photo to start tracking what you have.</Text>
               </View>
             ) : null}
-            {visibleFridgeItems.map((item) => {
-              const statusMeta = getFridgeStatusMeta(item.status);
-              return (
-                <View key={item.id} style={styles.fridgeCard}>
-                  <View style={styles.fridgeCardTop}>
-                    <View style={styles.fridgeTextWrap}>
-                      <Text style={styles.fridgeItemName}>{item.name}</Text>
-                      <Text style={styles.fridgeItemMeta}>
-                        {item.quantity}
-                        {item.category ? ` · ${item.category}` : ''}
-                      </Text>
-                      {item.note ? <Text style={styles.fridgeItemNote}>{item.note}</Text> : null}
-                    </View>
-                    <View style={[styles.fridgeStatusBadge, { backgroundColor: statusMeta.bg }]}>
-                      <Text style={[styles.fridgeStatusText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.fridgeActionsRow}>
-                    <View style={styles.fridgeStatusSwitch}>
-                      {(['full', 'low', 'out'] as FridgeItemStatus[]).map((status) => {
-                        const meta = getFridgeStatusMeta(status);
-                        const active = item.status === status;
-                        return (
+            {visibleFridgeSections.map((section) => (
+              <View key={section.title} style={styles.fridgeSection}>
+                <Text style={styles.fridgeSectionTitle}>{section.title}</Text>
+                <View style={styles.fridgeSectionList}>
+                  {section.items.map((item) => {
+                    const statusMeta = getFridgeStatusMeta(item.status);
+                    const secondaryMeta = [formatFridgeQuantity(item)].filter(Boolean).join(' · ');
+                    const timingMeta = getFridgeTimingMeta(item);
+                    const useSoon = isFridgeItemUseSoon(item);
+                    const countableAmount = getCountableFridgeAmount(item);
+                    return (
+                      <Pressable key={item.id} style={[styles.fridgeCard, isMobile && styles.fridgeCardMobile]} onPress={() => openFridgeEditor(item)}>
+                        <View style={[styles.fridgeCardTop, isMobile && styles.fridgeCardTopMobile]}>
+                          <View style={styles.fridgeTextWrap}>
+                            <View style={styles.fridgeNameRow}>
+                              <Text style={[styles.fridgeItemName, isMobile && styles.fridgeItemNameMobile]}>{item.name}</Text>
+                              {useSoon ? (
+                                <Pressable
+                                  style={styles.fridgeUseSoonAlert}
+                                  onPress={(event) => {
+                                    event.stopPropagation();
+                                    openFridgeEditor(item);
+                                  }}
+                                >
+                                  <Text style={styles.fridgeUseSoonAlertText}>!</Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+                            {secondaryMeta ? <Text style={styles.fridgeItemMeta}>{secondaryMeta}</Text> : null}
+                            {timingMeta ? <Text style={[styles.fridgeItemMeta, useSoon && styles.fridgeItemMetaUrgent]}>{timingMeta}</Text> : null}
+                            {item.note ? <Text style={styles.fridgeItemNote}>{item.note}</Text> : null}
+                          </View>
+                          <View style={styles.fridgeCardHeaderActions}>
+                            <View style={[styles.fridgeStatusBadge, { backgroundColor: statusMeta.bg }]}>
+                              <Text style={[styles.fridgeStatusText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+                            </View>
+                            <Pressable
+                              style={styles.fridgeMoreBtn}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                openFridgeEditor(item);
+                              }}
+                            >
+                              <Text style={styles.fridgeMoreBtnText}>...</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                        <View style={[styles.fridgeActionsRow, isMobile && styles.fridgeActionsRowMobile]}>
+                          {countableAmount ? (
+                            <View style={styles.fridgeCounter}>
+                              <Pressable
+                                style={styles.fridgeCounterBtn}
+                                onPress={(event) => {
+                                  event.stopPropagation();
+                                  adjustFridgeItemAmount(item, -1);
+                                }}
+                              >
+                                <Text style={styles.fridgeCounterBtnText}>−</Text>
+                              </Pressable>
+                              <Text style={styles.fridgeCounterValue}>{countableAmount.amount}</Text>
+                              <Pressable
+                                style={styles.fridgeCounterBtn}
+                                onPress={(event) => {
+                                  event.stopPropagation();
+                                  adjustFridgeItemAmount(item, 1);
+                                }}
+                              >
+                                <Text style={styles.fridgeCounterBtnText}>+</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
+                          <View style={[styles.fridgeStatusSwitch, isMobile && styles.fridgeStatusSwitchMobile]}>
+                            {countableAmount ? null : item.status === 'low' ? (
+                              <Pressable
+                                style={styles.fridgeQuickActionBtn}
+                                onPress={(event) => {
+                                  event.stopPropagation();
+                                  onUpdateFridgeItemStatus(item.id, 'full');
+                                }}
+                              >
+                                <Text style={styles.fridgeQuickActionBtnText}>Back in stock</Text>
+                              </Pressable>
+                            ) : (
+                              <Pressable
+                                style={styles.fridgeQuickActionBtn}
+                                onPress={(event) => {
+                                  event.stopPropagation();
+                                  onUpdateFridgeItemStatus(item.id, 'low');
+                                }}
+                              >
+                                <Text style={styles.fridgeQuickActionBtnText}>Running low</Text>
+                              </Pressable>
+                            )}
+                            <Pressable
+                              style={[styles.fridgeQuickActionBtn, styles.fridgeQuickActionBtnDanger]}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                onUpdateFridgeItemStatus(item.id, 'out');
+                              }}
+                            >
+                              <Text style={[styles.fridgeQuickActionBtnText, styles.fridgeQuickActionBtnTextDanger]}>Used up</Text>
+                            </Pressable>
+                          </View>
                           <Pressable
-                            key={`${item.id}-${status}`}
-                            style={[styles.fridgeStatusOption, active && { backgroundColor: meta.bg, borderColor: meta.color }]}
-                            onPress={() => onUpdateFridgeItemStatus(item.id, status)}
+                            style={[styles.fridgePrimaryBtn, isMobile && styles.fridgePrimaryBtnMobile]}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              onUseFridgeItem(item.id);
+                            }}
                           >
-                            <Text style={[styles.fridgeStatusOptionText, active && { color: meta.color }]}>{meta.shortLabel}</Text>
+                            <Text style={styles.fridgePrimaryBtnText}>{fridgeActionLabel}</Text>
                           </Pressable>
-                        );
-                      })}
-                    </View>
-                    <Pressable style={styles.fridgePrimaryBtn} onPress={() => onUseFridgeItem(item.id)}>
-                      <Text style={styles.fridgePrimaryBtnText}>{fridgeActionLabel}</Text>
-                    </Pressable>
-                  </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              );
-            })}
+              </View>
+            ))}
           </View>
         </SectionCard>
-      )}
+        )}
+      </View>
 
       <Modal
         visible={cameraOpen}
@@ -1214,10 +1810,10 @@ export function ShoppingScreen({
           }}
         >
           <Pressable style={styles.modalCard} onPress={() => undefined}>
-            <Text style={styles.modalTitle}>Scan Fridge Photo</Text>
+            <Text style={styles.modalTitle}>Scan Inventory Photo</Text>
             <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
               {fridgePhotoUri ? <Image source={{ uri: fridgePhotoUri }} style={styles.fridgePhotoPreview} resizeMode="cover" /> : null}
-              <Text style={styles.fridgeScanHint}>Review the detected products before saving them to Smart Fridge.</Text>
+              <Text style={styles.fridgeScanHint}>Review the detected products before saving them to Inventory.</Text>
               {fridgeScanSource ? (
                 <View style={[styles.fridgeScanStatusBadge, fridgeScanSource === 'ai' ? styles.fridgeScanStatusAi : styles.fridgeScanStatusFallback]}>
                   <Text style={[styles.fridgeScanStatusText, fridgeScanSource === 'ai' ? styles.fridgeScanStatusTextAi : styles.fridgeScanStatusTextFallback]}>
@@ -1299,193 +1895,675 @@ export function ShoppingScreen({
       </Modal>
 
       <Modal
-        visible={editOpen}
+        visible={fridgeEditOpen}
         animationType="fade"
         transparent
-        onRequestClose={() => {
-          setEditOpen(false);
-          setEditRows([]);
-          setNoteHover(false);
-        }}
+        onRequestClose={closeFridgeEditor}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => {
-            setEditOpen(false);
-            setEditRows([]);
-            setNoteHover(false);
-          }}
-        >
+        <Pressable style={styles.modalBackdrop} onPress={closeFridgeEditor}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
-            <Text style={styles.modalTitle}>Edit Shopping List</Text>
-            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
-              <View style={styles.editRowsWrap}>
-                {editRows.map((row) => (
-                  <View key={row.key} style={styles.editRow}>
-                    <TextInput
-                      value={row.name}
-                      onChangeText={(text) => setEditRows((prev) => prev.map((item) => (item.key === row.key ? { ...item, name: text } : item)))}
-                      placeholder="Item name"
-                      placeholderTextColor={colors.subtext}
-                      style={[styles.input, styles.editNameInput]}
-                    />
-                    <TextInput
-                      value={row.quantity}
-                      onChangeText={(text) => setEditRows((prev) => prev.map((item) => (item.key === row.key ? { ...item, quantity: text } : item)))}
-                      placeholder="1 pcs"
-                      placeholderTextColor={colors.subtext}
-                      style={[styles.input, styles.editQtyInput]}
-                    />
-                    <Pressable style={styles.deleteRowBtn} onPress={() => setEditRows((prev) => prev.filter((item) => item.key !== row.key))}>
-                      <Text style={styles.deleteRowBtnText}>X</Text>
-                    </Pressable>
+            <Text style={styles.modalTitle}>Edit Fridge Item</Text>
+            {fridgeEditDraft ? (
+              <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
+                <TextInput
+                  value={fridgeEditDraft.name}
+                  onChangeText={(text) => setFridgeEditDraft((prev) => (prev ? { ...prev, name: text } : prev))}
+                  placeholder="Product name"
+                  placeholderTextColor={colors.subtext}
+                  style={styles.input}
+                />
+                <View style={styles.fridgeEditAmountRow}>
+                  <TextInput
+                    value={fridgeEditDraft.amount}
+                    onChangeText={(text) => setFridgeEditDraft((prev) => (prev ? { ...prev, amount: text.replace(/[^0-9.,]/g, '') } : prev))}
+                    placeholder="Amount"
+                    placeholderTextColor={colors.subtext}
+                    style={[styles.input, styles.fridgeEditAmountInput]}
+                  />
+                  <View style={styles.fridgeEditChipWrap}>
+                    {FRIDGE_UNIT_OPTIONS.map((unit) => (
+                      <Pressable
+                        key={`fridge-unit-${unit}`}
+                        style={[styles.fridgeEditChip, fridgeEditDraft.unit === unit && styles.fridgeEditChipActive]}
+                        onPress={() => setFridgeEditDraft((prev) => (prev ? { ...prev, unit } : prev))}
+                      >
+                        <Text style={[styles.fridgeEditChipText, fridgeEditDraft.unit === unit && styles.fridgeEditChipTextActive]}>{unit}</Text>
+                      </Pressable>
+                    ))}
                   </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            <View style={styles.editButtonsRow}>
-              <Pressable style={styles.addInlineBtn} onPress={addEditRow}>
-                <Text style={styles.addInlineBtnText}>+ Add row</Text>
-              </Pressable>
-              {activeList ? (
+                </View>
+                <Text style={styles.fridgeEditLabel}>Category</Text>
+                <View style={styles.fridgeEditChipWrap}>
+                  {FRIDGE_CATEGORY_OPTIONS.map((category) => (
+                    <Pressable
+                      key={`fridge-category-${category}`}
+                      style={[styles.fridgeEditChip, fridgeEditDraft.category === category && styles.fridgeEditChipActive]}
+                      onPress={() => setFridgeEditDraft((prev) => (prev ? { ...prev, category } : prev))}
+                    >
+                      <Text style={[styles.fridgeEditChipText, fridgeEditDraft.category === category && styles.fridgeEditChipTextActive]}>{category}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.fridgeEditLabel}>Use by</Text>
+                <TextInput
+                  value={fridgeEditDraft.expiresAt}
+                  onChangeText={(text) => setFridgeEditDraft((prev) => (prev ? { ...prev, expiresAt: text } : prev))}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.subtext}
+                  style={styles.input}
+                />
+                <Text style={styles.fridgeEditLabel}>Note</Text>
+                <TextInput
+                  value={fridgeEditDraft.note}
+                  onChangeText={(text) => setFridgeEditDraft((prev) => (prev ? { ...prev, note: text } : prev))}
+                  placeholder="Optional note"
+                  placeholderTextColor={colors.subtext}
+                  style={[styles.input, styles.requestCommentInput]}
+                  multiline
+                />
                 <Pressable
-                  style={[styles.addInlineBtn, styles.deleteListBtn]}
-                  onPress={() => {
-                  onDeleteList(activeList.id);
-                  setEditOpen(false);
-                  setEditRows([]);
-                  setNoteHover(false);
-                  }}
+                  style={[styles.fridgeOpenedToggle, fridgeEditDraft.opened && styles.fridgeOpenedToggleActive]}
+                  onPress={() => setFridgeEditDraft((prev) => (prev ? { ...prev, opened: !prev.opened } : prev))}
                 >
-                  <Text style={styles.deleteListBtnText}>Delete list</Text>
+                  <Text style={[styles.fridgeOpenedToggleText, fridgeEditDraft.opened && styles.fridgeOpenedToggleTextActive]}>
+                    {fridgeEditDraft.opened ? 'Opened product' : 'Mark as opened'}
+                  </Text>
                 </Pressable>
-              ) : null}
-              <Pressable style={[styles.button, styles.editSaveBtn]} onPress={saveEditedList}>
-                <Text style={styles.buttonText}>Save</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.addInlineBtn, styles.editCancelBtn]}
-                onPress={() => {
-                  setEditOpen(false);
-                  setEditRows([]);
-                  setNoteHover(false);
-                }}
-              >
+                {fridgeEditRecipeIdeas.length > 0 ? (
+                  <View style={styles.fridgeRecipeIdeasSection}>
+                    <Text style={styles.fridgeEditLabel}>Recipe ideas</Text>
+                    <View style={styles.cookFromFridgeList}>
+                      {fridgeEditRecipeIdeas.map((item) => (
+                        <View key={`fridge-edit-${item.recipe.id}`} style={styles.cookRecipeCard}>
+                          <View style={styles.cookRecipeTop}>
+                            <View style={styles.cookRecipeTextWrap}>
+                              <Text style={styles.cookRecipeTitle}>{item.recipe.title}</Text>
+                              <Text style={styles.cookRecipeMeta}>
+                                {labelRecipeMealType(item.recipe.mealType)}
+                                {item.recipe.cookTimeMinutes ? ` · ${item.recipe.cookTimeMinutes} min` : ''}
+                              </Text>
+                            </View>
+                            <View style={[styles.cookRecipeStatusBadge, item.missingCount === 0 ? styles.cookRecipeStatusReady : styles.cookRecipeStatusMissing]}>
+                              <Text style={[styles.cookRecipeStatusText, item.missingCount === 0 ? styles.cookRecipeStatusTextReady : styles.cookRecipeStatusTextMissing]}>
+                                {item.missingCount === 0 ? 'Can cook now' : `Missing ${item.missingCount}`}
+                              </Text>
+                            </View>
+                          </View>
+                          {item.missingIngredients.length > 0 ? (
+                            <Text style={styles.cookRecipeMissingText}>Need: {item.missingIngredients.slice(0, 3).join(', ')}</Text>
+                          ) : (
+                            <Text style={styles.cookRecipeMatchText}>You already have what you need for this recipe.</Text>
+                          )}
+                          <View style={styles.cookRecipeActionsRow}>
+                            {item.missingIngredients.length > 0 ? (
+                              <Pressable
+                                style={styles.cookRecipeActionBtn}
+                                onPress={() =>
+                                  onCreateList(
+                                    item.missingIngredients.map((ingredientName) => ({
+                                      name: ingredientName,
+                                      quantity: '1 pcs',
+                                    })),
+                                    activeList?.id ?? null,
+                                  )
+                                }
+                              >
+                                <Text style={styles.cookRecipeActionBtnText}>Add missing to shopping</Text>
+                              </Pressable>
+                            ) : (
+                              <View style={[styles.cookRecipeActionBtn, styles.cookRecipeActionBtnDisabled]}>
+                                <Text style={[styles.cookRecipeActionBtnText, styles.cookRecipeActionBtnTextDisabled]}>Ready to cook</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </ScrollView>
+            ) : null}
+            <View style={styles.editButtonsRow}>
+              <Pressable style={[styles.addInlineBtn, styles.editCancelBtn]} onPress={closeFridgeEditor}>
                 <Text style={styles.addInlineBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.button, styles.editSaveBtn]} onPress={saveFridgeEditor}>
+                <Text style={styles.buttonText}>Save</Text>
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      <SectionCard title="🛒">
-        <View style={styles.sheet}>
-          {draftRows.map((row, index) => {
-            const suggestions = focusedRowId === row.id ? suggestionsByRow[row.id] || [] : [];
-            return (
-              <View key={row.id} style={[styles.sheetRowWrap, row.unitOpen && styles.sheetRowWrapActive]}>
-                <View style={[styles.sheetRow, index === draftRows.length - 1 && styles.sheetRowLast]}>
-                  <TextInput
-                    ref={(node) => {
-                      draftInputRefs.current[row.id] = node;
-                    }}
-                    value={row.name}
-                    onChangeText={(text) => {
-                      updateRow(row.id, (current) => ({ ...current, name: text }));
-                      setFocusedRowId(row.id);
-                    }}
-                    onPressIn={() => {
-                      if (promoteTopFilledRow(row.id, row.name, index)) return;
-                    }}
-                    onFocus={() => {
-                      if (promoteTopFilledRow(row.id, row.name, index)) return;
-                      setFocusedRowId(row.id);
-                    }}
-                    placeholder={index === 0 ? 'Start typing your shopping list...' : 'Next item'}
-                    placeholderTextColor={colors.subtext}
-                    style={styles.sheetInput}
-                  />
-
-                  <View style={styles.counterWrap}>
-                    <Pressable style={styles.counterBtn} onPress={() => updateRow(row.id, (current) => ({ ...current, amount: Math.max(1, current.amount - 1) }))}>
-                      <Text style={styles.counterBtnText}>-</Text>
+      <Modal
+        visible={baseListOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={closeBaseListPanel}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={closeBaseListPanel}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <Text style={styles.modalTitle}>Usual basket</Text>
+            {baseList ? (
+              <>
+                <Text style={styles.baseListMeta}>
+                  {baseList.items.length} item{baseList.items.length === 1 ? '' : 's'} saved
+                </Text>
+                <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
+                  <View style={styles.baseListActionRow}>
+                    <Pressable
+                      style={[styles.button, styles.baseListPrimaryAction]}
+                      onPress={() => {
+                        closeBaseListPanel();
+                        onStartFromBaseList();
+                      }}
+                    >
+                      <Text style={styles.buttonText}>Use list</Text>
                     </Pressable>
-                    <Text style={styles.counterValue}>{row.amount}</Text>
-                    <Pressable style={styles.counterBtn} onPress={() => updateRow(row.id, (current) => ({ ...current, amount: current.amount + 1 }))}>
-                      <Text style={styles.counterBtnText}>+</Text>
+                    <Pressable
+                      style={styles.addInlineBtn}
+                      onPress={() => {
+                        closeBaseListPanel();
+                        openEditor({ listId: baseList.id });
+                      }}
+                    >
+                      <Text style={styles.addInlineBtnText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.addInlineBtn}
+                      onPress={() => {
+                        closeBaseListPanel();
+                        openAddComposer('basket');
+                      }}
+                    >
+                      <Text style={styles.addInlineBtnText}>Add items</Text>
                     </Pressable>
                   </View>
 
-                  <View style={styles.unitWrap}>
+                  {activeList ? (
                     <Pressable
-                      style={styles.unitBtn}
-                      onPress={() =>
-                        setDraftRows((prev) =>
-                          prev.map((current) =>
-                            current.id === row.id
-                              ? { ...current, unitOpen: !current.unitOpen }
-                              : { ...current, unitOpen: false },
-                          ),
-                        )
-                      }
+                      style={styles.baseListLinkBtn}
+                      onPress={() => {
+                        onSaveAsBaseList(activeList.id);
+                        closeBaseListPanel();
+                      }}
                     >
-                      <Text style={styles.unitBtnText}>{row.unit}</Text>
+                      <Text style={styles.baseListLinkBtnText}>Save current list as usual basket</Text>
                     </Pressable>
-                    {row.unitOpen ? (
-                      <View style={styles.unitMenu}>
+                  ) : null}
+
+                  <View style={styles.baseListItemsWrap}>
+                    {baseList.items.map((item) => (
+                      <View key={item.id} style={styles.baseListItemCard}>
+                        <View style={styles.baseListItemCopy}>
+                          <Text style={styles.baseListItemName}>{item.name}</Text>
+                          <Text style={styles.baseListItemMeta}>
+                            {item.quantity}
+                            {item.category ? `  •  ${getShoppingItemCategoryLabel(item.category)}` : ''}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={styles.baseListItemUseBtn}
+                          onPress={() => useSingleBaseListItem(item)}
+                        >
+                          <Text style={styles.baseListItemUseBtnText}>Use</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.editButtonsRow}>
+                  <Pressable
+                    style={[styles.addInlineBtn, styles.deleteListBtn]}
+                    onPress={() => {
+                      onDeleteList(baseList.id);
+                      closeBaseListPanel();
+                    }}
+                  >
+                    <Text style={styles.deleteListBtnText}>Delete basket</Text>
+                  </Pressable>
+                  <Pressable style={[styles.addInlineBtn, styles.editCancelBtn]} onPress={closeBaseListPanel}>
+                    <Text style={styles.addInlineBtnText}>Close</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.baseListEmptyText}>
+                  Save your usual products here once, then reopen this basket any time to edit it, add more items, or use it for shopping.
+                </Text>
+                <View style={styles.editButtonsRow}>
+                  <Pressable
+                    style={[styles.button, styles.baseListPrimaryAction]}
+                    onPress={() => {
+                      closeBaseListPanel();
+                      openAddComposer('basket');
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Create basket</Text>
+                  </Pressable>
+                  {activeList ? (
+                    <Pressable
+                      style={styles.addInlineBtn}
+                      onPress={() => {
+                        onSaveAsBaseList(activeList.id);
+                        closeBaseListPanel();
+                      }}
+                    >
+                      <Text style={styles.addInlineBtnText}>Save current list</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable style={[styles.addInlineBtn, styles.editCancelBtn]} onPress={closeBaseListPanel}>
+                    <Text style={styles.addInlineBtnText}>Close</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={editOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={closeEditModal}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={closeEditModal}
+        >
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <View style={[styles.modalHeaderRow, isMobile && styles.modalHeaderRowMobile]}>
+              <Text style={styles.modalTitle}>{editTargetListTitle === 'Usual basket' ? 'Edit Usual Basket' : 'Edit Shopping List'}</Text>
+              <View style={styles.modalHeaderActions}>
+                <Pressable style={styles.modalPlusBtn} onPress={addEditRow}>
+                  <Text style={styles.modalPlusBtnText}>+</Text>
+                </Pressable>
+                {editTargetListId ? (
+                  <Pressable
+                    style={styles.modalInlineDeleteBtn}
+                    onPress={() => {
+                      if (!editTargetListId) return;
+                      onDeleteList(editTargetListId);
+                      closeEditModal();
+                    }}
+                  >
+                    <Text style={styles.modalInlineDeleteBtnText}>{editTargetListTitle === 'Usual basket' ? 'Delete basket' : 'Delete list'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            {!isMobile ? (
+              <View style={styles.editButtonsRow}>
+                <Pressable style={[styles.button, styles.editSaveBtn]} onPress={saveEditedList}>
+                  <Text style={styles.buttonText}>Save</Text>
+                </Pressable>
+                <Pressable style={[styles.addInlineBtn, styles.editCancelBtn]} onPress={closeEditModal}>
+                  <Text style={styles.addInlineBtnText}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <ScrollView style={[styles.modalBody, isMobile && styles.modalBodyWithFooter]} contentContainerStyle={styles.modalBodyContent}>
+              <View style={styles.editRowsWrap}>
+                {editRows.map((row, index) => {
+                  const suggestions = focusedEditRowKey === row.key ? editSuggestionsByRow[row.key] || [] : [];
+                  return (
+                  <View key={row.key} style={styles.editRowCard}>
+                    <View style={[styles.editRow, isMobile && styles.editRowMobile]}>
+                      <TextInput
+                        ref={(node) => {
+                          editInputRefs.current[row.key] = node;
+                        }}
+                        value={row.name}
+                        onChangeText={(text) => {
+                          setEditRows((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key
+                                ? {
+                                    ...item,
+                                    name: text,
+                                    category: text.trim().length > 0 ? inferShoppingItemCategory(text) : item.category,
+                                  }
+                                : item,
+                            ),
+                          );
+                          ensureFreshEditTopRow(row.key, text, index);
+                        }}
+                        onFocus={() => setFocusedEditRowKey(row.key)}
+                        onSubmitEditing={() => {
+                          promoteEditTopRowOnSubmit(row.key, row.name, index);
+                        }}
+                        placeholder="Item name"
+                        placeholderTextColor={colors.subtext}
+                        style={[styles.input, styles.editNameInput, isMobile && styles.editNameInputMobile]}
+                      />
+                      <TextInput
+                        value={row.amount}
+                        onChangeText={(text) =>
+                          setEditRows((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key
+                                ? {
+                                    ...item,
+                                    amount: text,
+                                    quantity: formatShoppingQuantity(text, item.unit),
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                        placeholder="1"
+                        placeholderTextColor={colors.subtext}
+                        style={[styles.input, styles.editQtyInput, isMobile && styles.editQtyInputMobile]}
+                      />
+                      <View style={[styles.editUnitRow, isMobile && styles.editUnitRowMobile]}>
                         {UNIT_OPTIONS.map((unit) => (
                           <Pressable
-                            key={unit}
-                            style={[styles.unitMenuItem, row.unit === unit && styles.unitMenuItemActive]}
+                            key={`${row.key}-${unit}`}
+                            style={[styles.editUnitChip, row.unit === unit && styles.editUnitChipActive]}
+                            onPress={() =>
+                              setEditRows((prev) =>
+                                prev.map((item) =>
+                                  item.key === row.key
+                                    ? {
+                                        ...item,
+                                        unit,
+                                        quantity: formatShoppingQuantity(item.amount, unit),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <Text style={[styles.editUnitChipText, row.unit === unit && styles.editUnitChipTextActive]}>{unit}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <Pressable
+                        style={styles.deleteRowBtn}
+                        onPress={() => {
+                          setEditRows((prev) => prev.filter((item) => item.key !== row.key));
+                          setFocusedEditRowKey((prev) => (prev === row.key ? null : prev));
+                        }}
+                      >
+                        <Text style={styles.deleteRowBtnText}>X</Text>
+                      </Pressable>
+                    </View>
+                    {suggestions.length ? (
+                      <View style={styles.editSuggestionList}>
+                        {suggestions.map((suggestion, suggestionIndex) => (
+                          <Pressable
+                            key={`${row.key}-${suggestion}`}
+                            style={[styles.suggestionItem, suggestionIndex === suggestions.length - 1 && styles.suggestionItemLast]}
                             onPress={() => {
-                              updateRow(row.id, (current) => ({ ...current, unit, unitOpen: false }));
+                              setEditRows((prev) =>
+                                prev.map((item) =>
+                                  item.key === row.key
+                                    ? {
+                                        ...item,
+                                        name: suggestion,
+                                        category: inferShoppingItemCategory(suggestion),
+                                      }
+                                    : item,
+                                ),
+                              );
+                              setFocusedEditRowKey(null);
                             }}
                           >
-                            <Text style={[styles.unitMenuText, row.unit === unit && styles.unitMenuTextActive]}>{unit}</Text>
+                            <Text style={styles.suggestionText}>{suggestion}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                    <View style={styles.editCategoryRow}>
+                      {SHOPPING_CATEGORY_OPTIONS.filter((option) => option.key !== 'all').map((option) => (
+                        <Pressable
+                          key={`${row.key}-${option.key}`}
+                          style={[styles.editCategoryChip, row.category === option.key && styles.editCategoryChipActive]}
+                          onPress={() =>
+                            setEditRows((prev) =>
+                              prev.map((item) => (item.key === row.key ? { ...item, category: option.key as ShoppingItemCategory } : item)),
+                            )
+                          }
+                        >
+                          <Text style={[styles.editCategoryChipText, row.category === option.key && styles.editCategoryChipTextActive]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )})}
+              </View>
+            </ScrollView>
+            {isMobile ? (
+              <View style={styles.mobileModalFooter}>
+                <View style={styles.mobileModalFooterRow}>
+                  <Pressable style={[styles.addInlineBtn, styles.editCancelBtn, styles.mobileFooterTertiaryBtn]} onPress={closeEditModal}>
+                    <Text style={styles.addInlineBtnText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable style={[styles.button, styles.editSaveBtn, styles.mobileFooterPrimaryBtn]} onPress={saveEditedList}>
+                    <Text style={styles.buttonText}>Save</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={addComposerOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setAddComposerOpen(false);
+          setComposerMode('list');
+          setPendingCreateBehavior('default');
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setAddComposerOpen(false);
+            setComposerMode('list');
+            setPendingCreateBehavior('default');
+          }}
+        >
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            {composerMode === 'basket' ? (
+              <View style={[styles.modalHeaderRow, isMobile && styles.modalHeaderRowMobile]}>
+                <Text style={styles.modalTitle}>Build Your Usual Basket</Text>
+                <View style={styles.modalHeaderActions}>
+                  <Pressable
+                    style={styles.modalPlusBtn}
+                    onPress={() => {
+                      closeAllUnitMenus();
+                      setDraftRows((prev) => [createDraftRow(prev.length), ...prev]);
+                    }}
+                  >
+                    <Text style={styles.modalPlusBtnText}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.modalTitle}>Add shopping items</Text>
+            )}
+            {!isMobile ? (
+              <View style={styles.addComposerActions}>
+                {composerMode !== 'basket' ? (
+                  <Pressable
+                    style={styles.addRowBtn}
+                    onPress={() => {
+                      closeAllUnitMenus();
+                      setDraftRows((prev) => [createDraftRow(prev.length), ...prev]);
+                    }}
+                  >
+                    <Text style={styles.addRowBtnText}>+ Row</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable style={[styles.button, styles.editSaveBtn]} onPress={saveDraftRows}>
+                  <Text style={styles.buttonText}>{composerMode === 'basket' ? 'Save basket' : 'Add items'}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.addInlineBtn, styles.editCancelBtn]}
+                  onPress={() => {
+                    setAddComposerOpen(false);
+                    setComposerMode('list');
+                    setPendingCreateBehavior('default');
+                  }}
+                >
+                  <Text style={styles.addInlineBtnText}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.sheet}>
+              {draftRows.map((row, index) => {
+                const suggestions = focusedRowId === row.id ? suggestionsByRow[row.id] || [] : [];
+                return (
+                  <View key={row.id} style={[styles.sheetRowWrap, row.unitOpen && styles.sheetRowWrapActive]}>
+                    <View style={[styles.sheetRow, index === draftRows.length - 1 && styles.sheetRowLast, isMobile && styles.sheetRowMobile]}>
+                      <TextInput
+                        ref={(node) => {
+                          draftInputRefs.current[row.id] = node;
+                        }}
+                        value={row.name}
+                        onChangeText={(text) => {
+                          updateRow(row.id, (current) => ({ ...current, name: text }));
+                          setFocusedRowId(row.id);
+                        }}
+                        onFocus={() => {
+                          setFocusedRowId(row.id);
+                        }}
+                        onSubmitEditing={() => {
+                          promoteTopFilledRow(row.id, row.name, index);
+                        }}
+                        placeholder={index === 0 ? 'Start typing your shopping list...' : 'Next item'}
+                        placeholderTextColor={colors.subtext}
+                        style={[styles.sheetInput, isMobile && styles.sheetInputMobile]}
+                      />
+
+                      <View style={[styles.counterWrap, isMobile && styles.counterWrapMobile]}>
+                        <Pressable
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            updateRow(row.id, (current) => {
+                              const step = getDraftAmountStep(current.unit, current.amount);
+                              const min = current.unit === 'g' ? 10 : 1;
+                              return { ...current, amount: Math.max(min, current.amount - step) };
+                            })
+                          }
+                        >
+                          <Text style={styles.counterBtnText}>-</Text>
+                        </Pressable>
+                        <Text style={styles.counterValue}>{row.amount}</Text>
+                        <Pressable
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            updateRow(row.id, (current) => {
+                              const step = getDraftAmountStep(current.unit, current.amount);
+                              return { ...current, amount: current.amount + step };
+                            })
+                          }
+                        >
+                          <Text style={styles.counterBtnText}>+</Text>
+                        </Pressable>
+                      </View>
+
+                      <View style={[styles.unitWrap, isMobile && styles.unitWrapMobile]}>
+                        <Pressable
+                          style={styles.unitBtn}
+                          onPress={() =>
+                            setDraftRows((prev) =>
+                              prev.map((current) =>
+                                current.id === row.id
+                                  ? { ...current, unitOpen: !current.unitOpen }
+                                  : { ...current, unitOpen: false },
+                              ),
+                            )
+                          }
+                        >
+                          <Text style={styles.unitBtnText}>{row.unit}</Text>
+                        </Pressable>
+                        {row.unitOpen ? (
+                          <View style={styles.unitMenu}>
+                            {UNIT_OPTIONS.map((unit) => (
+                              <Pressable
+                                key={unit}
+                                style={[styles.unitMenuItem, row.unit === unit && styles.unitMenuItemActive]}
+                                onPress={() => {
+                                  updateRow(row.id, (current) => ({
+                                    ...current,
+                                    unit,
+                                    amount: normalizeAmountForUnit(unit, current.amount),
+                                    unitOpen: false,
+                                  }));
+                                }}
+                              >
+                                <Text style={[styles.unitMenuText, row.unit === unit && styles.unitMenuTextActive]}>{unit}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {suggestions.length ? (
+                      <View style={styles.suggestionList}>
+                        {suggestions.map((suggestion, suggestionIndex) => (
+                          <Pressable
+                            key={`${row.id}-${suggestion}`}
+                            style={[styles.suggestionItem, suggestionIndex === suggestions.length - 1 && styles.suggestionItemLast]}
+                            onPress={() => {
+                              updateRow(row.id, (current) => ({ ...current, name: suggestion }));
+                              setFocusedRowId(null);
+                              closeAllUnitMenus();
+                            }}
+                          >
+                            <Text style={styles.suggestionText}>{suggestion}</Text>
                           </Pressable>
                         ))}
                       </View>
                     ) : null}
                   </View>
-                </View>
-
-                {suggestions.length ? (
-                  <View style={styles.suggestionList}>
-                    {suggestions.map((suggestion, suggestionIndex) => (
-                      <Pressable
-                        key={`${row.id}-${suggestion}`}
-                        style={[styles.suggestionItem, suggestionIndex === suggestions.length - 1 && styles.suggestionItemLast]}
-                        onPress={() => {
-                          updateRow(row.id, (current) => ({ ...current, name: suggestion }));
-                          setFocusedRowId(null);
-                          closeAllUnitMenus();
-                        }}
-                      >
-                        <Text style={styles.suggestionText}>{suggestion}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                );
+              })}
+            </View>
+            {isMobile ? (
+              <View style={styles.mobileModalFooter}>
+                {composerMode !== 'basket' ? (
+                  <Pressable
+                    style={[styles.addInlineBtn, styles.mobileFooterSecondaryBtn]}
+                    onPress={() => {
+                      closeAllUnitMenus();
+                      setDraftRows((prev) => [createDraftRow(prev.length), ...prev]);
+                    }}
+                  >
+                    <Text style={styles.addInlineBtnText}>+ Row</Text>
+                  </Pressable>
                 ) : null}
+                <View style={styles.mobileModalFooterRow}>
+                  <Pressable
+                    style={[styles.addInlineBtn, styles.editCancelBtn, styles.mobileFooterTertiaryBtn]}
+                    onPress={() => {
+                      setAddComposerOpen(false);
+                      setComposerMode('list');
+                      setPendingCreateBehavior('default');
+                    }}
+                  >
+                    <Text style={styles.addInlineBtnText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable style={[styles.button, styles.editSaveBtn, styles.mobileFooterPrimaryBtn]} onPress={saveDraftRows}>
+                    <Text style={styles.buttonText}>{composerMode === 'basket' ? 'Save basket' : 'Add items'}</Text>
+                  </Pressable>
+                </View>
               </View>
-            );
-          })}
-        </View>
-
-        <Pressable
-          style={styles.addRowBtn}
-          onPress={() => {
-            closeAllUnitMenus();
-            setDraftRows((prev) => [createDraftRow(prev.length), ...prev]);
-          }}
-        >
-          <Text style={styles.addRowBtnText}>+</Text>
+            ) : null}
+          </Pressable>
         </Pressable>
-
-        <Pressable style={styles.button} onPress={saveDraftRows}>
-          <Text style={styles.buttonText}>Add List</Text>
-        </Pressable>
-      </SectionCard>
+      </Modal>
     </>
   );
 }
@@ -1515,13 +2593,137 @@ function getFridgeStatusMeta(status: FridgeItemStatus) {
   };
 }
 
+function getCookFromFridgeSuggestions(fridgeItems: FridgeItem[], recipes: Recipe[]) {
+  const availableItems = fridgeItems.filter((item) => item.status !== 'out').map((item) => item.name.trim().toLowerCase());
+  if (availableItems.length === 0) return [];
+
+  return recipes
+    .map((recipe) => {
+      const availableIngredients: string[] = [];
+      const missingIngredients: string[] = [];
+
+      recipe.ingredients.forEach((ingredient) => {
+        const ingredientName = ingredient.name.trim().toLowerCase();
+        const matched = availableItems.some((itemName) => isIngredientMatched(itemName, ingredientName));
+        if (matched) {
+          availableIngredients.push(ingredient.name);
+        } else {
+          missingIngredients.push(ingredient.name);
+        }
+      });
+
+      return {
+        recipe,
+        availableIngredients,
+        missingIngredients,
+        availableCount: availableIngredients.length,
+        missingCount: missingIngredients.length,
+      };
+    })
+    .filter((entry) => entry.availableCount > 0 && entry.missingCount <= 3)
+    .sort((left, right) => {
+      if (left.missingCount !== right.missingCount) return left.missingCount - right.missingCount;
+      if (left.availableCount !== right.availableCount) return right.availableCount - left.availableCount;
+      return left.recipe.title.localeCompare(right.recipe.title);
+    })
+    .slice(0, 6);
+}
+
+function isIngredientMatched(fridgeItemName: string, ingredientName: string) {
+  if (fridgeItemName === ingredientName) return true;
+  if (fridgeItemName.includes(ingredientName) || ingredientName.includes(fridgeItemName)) return true;
+  const fridgeTokens = fridgeItemName.split(/[\s,/-]+/).filter((token) => token.length >= 4);
+  const ingredientTokens = ingredientName.split(/[\s,/-]+/).filter((token) => token.length >= 4);
+  return fridgeTokens.some((token) => ingredientTokens.includes(token));
+}
+
+function labelRecipeMealType(mealType: Recipe['mealType']) {
+  switch (mealType) {
+    case 'main_dish':
+      return 'Main dish';
+    case 'meal_prep':
+      return 'Meal prep';
+    default:
+      return mealType.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+}
+
+function formatFridgeQuantity(item: Omit<FridgeItem, 'id'> | FridgeItem) {
+  if (typeof item.amount === 'number' && item.unit) {
+    const normalized = Number.isInteger(item.amount) ? String(item.amount) : item.amount.toFixed(1).replace(/\.0$/, '');
+    return `${normalized} ${item.unit}`;
+  }
+  return item.quantity;
+}
+
+function getCountableFridgeAmount(item: Omit<FridgeItem, 'id'> | FridgeItem): { amount: number; unit: FridgeItemUnit } | null {
+  const countableUnits: FridgeItemUnit[] = ['pcs', 'pack', 'bottle', 'jar'];
+  if (typeof item.amount === 'number' && item.unit && countableUnits.includes(item.unit)) {
+    return { amount: Math.max(0, Math.round(item.amount)), unit: item.unit };
+  }
+  const match = item.quantity.trim().toLowerCase().match(/^(\d+(?:[.,]\d+)?)\s*([a-z]+)/);
+  if (!match) return null;
+  const amount = Math.round(Number(match[1].replace(',', '.')));
+  const rawUnit = match[2];
+  const unitMap: Record<string, FridgeItemUnit> = {
+    pc: 'pcs',
+    pcs: 'pcs',
+    piece: 'pcs',
+    pieces: 'pcs',
+    pack: 'pack',
+    packs: 'pack',
+    bottle: 'bottle',
+    bottles: 'bottle',
+    jar: 'jar',
+    jars: 'jar',
+  };
+  const unit = unitMap[rawUnit];
+  if (!unit) return null;
+  return { amount: Math.max(0, amount), unit };
+}
+
+function isFridgeItemUseSoon(item: Omit<FridgeItem, 'id'> | FridgeItem) {
+  if (!item.expiresAt) return false;
+  const expiry = new Date(`${item.expiresAt}T00:00:00`);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffMs = expiry.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 && diffDays <= 3;
+}
+
+function getFridgeTimingMeta(item: Omit<FridgeItem, 'id'> | FridgeItem) {
+  const parts: string[] = [];
+  if (item.expiresAt) {
+    const expiry = new Date(`${item.expiresAt}T00:00:00`);
+    if (!Number.isNaN(expiry.getTime())) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffMs = expiry.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        parts.push('Expired');
+      } else if (diffDays === 0) {
+        parts.push('Use today');
+      } else if (diffDays === 1) {
+        parts.push('Use in 1 day');
+      } else {
+        parts.push(`Use in ${diffDays} days`);
+      }
+    }
+  }
+  if (item.opened) parts.push('Opened');
+  return parts.join(' · ');
+}
+
 async function simulateFridgeRecognition(_uri: string): Promise<Array<Omit<FridgeItem, 'id'>>> {
   await new Promise((resolve) => setTimeout(resolve, 700));
   return [
-    { name: 'Milk', quantity: '1 bottle', category: 'Dairy', note: 'Detected from photo', status: 'low' },
-    { name: 'Eggs', quantity: '8 pcs', category: 'Dairy', note: 'Detected from photo', status: 'full' },
-    { name: 'Yogurt', quantity: '0 cups', category: 'Snacks', note: 'Detected from photo', status: 'out' },
-    { name: 'Cheese', quantity: '1 pack', category: 'Dairy', note: 'Detected from photo', status: 'low' },
+    { name: 'Milk', quantity: '1 bottle', amount: 1, unit: 'bottle', category: 'Dairy', note: 'Detected from photo', status: 'low', expiresAt: new Date(Date.now() + 86400000).toISOString().slice(0, 10), opened: true },
+    { name: 'Eggs', quantity: '8 pcs', amount: 8, unit: 'pcs', category: 'Dairy', note: 'Detected from photo', status: 'full' },
+    { name: 'Yogurt', quantity: '2 pcs', amount: 2, unit: 'pcs', category: 'Snacks', note: 'Detected from photo', status: 'low', expiresAt: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10) },
+    { name: 'Cheese', quantity: '1 pack', amount: 1, unit: 'pack', category: 'Dairy', note: 'Detected from photo', status: 'low', opened: true },
   ];
 }
 
@@ -1664,23 +2866,28 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     shoppingModeSwitch: {
       flexDirection: 'row',
       gap: 10,
-      marginBottom: 12,
+      marginBottom: 16,
     },
     shoppingModeBtn: {
       flex: 1,
-      borderRadius: 18,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.glassSoft,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      backgroundColor: 'rgba(255,255,255,0.42)',
+      paddingHorizontal: 18,
+      paddingVertical: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
+      gap: 8,
     },
     shoppingModeBtnActive: {
       borderColor: colors.primary,
-      backgroundColor: colors.selection,
+      backgroundColor: 'rgba(255,255,255,0.86)',
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.18,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 8,
     },
     shoppingModeIcon: {
       fontSize: 20,
@@ -1688,9 +2895,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     },
     shoppingModeText: {
       color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 16,
-      fontWeight: '700',
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '800',
     },
     shoppingModeTextActive: {
       color: colors.primary,
@@ -1863,16 +3070,62 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       lineHeight: 16,
       marginBottom: 10,
     },
+    fridgeSummaryRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 12,
+    },
+    fridgeSummaryRowMobile: {
+      gap: 6,
+    },
+    fridgeSummaryChip: {
+      flex: 1,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 2,
+    },
+    fridgeSummaryChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    fridgeSummaryValue: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 18,
+      fontWeight: '800',
+    },
+    fridgeSummaryLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '700',
+    },
+    fridgeSummaryLabelActive: {
+      color: colors.primary,
+    },
     fridgeHeaderRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 10,
       marginBottom: 10,
     },
+    fridgeHeaderRowMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      gap: 8,
+    },
     fridgeHeaderActions: {
       flexDirection: 'row',
       gap: 8,
       alignItems: 'center',
+    },
+    fridgeHeaderActionsMobile: {
+      width: '100%',
+      justifyContent: 'space-between',
     },
     fridgeUploadBtn: {
       borderRadius: 12,
@@ -1892,6 +3145,10 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       flexDirection: 'row',
       gap: 8,
       marginBottom: 10,
+    },
+    fridgeTabsRowMobile: {
+      flexWrap: 'wrap',
+      gap: 6,
     },
     fridgeTabBtn: {
       flex: 1,
@@ -1921,6 +3178,19 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     fridgeList: {
       gap: 10,
     },
+    fridgeSection: {
+      gap: 8,
+    },
+    fridgeSectionTitle: {
+      color: colors.text,
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '800',
+      paddingHorizontal: 2,
+    },
+    fridgeSectionList: {
+      gap: 6,
+    },
     fridgeEmptyCard: {
       borderRadius: 16,
       borderWidth: 1,
@@ -1941,60 +3211,183 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       lineHeight: 18,
     },
     fridgeCard: {
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.glassSoft,
-      padding: 12,
-      gap: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 6,
+    },
+    fridgeCardMobile: {
+      paddingHorizontal: 9,
+      paddingVertical: 8,
+      gap: 6,
     },
     fridgeCardTop: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: 10,
+      gap: 8,
+    },
+    fridgeCardTopMobile: {
+      gap: 7,
     },
     fridgeTextWrap: {
       flex: 1,
       gap: 2,
     },
+    fridgeNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     fridgeItemName: {
       color: colors.text,
-      fontSize: 16,
-      lineHeight: 20,
+      fontSize: 14,
+      lineHeight: 16,
       fontWeight: '800',
+    },
+    fridgeItemNameMobile: {
+      fontSize: 13,
+      lineHeight: 15,
     },
     fridgeItemMeta: {
       color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 17,
+      fontSize: 10,
+      lineHeight: 13,
       fontWeight: '600',
+    },
+    fridgeItemMetaUrgent: {
+      color: '#b91c1c',
     },
     fridgeItemNote: {
       color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 17,
+      fontSize: 10,
+      lineHeight: 13,
+    },
+    fridgeCardHeaderActions: {
+      alignItems: 'flex-end',
+      gap: 5,
+    },
+    fridgeUseSoonAlert: {
+      width: 16,
+      height: 16,
+      borderRadius: 999,
+      backgroundColor: 'rgba(239,68,68,0.16)',
+      borderWidth: 1,
+      borderColor: 'rgba(239,68,68,0.26)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fridgeUseSoonAlertText: {
+      color: '#b91c1c',
+      fontSize: 10,
+      lineHeight: 10,
+      fontWeight: '900',
+    },
+    fridgeMoreBtn: {
+      minWidth: 28,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fridgeMoreBtnText: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 11,
+      fontWeight: '900',
     },
     fridgeStatusBadge: {
       borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
     },
     fridgeStatusText: {
-      fontSize: 11,
-      lineHeight: 14,
+      fontSize: 9,
+      lineHeight: 11,
       fontWeight: '800',
     },
     fridgeActionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
+      justifyContent: 'flex-start',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    fridgeActionsRowMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      gap: 8,
+    },
+    fridgeCounter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+    },
+    fridgeCounterBtn: {
+      width: 22,
+      height: 22,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fridgeCounterBtnText: {
+      color: colors.text,
+      fontSize: 13,
+      lineHeight: 13,
+      fontWeight: '800',
+    },
+    fridgeCounterValue: {
+      minWidth: 16,
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 14,
+      fontWeight: '800',
+      textAlign: 'center',
     },
     fridgeStatusSwitch: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 6,
       flex: 1,
+    },
+    fridgeStatusSwitchMobile: {
+      width: '100%',
+    },
+    fridgeQuickActionBtn: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+    },
+    fridgeQuickActionBtnDanger: {
+      borderColor: 'rgba(248,113,113,0.28)',
+      backgroundColor: 'rgba(254,242,242,0.94)',
+    },
+    fridgeQuickActionBtnText: {
+      color: colors.text,
+      fontSize: 9,
+      lineHeight: 11,
+      fontWeight: '700',
+    },
+    fridgeQuickActionBtnTextDanger: {
+      color: '#b91c1c',
     },
     fridgeStatusOption: {
       borderRadius: 999,
@@ -2011,18 +3404,200 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontWeight: '700',
     },
     fridgePrimaryBtn: {
-      borderRadius: 12,
+      borderRadius: 10,
       backgroundColor: colors.primary,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fridgePrimaryBtnMobile: {
+      width: '100%',
+    },
+    fridgePrimaryBtnText: {
+      color: '#fff',
+      fontSize: 10,
+      lineHeight: 12,
+      fontWeight: '800',
+    },
+    fridgeEditAmountRow: {
+      gap: 10,
+    },
+    fridgeEditAmountInput: {
+      marginBottom: 0,
+    },
+    fridgeEditLabel: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+      marginBottom: 8,
+      marginTop: 2,
+    },
+    fridgeEditChipWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 8,
+    },
+    fridgeEditChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    fridgeEditChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    fridgeEditChipText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    fridgeEditChipTextActive: {
+      color: colors.primary,
+    },
+    fridgeOpenedToggle: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fridgeOpenedToggleActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    fridgeOpenedToggleText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    fridgeOpenedToggleTextActive: {
+      color: colors.primary,
+    },
+    fridgeRecipeIdeasSection: {
+      gap: 8,
+      marginTop: 6,
+    },
+    cookFromFridgeSection: {
+      marginTop: 14,
+      gap: 10,
+    },
+    restockHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      flexWrap: 'wrap',
+    },
+    cookFromFridgeTitle: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 20,
+      fontWeight: '800',
+    },
+    cookFromFridgeHint: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    cookFromFridgeList: {
+      gap: 10,
+    },
+    cookRecipeCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      padding: 12,
+      gap: 6,
+    },
+    cookRecipeTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+    cookRecipeTextWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    cookRecipeTitle: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 19,
+      fontWeight: '800',
+    },
+    cookRecipeMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '600',
+    },
+    cookRecipeStatusBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    cookRecipeStatusReady: {
+      backgroundColor: 'rgba(34,197,94,0.14)',
+    },
+    cookRecipeStatusMissing: {
+      backgroundColor: 'rgba(245,158,11,0.16)',
+    },
+    cookRecipeStatusText: {
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '800',
+    },
+    cookRecipeStatusTextReady: {
+      color: '#15803d',
+    },
+    cookRecipeStatusTextMissing: {
+      color: '#b45309',
+    },
+    cookRecipeMatchText: {
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
+    cookRecipeMissingText: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    cookRecipeActionsRow: {
+      marginTop: 2,
+      flexDirection: 'row',
+    },
+    cookRecipeActionBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
       paddingHorizontal: 12,
       paddingVertical: 9,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    fridgePrimaryBtnText: {
-      color: '#fff',
+    cookRecipeActionBtnDisabled: {
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+    },
+    cookRecipeActionBtnText: {
+      color: colors.primary,
       fontSize: 12,
       lineHeight: 14,
       fontWeight: '800',
+    },
+    cookRecipeActionBtnTextDisabled: {
+      color: colors.subtext,
     },
     fridgePhotoPreview: {
       width: '100%',
@@ -2112,14 +3687,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     listsStage: {
       position: 'relative',
       marginBottom: 14,
-      paddingTop: 8,
-      minHeight: 430,
+      paddingTop: 14,
+      minHeight: 520,
       overflow: 'visible',
     },
     headerActionsStack: {
       position: 'absolute',
-      top: 12,
-      right: 10,
+      top: 36,
+      right: 14,
       zIndex: 90,
       alignItems: 'flex-end',
       gap: 8,
@@ -2128,7 +3703,49 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       flexDirection: 'row',
       gap: 8,
       flexWrap: 'wrap',
-      marginBottom: 10,
+    },
+    shoppingControlsBlock: {
+      gap: 8,
+      marginBottom: 18,
+    },
+    shoppingControlsLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    editListHintRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flexWrap: 'wrap',
+      marginTop: -2,
+      marginBottom: 18,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255,255,255,0.38)',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    editListHintBtn: {
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 999,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    editListHintBtnText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    editListHintText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+      lineHeight: 17,
     },
     requestHint: {
       color: colors.subtext,
@@ -2236,28 +3853,814 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontWeight: '700',
       fontSize: 12,
     },
-    tab: {
+    shoppingListSection: {
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: colors.glassStrong,
+      borderRadius: 30,
+      backgroundColor: 'rgba(255,255,255,0.34)',
+      padding: 18,
+      marginBottom: 16,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.14,
+      shadowRadius: 26,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 10,
+      position: 'relative',
     },
-    tabActive: {
+    shoppingListSectionMobile: {
+      padding: 14,
+      borderRadius: 22,
+    },
+    shoppingListHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 14,
+      marginBottom: 14,
+      padding: 14,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.56)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.72)',
+    },
+    shoppingListHeaderMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    },
+    shoppingListHeaderActionsMobile: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    shoppingListHeaderCopy: {
+      gap: 4,
+      flex: 1,
+    },
+    shoppingPrimaryBtn: {
+      minWidth: 76,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    shoppingPrimaryBtnText: {
+      color: '#ffffff',
+      fontSize: 12,
+      lineHeight: 14,
+      fontWeight: '800',
+    },
+    basketOnboardingCard: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.72)',
+      borderRadius: 24,
+      backgroundColor: 'rgba(255,255,255,0.62)',
+      padding: 18,
+      gap: 10,
+      marginBottom: 18,
+    },
+    basketOnboardingTitle: {
+      color: colors.text,
+      fontSize: 18,
+      lineHeight: 24,
+      fontWeight: '800',
+    },
+    basketOnboardingText: {
+      color: colors.subtext,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: '600',
+      maxWidth: 620,
+    },
+    basketOnboardingActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 4,
+    },
+    basketSecondaryBtn: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(223,232,244,0.9)',
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    basketSecondaryBtnText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    shoppingListBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: 999,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: 'rgba(45,109,246,0.16)',
+    },
+    shoppingListBadgeText: {
+      color: colors.primary,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '800',
+    },
+    shoppingListTitle: {
+      color: colors.text,
+      fontSize: 24,
+      lineHeight: 28,
+      fontWeight: '800',
+    },
+    shoppingListSubtitle: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '700',
+    },
+    shoppingListStatsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 2,
+    },
+    shoppingListStatCard: {
+      minWidth: 92,
+      borderRadius: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+      backgroundColor: 'rgba(245,250,255,0.92)',
+      borderWidth: 1,
+      borderColor: 'rgba(215,229,247,0.92)',
+      gap: 2,
+    },
+    shoppingListStatValue: {
+      color: colors.text,
+      fontSize: 18,
+      lineHeight: 22,
+      fontWeight: '800',
+    },
+    shoppingListStatLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '700',
+    },
+    shoppingListHeaderActions: {
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 10,
+      alignSelf: 'flex-start',
+    },
+    shoppingTopTabs: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 14,
+      flexWrap: 'wrap',
+    },
+    shoppingTopTab: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.74)',
+      backgroundColor: 'rgba(255,255,255,0.56)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    shoppingTopTabActive: {
       borderColor: colors.primary,
       backgroundColor: colors.selection,
     },
+    shoppingTopTabText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    shoppingTopTabTextActive: {
+      color: colors.primary,
+    },
+    aiAssistantCard: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.72)',
+      borderRadius: 22,
+      backgroundColor: 'rgba(255,255,255,0.58)',
+      padding: 16,
+      gap: 12,
+      marginBottom: 18,
+    },
+    aiAssistantHeader: {
+      gap: 2,
+    },
+    aiAssistantTitle: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 20,
+      fontWeight: '800',
+    },
+    aiAssistantCaption: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
+    aiSuggestionList: {
+      gap: 10,
+    },
+    aiSuggestionCard: {
+      borderWidth: 1,
+      borderColor: 'rgba(223,232,244,0.9)',
+      borderRadius: 18,
+      backgroundColor: '#ffffff',
+      padding: 14,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    aiSuggestionCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    aiSuggestionTitle: {
+      color: colors.text,
+      fontSize: 14,
+      lineHeight: 19,
+      fontWeight: '700',
+    },
+    aiSuggestionSource: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: '600',
+    },
+    aiSuggestionActions: {
+      alignItems: 'flex-end',
+      gap: 8,
+    },
+    aiSuggestionAddBtn: {
+      minWidth: 64,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      alignItems: 'center',
+    },
+    aiSuggestionAddBtnText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    aiSuggestionDismissBtn: {
+      minWidth: 64,
+      borderRadius: 12,
+      backgroundColor: 'rgba(244,247,251,0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(220,228,239,0.92)',
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      alignItems: 'center',
+    },
+    aiSuggestionDismissBtnText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    shoppingSetupIntroCopy: {
+      gap: 4,
+    },
+    shoppingUtilityRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      marginBottom: 16,
+    },
+    shoppingUtilityBtn: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.75)',
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.44)',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    shoppingUtilityBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    shoppingUtilityBtnText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    shoppingUtilityBtnTextActive: {
+      color: colors.primary,
+    },
+    shoppingBaseSection: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 22,
+      backgroundColor: 'rgba(255,255,255,0.42)',
+      padding: 18,
+      gap: 12,
+      marginBottom: 16,
+    },
+    shoppingBaseCopy: {
+      gap: 4,
+    },
+    shoppingBaseTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    shoppingBaseText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '600',
+      lineHeight: 19,
+    },
+    shoppingBaseActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    shoppingBaseBtn: {
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 14,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    shoppingBaseBtnDisabled: {
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+    },
+    shoppingBaseBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    shoppingBaseBtnTextDisabled: {
+      color: colors.subtext,
+    },
+    shoppingCategoryRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    shoppingCategoryHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      flexWrap: 'wrap',
+    },
+    shoppingCategorySummary: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '700',
+    },
+    shoppingCategoryChip: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.74)',
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.56)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    shoppingCategoryChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: 'rgba(255,255,255,0.94)',
+    },
+    shoppingCategoryChipText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    shoppingCategoryChipTextActive: {
+      color: colors.primary,
+    },
+    tab: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.74)',
+      borderRadius: 999,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      backgroundColor: 'rgba(255,255,255,0.56)',
+    },
+    tabActive: {
+      borderColor: colors.primary,
+      backgroundColor: 'rgba(255,255,255,0.94)',
+    },
     tabText: {
       color: colors.text,
-      fontWeight: '600',
+      fontWeight: '700',
+      fontSize: 15,
     },
     tabTextActive: {
       color: colors.primary,
     },
+    shoppingBoard: {
+      gap: 18,
+    },
+    shoppingPanelsBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 20,
+      backgroundColor: 'transparent',
+    },
+    moreSection: {
+      marginTop: 18,
+      zIndex: 30,
+    },
+    moreToggleBtn: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.74)',
+      backgroundColor: 'rgba(255,255,255,0.48)',
+      paddingHorizontal: 16,
+      paddingVertical: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    moreToggleBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: 'rgba(255,255,255,0.84)',
+    },
+    moreToggleBtnText: {
+      color: colors.text,
+      fontSize: 14,
+      lineHeight: 18,
+      fontWeight: '800',
+    },
+    moreToggleBtnTextActive: {
+      color: colors.primary,
+    },
+    moreToggleBtnChevron: {
+      color: colors.subtext,
+      fontSize: 18,
+      lineHeight: 18,
+      fontWeight: '700',
+    },
+    morePanel: {
+      marginTop: 10,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.72)',
+      backgroundColor: 'rgba(255,255,255,0.54)',
+      padding: 16,
+      gap: 14,
+      zIndex: 31,
+    },
+    moreActionGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    moreActionBtn: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(223,232,244,0.9)',
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+    },
+    moreActionBtnText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    moreInlineActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    moreSecondaryBtn: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: 'rgba(255,255,255,0.44)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    moreSecondaryBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    baseListMeta: {
+      color: colors.subtext,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '700',
+      marginTop: -6,
+      marginBottom: 6,
+    },
+    baseListActionRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 12,
+    },
+    baseListPrimaryAction: {
+      minWidth: 120,
+    },
+    baseListLinkBtn: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      marginBottom: 12,
+    },
+    baseListLinkBtnText: {
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '700',
+    },
+    baseListItemsWrap: {
+      gap: 10,
+    },
+    baseListItemCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    baseListItemCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    baseListItemName: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 20,
+      fontWeight: '800',
+    },
+    baseListItemMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
+    baseListItemUseBtn: {
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 12,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    baseListItemUseBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    baseListEmptyText: {
+      color: colors.subtext,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '600',
+      marginTop: 2,
+      marginBottom: 8,
+    },
+    moreSubsection: {
+      gap: 10,
+    },
+    moreSubsectionTitle: {
+      color: colors.text,
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '800',
+    },
+    shoppingEmptyState: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 22,
+      backgroundColor: colors.glassStrong,
+      padding: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 220,
+    },
+    shoppingEmptyTitle: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '800',
+      marginBottom: 6,
+    },
+    shoppingEmptyText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '600',
+      textAlign: 'center',
+      maxWidth: 360,
+    },
+    shoppingGroup: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.74)',
+      borderRadius: 26,
+      backgroundColor: 'rgba(255,255,255,0.56)',
+      padding: 18,
+      gap: 14,
+    },
+    shoppingGroupTitle: {
+      color: colors.text,
+      fontSize: 19,
+      lineHeight: 24,
+      fontWeight: '800',
+    },
+    shoppingGroupList: {
+      gap: 12,
+    },
+    shoppingRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(228,236,246,0.92)',
+      borderRadius: 20,
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 3,
+    },
+    shoppingRowMobile: {
+      gap: 10,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    shoppingCheckbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 8,
+      borderWidth: 1.7,
+      borderColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#ffffff',
+      marginTop: 2,
+    },
+    shoppingCheckboxMobile: {
+      width: 20,
+      height: 20,
+      borderRadius: 7,
+      marginTop: 1,
+    },
+    shoppingCheckboxActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    shoppingCheckboxDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: '#ffffff',
+    },
+    shoppingRowBody: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 14,
+    },
+    shoppingRowBodyMobile: {
+      gap: 10,
+      alignItems: 'center',
+    },
+    shoppingRowTextWrap: {
+      flex: 1,
+      gap: 4,
+    },
+    shoppingRowName: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: '800',
+    },
+    shoppingRowNameMobile: {
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    shoppingRowNameDone: {
+      color: colors.subtext,
+      textDecorationLine: 'line-through',
+    },
+    shoppingRowSubtext: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '600',
+    },
+    shoppingRowSubtextMobile: {
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    shoppingRowQty: {
+      color: colors.text,
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '800',
+    },
+    shoppingRowQtyMobile: {
+      fontSize: 12,
+      lineHeight: 15,
+    },
+    shoppingRowMeta: {
+      alignItems: 'flex-end',
+      gap: 8,
+      flexShrink: 0,
+    },
+    shoppingRowMetaMobile: {
+      alignItems: 'flex-start',
+      flexShrink: 1,
+      minWidth: 54,
+    },
+    shoppingRowCategoryChip: {
+      borderWidth: 1,
+      borderColor: 'rgba(218,228,242,0.9)',
+      borderRadius: 999,
+      backgroundColor: 'rgba(244,248,253,0.95)',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    shoppingRowCategoryText: {
+      color: colors.subtext,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '800',
+    },
+    shoppingRowQtyDone: {
+      color: colors.subtext,
+      textDecorationLine: 'line-through',
+      opacity: 0.75,
+    },
+    shoppingHistorySection: {
+      marginTop: 18,
+      gap: 10,
+    },
+    shoppingHistoryTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    shoppingHistoryList: {
+      gap: 10,
+    },
+    shoppingHistoryCard: {
+      borderWidth: 1,
+      borderColor: 'rgba(223,232,244,0.9)',
+      borderRadius: 18,
+      backgroundColor: '#ffffff',
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    shoppingHistoryCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    shoppingHistoryCardTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    shoppingHistoryMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    shoppingHistoryBtn: {
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 12,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    shoppingHistoryBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
     carouselWrap: {
       position: 'relative',
-      minHeight: 430,
+      minHeight: 520,
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'visible',
@@ -2265,47 +4668,47 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     },
     carouselHalo: {
       position: 'absolute',
-      width: 620,
-      height: 280,
+      width: 760,
+      height: 340,
       borderRadius: 999,
       backgroundColor: 'rgba(15, 23, 42, 0.08)',
-      opacity: 0.32,
-      transform: [{ translateY: 18 }],
+      opacity: 0.16,
+      transform: [{ translateY: 32 }],
     },
     carouselGlow: {
       position: 'absolute',
-      width: 480,
-      height: 220,
+      width: 580,
+      height: 250,
       borderRadius: 999,
       backgroundColor: colors.selection,
-      opacity: 0.12,
-      transform: [{ translateY: 12 }],
+      opacity: 0.07,
+      transform: [{ translateY: 20 }],
     },
     carouselRail: {
       position: 'absolute',
-      bottom: 18,
-      width: 420,
-      height: 72,
+      bottom: 10,
+      width: 520,
+      height: 88,
       borderRadius: 999,
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.22)',
       backgroundColor: 'rgba(15,23,42,0.14)',
-      opacity: 0.45,
+      opacity: 0.22,
     },
     noteSheet: {
       position: 'absolute',
       width: '100%',
-      maxWidth: 320,
-      minHeight: 420,
-      borderRadius: 22,
+      maxWidth: 388,
+      minHeight: 494,
+      borderRadius: 28,
       borderWidth: 1,
       borderColor: noteBorder,
       backgroundColor: notePaper,
-      paddingTop: 20,
-      paddingBottom: 22,
-      paddingHorizontal: 16,
+      paddingTop: 28,
+      paddingBottom: 30,
+      paddingHorizontal: 22,
       overflow: 'hidden',
-      transform: [{ scale: 0.68 }],
+      transform: [{ scale: 0.74 }],
     },
     noteSheetGhost: {
       backgroundColor: notePaperGhost,
@@ -2316,27 +4719,27 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       borderColor: noteBorder,
     },
     noteSheetFarLeft: {
-      transform: [{ translateX: -276 }, { translateY: 18 }, { scale: 0.5 }, { rotate: '-20deg' }],
-      opacity: 0.92,
+      transform: [{ translateX: -322 }, { translateY: 22 }, { scale: 0.42 }, { rotate: '-22deg' }],
+      opacity: 0.22,
       zIndex: 1,
     },
     noteSheetLeft: {
-      transform: [{ translateX: -154 }, { translateY: 0 }, { scale: 0.64 }, { rotate: '-14deg' }],
-      opacity: 0.97,
+      transform: [{ translateX: -190 }, { translateY: 10 }, { scale: 0.56 }, { rotate: '-14deg' }],
+      opacity: 0.4,
       zIndex: 2,
     },
     noteSheetRight: {
-      transform: [{ translateX: 154 }, { translateY: 0 }, { scale: 0.64 }, { rotate: '14deg' }],
-      opacity: 0.97,
+      transform: [{ translateX: 190 }, { translateY: 10 }, { scale: 0.56 }, { rotate: '14deg' }],
+      opacity: 0.4,
       zIndex: 2,
     },
     noteSheetFarRight: {
-      transform: [{ translateX: 276 }, { translateY: 18 }, { scale: 0.5 }, { rotate: '20deg' }],
-      opacity: 0.92,
+      transform: [{ translateX: 322 }, { translateY: 22 }, { scale: 0.42 }, { rotate: '22deg' }],
+      opacity: 0.22,
       zIndex: 1,
     },
     noteSheetFront: {
-      transform: [{ scale: 0.86 }],
+      transform: [{ scale: 0.98 }],
       opacity: 1,
       zIndex: 5,
     },
@@ -2351,58 +4754,60 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       position: 'absolute',
       left: 18,
       right: 18,
-      top: 60,
+      top: 82,
       color: colors.subtext,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '700',
       textAlign: 'center',
-      opacity: 0.6,
+      opacity: 0.34,
     },
     notePlaceholderLabel: {
       position: 'absolute',
       left: 18,
       right: 18,
-      top: 86,
+      top: 102,
       color: colors.subtext,
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '700',
       textAlign: 'center',
-      opacity: 0.48,
+      opacity: 0.28,
       textTransform: 'uppercase',
       letterSpacing: 2,
     },
     headerEditBtn: {
-      width: 38,
-      height: 38,
+      minWidth: 104,
+      height: 42,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
+      borderColor: 'rgba(255,255,255,0.82)',
+      backgroundColor: 'rgba(255,255,255,0.82)',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 80,
+      paddingHorizontal: 16,
     },
     headerEditBtnText: {
       color: colors.text,
-      fontSize: 20,
-      fontWeight: '700',
-      marginTop: -2,
+      fontSize: 13,
+      lineHeight: 16,
+      fontWeight: '800',
     },
     headerShareBtn: {
-      width: 38,
-      height: 38,
+      minWidth: 104,
+      height: 42,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 16,
     },
     headerShareBtnText: {
-      color: colors.primary,
-      fontSize: 18,
+      color: '#ffffff',
+      fontSize: 13,
+      lineHeight: 16,
       fontWeight: '800',
-      marginTop: -1,
     },
     shareMenu: {
       width: 190,
@@ -2431,8 +4836,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       backgroundColor: colors.border,
     },
     sharedInboxWrap: {
-      marginRight: 58,
-      marginBottom: 10,
+      marginBottom: 14,
       gap: 8,
     },
     sharedInboxTitle: {
@@ -2443,9 +4847,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     },
     sharedInboxCard: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(223,232,244,0.9)',
       borderRadius: 18,
-      backgroundColor: colors.glassStrong,
+      backgroundColor: '#ffffff',
       padding: 12,
       flexDirection: 'row',
       alignItems: 'center',
@@ -2488,52 +4892,67 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       backgroundColor: colors.card,
     },
     sharedInboxDismissText: {
-      color: colors.text,
+      color: colors.subtext,
       fontWeight: '700',
       fontSize: 12,
     },
+    backToShoppingBtn: {
+      alignSelf: 'flex-start',
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 14,
+    },
+    backToShoppingBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
     notePin: {
       position: 'absolute',
-      top: -2,
-      right: 74,
-      width: 14,
-      height: 40,
+      top: 4,
+      right: 88,
+      width: 16,
+      height: 44,
       borderRadius: 12,
-      borderWidth: 2,
+      borderWidth: 2.2,
       borderColor: notePinColor,
       backgroundColor: 'transparent',
       transform: [{ rotate: '-28deg' }],
-      opacity: 0.62,
+      opacity: 0.82,
     },
     noteTitle: {
       textAlign: 'center',
       color: colors.text,
-      fontSize: 15,
-      lineHeight: 22,
+      fontSize: 17,
+      lineHeight: 24,
       fontWeight: '800',
-      letterSpacing: 4,
-      marginBottom: 18,
+      letterSpacing: 4.6,
+      marginBottom: 26,
     },
     noteRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: 12,
-      minHeight: 24,
-      marginBottom: 4,
+      gap: 14,
+      minHeight: 34,
+      marginBottom: 8,
     },
     noteEmptyRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      minHeight: 24,
+      gap: 14,
+      minHeight: 34,
     },
     noteCheckbox: {
-      width: 12,
-      height: 12,
-      marginTop: 5,
-      borderWidth: 1,
+      width: 16,
+      height: 16,
+      marginTop: 6,
+      borderWidth: 1.2,
       borderColor: colors.subtext,
-      borderRadius: 2,
+      borderRadius: 4,
       backgroundColor: 'rgba(255,255,255,0.86)',
       alignItems: 'center',
       justifyContent: 'center',
@@ -2544,14 +4963,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       backgroundColor: colors.selection,
     },
     noteCheckboxDot: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
       backgroundColor: colors.primary,
     },
     noteRowTextWrap: {
       flex: 1,
-      minHeight: 21,
+      minHeight: 28,
       justifyContent: 'flex-end',
       position: 'relative',
     },
@@ -2559,7 +4978,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 2,
+      bottom: 4,
       borderBottomWidth: 1,
       borderBottomColor: noteRule,
     },
@@ -2568,34 +4987,34 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       alignItems: 'flex-end',
       justifyContent: 'space-between',
       gap: 10,
-      paddingBottom: 4,
+      paddingBottom: 6,
     },
     noteItemName: {
       flex: 1,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
     },
     noteItemQty: {
       color: colors.subtext,
-      fontSize: 10,
-      fontWeight: '700',
+      fontSize: 12,
+      fontWeight: '800',
       flexShrink: 0,
     },
     noteItemNameDone: {
       textDecorationLine: 'line-through',
-      opacity: 0.58,
+      opacity: 0.42,
     },
     noteItemQtyDone: {
       textDecorationLine: 'line-through',
-      opacity: 0.58,
+      opacity: 0.42,
     },
     noteEmptyText: {
       position: 'absolute',
-      left: 20,
-      bottom: 5,
+      left: 26,
+      bottom: 7,
       color: colors.subtext,
-      fontSize: 11,
+      fontSize: 13,
       fontStyle: 'italic',
     },
     noteLeafLeft: {
@@ -2684,14 +5103,69 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontWeight: '800',
       marginBottom: 14,
     },
+    modalHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    modalHeaderRowMobile: {
+      marginBottom: 10,
+    },
+    modalHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 0,
+    },
+    modalPlusBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalPlusBtnText: {
+      color: colors.primary,
+      fontSize: 22,
+      lineHeight: 22,
+      fontWeight: '700',
+    },
+    modalInlineDeleteBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: colors.selection,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalInlineDeleteBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700',
+    },
     modalBody: {
       maxHeight: 420,
+    },
+    modalBodyWithFooter: {
+      marginBottom: 12,
     },
     modalBodyContent: {
       paddingBottom: 4,
     },
     editRowsWrap: {
       gap: 8,
+    },
+    editRowCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 18,
+      backgroundColor: colors.card,
+      padding: 10,
+      gap: 10,
     },
     input: {
       borderWidth: 1,
@@ -2701,19 +5175,91 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       paddingVertical: 10,
       backgroundColor: colors.glassStrong,
       color: colors.text,
+      fontSize: 16,
     },
     editRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
     },
+    editRowMobile: {
+      flexWrap: 'wrap',
+      alignItems: 'stretch',
+    },
+    editUnitRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+    editUnitRowMobile: {
+      flex: 1,
+      minWidth: 120,
+    },
+    editUnitChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 8,
+      paddingVertical: 9,
+      minWidth: 46,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editUnitChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    editUnitChipText: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    editUnitChipTextActive: {
+      color: colors.primary,
+    },
+    editCategoryRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    editCategoryChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      backgroundColor: colors.glassStrong,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+    },
+    editCategoryChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    editCategoryChipText: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    editCategoryChipTextActive: {
+      color: colors.primary,
+    },
     editNameInput: {
       flex: 1,
       marginBottom: 0,
     },
+    editNameInputMobile: {
+      width: '100%',
+      flexBasis: '100%',
+    },
     editQtyInput: {
       width: 110,
       marginBottom: 0,
+    },
+    editQtyInputMobile: {
+      flex: 1,
+      minWidth: 88,
+      width: undefined,
     },
     deleteRowBtn: {
       width: 38,
@@ -2735,6 +5281,34 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       flexWrap: 'wrap',
       gap: 8,
       marginTop: 12,
+    },
+    editButtonsRowMobile: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    },
+    modalActionBtnMobile: {
+      width: '100%',
+    },
+    mobileModalFooter: {
+      gap: 8,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    mobileModalFooterRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    mobileFooterPrimaryBtn: {
+      flex: 1,
+      minWidth: 0,
+    },
+    mobileFooterSecondaryBtn: {
+      width: '100%',
+    },
+    mobileFooterTertiaryBtn: {
+      flexShrink: 0,
+      minWidth: 96,
     },
     addInlineBtn: {
       borderWidth: 1,
@@ -2793,14 +5367,25 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       borderBottomColor: colors.border,
       backgroundColor: 'transparent',
     },
+    sheetRowMobile: {
+      flexWrap: 'nowrap',
+      alignItems: 'center',
+      paddingVertical: 8,
+      gap: 4,
+    },
     sheetRowLast: {
       borderBottomWidth: 0,
     },
     sheetInput: {
       flex: 1,
       color: colors.text,
-      fontSize: 13,
+      fontSize: 16,
       paddingVertical: 7,
+    },
+    sheetInputMobile: {
+      flex: 1,
+      minWidth: 0,
+      paddingRight: 6,
     },
     counterWrap: {
       width: 74,
@@ -2813,6 +5398,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 4,
+    },
+    counterWrapMobile: {
+      width: 88,
+      minWidth: 88,
+      flexShrink: 0,
     },
     counterBtn: {
       width: 17,
@@ -2840,6 +5430,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       width: 56,
       alignItems: 'flex-end',
       zIndex: 5,
+    },
+    unitWrapMobile: {
+      width: 42,
+      alignItems: 'flex-end',
+      flexShrink: 0,
     },
     unitBtn: {
       width: 42,
@@ -2898,6 +5493,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       overflow: 'hidden',
       zIndex: 10,
     },
+    editSuggestionList: {
+      marginTop: -2,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.glassStrong,
+      overflow: 'hidden',
+      zIndex: 10,
+    },
     suggestionItem: {
       paddingHorizontal: 9,
       paddingVertical: 7,
@@ -2913,23 +5518,29 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontWeight: '500',
     },
     addRowBtn: {
-      width: 32,
-      height: 32,
+      minWidth: 74,
+      height: 40,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.glassStrong,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 12,
       alignSelf: 'flex-start',
       zIndex: 1,
+      paddingHorizontal: 12,
     },
     addRowBtnText: {
       color: colors.primary,
-      fontSize: 24,
-      fontWeight: '700',
-      lineHeight: 26,
+      fontSize: 13,
+      fontWeight: '800',
+      lineHeight: 16,
+    },
+    addComposerActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 14,
     },
     button: {
       backgroundColor: colors.primary,

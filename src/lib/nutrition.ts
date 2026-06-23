@@ -1,9 +1,15 @@
-import { ActivityLevel, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex } from '@/types/app';
 
 export type NutritionFoodPreset = {
   id: string;
   name: string;
   baseAmount: string;
+  baseMode?: '100g' | '100ml' | 'serving';
+  baseQuantity?: number;
+  brand?: string;
+  isCustom?: boolean;
+  source?: 'custom' | 'open_food_facts' | 'usda';
+  sourceLabel?: string;
   caloriesPer100g: number;
   proteinPer100g: number;
   fatPer100g: number;
@@ -136,14 +142,61 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
 ];
 
 export function getNutritionValuesForGrams(preset: NutritionFoodPreset, gramsValue: string) {
+  if ((preset.baseMode || '100g') === 'serving') {
+    return {
+      grams: preset.baseQuantity || 1,
+      calories: String(Math.round(preset.caloriesPer100g)),
+      protein: String(Math.round(preset.proteinPer100g * 10) / 10),
+      fat: String(Math.round(preset.fatPer100g * 10) / 10),
+      carbs: String(Math.round(preset.carbsPer100g * 10) / 10),
+    };
+  }
   const grams = Math.max(0, toNumber(gramsValue));
-  const multiplier = grams / 100;
+  const multiplier = grams / Math.max(1, preset.baseQuantity || 100);
   return {
     grams,
     calories: String(Math.round(preset.caloriesPer100g * multiplier)),
     protein: String(Math.round(preset.proteinPer100g * multiplier * 10) / 10),
     fat: String(Math.round(preset.fatPer100g * multiplier * 10) / 10),
     carbs: String(Math.round(preset.carbsPer100g * multiplier * 10) / 10),
+  };
+}
+
+export function customNutritionFoodToPreset(food: CustomNutritionFood): NutritionFoodPreset {
+  const baseQuantity = Math.max(1, food.baseQuantity || 100);
+  return {
+    id: food.id,
+    name: food.name.trim(),
+    baseAmount:
+      food.baseMode === 'serving'
+        ? 'per 1 serving'
+        : `per ${baseQuantity} ${food.baseMode === '100ml' ? 'ml' : 'g'}`,
+    baseMode: food.baseMode,
+    baseQuantity,
+    brand: food.brand,
+    isCustom: true,
+    source: 'custom',
+    sourceLabel: 'Saved',
+    caloriesPer100g: food.calories,
+    proteinPer100g: food.protein,
+    fatPer100g: food.fat,
+    carbsPer100g: food.carbs,
+  };
+}
+
+export function nutritionPresetToCustomFood(preset: NutritionFoodPreset): CustomNutritionFood {
+  const baseMode = preset.baseMode || '100g';
+  const defaultBaseQuantity = baseMode === 'serving' ? 1 : 100;
+  return {
+    id: preset.id,
+    name: preset.name,
+    brand: preset.brand?.trim() || undefined,
+    baseMode,
+    baseQuantity: Math.max(1, preset.baseQuantity || defaultBaseQuantity),
+    calories: Math.max(0, Math.round(preset.caloriesPer100g * 10) / 10),
+    protein: Math.max(0, Math.round(preset.proteinPer100g * 10) / 10),
+    fat: Math.max(0, Math.round(preset.fatPer100g * 10) / 10),
+    carbs: Math.max(0, Math.round(preset.carbsPer100g * 10) / 10),
   };
 }
 

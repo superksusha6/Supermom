@@ -13,6 +13,9 @@ alter table public.profiles add column if not exists cycle_entries_json jsonb no
 
 alter table public.profiles enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.profiles to authenticated;
+
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
 for select using (id = auth.uid());
