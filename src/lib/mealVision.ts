@@ -36,3 +36,19 @@ export async function analyzeMealPhoto(payload: AnalyzeMealPhotoPayload): Promis
 
   return data?.estimate || null;
 }
+
+export async function estimateMealByText(description: string): Promise<MealPhotoEstimate | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { data, error } = await supabase.functions.invoke<AnalyzeMealPhotoResponse>('estimate-meal-text', {
+    body: { description },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'AI estimate request failed.');
+  }
+
+  return data?.estimate || null;
+}

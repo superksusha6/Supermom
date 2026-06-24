@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { lookupNutritionBarcode, normalizeNutritionSearchText, searchNutritionCatalog } from '@/lib/nutritionCatalog';
-import { analyzeMealPhoto } from '@/lib/mealVision';
+import { analyzeMealPhoto, estimateMealByText } from '@/lib/mealVision';
 import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -125,6 +125,7 @@ export function NutritionScreen({
   const [mealPhotoError, setMealPhotoError] = useState<string | null>(null);
   const [mealPhotoNote, setMealPhotoNote] = useState<string | null>(null);
   const [mealPhotoConfidence, setMealPhotoConfidence] = useState<'low' | 'medium' | 'high' | null>(null);
+  const [aiEstimateLoading, setAiEstimateLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
   const weekScrollRef = useRef<ScrollView>(null);
@@ -656,6 +657,44 @@ export function NutritionScreen({
     }
   }
 
+  async function estimateByName() {
+    const name = (foodSearch.trim() || draftMealName.trim());
+    if (!name || aiEstimateLoading) return;
+    setAiEstimateLoading(true);
+    setMealPhotoError(null);
+    try {
+      const estimate = await estimateMealByText(name);
+      if (!estimate) {
+        setMealPhotoError('AI could not estimate this dish. Try a clearer name.');
+        return;
+      }
+      setPhotoEstimateMode(true);
+      setCustomFoodMode(true);
+      setSelectedPreset(null);
+      setEditingEntryId(null);
+      setDraftMealName(estimate.mealName);
+      setCustomBrand('');
+      setCustomBarcode('');
+      setCustomServingType('100g');
+      setDraftGrams(String(Math.max(1, Math.round(estimate.estimatedAmountGrams || 100))));
+      setDraftCalories(String(estimate.caloriesPer100g));
+      setDraftProtein(String(estimate.proteinPer100g));
+      setDraftFat(String(estimate.fatPer100g));
+      setDraftCarbs(String(estimate.carbsPer100g));
+      setFoodSearch(estimate.mealName);
+      setMealPhotoConfidence(estimate.confidence || null);
+      setMealPhotoNote(
+        [estimate.note, estimate.detectedFoods?.length ? `Includes: ${estimate.detectedFoods.join(', ')}` : null]
+          .filter(Boolean)
+          .join(' · '),
+      );
+    } catch {
+      setMealPhotoError('Could not reach the AI estimator right now.');
+    } finally {
+      setAiEstimateLoading(false);
+    }
+  }
+
   async function handleBarcodeScanned(data?: string) {
     const code = (data || '').trim();
     if (!code || barcodeLookupBusy) return;
@@ -1076,6 +1115,20 @@ export function NutritionScreen({
                     {!foodSearch.trim() && addTab === 'search' ? (
                       <Text style={styles.searchEmptyHint}>Start typing to search the nutrition database.</Text>
                     ) : null}
+                    {foodSearch.trim().length >= 2 ? (
+                      <Pressable
+                        style={[styles.aiEstimateBtn, aiEstimateLoading && styles.aiEstimateBtnDisabled]}
+                        disabled={aiEstimateLoading}
+                        onPress={estimateByName}
+                      >
+                        <Text style={styles.aiEstimateBtnTitle}>
+                          {aiEstimateLoading ? 'Estimating…' : `✨ Estimate “${foodSearch.trim()}” with AI`}
+                        </Text>
+                        <Text style={styles.aiEstimateBtnText}>
+                          Best for home-cooked dishes (mashed potatoes, soups) where barcodes give the dry product.
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     {foodSearch.trim() && !hasExactFoodMatch ? (
                       <Pressable
                         style={styles.customFoodBtn}
@@ -1152,10 +1205,10 @@ export function NutritionScreen({
                   <View style={styles.customFoodCard}>
                     <View style={styles.customFoodHeader}>
                       <View>
-                        <Text style={styles.customFoodTitle}>{photoEstimateMode ? 'Photo estimate' : 'Custom food'}</Text>
+                        <Text style={styles.customFoodTitle}>{photoEstimateMode ? 'AI estimate' : 'Custom food'}</Text>
                         <Text style={styles.customFoodText}>
                           {photoEstimateMode
-                            ? 'We estimated this meal from the photo. Adjust the portion or nutrition if needed before saving.'
+                            ? 'AI estimate of the ready dish per 100 g. Adjust the portion or nutrition if needed before saving.'
                             : `Enter nutrition from the package per ${customServingType === 'serving' ? '1 serving' : customServingType === '100ml' ? '100 ml' : '100 g'}, then choose how much was eaten.`}
                         </Text>
                         {mealPhotoNote ? <Text style={styles.customFoodText}>{mealPhotoNote}</Text> : null}
@@ -2623,11 +2676,33 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 12,
       fontWeight: '700',
     },
-    customFoodBtn: {
+    aiEstimateBtn: {
       borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.primary,
       backgroundColor: colors.selection,
+      padding: 14,
+      marginBottom: 10,
+    },
+    aiEstimateBtnDisabled: {
+      opacity: 0.6,
+    },
+    aiEstimateBtnTitle: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '800',
+      marginBottom: 3,
+    },
+    aiEstimateBtnText: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    customFoodBtn: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
       padding: 14,
       marginBottom: 12,
     },
