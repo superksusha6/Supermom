@@ -121,6 +121,7 @@ function mapOpenFoodFactsProduct(product: OpenFoodFactsProduct): NutritionFoodPr
     id: code ? `off-${code}` : `off-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
     name,
     brand: brand || undefined,
+    barcode: code || undefined,
     baseAmount: baseMode === '100ml' ? 'per 100 ml' : 'per 100 g',
     baseMode,
     baseQuantity: 100,

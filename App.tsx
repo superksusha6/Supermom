@@ -4210,7 +4210,7 @@ function AppShell() {
               quickActionRequest={dashboardCalendarQuickAction}
               onCompleteStaffTask={markStaffTaskDone}
               getStaffTaskSuggestions={getStaffTaskSuggestions}
-              onAddEvent={({ title, date, time, owner, ownerName, ownerChildProfileId, shareToParent, category, color, taskPriority, motherColor, staffColor, visibility }) => {
+              onAddEvent={({ title, date, time, endTime, owner, ownerName, ownerChildProfileId, shareToParent, category, color, taskPriority, motherColor, staffColor, visibility }) => {
                 const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
                 const deadlineAt = time ? `${date} ${time}` : date;
                 const childForMirror =
@@ -4229,6 +4229,7 @@ function AppShell() {
                       title,
                       date,
                       time,
+                      endTime,
                       color,
                     })
                   : null;
@@ -4239,6 +4240,7 @@ function AppShell() {
                     title,
                     date,
                     time,
+                    endTime,
                     owner,
                     ownerName,
                     ownerChildProfileId,
@@ -4256,6 +4258,7 @@ function AppShell() {
                       title,
                       date,
                       time,
+                      endTime,
                       owner,
                       ownerName,
                       ownerChildProfileId: ownerChildProfileId || null,
@@ -4270,6 +4273,7 @@ function AppShell() {
                           title: mirrorEvent.title,
                           date: mirrorEvent.date,
                           time: mirrorEvent.time,
+                          endTime: mirrorEvent.endTime,
                           owner: mirrorEvent.owner,
                           ownerName: mirrorEvent.ownerName,
                           ownerChildProfileId: mirrorEvent.ownerChildProfileId || null,
@@ -4306,6 +4310,7 @@ function AppShell() {
                     title,
                     date,
                     time,
+                    endTime,
                     owner,
                     ownerName,
                     category,
@@ -4334,7 +4339,7 @@ function AppShell() {
                   ]);
                 }
               }}
-              onUpdateEvent={({ id, title, color, time, owner, ownerName, ownerChildProfileId, shareToParent, category, date, motherColor, staffColor, visibility }) => {
+              onUpdateEvent={({ id, title, color, time, endTime, owner, ownerName, ownerChildProfileId, shareToParent, category, date, motherColor, staffColor, visibility }) => {
                 const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
                 const sourceEvent = events.find((event) => event.id === id);
                 const childForMirror =
@@ -4351,6 +4356,7 @@ function AppShell() {
                         title,
                         date,
                         time,
+                        endTime,
                         color,
                       })
                     : null;
@@ -4361,6 +4367,7 @@ function AppShell() {
                       title,
                       date,
                       time,
+                      endTime,
                       owner,
                       ownerName,
                       ownerChildProfileId: ownerChildProfileId || null,
@@ -4378,6 +4385,7 @@ function AppShell() {
                         title: nextMirrorEvent.title,
                         date: nextMirrorEvent.date,
                         time: nextMirrorEvent.time,
+                        endTime: nextMirrorEvent.endTime,
                         owner: nextMirrorEvent.owner,
                         ownerName: nextMirrorEvent.ownerName,
                         ownerChildProfileId: nextMirrorEvent.ownerChildProfileId || null,
@@ -4397,7 +4405,7 @@ function AppShell() {
 
                 setEvents((prev) => {
                   let next = prev.map((event) =>
-                    event.id === id ? { ...event, title, color, time, owner, ownerName, ownerChildProfileId, category, date, motherColor, staffColor, visibility } : event,
+                    event.id === id ? { ...event, title, color, time, endTime, owner, ownerName, ownerChildProfileId, category, date, motherColor, staffColor, visibility } : event,
                   );
                   if (counterpartEvent && nextMirrorEvent) {
                     next = next.map((event) =>
@@ -4407,6 +4415,7 @@ function AppShell() {
                             title: nextMirrorEvent.title,
                             color: nextMirrorEvent.color,
                             time: nextMirrorEvent.time,
+                            endTime: nextMirrorEvent.endTime,
                             owner: nextMirrorEvent.owner,
                             ownerName: nextMirrorEvent.ownerName,
                             ownerChildProfileId: nextMirrorEvent.ownerChildProfileId,
@@ -6450,9 +6459,10 @@ function buildParentMirrorEvent(params: {
   title: string;
   date: string;
   time: string;
+  endTime?: string;
   color?: string;
 }): CalendarEvent {
-  const { childId, childName, parentLabel, title, date, time, color } = params;
+  const { childId, childName, parentLabel, title, date, time, endTime, color } = params;
   return {
     id: `e-manual-parent-${childId}-${date}-${normalizeTimeText(time)}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
     title: `${childName}: ${title}`,
@@ -6461,6 +6471,7 @@ function buildParentMirrorEvent(params: {
     ownerChildProfileId: childId,
     date,
     time,
+    endTime,
     category: 'Child Plan',
     color: color || '#64748b',
     visibility: 'shared',

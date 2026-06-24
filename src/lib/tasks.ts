@@ -51,6 +51,7 @@ type CalendarInsert = {
   title: string;
   date: string;
   time: string;
+  endTime?: string;
   owner: Role;
   ownerName: string;
   ownerChildProfileId?: string | null;
@@ -591,6 +592,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
       ownerChildProfileId: row.owner_child_profile_id || undefined,
       date,
       time,
+      endTime: meta.endTime || undefined,
       category: meta.category || 'General',
       color: meta.color || '#64748b',
       motherColor: meta.motherColor,
@@ -739,6 +741,7 @@ export async function createCalendarEvent(session: AppSession, payload: Calendar
     category: payload.category,
     owner: payload.owner,
     ownerName: payload.ownerName,
+    endTime: payload.endTime,
   });
 
   const { error } = await client.from('events').insert({
@@ -770,6 +773,7 @@ export async function updateCalendarEvent(
     category: payload.category,
     owner: payload.owner,
     ownerName: payload.ownerName,
+    endTime: payload.endTime,
   });
 
   const { error } = await client
@@ -1860,7 +1864,7 @@ export async function listCustomNutritionFoods(session: AppSession): Promise<Cus
   const client = requireClient();
   const { data, error } = await client
     .from('custom_nutrition_foods')
-    .select('id, name, brand, base_mode, base_quantity, calories, protein, fat, carbs')
+    .select('id, name, brand, barcode, base_mode, base_quantity, calories, protein, fat, carbs')
     .eq('user_id', session.userId)
     .order('updated_at', { ascending: false });
   if (isMissingCustomNutritionFoodsTableError(error)) {
@@ -1871,6 +1875,7 @@ export async function listCustomNutritionFoods(session: AppSession): Promise<Cus
     id: row.id,
     name: row.name,
     brand: row.brand || undefined,
+    barcode: row.barcode || undefined,
     baseMode: row.base_mode || '100g',
     baseQuantity: Number(row.base_quantity) || 100,
     calories: Number(row.calories) || 0,
@@ -1899,6 +1904,7 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
       family_id: session.familyId,
       name: food.name,
       brand: food.brand || null,
+      barcode: food.barcode || null,
       base_mode: food.baseMode,
       base_quantity: food.baseQuantity,
       calories: food.calories,

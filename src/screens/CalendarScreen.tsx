@@ -47,6 +47,7 @@ type Props = {
     title: string;
     date: string;
     time: string;
+    endTime?: string;
     owner: Role;
     ownerName: string;
     ownerChildProfileId?: string;
@@ -63,6 +64,7 @@ type Props = {
     title: string;
     color: string;
     time: string;
+    endTime?: string;
     date: string;
     owner: Role;
     ownerName: string;
@@ -81,6 +83,14 @@ type Props = {
 type GuidanceScope = 'day' | 'month' | 'year';
 const MIN_CALENDAR_MONTH = new Date(2010, 0, 1);
 const MAX_CALENDAR_MONTH = new Date(2100, 11, 1);
+const DAY_TIMELINE_START_HOUR = 6;
+const DAY_TIMELINE_END_HOUR = 22;
+const DAY_TIMELINE_HOUR_HEIGHT = 76;
+const DAY_TIMELINE_EVENT_DURATION_MINUTES = 50;
+const DAY_TIMELINE_HOURS = Array.from(
+  { length: DAY_TIMELINE_END_HOUR - DAY_TIMELINE_START_HOUR + 1 },
+  (_, index) => DAY_TIMELINE_START_HOUR + index,
+);
 
 export function CalendarScreen({
   isActive,
@@ -145,6 +155,7 @@ export function CalendarScreen({
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
   const [calendarPagerWidth, setCalendarPagerWidth] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [dayTimelineOpen, setDayTimelineOpen] = useState(false);
   const [guidanceScope, setGuidanceScope] = useState<GuidanceScope>('day');
   const [nutritionInfoOpen, setNutritionInfoOpen] = useState(false);
   const [nutritionEditorOpen, setNutritionEditorOpen] = useState(false);
@@ -195,16 +206,15 @@ export function CalendarScreen({
   const [editBaseColor, setEditBaseColor] = useState('#ef4444');
   const [editToneIndex, setEditToneIndex] = useState(4);
   const [newTime, setNewTime] = useState('10:00 AM');
+  const [newEndTime, setNewEndTime] = useState('11:00 AM');
   const [editTime, setEditTime] = useState('10:00 AM');
+  const [editEndTime, setEditEndTime] = useState('11:00 AM');
   const [newAssignee, setNewAssignee] = useState<string>('mother');
   const [newShareToParent, setNewShareToParent] = useState(true);
   const [editAssignee, setEditAssignee] = useState<string>('mother');
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
-  const [timeTarget, setTimeTarget] = useState<'create' | 'edit'>('create');
-  const [dialStep, setDialStep] = useState<'hour' | 'minute'>('hour');
-  const [dialHour, setDialHour] = useState(10);
-  const [dialMinute, setDialMinute] = useState(0);
-  const [dialPeriod, setDialPeriod] = useState<'AM' | 'PM'>('AM');
+  const [openTimeField, setOpenTimeField] = useState<'create_start' | 'create_end' | 'edit_start' | 'edit_end' | null>(null);
+  const [editingTimeField, setEditingTimeField] = useState<'create_start' | 'create_end' | 'edit_start' | 'edit_end' | null>(null);
+  const [timeDraft, setTimeDraft] = useState('');
   const [baseColor, setBaseColor] = useState('#ef4444');
   const [toneIndex, setToneIndex] = useState(4);
   const [creatorMode, setCreatorMode] = useState<'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task'>('general');
@@ -215,6 +225,10 @@ export function CalendarScreen({
   const [confettiOrigin, setConfettiOrigin] = useState({ x: 0, y: 0 });
   const confettiAnim = useRef(new Animated.Value(0)).current;
   const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const isCoarsePointerWeb = useMemo(
+    () => Platform.OS === 'web' && typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches,
+    [],
+  );
   const calendarTrackTranslateX = useMemo(
     () => Animated.add(calendarDragX, new Animated.Value(-calendarPagerWidth || 0)),
     [calendarDragX, calendarPagerWidth],
@@ -230,21 +244,6 @@ export function CalendarScreen({
   const basePalette = ['#ff7a00', '#ffcc00', '#22c55e', '#06b6d4', '#2563eb', '#7c3aed', '#ec4899', '#8b5a2b', '#111827'];
   const toneColors = useMemo(() => buildToneScale(baseColor, 11), [baseColor]);
   const editToneColors = useMemo(() => buildToneScale(editBaseColor, 11), [editBaseColor]);
-  const dialItems = dialStep === 'hour' ? Array.from({ length: 12 }, (_, i) => i + 1) : Array.from({ length: 12 }, (_, i) => i * 5);
-  const dialDots = useMemo(() => {
-    const size = 230;
-    const center = size / 2;
-    const radius = 88;
-    return dialItems.map((item, index) => {
-      const angle = (Math.PI * 2 * index) / 12 - Math.PI / 2;
-      return {
-        value: item,
-        left: center + Math.cos(angle) * radius - 19,
-        top: center + Math.sin(angle) * radius - 19,
-      };
-    });
-  }, [dialItems]);
-
   useEffect(() => {
     const next = toneColors[Math.min(toneIndex, toneColors.length - 1)] || baseColor;
     setNewColor(next);
@@ -306,6 +305,7 @@ export function CalendarScreen({
     const eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
     return eventsByDay.sort((a, b) => a.time.localeCompare(b.time));
   }, [filtered, selectedDateKey]);
+  const selectedTimelineEvents = useMemo(() => buildTimelineEvents(selectedEvents), [selectedEvents]);
   const nutritionPlan = useMemo(
     () =>
       getNutritionPlan({
@@ -496,6 +496,7 @@ export function CalendarScreen({
   }, [cycleEntries, effectiveCycleLastPeriodStart, inferredCyclePeriodStartDateKeys, isMomProfile]);
   const selectedDateLabel = useMemo(() => formatDateForCycleAction(selectedDateKey), [selectedDateKey]);
   const selectedDayPlanTitle = useMemo(() => formatDayPlanTitle(selectedDateKey), [selectedDateKey]);
+  const selectedDateReadableLabel = useMemo(() => formatReadableDayHeading(selectedDateKey), [selectedDateKey]);
   const isSelectedDateCurrentPeriodStart = effectiveCycleLastPeriodStart === selectedDateLabel;
   const periodReminderMessage = useMemo(() => {
     if (!isMomProfile || !periodRemindersEnabled || !effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart) return null;
@@ -726,7 +727,7 @@ export function CalendarScreen({
   );
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !calendarPagerWidth) return;
+    if (Platform.OS !== 'web' || !calendarPagerWidth || isCoarsePointerWeb) return;
 
     const node = calendarGridRef.current as unknown as HTMLElement | null;
     if (!node) return;
@@ -783,7 +784,87 @@ export function CalendarScreen({
       }
       calendarWebScrollSuppressRef.current = false;
     };
-  }, [calendarPagerWidth, currentMonth]);
+  }, [calendarPagerWidth, currentMonth, isCoarsePointerWeb]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !calendarPagerWidth || !isCoarsePointerWeb) return;
+
+    const node = calendarGridRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+
+    let startX = 0;
+    let startY = 0;
+    let deltaX = 0;
+    let horizontalSwipe = false;
+    let tracking = false;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      tracking = true;
+      horizontalSwipe = false;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      deltaX = 0;
+      calendarDragX.stopAnimation();
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!tracking) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      if (!horizontalSwipe) {
+        if (Math.abs(deltaY) > 10 && Math.abs(deltaY) > Math.abs(deltaX)) {
+          tracking = false;
+          return;
+        }
+
+        if (Math.abs(deltaX) > 12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.35) {
+          horizontalSwipe = true;
+        }
+      }
+
+      if (horizontalSwipe) {
+        event.preventDefault();
+        const clampedDx = Math.max(-calendarPagerWidth, Math.min(calendarPagerWidth, deltaX));
+        calendarDragX.setValue(clampedDx);
+      }
+    };
+
+    const finishTouch = () => {
+      if (horizontalSwipe) {
+        const shouldCommitByVelocity = false;
+        const effectiveOffset = shouldCommitByVelocity
+          ? deltaX < 0
+            ? -calendarPagerWidth
+            : calendarPagerWidth
+          : deltaX;
+        commitCalendarSwipe(effectiveOffset);
+      } else {
+        animateCalendarToOffset(0);
+      }
+
+      tracking = false;
+      horizontalSwipe = false;
+      deltaX = 0;
+    };
+
+    node.addEventListener('touchstart', handleTouchStart, { passive: true });
+    node.addEventListener('touchmove', handleTouchMove, { passive: false });
+    node.addEventListener('touchend', finishTouch, { passive: true });
+    node.addEventListener('touchcancel', finishTouch, { passive: true });
+
+    return () => {
+      node.removeEventListener('touchstart', handleTouchStart);
+      node.removeEventListener('touchmove', handleTouchMove);
+      node.removeEventListener('touchend', finishTouch);
+      node.removeEventListener('touchcancel', finishTouch);
+    };
+  }, [calendarPagerWidth, currentMonth, isCoarsePointerWeb]);
 
   useEffect(() => {
     if (!quickActionRequest) return;
@@ -965,36 +1046,123 @@ export function CalendarScreen({
     setNutritionEditorOpen(true);
   }
 
-  function openTimePicker(target: 'create' | 'edit') {
-    const source = target === 'create' ? newTime : editTime;
-    const parsed = parseTimeValue(source);
-    setTimeTarget(target);
-    setDialHour(parsed.hour);
-    setDialMinute(parsed.minute);
-    setDialPeriod(parsed.period);
-    setDialStep('hour');
-    setTimePickerOpen(true);
+  function currentTimeFieldValue(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end') {
+    return target === 'create_start'
+      ? newTime
+      : target === 'create_end'
+        ? newEndTime
+        : target === 'edit_start'
+          ? editTime
+          : editEndTime;
   }
 
-  function chooseDialValue(value: number) {
-    if (dialStep === 'hour') {
-      setDialHour(value);
-      setDialStep('minute');
-      return;
+  function applyTimeSelection(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end', value: string) {
+    if (target === 'create_start') {
+      setNewTime(value);
+      if (convertTimeToMinutes(newEndTime) <= convertTimeToMinutes(value)) {
+        setNewEndTime(addMinutesToTime(value, 60));
+      }
+    } else if (target === 'create_end') {
+      setNewEndTime(value);
+    } else if (target === 'edit_start') {
+      setEditTime(value);
+      if (convertTimeToMinutes(editEndTime) <= convertTimeToMinutes(value)) {
+        setEditEndTime(addMinutesToTime(value, 60));
+      }
+    } else {
+      setEditEndTime(value);
     }
+    setOpenTimeField(null);
+  }
 
-    setDialMinute(value);
-    const next = formatClockTime(dialHour, value, dialPeriod);
-    if (timeTarget === 'create') setNewTime(next);
-    else setEditTime(next);
-    setTimePickerOpen(false);
-    setDialStep('hour');
+  function beginEditTimeField(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end') {
+    setEditingTimeField(target);
+    setTimeDraft(currentTimeFieldValue(target));
+  }
+
+  function commitTimeText(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end', text: string) {
+    setEditingTimeField(null);
+    // Read the committed value from the field itself (not the shared draft) so moving
+    // focus between Start/End can never write one field's text into the other.
+    const raw = (text ?? '').trim();
+    if (raw && isValidTimeText(raw)) {
+      applyTimeSelection(target, normalizeTimeText(raw));
+    }
+  }
+
+  function renderTimeField(
+    target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end',
+    label: string,
+    isEnd: boolean,
+  ) {
+    const editing = editingTimeField === target;
+    const value = currentTimeFieldValue(target);
+    return (
+      <View
+        style={[
+          styles.timeRangeField,
+          (editing || (isEnd && openTimeField === target)) && styles.timeRangeFieldActive,
+        ]}
+      >
+        <Text style={styles.timeRangeLabel}>{label}</Text>
+        <View style={styles.timeFieldInputRow}>
+          <TextInput
+            style={styles.timeRangeValueInput}
+            value={editing ? timeDraft : value}
+            onFocus={() => beginEditTimeField(target)}
+            onChangeText={setTimeDraft}
+            onEndEditing={(event) => commitTimeText(target, event.nativeEvent?.text ?? timeDraft)}
+            onSubmitEditing={(event) => commitTimeText(target, event.nativeEvent?.text ?? timeDraft)}
+            returnKeyType="done"
+            selectTextOnFocus
+          />
+          {isEnd ? (
+            <Pressable
+              style={styles.timeChevronBtn}
+              onPress={() => setOpenTimeField((prev) => (prev === target ? null : target))}
+            >
+              <Text style={styles.timeChevronText}>⌄</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  function renderEndDropdown(target: 'create_end' | 'edit_end') {
+    if (openTimeField !== target) return null;
+    const startValue = target === 'create_end' ? newTime : editTime;
+    const currentValue = currentTimeFieldValue(target);
+    const options = buildEndDurationOptions(startValue);
+    return (
+      <View style={styles.timeDropdown}>
+        {options.map((option) => {
+          const selected = option.value === currentValue;
+          return (
+            <Pressable
+              key={option.value}
+              style={[styles.timeOptionRow, selected && styles.timeOptionRowActive]}
+              onPress={() => applyTimeSelection(target, option.value)}
+            >
+              <Text style={[styles.timeOptionText, selected && styles.timeOptionTextActive]}>
+                {selected ? '✓  ' : ''}
+                {option.label}
+              </Text>
+              <Text style={styles.timeOptionDuration}>{option.duration}</Text>
+            </Pressable>
+          );
+        })}
+        <Text style={styles.timeDropdownHint}>Need longer? Type the end time directly in the field.</Text>
+      </View>
+    );
   }
 
   function openEditModal(event: CalendarEvent) {
     const isAutoGeneratedStaffTask = event.id.startsWith('e-staff-');
     if (event.owner === 'staff' && isAutoGeneratedStaffTask) return;
     if (isBirthdayEvent(event)) return;
+    setOpenTimeField(null);
+    setEditingTimeField(null);
     setEditingEventId(event.id);
     const mirrorChildId = event.owner === 'mother' && event.category === 'Child Plan' ? event.ownerChildProfileId : undefined;
     const linkedChildId = event.owner === 'child' ? event.ownerChildProfileId : mirrorChildId;
@@ -1005,7 +1173,11 @@ export function CalendarScreen({
     setEditVisibility(event.visibility || 'shared');
     setEditMotherColor(event.motherColor);
     setEditStaffColor(event.staffColor);
-    setEditTime(normalizeTimeText(event.time));
+    const normalizedEditTime = normalizeTimeText(event.time);
+    setEditTime(normalizedEditTime);
+    setEditEndTime(
+      event.endTime ? normalizeTimeText(event.endTime) : addMinutesToTime(normalizedEditTime, 60),
+    );
     if (event.owner === 'child' || isChildMirror) {
       setEditAssignee(linkedChild ? `child:${linkedChild.id}` : 'mother');
       setEditShareToParent(isChildMirror || hasParentMirrorEvent(event, linkedChild || undefined));
@@ -1037,14 +1209,21 @@ export function CalendarScreen({
     setEditOpen(true);
   }
 
-  function openCreator(mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task') {
+  function openCreator(
+    mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task',
+    prefillTime?: string,
+  ) {
     setCreatorMode(mode);
     setHasPickedColor(false);
     setColorPickerOpen(false);
     setTonePickerOpen(false);
+    setOpenTimeField(null);
+    setEditingTimeField(null);
     setNewTitle('');
     setCustomHex('');
-    setNewTime('10:00 AM');
+    const startTime = prefillTime ?? '10:00 AM';
+    setNewTime(startTime);
+    setNewEndTime(addMinutesToTime(startTime, 60));
 
     if (mode === 'staff_assigned_task') {
       setNewAssignee(activeStaffProfile ? `staff:${activeStaffProfile.id}` : 'mother');
@@ -1087,6 +1266,21 @@ export function CalendarScreen({
     setToneIndex(4);
     setNewColor('#ffffff');
     setCreatorOpen(true);
+  }
+
+  const primaryTimelineCreatorMode: 'general' | 'staff_assigned_task' | 'staff_self_plan' =
+    isMotherViewingStaffCalendar
+      ? 'staff_assigned_task'
+      : isStaffViewingOwnCalendar
+      ? 'staff_self_plan'
+      : 'general';
+
+  function openCreatorFromTimeline(
+    mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task',
+    prefillTime?: string,
+  ) {
+    setDayTimelineOpen(false);
+    openCreator(mode, prefillTime);
   }
 
   function getChildShareDefault(childId: string) {
@@ -1187,9 +1381,10 @@ export function CalendarScreen({
                     isSelected && styles.dayCellSelected,
                     cell.dateKey && birthdayDates.has(cell.dateKey) && styles.dayCellBirthday,
                   ]}
-                  onPress={(event) => {
+                    onPress={(event) => {
                     if (cell.dateKey) {
                       setSelectedDateKey(cell.dateKey);
+                      setDayTimelineOpen(true);
                       if (birthdayDates.has(cell.dateKey)) {
                         triggerBirthdayCelebration({
                           x: event.nativeEvent.pageX,
@@ -1352,6 +1547,120 @@ export function CalendarScreen({
         </Pressable>
       </Modal>
 
+      <Modal visible={dayTimelineOpen} transparent animationType="fade" onRequestClose={() => setDayTimelineOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.dayTimelineModalCard]}>
+            <View style={styles.dayTimelineModalTop}>
+              <View style={styles.dayTimelineModalCopy}>
+                <Text style={styles.dayTimelineModalTitle}>{selectedDateReadableLabel}</Text>
+                {selectedEvents.length > 0 ? (
+                  <Text style={styles.dayTimelineModalSubtitle}>
+                    {`${selectedEvents.length} plan${selectedEvents.length === 1 ? '' : 's'} for this day`}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setDayTimelineOpen(false)}>
+                <Text style={styles.pickerModalCloseText}>×</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.dayTimelineHint}>Tap a time to add a plan</Text>
+
+            <ScrollView
+              style={styles.dayTimelineScroll}
+              contentContainerStyle={styles.dayTimelineScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.dayTimelineSurface}>
+                <View style={styles.dayTimelineHoursCol}>
+                  {DAY_TIMELINE_HOURS.map((hour) => (
+                    <View key={`timeline-hour-${hour}`} style={styles.dayTimelineHourMark}>
+                      <Text style={styles.dayTimelineHourText}>{formatTimelineHour(hour)}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.dayTimelineTrack}>
+                  {DAY_TIMELINE_HOURS.map((hour, index) => (
+                    <Pressable
+                      key={`timeline-slot-${hour}`}
+                      style={[
+                        styles.dayTimelineSlot,
+                        { top: index * DAY_TIMELINE_HOUR_HEIGHT, height: DAY_TIMELINE_HOUR_HEIGHT },
+                      ]}
+                      onPress={() =>
+                        openCreatorFromTimeline(primaryTimelineCreatorMode, formatClockTime(
+                          hour % 12 === 0 ? 12 : hour % 12,
+                          0,
+                          hour >= 12 ? 'PM' : 'AM',
+                        ))
+                      }
+                    />
+                  ))}
+
+                  {DAY_TIMELINE_HOURS.map((hour, index) => (
+                    <View
+                      key={`timeline-line-${hour}`}
+                      pointerEvents="none"
+                      style={[
+                        styles.dayTimelineGridLine,
+                        { top: index * DAY_TIMELINE_HOUR_HEIGHT },
+                      ]}
+                    />
+                  ))}
+
+                  {selectedDateKey === todayKey ? (
+                    <View
+                      style={[
+                        styles.dayTimelineNowLine,
+                        {
+                          top: getCurrentTimeLineOffset(),
+                        },
+                      ]}
+                    >
+                      <View style={styles.dayTimelineNowDot} />
+                      <View style={styles.dayTimelineNowStroke} />
+                    </View>
+                  ) : null}
+
+                  {selectedTimelineEvents.map((event) => (
+                    <Pressable
+                      key={`timeline-event-${event.id}`}
+                      style={[
+                        styles.dayTimelineEventCard,
+                        {
+                          top: event.top,
+                          height: event.height,
+                          left: `${event.leftPercent}%`,
+                          width: `${event.widthPercent}%`,
+                          borderColor: hexToRgba(resolveDisplayColor(event), 0.32) || resolveDisplayColor(event),
+                          backgroundColor: hexToRgba(resolveDisplayColor(event), 0.16) || 'rgba(255,255,255,0.92)',
+                        },
+                      ]}
+                      onPress={() => openEditModal(event)}
+                    >
+                      <View style={styles.dayTimelineEventMetaRow}>
+                        <Text style={styles.dayTimelineEventTime}>
+                          {event.endTime
+                            ? `${normalizeTimeText(event.time)} – ${normalizeTimeText(event.endTime)}`
+                            : normalizeTimeText(event.time)}
+                        </Text>
+                        <View style={[styles.dayTimelineEventDot, { backgroundColor: resolveDisplayColor(event) }]} />
+                      </View>
+                      <Text style={styles.dayTimelineEventTitle}>{event.title}</Text>
+                      <Text style={styles.dayTimelineEventSubtitle}>
+                        {isBirthdayEvent(event) ? 'Birthday' : event.category || event.ownerName || 'Plan'}
+                      </Text>
+                    </Pressable>
+                  ))}
+
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <SectionCard title="Calendar">
         {currentRole === 'mother' ? (
           <View style={styles.scopeRow}>
@@ -1398,20 +1707,34 @@ export function CalendarScreen({
           style={[
             styles.calendarGridWrap,
             Platform.OS === 'web'
-              ? ({
-                  touchAction: 'pan-x',
-                  userSelect: 'none',
-                  overflowX: 'auto',
-                  overflowY: 'hidden',
-                  overscrollBehaviorX: 'contain',
-                  overscrollBehaviorY: 'contain',
-                  scrollSnapType: 'x mandatory',
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  WebkitUserSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  WebkitOverflowScrolling: 'touch',
-                } as any)
+              ? isCoarsePointerWeb
+                ? ({
+                    touchAction: 'pan-y',
+                    userSelect: 'none',
+                    overflowX: 'hidden',
+                    overflowY: 'hidden',
+                    overscrollBehaviorX: 'contain',
+                    overscrollBehaviorY: 'contain',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    WebkitOverflowScrolling: 'touch',
+                  } as any)
+                : ({
+                    touchAction: 'pan-x',
+                    userSelect: 'none',
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
+                    overscrollBehaviorX: 'contain',
+                    overscrollBehaviorY: 'contain',
+                    scrollSnapType: 'x mandatory',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    WebkitOverflowScrolling: 'touch',
+                  } as any)
               : null,
           ]}
           onLayout={(event) => {
@@ -1422,7 +1745,7 @@ export function CalendarScreen({
           {...(Platform.OS === 'web' ? {} : calendarPanResponder.panHandlers)}
         >
           {calendarPagerWidth ? (
-            Platform.OS === 'web' ? (
+            Platform.OS === 'web' && !isCoarsePointerWeb ? (
               <View style={[styles.calendarPagerTrack, styles.calendarPagerTrackWeb]}>
                 {renderCalendarMonthPages()}
               </View>
@@ -1683,88 +2006,6 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      <SectionCard title={selectedDayPlanTitle}>
-        {selectedBirthdayNames.length > 0 ? (
-          <View style={styles.birthdaySummaryCard}>
-            <View style={styles.birthdaySummaryIconWrap}>
-              <BirthdayCakeIcon styles={styles} />
-            </View>
-            <Text style={styles.birthdaySummaryText}>
-              {selectedBirthdayNames.length === 1
-                ? `Today is ${selectedBirthdayNames[0]}'s birthday`
-                : `Birthdays: ${selectedBirthdayNames.join(', ')}`}
-            </Text>
-          </View>
-        ) : null}
-        {isMotherViewingStaffCalendar ? (
-          <View style={styles.eventsHeader}>
-            <Pressable style={styles.addActionBtn} onPress={() => openCreator('staff_assigned_task')}>
-              <Text style={styles.addActionBtnText}>+ Add tasks</Text>
-            </Pressable>
-          </View>
-        ) : isStaffViewingOwnCalendar ? (
-          <View style={styles.staffActionStack}>
-            <View style={styles.eventsHeader}>
-              <Pressable style={styles.addActionBtn} onPress={() => openCreator('staff_self_plan')}>
-                <Text style={styles.addActionBtnText}>+ Add plan</Text>
-              </Pressable>
-            </View>
-            <View style={styles.eventsHeader}>
-              <Pressable style={styles.addActionBtn} onPress={() => openCreator('staff_self_task')}>
-                <Text style={styles.addActionBtnText}>+ Add tasks</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.eventsHeader}>
-            <Pressable style={[styles.addActionBtn, styles.addActionBtnCompact]} onPress={() => openCreator('general')}>
-              <Text style={styles.addActionBtnText}>+</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {selectedEvents.map((event) => (
-          <Pressable style={styles.item} key={event.id} onPress={() => openEditModal(event)}>
-            <View style={styles.eventTop}>
-              <Text style={styles.title}>
-                {event.time ? `${event.time} ` : ''}
-                {event.title}
-              </Text>
-              {isBirthdayEvent(event) ? (
-                <View style={styles.birthdayEventBadge}>
-                  <View style={styles.birthdayEventBadgeRow}>
-                    <BirthdayCakeIcon styles={styles} compact />
-                    <Text style={styles.birthdayEventBadgeText}>Birthday</Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={[styles.eventBadge, { backgroundColor: resolveDisplayColor(event) }]}>
-                  <Text style={styles.eventBadgeText}>{event.category || 'General'}</Text>
-                </View>
-              )}
-            </View>
-            {event.owner === 'staff' && event.category?.toLowerCase().includes('task') ? (
-              <Pressable
-                style={styles.staffCheckRow}
-                disabled={resolveStaffTask(tasks, event)?.status === 'done'}
-                onPress={() => {
-                  const task = resolveStaffTask(tasks, event);
-                  if (task) onCompleteStaffTask(task.id);
-                }}
-              >
-                <View style={[styles.staffCheckbox, resolveStaffTask(tasks, event)?.status === 'done' && styles.staffCheckboxDone]}>
-                  {resolveStaffTask(tasks, event)?.status === 'done' ? <Text style={styles.staffCheckboxTick}>✓</Text> : null}
-                </View>
-                <Text style={styles.eventMetaText}>
-                  {resolveStaffTask(tasks, event)?.status === 'done' ? 'Completed' : 'Tap to mark completed'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </Pressable>
-        ))}
-        {selectedEvents.length === 0 ? <Text style={styles.empty}>No plans for this day yet.</Text> : null}
-      </SectionCard>
-
       <Pressable
         style={styles.guidanceEntryCard}
         onPress={() => {
@@ -1794,13 +2035,11 @@ export function CalendarScreen({
                       ? 'Add My Task'
                       : 'Create Event / Plan'}
               </Text>
-              <Text style={styles.modalSub}>Date: {selectedDateKey}</Text>
+              <Text style={styles.modalSub}>{formatCreatorDateLabel(selectedDateKey)}</Text>
               {creatorMode === 'staff_assigned_task' || creatorMode === 'staff_self_task' ? (
                 <View style={styles.taskCreatorCard}>
+                  <View style={styles.timeRangeRow}>{renderTimeField('create_start', 'Time', false)}</View>
                   <View style={styles.taskCreatorRow}>
-                    <Pressable style={styles.clockBtn} onPress={() => openTimePicker('create')}>
-                      <Text style={styles.clockBtnText}>◷</Text>
-                    </Pressable>
                     <View
                       ref={taskInputWrapRef}
                       style={styles.taskCreatorInputWrap}
@@ -1816,7 +2055,6 @@ export function CalendarScreen({
                         }}
                         style={[styles.input, styles.taskCreatorInput]}
                       />
-                      <Text style={styles.taskCreatorTimeLabel}>{newTime}</Text>
                     </View>
                   </View>
                   <View style={styles.row}>
@@ -1865,37 +2103,74 @@ export function CalendarScreen({
                 </View>
               )}
               {creatorMode === 'staff_assigned_task' || creatorMode === 'staff_self_task' ? null : (
-                <View style={styles.timeRow}>
-                  <Pressable style={styles.clockBtn} onPress={() => openTimePicker('create')}>
-                    <Text style={styles.clockBtnText}>Clock</Text>
-                  </Pressable>
-                  <Text style={styles.timeValue}>{newTime}</Text>
-                </View>
+                <>
+                  <View style={styles.timeRangeRow}>
+                    {renderTimeField('create_start', 'Start', false)}
+                    <Text style={styles.timeRangeArrow}>→</Text>
+                    {renderTimeField('create_end', 'End', true)}
+                    {formatDurationLabel(newTime, newEndTime) ? (
+                      <View style={styles.timeRangeDuration}>
+                        <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {renderEndDropdown('create_end')}
+                </>
               )}
               {creatorMode === 'general' ? (
-                <View style={styles.row}>
-                  <Chip
-                    active={newAssignee === 'mother'}
-                    label={parentLabel}
-                    onPress={() => {
-                      setNewAssignee('mother');
-                      setNewShareToParent(true);
-                    }}
-                    styles={styles}
-                  />
-                  {children.map((child) => (
+                <>
+                  <View style={styles.row}>
                     <Chip
-                      key={child.id}
-                      active={newAssignee === `child:${child.id}`}
-                      label={child.name}
+                      active={newAssignee === 'mother'}
+                      label={parentLabel}
                       onPress={() => {
-                        setNewAssignee(`child:${child.id}`);
-                        setNewShareToParent(getChildShareDefault(child.id));
+                        setNewAssignee('mother');
+                        setNewShareToParent(true);
                       }}
                       styles={styles}
                     />
-                  ))}
-                </View>
+                    {children.map((child) => (
+                      <Chip
+                        key={child.id}
+                        active={newAssignee === `child:${child.id}`}
+                        label={child.name}
+                        onPress={() => {
+                          setNewAssignee(`child:${child.id}`);
+                          setNewShareToParent(getChildShareDefault(child.id));
+                        }}
+                        styles={styles}
+                      />
+                    ))}
+                    {staffProfiles.map((profile) => (
+                      <Chip
+                        key={`creator-staff-${profile.id}`}
+                        active={newAssignee === `staff:${profile.id}`}
+                        label={profile.name}
+                        onPress={() => {
+                          setNewAssignee(`staff:${profile.id}`);
+                          setNewShareToParent(false);
+                        }}
+                        styles={styles}
+                      />
+                    ))}
+                  </View>
+                  {newAssignee.startsWith('staff:') ? (
+                    <View style={styles.row}>
+                      <Chip
+                        active={newTaskPriority === 'non_urgent'}
+                        label="Non-urgent"
+                        onPress={() => setNewTaskPriority('non_urgent')}
+                        styles={styles}
+                      />
+                      <Chip
+                        active={newTaskPriority === 'urgent'}
+                        label="Urgent"
+                        onPress={() => setNewTaskPriority('urgent')}
+                        styles={styles}
+                      />
+                    </View>
+                  ) : null}
+                </>
               ) : null}
               {creatorMode === 'general' && newAssignee.startsWith('child:') ? (
                 <>
@@ -1918,13 +2193,27 @@ export function CalendarScreen({
                       const selectedStaffId = newAssignee.startsWith('staff:') ? newAssignee.replace('staff:', '') : null;
                       const selectedChild = selectedChildId ? children.find((item) => item.id === selectedChildId) : null;
                       const selectedStaff = selectedStaffId ? staffProfiles.find((item) => item.id === selectedStaffId) : null;
-                      const isStaffAssignedTask = creatorMode === 'staff_assigned_task';
+                      const isStaffAssignedTask = creatorMode === 'staff_assigned_task' || (creatorMode === 'general' && !!selectedStaff);
                       const isStaffSelfPlan = creatorMode === 'staff_self_plan';
                       const isStaffSelfTask = creatorMode === 'staff_self_task';
+                      const resolvedColor = isStaffAssignedTask
+                        ? newTaskPriority === 'urgent'
+                          ? '#f87171'
+                          : '#fca5a5'
+                        : isStaffSelfPlan
+                          ? '#86efac'
+                          : isStaffSelfTask
+                            ? newTaskPriority === 'urgent'
+                              ? '#60a5fa'
+                              : '#93c5fd'
+                            : hasPickedColor
+                              ? newColor
+                              : '#64748b';
                       onAddEvent({
                         title: newTitle.trim(),
                         date: selectedDateKey,
                         time: newTime,
+                        endTime: newEndTime,
                         owner: selectedChild ? 'child' : selectedStaff ? 'staff' : 'mother',
                         ownerName: selectedChild ? selectedChild.name : selectedStaff ? selectedStaff.name : parentLabel,
                         ownerChildProfileId: selectedChild ? selectedChild.id : undefined,
@@ -1938,22 +2227,10 @@ export function CalendarScreen({
                               : selectedChild
                                 ? selectedChild.name
                                 : 'General',
-                        color: isStaffAssignedTask
-                          ? newTaskPriority === 'urgent'
-                            ? '#f87171'
-                            : '#fca5a5'
-                          : isStaffSelfPlan
-                            ? '#86efac'
-                            : isStaffSelfTask
-                              ? newTaskPriority === 'urgent'
-                                ? '#60a5fa'
-                                : '#93c5fd'
-                              : hasPickedColor
-                                ? newColor
-                                : '#64748b',
+                        color: resolvedColor,
                         taskPriority: isStaffAssignedTask || isStaffSelfTask ? newTaskPriority : undefined,
-                        motherColor: selectedStaff ? (creatorMode === 'staff_assigned_task' ? newColor : undefined) : undefined,
-                        staffColor: selectedStaff ? (creatorMode === 'staff_assigned_task' ? undefined : newColor) : undefined,
+                        motherColor: selectedStaff ? (isStaffAssignedTask ? resolvedColor : undefined) : undefined,
+                        staffColor: selectedStaff ? (isStaffAssignedTask ? undefined : newColor) : undefined,
                         visibility: creatorMode === 'staff_self_plan' ? 'staff_private' : 'shared',
                       });
                       setNewTitle('');
@@ -2013,12 +2290,17 @@ export function CalendarScreen({
                   multiline
                 />
               </View>
-              <View style={styles.timeRow}>
-                <Pressable style={styles.clockBtn} onPress={() => openTimePicker('edit')}>
-                  <Text style={styles.clockBtnText}>Clock</Text>
-                </Pressable>
-                <Text style={styles.timeValue}>{editTime}</Text>
+              <View style={styles.timeRangeRow}>
+                {renderTimeField('edit_start', 'Start', false)}
+                <Text style={styles.timeRangeArrow}>→</Text>
+                {renderTimeField('edit_end', 'End', true)}
+                {formatDurationLabel(editTime, editEndTime) ? (
+                  <View style={styles.timeRangeDuration}>
+                    <Text style={styles.timeRangeDurationText}>{formatDurationLabel(editTime, editEndTime)}</Text>
+                  </View>
+                ) : null}
               </View>
+              {renderEndDropdown('edit_end')}
               <View style={styles.row}>
                 <Chip
                   active={editAssignee === 'mother'}
@@ -2084,6 +2366,7 @@ export function CalendarScreen({
                       title: editTitle.trim(),
                       color: editHasPickedColor ? editColor : '#64748b',
                       time: editTime,
+                      endTime: editEndTime,
                       date: selectedDateKey,
                       owner: selectedChild ? 'child' : selectedStaff ? 'staff' : 'mother',
                       ownerName: selectedChild ? selectedChild.name : selectedStaff ? selectedStaff.name : parentLabel,
@@ -2113,38 +2396,6 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      <Modal visible={timePickerOpen} transparent animationType="fade" onRequestClose={() => setTimePickerOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.clockModalCard}>
-            <Text style={styles.createTitle}>Pick Time</Text>
-            <Text style={styles.modalSub}>{dialStep === 'hour' ? 'Step 1: Select hour' : 'Step 2: Select minute'}</Text>
-            <View style={styles.clockDial}>
-              {dialDots.map((dot) => (
-                <Pressable
-                  key={`${dialStep}-${dot.value}`}
-                  style={[
-                    styles.clockNumber,
-                    { left: dot.left, top: dot.top },
-                    (dialStep === 'hour' ? dialHour === dot.value : dialMinute === dot.value) && styles.clockNumberActive,
-                  ]}
-                  onPress={() => chooseDialValue(dot.value)}
-                >
-                  <Text style={styles.clockNumberText}>{dialStep === 'minute' ? String(dot.value).padStart(2, '0') : dot.value}</Text>
-                </Pressable>
-              ))}
-              <Pressable style={styles.ampmToggle} onPress={() => setDialPeriod((prev) => (prev === 'AM' ? 'PM' : 'AM'))}>
-                <Text style={styles.ampmText}>{dialPeriod}</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.timePreview}>{formatClockTime(dialHour, dialMinute, dialPeriod)}</Text>
-            <View style={styles.modalActions}>
-              <Pressable style={styles.cancelBtn} onPress={() => setTimePickerOpen(false)}>
-                <Text style={styles.cancelBtnText}>Done</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={colorPickerOpen} transparent animationType="fade" onRequestClose={() => setColorPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -2923,6 +3174,156 @@ function parseTimeValue(value: string) {
 function normalizeTimeText(value: string) {
   const parsed = parseTimeValue(value);
   return formatClockTime(parsed.hour, parsed.minute, parsed.period);
+}
+
+function convertTimeToMinutes(value: string) {
+  const parsed = parseTimeValue(value);
+  const normalizedHour = parsed.hour % 12 + (parsed.period === 'PM' ? 12 : 0);
+  return normalizedHour * 60 + parsed.minute;
+}
+
+function minutesToClockText(totalMinutes: number) {
+  const dayMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+  const hour24 = Math.floor(dayMinutes / 60);
+  const minute = dayMinutes % 60;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return formatClockTime(hour12, minute, period);
+}
+
+function addMinutesToTime(time: string, deltaMinutes: number) {
+  return minutesToClockText(convertTimeToMinutes(time) + deltaMinutes);
+}
+
+function formatDurationLabel(startTime: string, endTime: string) {
+  const minutes = convertTimeToMinutes(endTime) - convertTimeToMinutes(startTime);
+  if (minutes <= 0) return '';
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins} min`;
+  if (mins === 0) return `${hours} h`;
+  return `${hours} h ${mins} min`;
+}
+
+const END_DURATION_STEP_MINUTES = 30;
+const END_DURATION_MAX_MINUTES = 180;
+
+function isValidTimeText(value: string) {
+  return /^\s*\d{1,2}:\d{2}(\s*(am|pm))?\s*$/i.test(value) || /^\s*\d{1,2}\s*(am|pm)\s*$/i.test(value);
+}
+
+function buildEndDurationOptions(startTime: string) {
+  const startMinutes = convertTimeToMinutes(startTime);
+  const options: Array<{ value: string; label: string; duration: string }> = [];
+  for (let duration = END_DURATION_STEP_MINUTES; duration <= END_DURATION_MAX_MINUTES; duration += END_DURATION_STEP_MINUTES) {
+    const minute = startMinutes + duration;
+    if (minute >= 24 * 60) break;
+    const value = minutesToClockText(minute);
+    options.push({ value, label: value, duration: formatDurationLabel(startTime, value) });
+  }
+  return options;
+}
+
+function formatCreatorDateLabel(dateKey: string) {
+  const date = parseDateKeyToDate(dateKey);
+  const dayMonthYear = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
+  return `${dayMonthYear}, ${weekday}`;
+}
+
+function formatTimelineHour(hour24: number) {
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12} ${period}`;
+}
+
+function formatReadableDayHeading(dateKey: string) {
+  const date = parseDateKeyToDate(dateKey);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getCurrentTimeLineOffset() {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const clamped = Math.max(DAY_TIMELINE_START_HOUR * 60, Math.min(DAY_TIMELINE_END_HOUR * 60, minutes));
+  return ((clamped - DAY_TIMELINE_START_HOUR * 60) / 60) * DAY_TIMELINE_HOUR_HEIGHT;
+}
+
+function buildTimelineEvents(events: CalendarEvent[]) {
+  const sorted = [...events].sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
+  const timelineEvents: Array<
+    CalendarEvent & {
+      startMinutes: number;
+      endMinutes: number;
+      lane: number;
+      laneCount: number;
+      top: number;
+      height: number;
+      leftPercent: number;
+      widthPercent: number;
+    }
+  > = [];
+
+  let activeCluster: number[] = [];
+
+  const finalizeCluster = () => {
+    if (activeCluster.length === 0) return;
+    const laneCount = Math.max(...activeCluster.map((index) => timelineEvents[index].lane)) + 1;
+    activeCluster.forEach((index) => {
+      timelineEvents[index].laneCount = laneCount;
+      const gap = 2;
+      const widthPercent = (100 - gap * (laneCount - 1)) / laneCount;
+      timelineEvents[index].widthPercent = widthPercent;
+      timelineEvents[index].leftPercent = timelineEvents[index].lane * (widthPercent + gap);
+    });
+    activeCluster = [];
+  };
+
+  const trackStartMinutes = DAY_TIMELINE_START_HOUR * 60;
+  const trackEndMinutes = DAY_TIMELINE_END_HOUR * 60;
+
+  sorted.forEach((event) => {
+    const startMinutes = convertTimeToMinutes(event.time);
+    const clampedStart = Math.max(trackStartMinutes, Math.min(trackEndMinutes, startMinutes));
+    const rawDuration = event.endTime
+      ? convertTimeToMinutes(event.endTime) - startMinutes
+      : DAY_TIMELINE_EVENT_DURATION_MINUTES;
+    const durationMinutes = rawDuration > 0 ? rawDuration : DAY_TIMELINE_EVENT_DURATION_MINUTES;
+    const endMinutes = Math.min(trackEndMinutes, clampedStart + durationMinutes);
+    const visibleDuration = Math.max(endMinutes - clampedStart, 15);
+
+    const overlappingActive = activeCluster.filter((index) => timelineEvents[index].endMinutes > clampedStart);
+    if (overlappingActive.length !== activeCluster.length) {
+      finalizeCluster();
+      activeCluster = overlappingActive;
+    }
+
+    const usedLanes = new Set(activeCluster.map((index) => timelineEvents[index].lane));
+    let lane = 0;
+    while (usedLanes.has(lane)) lane += 1;
+
+    timelineEvents.push({
+      ...event,
+      startMinutes: clampedStart,
+      endMinutes,
+      lane,
+      laneCount: 1,
+      top: ((clampedStart - trackStartMinutes) / 60) * DAY_TIMELINE_HOUR_HEIGHT + 4,
+      height: Math.max((visibleDuration / 60) * DAY_TIMELINE_HOUR_HEIGHT - 6, 40),
+      leftPercent: 0,
+      widthPercent: 100,
+    });
+
+    activeCluster.push(timelineEvents.length - 1);
+  });
+
+  finalizeCluster();
+  return timelineEvents;
 }
 
 function ColorWheelPicker({ color, onChange }: { color: string; onChange: (value: string) => void }) {
@@ -5541,6 +5942,227 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.text,
     fontWeight: '700',
   },
+  timeRangeRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  timeRangeField: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    minWidth: 104,
+  },
+  timeRangeLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  timeRangeValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  timeFieldInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeRangeValueInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    paddingVertical: 0,
+    minWidth: 70,
+  },
+  timeChevronBtn: {
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  timeChevronText: {
+    color: colors.subtext,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  timeDropdownHint: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  timeRangeArrow: {
+    color: colors.subtext,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  timeRangeDuration: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: colors.glassSoft,
+  },
+  timeRangeDurationText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dayTimelineModalCard: {
+    width: '100%',
+    maxWidth: 720,
+    maxHeight: '88%',
+    paddingBottom: 0,
+  },
+  dayTimelineModalTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dayTimelineModalCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  dayTimelineModalTitle: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 32,
+  },
+  dayTimelineModalSubtitle: {
+    color: colors.subtext,
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  dayTimelineHint: {
+    color: colors.subtext,
+    fontWeight: '600',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  dayTimelineSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
+  dayTimelineScroll: {
+    flex: 1,
+  },
+  dayTimelineScrollContent: {
+    paddingBottom: 20,
+  },
+  dayTimelineSurface: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  dayTimelineHoursCol: {
+    width: 60,
+    paddingTop: 2,
+  },
+  dayTimelineHourMark: {
+    height: DAY_TIMELINE_HOUR_HEIGHT,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 2,
+  },
+  dayTimelineHourText: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  dayTimelineTrack: {
+    flex: 1,
+    minHeight: (DAY_TIMELINE_HOURS.length - 1) * DAY_TIMELINE_HOUR_HEIGHT + 64,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  dayTimelineGridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(148,163,184,0.16)',
+  },
+  dayTimelineNowLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 16,
+    zIndex: 4,
+    justifyContent: 'center',
+  },
+  dayTimelineNowStroke: {
+    height: 2,
+    marginLeft: 22,
+    backgroundColor: hexToRgba(colors.primary, 0.82) || colors.primary,
+  },
+  dayTimelineNowDot: {
+    position: 'absolute',
+    left: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  dayTimelineEventCard: {
+    position: 'absolute',
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    shadowColor: 'rgba(15,23,42,0.12)',
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    zIndex: 5,
+  },
+  dayTimelineEventMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  dayTimelineEventTime: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  dayTimelineEventDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  dayTimelineEventTitle: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  dayTimelineEventSubtitle: {
+    color: colors.subtext,
+    fontWeight: '600',
+    fontSize: 12,
+    marginTop: 4,
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
@@ -5575,68 +6197,45 @@ const createStyles = (colors: ThemeColors) =>
     backgroundColor: colors.glassStrong,
     padding: 14,
   },
-  clockModalCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.glassStrong,
-    padding: 14,
-    alignItems: 'center',
-  },
-  clockDial: {
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    borderWidth: 1,
-    borderColor: colors.border,
-    position: 'relative',
-    backgroundColor: colors.glassSoft,
-    marginBottom: 10,
-  },
-  clockNumber: {
-    position: 'absolute',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.glassStrong,
-  },
-  clockNumberActive: {
+  timeRangeFieldActive: {
     borderColor: colors.primary,
     backgroundColor: colors.selection,
   },
-  clockNumberText: {
+  timeDropdown: {
+    marginTop: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    overflow: 'hidden',
+  },
+  timeDropdownScroll: {
+    maxHeight: 220,
+  },
+  timeOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glassSoft,
+  },
+  timeOptionRowActive: {
+    backgroundColor: colors.selection,
+  },
+  timeOptionText: {
     color: colors.text,
+    fontSize: 15,
     fontWeight: '700',
-    fontSize: 12,
   },
-  ampmToggle: {
-    position: 'absolute',
-    top: 95,
-    left: 95,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.selection,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ampmText: {
+  timeOptionTextActive: {
     color: colors.primary,
-    fontWeight: '800',
-    fontSize: 11,
   },
-  timePreview: {
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
+  timeOptionDuration: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
   },
   modalSub: {
     color: colors.subtext,

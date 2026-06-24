@@ -72,6 +72,7 @@ export type CustomNutritionFood = {
   id: string;
   name: string;
   brand?: string;
+  barcode?: string;
   baseMode: '100g' | '100ml' | 'serving';
   baseQuantity: number;
   calories: number;
@@ -132,6 +133,7 @@ export type CalendarEvent = {
   ownerChildProfileId?: string;
   date: string;
   time: string;
+  endTime?: string;
   category?: string;
   color?: string;
   motherColor?: string;

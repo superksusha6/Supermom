@@ -1,6 +1,7 @@
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useCameraPermissions } from 'expo-camera';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
@@ -65,6 +66,8 @@ function persistNutritionLibraryMeta(meta: NutritionLibraryMeta) {
   }
 }
 
+const NUTRITION_WEEK_RADIUS = 12;
+
 export function NutritionScreen({
   personalProfile,
   nutritionGoal,
@@ -105,6 +108,8 @@ export function NutritionScreen({
   const [customFoodMode, setCustomFoodMode] = useState(false);
   const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
   const [customBrand, setCustomBrand] = useState('');
+  const [customBarcode, setCustomBarcode] = useState('');
+  const [manualBarcode, setManualBarcode] = useState('');
   const [customServingType, setCustomServingType] = useState<'100g' | '100ml' | 'serving'>('100g');
   const [catalogResults, setCatalogResults] = useState<NutritionFoodPreset[]>([]);
   const [catalogSearchLoading, setCatalogSearchLoading] = useState(false);
@@ -118,8 +123,9 @@ export function NutritionScreen({
   const [mealPhotoNote, setMealPhotoNote] = useState<string | null>(null);
   const [mealPhotoConfidence, setMealPhotoConfidence] = useState<'low' | 'medium' | 'high' | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
-  const [weekOffset, setWeekOffset] = useState(0);
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
+  const weekScrollRef = useRef<ScrollView>(null);
+  const [weekViewportWidth, setWeekViewportWidth] = useState(0);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const plan = getNutritionPlan({
@@ -222,7 +228,17 @@ export function NutritionScreen({
     });
   }, [allFoodPresets, catalogResults, foodSearch]);
   const todayDateKey = useMemo(() => toDateKey(new Date()), []);
-  const weekDays = useMemo(() => buildNutritionWeekDays(weekOffset, nutritionEntries), [nutritionEntries, weekOffset]);
+  const weeks = useMemo(() => buildNutritionWeeks(nutritionEntries), [nutritionEntries]);
+
+  const scrollToCurrentWeek = (animated: boolean) => {
+    if (weekViewportWidth <= 0) return;
+    weekScrollRef.current?.scrollTo({ x: NUTRITION_WEEK_RADIUS * weekViewportWidth, animated });
+  };
+
+  useEffect(() => {
+    scrollToCurrentWeek(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekViewportWidth]);
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
   const selectedPresetValues = selectedPreset ? getNutritionValuesForGrams(selectedPreset, draftGrams) : null;
   const selectedPresetBaseMode = selectedPreset?.baseMode || '100g';
@@ -269,6 +285,25 @@ export function NutritionScreen({
       })
     : [];
 
+  const loggedDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const entry of nutritionEntries) set.add(entry.date);
+    return set;
+  }, [nutritionEntries]);
+
+  const nutritionStreak = useMemo(() => {
+    let count = 0;
+    const cursor = new Date();
+    for (let i = 0; i < 366; i += 1) {
+      if (!loggedDates.has(toDateKey(cursor))) break;
+      count += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  }, [loggedDates]);
+
+  const rdiPercent = plan && plan.calories > 0 ? Math.round((totals.calories / plan.calories) * 100) : null;
+
   useEffect(() => {
     const query = foodSearch.trim();
     if (customFoodMode || photoEstimateMode || !activeMealType || query.length < 2) {
@@ -310,7 +345,7 @@ export function NutritionScreen({
   useEffect(() => {
     if (!quickActionRequest || quickActionRequest.type !== 'add-meal') return;
     setSelectedDateKey(todayDateKey);
-    setWeekOffset(0);
+    scrollToCurrentWeek(false);
     setAddFoodFlow('search');
     setPhotoEstimateMode(false);
     setCustomFoodMode(false);
@@ -384,7 +419,9 @@ export function NutritionScreen({
 
   async function openBarcodeScanner() {
     try {
-      if (!cameraPermission?.granted) {
+      // On web the browser prompts for camera access via getUserMedia inside the scanner
+      // component; the expo-camera permission gate only applies to native builds.
+      if (Platform.OS !== 'web' && !cameraPermission?.granted) {
         const permission = await requestCameraPermission();
         if (!permission.granted) {
           Alert.alert('Permission needed', 'Allow camera access to scan product barcodes.');
@@ -392,6 +429,7 @@ export function NutritionScreen({
         }
       }
       setBarcodeLookupError(null);
+      setManualBarcode('');
       setAddFoodFlow('scan');
       setBarcodeCameraOpen(true);
     } catch {
@@ -458,13 +496,16 @@ export function NutritionScreen({
   }
 
   async function handleBarcodeScanned(data?: string) {
-    if (!data || barcodeLookupBusy) return;
+    const code = (data || '').trim();
+    if (!code || barcodeLookupBusy) return;
     setBarcodeLookupBusy(true);
     setBarcodeLookupError(null);
     try {
-      const preset = await lookupNutritionBarcode(data);
+      // Local-first: a product entered or scanned before is remembered by barcode and resolves instantly (offline too).
+      const remembered = customFoodPresets.find((food) => food.barcode === code || food.id === `off-${code}`);
+      const preset = remembered ? customNutritionFoodToPreset(remembered) : await lookupNutritionBarcode(code);
       if (!preset) {
-        setBarcodeLookupError('We found the barcode, but there is no product data for it yet.');
+        setBarcodeLookupError('We found the barcode, but there is no product data for it yet. Add it once and it will be remembered.');
         return;
       }
       const displayTitle = preset.brand?.trim() ? `${preset.brand.trim()} ${preset.name}` : preset.name;
@@ -479,10 +520,12 @@ export function NutritionScreen({
       setDraftCarbs(next.carbs);
       setCustomServingType(baseMode);
       setDraftGrams(defaultAmount);
+      setCustomBarcode(code);
+      setManualBarcode('');
       setFoodSearch(displayTitle);
       setAddFoodFlow('scan');
       setBarcodeCameraOpen(false);
-      savePresetToLibrary(preset);
+      if (!remembered) savePresetToLibrary(preset);
     } catch {
       setBarcodeLookupError('Could not load product details from the barcode right now.');
     } finally {
@@ -495,44 +538,74 @@ export function NutritionScreen({
       {renderInlineContent ? (
         <ScrollView contentContainerStyle={styles.content}>
       <SectionCard title="Meals Today">
-        <View style={styles.weekHeader}>
-          <Pressable style={styles.weekArrowBtn} onPress={() => setWeekOffset((prev) => prev - 1)}>
-            <Text style={styles.weekArrowText}>‹</Text>
-          </Pressable>
-          <View style={styles.weekTitleWrap}>
-            <Text style={styles.weekTitle}>{selectedDateLabel}</Text>
-            <Text style={styles.weekSubtitle}>{formatReadableDate(selectedDateKey)}</Text>
-          </View>
-          <Pressable style={styles.weekArrowBtn} onPress={() => setWeekOffset((prev) => prev + 1)}>
-            <Text style={styles.weekArrowText}>›</Text>
-          </Pressable>
+        <View style={styles.weekTitleWrap}>
+          <Text style={styles.weekTitle}>{selectedDateLabel}</Text>
+          <Text style={styles.weekSubtitle}>{formatReadableDate(selectedDateKey)}</Text>
         </View>
-        <View style={styles.weekDaysRow}>
-          {weekDays.map((day) => {
-            const active = day.dateKey === selectedDateKey;
-            const today = day.dateKey === todayDateKey;
-            const hovered = day.dateKey === hoveredDateKey;
-            return (
-              <Pressable
-                key={day.dateKey}
-                style={[
-                  styles.weekDayCard,
-                  today && styles.weekDayCardToday,
-                  hovered && styles.weekDayCardHover,
-                  active && styles.weekDayCardActive,
-                  today && hovered && styles.weekDayCardTodayHover,
-                  today && active && hovered && styles.weekDayCardTodayActiveHover,
-                ]}
-                onPress={() => setSelectedDateKey(day.dateKey)}
-                onHoverIn={() => setHoveredDateKey(day.dateKey)}
-                onHoverOut={() => setHoveredDateKey(null)}
-              >
-                <Text style={[styles.weekDayName, today && styles.weekDayNameToday, active && styles.weekDayNameActive, today && hovered && styles.weekDayTextTodayHover]}>{day.weekday}</Text>
-                <Text style={[styles.weekDayNumber, today && styles.weekDayNumberToday, active && styles.weekDayNumberActive, today && hovered && styles.weekDayTextTodayHover]}>{day.dayNumber}</Text>
-                <Text style={[styles.weekDayCalories, today && styles.weekDayCaloriesToday, active && styles.weekDayCaloriesActive, today && hovered && styles.weekDayTextTodayHover]}>{day.calories ? `${day.calories} kcal` : 'empty'}</Text>
-              </Pressable>
-            );
-          })}
+        <ScrollView
+          ref={weekScrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onLayout={(event) => setWeekViewportWidth(event.nativeEvent.layout.width)}
+        >
+          {weeks.map((week) => (
+            <View key={week.key} style={[styles.weekPage, weekViewportWidth ? { width: weekViewportWidth } : null]}>
+              {week.days.map((day) => {
+                const active = day.dateKey === selectedDateKey;
+                const today = day.dateKey === todayDateKey;
+                const hovered = day.dateKey === hoveredDateKey;
+                return (
+                  <Pressable
+                    key={day.dateKey}
+                    style={[
+                      styles.weekDayCard,
+                      today && styles.weekDayCardToday,
+                      hovered && styles.weekDayCardHover,
+                      active && styles.weekDayCardActive,
+                      today && hovered && styles.weekDayCardTodayHover,
+                      today && active && hovered && styles.weekDayCardTodayActiveHover,
+                    ]}
+                    onPress={() => setSelectedDateKey(day.dateKey)}
+                    onHoverIn={() => setHoveredDateKey(day.dateKey)}
+                    onHoverOut={() => setHoveredDateKey(null)}
+                  >
+                    <Text style={[styles.weekDayName, today && styles.weekDayNameToday, active && styles.weekDayNameActive, today && hovered && styles.weekDayTextTodayHover]}>{day.weekday}</Text>
+                    <Text style={[styles.weekDayNumber, today && styles.weekDayNumberToday, active && styles.weekDayNumberActive, today && hovered && styles.weekDayTextTodayHover]}>{day.dayNumber}</Text>
+                    {loggedDates.has(day.dateKey) ? (
+                      <View style={styles.weekDayCheck}>
+                        <Text style={styles.weekDayCheckText}>✓</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.weekDayCheckPlaceholder} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>
+        {nutritionStreak > 0 ? (
+          <View style={styles.streakRow}>
+            <Text style={styles.streakFlame}>🔥</Text>
+            <Text style={styles.streakText}>
+              {`${nutritionStreak}-day logging streak`}
+            </Text>
+          </View>
+        ) : null}
+        <View style={styles.macroSummaryRow}>
+          {[
+            { label: 'Fat', value: `${totals.fat}` },
+            { label: 'Carbs', value: `${totals.carbs}` },
+            { label: 'Protein', value: `${totals.protein}` },
+            { label: 'RDI', value: rdiPercent !== null ? `${rdiPercent}%` : '—' },
+            { label: 'Calories', value: `${totals.calories}`, strong: true },
+          ].map((cell) => (
+            <View key={cell.label} style={styles.macroSummaryCell}>
+              <Text style={styles.macroSummaryLabel}>{cell.label}</Text>
+              <Text style={[styles.macroSummaryValue, cell.strong && styles.macroSummaryValueStrong]}>{cell.value}</Text>
+            </View>
+          ))}
         </View>
         <Text style={styles.sectionHint}>Tap `+` on any meal to add products for the selected day.</Text>
         <View style={styles.todaySummaryBar}>
@@ -622,10 +695,14 @@ export function NutritionScreen({
                   <Text style={styles.mealTitle}>{section.title}</Text>
                   <Text style={styles.mealRowMeta}>
                     {section.entries.length
-                      ? `${section.entries.length} item${section.entries.length === 1 ? '' : 's'} • ${section.totals.calories} kcal • P ${section.totals.protein} • F ${section.totals.fat} • C ${section.totals.carbs}`
+                      ? `${section.entries.length} item${section.entries.length === 1 ? '' : 's'} • P ${section.totals.protein} • F ${section.totals.fat} • C ${section.totals.carbs}`
                       : 'Tap + to add foods'}
                   </Text>
                 </View>
+              </View>
+              <View style={styles.mealCaloriesCol}>
+                <Text style={styles.mealCaloriesValue}>{section.totals.calories}</Text>
+                <Text style={styles.mealCaloriesLabel}>kcal</Text>
               </View>
               <Pressable
                 style={styles.addMealBtn}
@@ -787,6 +864,7 @@ export function NutritionScreen({
                           setDraftCarbs('');
                           setDraftGrams('100');
                           setCustomBrand('');
+                          setCustomBarcode('');
                           setCustomServingType('100g');
                         }}
                       >
@@ -863,6 +941,7 @@ export function NutritionScreen({
                           setCustomFoodMode(false);
                           setPhotoEstimateMode(false);
                           setCustomBrand('');
+                          setCustomBarcode('');
                           setMealPhotoError(null);
                           setMealPhotoNote(null);
                         }}
@@ -871,6 +950,13 @@ export function NutritionScreen({
                       </Pressable>
                     </View>
                     <TextInput placeholder="Brand optional" style={styles.input} value={customBrand} onChangeText={setCustomBrand} />
+                    <TextInput
+                      placeholder="Barcode optional — saved so scanning finds this product"
+                      style={styles.input}
+                      value={customBarcode}
+                      onChangeText={setCustomBarcode}
+                      keyboardType="number-pad"
+                    />
                     <View style={styles.pillRow}>
                       {[
                         { key: '100g' as const, label: '100 g' },
@@ -1029,6 +1115,7 @@ export function NutritionScreen({
                         id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
+                        barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
                         baseMode: customServingType,
                         baseQuantity: normalizedBaseQuantity,
                         calories: Number(draftCalories) || 0,
@@ -1079,6 +1166,7 @@ export function NutritionScreen({
                   setCustomFoodMode(false);
                   setPhotoEstimateMode(false);
                   setCustomBrand('');
+                  setCustomBarcode('');
                   setCustomServingType('100g');
                   setCatalogResults([]);
                   setCatalogSearchError(null);
@@ -1102,15 +1190,31 @@ export function NutritionScreen({
             <Text style={styles.modalTitle}>Scan product package</Text>
             <Text style={styles.barcodeHint}>Point the camera at the barcode and we will try to fill calories and macros automatically.</Text>
             <View style={styles.barcodePreviewWrap}>
-              <CameraView
-                style={styles.barcodePreview}
-                facing="back"
-                barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
-                onBarcodeScanned={barcodeLookupBusy ? undefined : ({ data }) => void handleBarcodeScanned(data)}
+              <BarcodeScanner
+                active={barcodeCameraOpen}
+                paused={barcodeLookupBusy}
+                onDetected={(code) => void handleBarcodeScanned(code)}
               />
               <View pointerEvents="none" style={styles.barcodeFrame} />
             </View>
             {barcodeLookupError ? <Text style={styles.catalogError}>{barcodeLookupError}</Text> : null}
+            <Text style={styles.barcodeHint}>Or enter the barcode digits manually:</Text>
+            <View style={styles.barcodeManualRow}>
+              <TextInput
+                placeholder="e.g. 4601234567890"
+                style={[styles.input, styles.barcodeManualInput]}
+                value={manualBarcode}
+                onChangeText={setManualBarcode}
+                keyboardType="number-pad"
+              />
+              <Pressable
+                style={[styles.primaryBtn, (!manualBarcode.trim() || barcodeLookupBusy) && styles.barcodeFindBtnDisabled]}
+                disabled={!manualBarcode.trim() || barcodeLookupBusy}
+                onPress={() => void handleBarcodeScanned(manualBarcode)}
+              >
+                <Text style={styles.primaryBtnText}>Find</Text>
+              </Pressable>
+            </View>
             <View style={styles.modalActions}>
               <Pressable style={styles.modalGhostBtn} onPress={() => setBarcodeCameraOpen(false)}>
                 <Text style={styles.modalGhostBtnText}>Cancel</Text>
@@ -1130,25 +1234,32 @@ function toDateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function buildNutritionWeekDays(weekOffset: number, entries: NutritionFoodEntry[]) {
+function buildNutritionWeeks(entries: NutritionFoodEntry[]) {
   const today = new Date();
-  const monday = new Date(today);
-  const day = monday.getDay();
-  const mondayDiff = day === 0 ? -6 : 1 - day;
-  monday.setDate(today.getDate() + mondayDiff + weekOffset * 7);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const dayOfWeek = todayMidnight.getDay();
+  const mondayDiff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const currentMonday = new Date(todayMidnight);
+  currentMonday.setDate(todayMidnight.getDate() + mondayDiff);
   const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  return labels.map((weekday, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
-    const dateKey = toDateKey(date);
-    const totals = getNutritionTotals(entries.filter((entry) => entry.date === dateKey));
-    return {
-      dateKey,
-      weekday,
-      dayNumber: String(date.getDate()),
-      calories: totals.calories,
-    };
+  return Array.from({ length: NUTRITION_WEEK_RADIUS * 2 + 1 }, (_, weekIndex) => {
+    const weekOffset = weekIndex - NUTRITION_WEEK_RADIUS;
+    const monday = new Date(currentMonday);
+    monday.setDate(currentMonday.getDate() + weekOffset * 7);
+    const days = labels.map((weekday, dayIndex) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + dayIndex);
+      const dateKey = toDateKey(date);
+      const totals = getNutritionTotals(entries.filter((entry) => entry.date === dateKey));
+      return {
+        dateKey,
+        weekday,
+        dayNumber: String(date.getDate()),
+        calories: totals.calories,
+      };
+    });
+    return { key: toDateKey(monday), days };
   });
 }
 
@@ -1225,9 +1336,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '700',
     },
     weekTitleWrap: {
-      flex: 1,
       alignItems: 'center',
       gap: 2,
+      marginBottom: 12,
     },
     weekTitle: {
       color: colors.text,
@@ -1239,9 +1350,11 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 12,
       fontWeight: '700',
     },
-    weekDaysRow: {
+    weekPage: {
       flexDirection: 'row',
+      alignItems: 'stretch',
       gap: 8,
+      paddingVertical: 2,
       marginBottom: 12,
     },
     weekDayCard: {
@@ -1317,6 +1430,85 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 9,
       fontWeight: '700',
       marginTop: 3,
+    },
+    weekDayCheck: {
+      marginTop: 4,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#22c55e',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    weekDayCheckText: {
+      color: '#ffffff',
+      fontSize: 10,
+      fontWeight: '900',
+      lineHeight: 12,
+    },
+    weekDayCheckPlaceholder: {
+      marginTop: 4,
+      width: 16,
+      height: 16,
+    },
+    streakRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 10,
+    },
+    streakFlame: {
+      fontSize: 14,
+    },
+    streakText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    macroSummaryRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 6,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+    },
+    macroSummaryCell: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 3,
+    },
+    macroSummaryLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    macroSummaryValue: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    macroSummaryValueStrong: {
+      fontSize: 20,
+      fontWeight: '900',
+    },
+    mealCaloriesCol: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    mealCaloriesValue: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    mealCaloriesLabel: {
+      color: colors.subtext,
+      fontSize: 10,
+      fontWeight: '700',
     },
     weekDayCaloriesActive: {
       color: colors.text,
@@ -2286,6 +2478,17 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 12,
       lineHeight: 18,
       marginTop: -8,
+    },
+    barcodeManualRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    barcodeManualInput: {
+      flex: 1,
+    },
+    barcodeFindBtnDisabled: {
+      opacity: 0.5,
     },
     barcodePreviewWrap: {
       borderRadius: 22,

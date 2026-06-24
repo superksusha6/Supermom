@@ -7,6 +7,7 @@ export type NutritionFoodPreset = {
   baseMode?: '100g' | '100ml' | 'serving';
   baseQuantity?: number;
   brand?: string;
+  barcode?: string;
   isCustom?: boolean;
   source?: 'custom' | 'open_food_facts' | 'usda';
   sourceLabel?: string;
@@ -174,6 +175,7 @@ export function customNutritionFoodToPreset(food: CustomNutritionFood): Nutritio
     baseMode: food.baseMode,
     baseQuantity,
     brand: food.brand,
+    barcode: food.barcode,
     isCustom: true,
     source: 'custom',
     sourceLabel: 'Saved',
@@ -191,6 +193,7 @@ export function nutritionPresetToCustomFood(preset: NutritionFoodPreset): Custom
     id: preset.id,
     name: preset.name,
     brand: preset.brand?.trim() || undefined,
+    barcode: preset.barcode?.trim() || undefined,
     baseMode,
     baseQuantity: Math.max(1, preset.baseQuantity || defaultBaseQuantity),
     calories: Math.max(0, Math.round(preset.caloriesPer100g * 10) / 10),

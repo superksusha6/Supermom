@@ -4,6 +4,7 @@ create table if not exists public.custom_nutrition_foods (
   family_id uuid not null references public.families(id) on delete cascade,
   name text not null,
   brand text,
+  barcode text,
   base_mode text not null default '100g' check (base_mode in ('100g', '100ml', 'serving')),
   base_quantity numeric(8,2) not null default 100,
   calories numeric(8,2) not null default 0,
@@ -13,6 +14,11 @@ create table if not exists public.custom_nutrition_foods (
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+-- Migration for existing installs: add the barcode column if missing.
+alter table public.custom_nutrition_foods add column if not exists barcode text;
+create index if not exists custom_nutrition_foods_barcode_idx
+  on public.custom_nutrition_foods (user_id, barcode);
 
 alter table public.custom_nutrition_foods enable row level security;
 
