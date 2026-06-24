@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/SectionCard';
 import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { lookupNutritionBarcode, normalizeNutritionSearchText, searchNutritionCatalog } from '@/lib/nutritionCatalog';
 import { analyzeMealPhoto } from '@/lib/mealVision';
-import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -96,6 +96,9 @@ export function NutritionScreen({
   const styles = useMemo(() => createStyles(colors, isMobile), [colors, isMobile]);
   const hasProfileInputs = Boolean(personalProfile.dateOfBirth && personalProfile.heightCm && personalProfile.weightKg);
   const [activeMealType, setActiveMealType] = useState<NutritionMealType | null>(null);
+  const [expandedMeal, setExpandedMeal] = useState<NutritionMealType | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [addTab, setAddTab] = useState<'search' | 'recent' | 'frequent' | 'saved'>('recent');
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -208,6 +211,38 @@ export function NutritionScreen({
       .sort((a, b) => scorePreset(b) - scorePreset(a))
       .slice(0, 8);
   }, [allFoodPresets, foodSearch, libraryMeta.favorites, libraryMeta.recentIds, mealTypeUsageCounts]);
+
+  const entryUsageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of nutritionEntries) {
+      const key = normalizeNutritionSearchText(entry.source?.displayName || entry.name);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [nutritionEntries]);
+
+  const recentPresets = useMemo(
+    () =>
+      libraryMeta.recentIds
+        .map((id) => allFoodPresets.find((preset) => preset.id === id))
+        .filter((preset): preset is NutritionFoodPreset => !!preset)
+        .slice(0, 25),
+    [libraryMeta.recentIds, allFoodPresets],
+  );
+
+  const frequentPresets = useMemo(
+    () =>
+      allFoodPresets
+        .map((preset) => ({ preset, count: entryUsageCounts.get(normalizeNutritionSearchText(preset.name)) || 0 }))
+        .filter((item) => item.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 25)
+        .map((item) => item.preset),
+    [allFoodPresets, entryUsageCounts],
+  );
+
+  const savedPresets = useMemo(() => customFoodPresets.map(customNutritionFoodToPreset), [customFoodPresets]);
   const visibleCatalogResults = useMemo(() => {
     const existingKeys = new Set(
       allFoodPresets.map((item) => `${(item.brand || '').trim().toLowerCase()}::${item.name.trim().toLowerCase()}::${item.baseMode || '100g'}`),
@@ -242,6 +277,22 @@ export function NutritionScreen({
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
   const selectedPresetValues = selectedPreset ? getNutritionValuesForGrams(selectedPreset, draftGrams) : null;
   const selectedPresetBaseMode = selectedPreset?.baseMode || '100g';
+  const selectedPresetReference = selectedPreset
+    ? selectedPreset.servingGrams && selectedPreset.servingGrams > 0
+      ? {
+          label: `Per serving · ${selectedPreset.servingGrams} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'}`,
+          values: getNutritionValuesForGrams(selectedPreset, String(selectedPreset.servingGrams)),
+        }
+      : {
+          label: selectedPreset.baseAmount,
+          values: {
+            calories: String(selectedPreset.caloriesPer100g),
+            protein: String(selectedPreset.proteinPer100g),
+            fat: String(selectedPreset.fatPer100g),
+            carbs: String(selectedPreset.carbsPer100g),
+          },
+        }
+    : null;
   const customFoodPreviewPreset = useMemo<NutritionFoodPreset | null>(() => {
     if (!customFoodMode || !draftMealName.trim()) return null;
     return {
@@ -404,7 +455,12 @@ export function NutritionScreen({
   function applyPresetSelection(item: NutritionFoodPreset) {
     const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
     const baseMode = item.baseMode || '100g';
-    const defaultAmount = baseMode === 'serving' ? String(item.baseQuantity || 1) : String(item.baseQuantity || 100);
+    const defaultAmount =
+      baseMode === 'serving'
+        ? String(item.baseQuantity || 1)
+        : item.servingGrams && item.servingGrams > 0
+          ? String(item.servingGrams)
+          : String(item.baseQuantity || 100);
     const next = getNutritionValuesForGrams(item, defaultAmount);
     setSelectedPreset(item);
     setDraftMealName(displayTitle);
@@ -415,6 +471,111 @@ export function NutritionScreen({
     setCustomServingType(baseMode);
     setDraftGrams(defaultAmount);
     setFoodSearch(displayTitle);
+  }
+
+  function openMealAdder(mealKey: NutritionMealType) {
+    setEditingEntryId(null);
+    setAddTab('recent');
+    setActiveMealType(mealKey);
+    setDraftMealName('');
+    setDraftCalories('');
+    setDraftProtein('');
+    setDraftFat('');
+    setDraftCarbs('');
+    setFoodSearch('');
+    setDraftGrams('100');
+    setSelectedPreset(null);
+    setAddFoodFlow('search');
+    setCustomFoodMode(false);
+    setPhotoEstimateMode(false);
+    setCustomBrand('');
+    setCustomBarcode('');
+    setCustomServingType('100g');
+    setMealPhotoError(null);
+    setMealPhotoNote(null);
+    setMealPhotoConfidence(null);
+  }
+
+  function removeNutritionEntry(entryId: string) {
+    onNutritionEntriesChange((prev) => prev.filter((entry) => entry.id !== entryId));
+  }
+
+  function editNutritionEntry(entry: NutritionFoodEntry) {
+    const source = entry.source;
+    if (!source) return;
+    const preset: NutritionFoodPreset = {
+      id: `entry-src-${entry.id}`,
+      name: source.displayName,
+      brand: source.brand,
+      baseAmount:
+        source.baseMode === 'serving'
+          ? 'per 1 serving'
+          : `per ${source.baseQuantity} ${source.baseMode === '100ml' ? 'ml' : 'g'}`,
+      baseMode: source.baseMode,
+      baseQuantity: source.baseQuantity,
+      servingGrams: source.servingGrams,
+      source: 'custom',
+      sourceLabel: 'Saved',
+      caloriesPer100g: source.caloriesPer100g,
+      proteinPer100g: source.proteinPer100g,
+      fatPer100g: source.fatPer100g,
+      carbsPer100g: source.carbsPer100g,
+    };
+    const values = getNutritionValuesForGrams(preset, source.grams);
+    setEditingEntryId(entry.id);
+    setActiveMealType(entry.mealType);
+    setSelectedPreset(preset);
+    setDraftMealName(source.displayName);
+    setDraftCalories(values.calories);
+    setDraftProtein(values.protein);
+    setDraftFat(values.fat);
+    setDraftCarbs(values.carbs);
+    setCustomServingType(source.baseMode);
+    setDraftGrams(source.grams);
+    setFoodSearch(source.displayName);
+    setAddFoodFlow('search');
+    setCustomFoodMode(false);
+    setPhotoEstimateMode(false);
+    setExpandedMeal(null);
+  }
+
+  function renderPresetRow(item: NutritionFoodPreset) {
+    return (
+      <Pressable key={item.id} style={styles.catalogResultCard} onPress={() => applyPresetSelection(item)}>
+        <Pressable
+          style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            toggleFavoritePreset(item);
+          }}
+        >
+          <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
+        </Pressable>
+        <View style={styles.catalogResultTopRow}>
+          <View style={styles.catalogResultCopy}>
+            <Text style={styles.catalogResultTitle}>{item.name}</Text>
+            <Text style={styles.catalogResultSubtitle}>
+              {item.brand?.trim() ? `${item.brand.trim()} · ${item.baseAmount}` : item.baseAmount}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.catalogResultMacros}>
+          {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  function applyDraftGrams(value: string) {
+    const grams = cleanNutritionNumber(value);
+    setDraftGrams(grams);
+    if (selectedPreset) {
+      const next = getNutritionValuesForGrams(selectedPreset, grams);
+      setDraftCalories(next.calories);
+      setDraftProtein(next.protein);
+      setDraftFat(next.fat);
+      setDraftCarbs(next.carbs);
+    }
   }
 
   async function openBarcodeScanner() {
@@ -510,7 +671,12 @@ export function NutritionScreen({
       }
       const displayTitle = preset.brand?.trim() ? `${preset.brand.trim()} ${preset.name}` : preset.name;
       const baseMode = preset.baseMode || '100g';
-      const defaultAmount = baseMode === 'serving' ? String(preset.baseQuantity || 1) : String(preset.baseQuantity || 100);
+      const defaultAmount =
+        baseMode === 'serving'
+          ? String(preset.baseQuantity || 1)
+          : preset.servingGrams && preset.servingGrams > 0
+            ? String(preset.servingGrams)
+            : String(preset.baseQuantity || 100);
       const next = getNutritionValuesForGrams(preset, defaultAmount);
       setSelectedPreset(preset);
       setDraftMealName(displayTitle);
@@ -685,63 +851,78 @@ export function NutritionScreen({
           </View>
         </View>
         <View style={styles.mealCardsWrap}>
-          {mealData.map((section) => (
+          {mealData.map((section) => {
+            const hasEntries = section.entries.length > 0;
+            const isExpanded = expandedMeal === section.key;
+            return (
             <View key={section.key} style={styles.mealRowCard}>
-              <View style={styles.mealTitleWrap}>
-                <View style={[styles.mealIconBadge, { backgroundColor: `${section.accent}18`, borderColor: `${section.accent}4D` }]}>
-                  <Text style={[styles.mealIconText, { color: section.accent }]}>{section.icon}</Text>
-                </View>
-                <View style={styles.mealHeaderCopy}>
-                  <Text style={styles.mealTitle}>{section.title}</Text>
-                  <Text style={styles.mealRowMeta}>
-                    {section.entries.length
-                      ? `${section.entries.length} item${section.entries.length === 1 ? '' : 's'} • P ${section.totals.protein} • F ${section.totals.fat} • C ${section.totals.carbs}`
-                      : 'Tap + to add foods'}
-                  </Text>
-                </View>
+              <View style={styles.mealRowHeader}>
+                <Pressable
+                  style={styles.mealRowMain}
+                  onPress={() => (hasEntries ? setExpandedMeal((prev) => (prev === section.key ? null : section.key)) : openMealAdder(section.key))}
+                >
+                  <View style={styles.mealTitleWrap}>
+                    <View style={[styles.mealIconBadge, { backgroundColor: `${section.accent}18`, borderColor: `${section.accent}4D` }]}>
+                      <Text style={[styles.mealIconText, { color: section.accent }]}>{section.icon}</Text>
+                    </View>
+                    <View style={styles.mealHeaderCopy}>
+                      <Text style={styles.mealTitle}>{section.title}</Text>
+                      <Text style={styles.mealRowMeta}>
+                        {hasEntries
+                          ? `${section.entries.length} item${section.entries.length === 1 ? '' : 's'} • ${isExpanded ? 'tap to collapse' : 'tap to view'}`
+                          : 'Tap + to add foods'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.mealCaloriesCol}>
+                    <Text style={styles.mealCaloriesValue}>{section.totals.calories}</Text>
+                    <Text style={styles.mealCaloriesLabel}>kcal</Text>
+                  </View>
+                </Pressable>
+                <Pressable style={styles.addMealBtn} onPress={() => openMealAdder(section.key)}>
+                  <Text style={styles.addMealBtnText}>+</Text>
+                </Pressable>
               </View>
-              <View style={styles.mealCaloriesCol}>
-                <Text style={styles.mealCaloriesValue}>{section.totals.calories}</Text>
-                <Text style={styles.mealCaloriesLabel}>kcal</Text>
-              </View>
-              <Pressable
-                style={styles.addMealBtn}
-                onPress={() => {
-                  setActiveMealType(section.key);
-                  setDraftMealName('');
-                  setDraftCalories('');
-                  setDraftProtein('');
-                  setDraftFat('');
-                  setDraftCarbs('');
-                  setFoodSearch('');
-                  setDraftGrams('100');
-                  setSelectedPreset(null);
-                  setAddFoodFlow('search');
-                  setCustomFoodMode(false);
-                  setPhotoEstimateMode(false);
-                  setCustomBrand('');
-                  setCustomServingType('100g');
-                  setMealPhotoError(null);
-                  setMealPhotoNote(null);
-                  setMealPhotoConfidence(null);
-                }}
-              >
-                <Text style={styles.addMealBtnText}>+</Text>
-              </Pressable>
+              {isExpanded && hasEntries ? (
+                <View style={styles.mealEntriesWrap}>
+                  {section.entries.map((entry) => (
+                    <View key={entry.id} style={styles.mealEntryRow}>
+                      <Pressable
+                        style={styles.mealEntryCopy}
+                        disabled={!entry.source}
+                        onPress={() => editNutritionEntry(entry)}
+                      >
+                        <Text style={styles.mealEntryName}>{entry.name}</Text>
+                        <Text style={styles.mealEntryMeta}>
+                          {`${entry.calories} kcal · P ${entry.protein} · F ${entry.fat} · C ${entry.carbs}`}
+                          {entry.source ? '  ·  tap to edit' : ''}
+                        </Text>
+                      </Pressable>
+                      <Pressable style={styles.mealEntryDelete} onPress={() => removeNutritionEntry(entry.id)}>
+                        <Text style={styles.mealEntryDeleteText}>×</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Pressable style={styles.mealAddMoreBtn} onPress={() => openMealAdder(section.key)}>
+                    <Text style={styles.mealAddMoreText}>+ Add food</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
-          ))}
+            );
+          })}
         </View>
       </SectionCard>
 
         </ScrollView>
       ) : null}
 
-      <Modal visible={!!activeMealType} transparent animationType="fade" onRequestClose={() => setActiveMealType(null)}>
+      <Modal visible={!!activeMealType} transparent animationType="fade" onRequestClose={() => { setActiveMealType(null); setEditingEntryId(null); }}>
         <View style={styles.modalScrim}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveMealType(null)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setActiveMealType(null); setEditingEntryId(null); }} />
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalEyebrow}>Add product</Text>
+              <Text style={styles.modalEyebrow}>{editingEntryId ? 'Edit product' : 'Add product'}</Text>
               <Text style={styles.modalTitle}>
                 {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
               </Text>
@@ -808,8 +989,27 @@ export function NutritionScreen({
                     <Text style={styles.photoPreviewHint}>You can edit the grams and nutrition below before saving.</Text>
                   </View>
                 ) : null}
-                {!customFoodMode ? (
+                {!customFoodMode && !selectedPreset ? (
                   <>
+                    <View style={styles.addTabsRow}>
+                      {([
+                        { key: 'recent', label: 'Recent' },
+                        { key: 'frequent', label: 'Frequent' },
+                        { key: 'saved', label: 'Saved' },
+                        { key: 'search', label: 'Search' },
+                      ] as const).map((tab) => (
+                        <Pressable
+                          key={tab.key}
+                          style={[styles.addTab, addTab === tab.key && styles.addTabActive]}
+                          onPress={() => {
+                            setAddTab(tab.key);
+                            if (tab.key !== 'search') setFoodSearch('');
+                          }}
+                        >
+                          <Text style={[styles.addTabText, addTab === tab.key && styles.addTabTextActive]}>{tab.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
                     {foodSearch.trim().length >= 1 && filteredFoodPresets.length ? (
                       <View style={styles.quickSection}>
                         <View style={styles.quickSectionHeader}>
@@ -824,7 +1024,7 @@ export function NutritionScreen({
                           {filteredFoodPresets.map((item) => (
                             <Pressable
                               key={item.id}
-                              style={[styles.presetCard, selectedPreset?.id === item.id && styles.presetCardActive]}
+                              style={styles.presetCard}
                               onPress={() => applyPresetSelection(item)}
                             >
                               <Pressable
@@ -846,10 +1046,35 @@ export function NutritionScreen({
                         </ScrollView>
                       </View>
                     ) : null}
-                    {addFoodFlow === 'search' && !foodSearch.trim() ? (
-                      <Text style={styles.searchEmptyHint}>
-                        Start typing to see quick suggestions and foods you usually add for this meal.
-                      </Text>
+                    {!foodSearch.trim() && addTab === 'recent' ? (
+                      <View style={styles.presetListWrap}>
+                        {recentPresets.length ? (
+                          recentPresets.map(renderPresetRow)
+                        ) : (
+                          <Text style={styles.catalogEmpty}>Nothing yet — foods you add will show up here for quick re-adding.</Text>
+                        )}
+                      </View>
+                    ) : null}
+                    {!foodSearch.trim() && addTab === 'frequent' ? (
+                      <View style={styles.presetListWrap}>
+                        {frequentPresets.length ? (
+                          frequentPresets.map(renderPresetRow)
+                        ) : (
+                          <Text style={styles.catalogEmpty}>No frequent foods yet — they appear once you log the same food a few times.</Text>
+                        )}
+                      </View>
+                    ) : null}
+                    {!foodSearch.trim() && addTab === 'saved' ? (
+                      <View style={styles.presetListWrap}>
+                        {savedPresets.length ? (
+                          savedPresets.map(renderPresetRow)
+                        ) : (
+                          <Text style={styles.catalogEmpty}>No saved foods yet — scanned and custom foods are saved here.</Text>
+                        )}
+                      </View>
+                    ) : null}
+                    {!foodSearch.trim() && addTab === 'search' ? (
+                      <Text style={styles.searchEmptyHint}>Start typing to search the nutrition database.</Text>
                     ) : null}
                     {foodSearch.trim() && !hasExactFoodMatch ? (
                       <Pressable
@@ -893,7 +1118,7 @@ export function NutritionScreen({
                         {visibleCatalogResults.map((item) => (
                           <Pressable
                             key={item.id}
-                            style={[styles.catalogResultCard, selectedPreset?.id === item.id && styles.presetCardActive]}
+                            style={styles.catalogResultCard}
                             onPress={() => applyPresetSelection(item)}
                           >
                             <Pressable
@@ -923,7 +1148,7 @@ export function NutritionScreen({
                       </View>
                     ) : null}
                   </>
-                ) : (
+                ) : customFoodMode ? (
                   <View style={styles.customFoodCard}>
                     <View style={styles.customFoodHeader}>
                       <View>
@@ -973,18 +1198,18 @@ export function NutritionScreen({
                       ))}
                     </View>
                   </View>
-                )}
+                ) : null}
               </View>
 
-              {selectedPreset ? (
+              {selectedPreset && selectedPresetReference ? (
                 <View style={styles.productInfoCard}>
                   <Text style={styles.productInfoTitle}>{selectedPreset.name}</Text>
-                  <Text style={styles.productInfoSubtitle}>{selectedPreset.baseAmount}</Text>
+                  <Text style={styles.productInfoSubtitle}>{selectedPresetReference.label}</Text>
                   <View style={styles.productInfoStats}>
-                    <Text style={styles.productInfoStat}>{selectedPreset.caloriesPer100g} kcal</Text>
-                    <Text style={styles.productInfoStat}>P {selectedPreset.proteinPer100g}</Text>
-                    <Text style={styles.productInfoStat}>F {selectedPreset.fatPer100g}</Text>
-                    <Text style={styles.productInfoStat}>C {selectedPreset.carbsPer100g}</Text>
+                    <Text style={styles.productInfoStat}>{selectedPresetReference.values.calories} kcal</Text>
+                    <Text style={styles.productInfoStat}>P {selectedPresetReference.values.protein}</Text>
+                    <Text style={styles.productInfoStat}>F {selectedPresetReference.values.fat}</Text>
+                    <Text style={styles.productInfoStat}>C {selectedPresetReference.values.carbs}</Text>
                   </View>
                 </View>
               ) : null}
@@ -1001,17 +1226,7 @@ export function NutritionScreen({
                             keyboardType="decimal-pad"
                             style={styles.input}
                             value={draftGrams}
-                            onChangeText={(text) => {
-                              const grams = cleanNutritionNumber(text);
-                              setDraftGrams(grams);
-                              if (selectedPreset) {
-                                const next = getNutritionValuesForGrams(selectedPreset, grams);
-                                setDraftCalories(next.calories);
-                                setDraftProtein(next.protein);
-                                setDraftFat(next.fat);
-                                setDraftCarbs(next.carbs);
-                              }
-                            }}
+                            onChangeText={(text) => applyDraftGrams(text)}
                           />
                         </View>
                         <View style={styles.gramsUnitChip}>
@@ -1071,6 +1286,10 @@ export function NutritionScreen({
                     ) : null}
                       </>
                     ) : selectedPresetValues ? (
+                      <>
+                      <Text style={styles.portionResultLabel}>
+                        {`For ${draftGrams || '0'} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'} you log:`}
+                      </Text>
                       <View style={styles.macroPreviewGrid}>
                         <View style={styles.macroPreviewCard}>
                           <Text style={styles.macroPreviewValue}>{selectedPresetValues.calories || '0'}</Text>
@@ -1089,12 +1308,13 @@ export function NutritionScreen({
                           <Text style={styles.macroPreviewLabel}>Carbs</Text>
                         </View>
                       </View>
+                      </>
                     ) : null}
                   </>
                 ) : null}
               </View>
             <View style={styles.modalActions}>
-              <Pressable style={styles.modalGhostBtn} onPress={() => setActiveMealType(null)}>
+              <Pressable style={styles.modalGhostBtn} onPress={() => { setActiveMealType(null); setEditingEntryId(null); }}>
                 <Text style={styles.modalGhostBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -1136,25 +1356,43 @@ export function NutritionScreen({
                     }
                   }
                   if (selectedPreset) registerRecentPreset(selectedPreset.id);
-                  onNutritionEntriesChange((prev) => [
-                    {
-                      id: createUuid(),
-                      name: formatNutritionEntryName({
-                        name: draftMealName.trim(),
-                        grams: draftGrams,
-                        customBrand,
-                        customFoodMode,
-                        customServingType,
-                      }),
-                      mealType: activeMealType,
-                      date: selectedDateKey,
-                      calories: nextEntryCalories,
-                      protein: nextEntryProtein,
-                      fat: nextEntryFat,
-                      carbs: nextEntryCarbs,
-                    },
-                    ...prev,
-                  ]);
+                  const sourcePreset = customFoodMode ? customFoodPreviewPreset : selectedPreset;
+                  const entrySource: NutritionEntrySource | undefined = sourcePreset
+                    ? {
+                        displayName: customFoodMode ? draftMealName.trim() : sourcePreset.name,
+                        brand: customFoodMode ? customBrand.trim() || undefined : sourcePreset.brand,
+                        grams: draftGrams || '100',
+                        baseMode: customFoodMode ? customServingType : sourcePreset.baseMode || '100g',
+                        baseQuantity: sourcePreset.baseQuantity || (customFoodMode && customServingType === 'serving' ? 1 : 100),
+                        caloriesPer100g: sourcePreset.caloriesPer100g,
+                        proteinPer100g: sourcePreset.proteinPer100g,
+                        fatPer100g: sourcePreset.fatPer100g,
+                        carbsPer100g: sourcePreset.carbsPer100g,
+                        servingGrams: sourcePreset.servingGrams,
+                      }
+                    : undefined;
+                  const builtEntry: NutritionFoodEntry = {
+                    id: editingEntryId || createUuid(),
+                    name: formatNutritionEntryName({
+                      name: draftMealName.trim(),
+                      grams: draftGrams,
+                      customBrand,
+                      customFoodMode,
+                      customServingType,
+                    }),
+                    mealType: activeMealType,
+                    date: selectedDateKey,
+                    calories: nextEntryCalories,
+                    protein: nextEntryProtein,
+                    fat: nextEntryFat,
+                    carbs: nextEntryCarbs,
+                    source: entrySource,
+                  };
+                  onNutritionEntriesChange((prev) =>
+                    editingEntryId
+                      ? prev.map((entry) => (entry.id === editingEntryId ? builtEntry : entry))
+                      : [builtEntry, ...prev],
+                  );
                   setDraftMealName('');
                   setDraftCalories('');
                   setDraftProtein('');
@@ -1173,9 +1411,10 @@ export function NutritionScreen({
                   setMealPhotoError(null);
                   setMealPhotoNote(null);
                   setActiveMealType(null);
+                  setEditingEntryId(null);
                 }}
               >
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{editingEntryId ? 'Update' : 'Save'}</Text>
               </Pressable>
             </View>
             </ScrollView>
@@ -1817,12 +2056,79 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.glassStrong,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    mealRowHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    mealRowMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    mealEntriesWrap: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      gap: 8,
+    },
+    mealEntryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    mealEntryCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    mealEntryName: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    mealEntryMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    mealEntryDelete: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.glassSoft,
+    },
+    mealEntryDeleteText: {
+      color: colors.subtext,
+      fontSize: 18,
+      fontWeight: '800',
+      lineHeight: 20,
+    },
+    mealAddMoreBtn: {
+      marginTop: 2,
+      alignSelf: 'flex-start',
+      paddingVertical: 8,
       paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    mealAddMoreText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
     },
     mealTitleWrap: {
       flex: 1,
@@ -2148,6 +2454,36 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       lineHeight: 17,
       marginBottom: 10,
     },
+    addTabsRow: {
+      flexDirection: 'row',
+      gap: 6,
+      marginBottom: 12,
+    },
+    addTab: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      alignItems: 'center',
+    },
+    addTabActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    addTabText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    addTabTextActive: {
+      color: colors.primary,
+    },
+    presetListWrap: {
+      gap: 8,
+      marginBottom: 10,
+    },
     presetScrollContent: {
       gap: 10,
       paddingBottom: 10,
@@ -2411,6 +2747,13 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: colors.text,
       fontSize: 16,
       fontWeight: '800',
+    },
+    portionResultLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+      marginTop: 12,
+      marginBottom: 8,
     },
     macroPreviewGrid: {
       flexDirection: 'row',

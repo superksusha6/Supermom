@@ -396,9 +396,12 @@ create table if not exists nutrition_entries (
   protein numeric(8,2) not null default 0,
   fat numeric(8,2) not null default 0,
   carbs numeric(8,2) not null default 0,
+  source_json jsonb,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+alter table nutrition_entries add column if not exists source_json jsonb;
 
 create table if not exists cycle_entries (
   id uuid primary key default gen_random_uuid(),

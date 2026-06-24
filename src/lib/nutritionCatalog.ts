@@ -99,6 +99,17 @@ function getOpenFoodFactsBaseMode(product: OpenFoodFactsProduct): '100g' | '100m
   return '100g';
 }
 
+function readOpenFoodFactsServingGrams(product: OpenFoodFactsProduct): number | undefined {
+  const quantity = Number(product.serving_quantity);
+  if (Number.isFinite(quantity) && quantity > 0) return Math.round(quantity);
+  const match = collapseWhitespace(product.serving_size).match(/([\d.]+)\s*(g|ml)/i);
+  if (match) {
+    const parsed = Math.round(parseFloat(match[1]));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
 function mapOpenFoodFactsProduct(product: OpenFoodFactsProduct): NutritionFoodPreset | null {
   const name = collapseWhitespace(product.product_name || product.generic_name);
   if (!name) return null;
@@ -117,11 +128,13 @@ function mapOpenFoodFactsProduct(product: OpenFoodFactsProduct): NutritionFoodPr
   const brand = collapseWhitespace(product.brands?.split(',')[0]);
   const baseMode = getOpenFoodFactsBaseMode(product);
   const code = collapseWhitespace(product.code);
+  const servingGrams = readOpenFoodFactsServingGrams(product);
   return {
     id: code ? `off-${code}` : `off-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
     name,
     brand: brand || undefined,
     barcode: code || undefined,
+    servingGrams,
     baseAmount: baseMode === '100ml' ? 'per 100 ml' : 'per 100 g',
     baseMode,
     baseQuantity: 100,

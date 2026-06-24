@@ -1841,7 +1841,7 @@ export async function listNutritionEntries(session: AppSession): Promise<Nutriti
   const client = requireClient();
   const { data, error } = await client
     .from('nutrition_entries')
-    .select('id, name, meal_type, entry_date, calories, protein, fat, carbs')
+    .select('id, name, meal_type, entry_date, calories, protein, fat, carbs, source_json')
     .eq('user_id', session.userId)
     .order('entry_date', { ascending: false });
   if (isMissingNutritionEntriesTableError(error)) {
@@ -1857,6 +1857,7 @@ export async function listNutritionEntries(session: AppSession): Promise<Nutriti
     protein: String(row.protein ?? '0'),
     fat: String(row.fat ?? '0'),
     carbs: String(row.carbs ?? '0'),
+    source: (row.source_json as NutritionFoodEntry['source']) || undefined,
   }));
 }
 
@@ -1963,6 +1964,7 @@ export async function replaceNutritionEntries(session: AppSession, entries: Nutr
       protein: Number(entry.protein) || 0,
       fat: Number(entry.fat) || 0,
       carbs: Number(entry.carbs) || 0,
+      source_json: entry.source ?? null,
       updated_at: new Date().toISOString(),
     })),
     { onConflict: 'id' },

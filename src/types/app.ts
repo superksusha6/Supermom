@@ -57,6 +57,19 @@ export type NutritionPace = 'fast' | 'flexible';
 export type NutritionMealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other';
 export type HabitReminderMode = 'off' | 'smart' | 'custom';
 
+export type NutritionEntrySource = {
+  displayName: string;
+  brand?: string;
+  grams: string;
+  baseMode: '100g' | '100ml' | 'serving';
+  baseQuantity: number;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  fatPer100g: number;
+  carbsPer100g: number;
+  servingGrams?: number;
+};
+
 export type NutritionFoodEntry = {
   id: string;
   name: string;
@@ -66,6 +79,7 @@ export type NutritionFoodEntry = {
   protein: string;
   fat: string;
   carbs: string;
+  source?: NutritionEntrySource;
 };
 
 export type CustomNutritionFood = {

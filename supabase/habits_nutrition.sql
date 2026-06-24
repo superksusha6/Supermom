@@ -31,9 +31,13 @@ create table if not exists public.nutrition_entries (
   protein numeric(8,2) not null default 0,
   fat numeric(8,2) not null default 0,
   carbs numeric(8,2) not null default 0,
+  source_json jsonb,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+-- Migration for existing installs: remember the source product + grams so entries can be edited.
+alter table public.nutrition_entries add column if not exists source_json jsonb;
 
 alter table public.habit_entries enable row level security;
 alter table public.nutrition_entries enable row level security;

@@ -8,6 +8,7 @@ export type NutritionFoodPreset = {
   baseQuantity?: number;
   brand?: string;
   barcode?: string;
+  servingGrams?: number;
   isCustom?: boolean;
   source?: 'custom' | 'open_food_facts' | 'usda';
   sourceLabel?: string;
