@@ -180,19 +180,23 @@ export function NutritionScreen({
   const filteredFoodPresets = useMemo(() => {
     const query = normalizeNutritionSearchText(foodSearch);
     if (!query) return [] as NutritionFoodPreset[];
+    const aliasTextOf = (item: NutritionFoodPreset) =>
+      item.aliases?.length ? normalizeNutritionSearchText(item.aliases.join(' ')) : '';
     const scorePreset = (item: NutritionFoodPreset) => {
       const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
       const name = normalizeNutritionSearchText(item.name);
       const title = normalizeNutritionSearchText(displayTitle);
       const brand = normalizeNutritionSearchText(item.brand);
+      const aliasText = aliasTextOf(item);
       const tokens = query.split(' ').filter(Boolean);
       const mealScore = mealTypeUsageCounts.get(name) || mealTypeUsageCounts.get(title) || 0;
-      const prefixScore = name.startsWith(query) || title.startsWith(query) || brand.startsWith(query) ? 100 : 0;
+      const prefixScore = name.startsWith(query) || title.startsWith(query) || brand.startsWith(query) || aliasText.startsWith(query) ? 100 : 0;
       const favoriteScore = libraryMeta.favorites.includes(item.id) ? 20 : 0;
       const recentIndex = libraryMeta.recentIds.indexOf(item.id);
       const recentScore = recentIndex >= 0 ? Math.max(0, 12 - recentIndex) : 0;
-      const tokenScore = tokens.reduce((sum, token) => sum + (title.includes(token) ? 20 : 0), 0);
-      const allTokensScore = tokens.length > 1 && tokens.every((token) => title.includes(token)) ? 100 : 0;
+      const haystack = `${title} ${aliasText}`;
+      const tokenScore = tokens.reduce((sum, token) => sum + (haystack.includes(token) ? 20 : 0), 0);
+      const allTokensScore = tokens.length > 1 && tokens.every((token) => haystack.includes(token)) ? 100 : 0;
       return prefixScore + favoriteScore + recentScore + mealScore * 10 + tokenScore + allTokensScore;
     };
     return [...allFoodPresets]
@@ -201,12 +205,15 @@ export function NutritionScreen({
         const normalizedName = normalizeNutritionSearchText(item.name);
         const normalizedTitle = normalizeNutritionSearchText(title);
         const normalizedBrand = normalizeNutritionSearchText(item.brand);
+        const aliasText = aliasTextOf(item);
         const tokens = query.split(' ').filter(Boolean);
+        const haystack = `${normalizedTitle} ${aliasText}`;
         return (
           normalizedName.includes(query) ||
           normalizedTitle.includes(query) ||
           normalizedBrand.includes(query) ||
-          (tokens.length > 1 && tokens.every((token) => normalizedTitle.includes(token)))
+          aliasText.includes(query) ||
+          (tokens.length > 1 && tokens.every((token) => haystack.includes(token)))
         );
       })
       .sort((a, b) => scorePreset(b) - scorePreset(a))

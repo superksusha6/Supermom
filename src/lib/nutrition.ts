@@ -9,6 +9,7 @@ export type NutritionFoodPreset = {
   brand?: string;
   barcode?: string;
   servingGrams?: number;
+  aliases?: string[];
   isCustom?: boolean;
   source?: 'custom' | 'open_food_facts' | 'usda';
   sourceLabel?: string;
@@ -141,6 +142,44 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-omelet-with-vegetables', name: 'Omelet with vegetables', baseAmount: 'per 100 g', caloriesPer100g: 120, proteinPer100g: 10, fatPer100g: 8, carbsPer100g: 4 },
   { id: 'preset-syrniki-classic', name: 'Syrniki, classic', baseAmount: 'per 100 g', caloriesPer100g: 220, proteinPer100g: 12, fatPer100g: 10, carbsPer100g: 20 },
   { id: 'preset-syrniki-no-sugar', name: 'Syrniki, no sugar', baseAmount: 'per 100 g', caloriesPer100g: 180, proteinPer100g: 14, fatPer100g: 8, carbsPer100g: 12 },
+
+  // Ready home dishes with realistic cooked nutrition per 100 g (+ search synonyms)
+  { id: 'preset-mashed-potatoes', name: 'Mashed potatoes', baseAmount: 'per 100 g', caloriesPer100g: 110, proteinPer100g: 2, fatPer100g: 4, carbsPer100g: 16, aliases: ['puree', 'potato puree', 'creamy mashed potato'] },
+  { id: 'preset-mashed-potatoes-water', name: 'Mashed potatoes on water', baseAmount: 'per 100 g', caloriesPer100g: 80, proteinPer100g: 2, fatPer100g: 0.5, carbsPer100g: 17, aliases: ['mashed potato no butter'] },
+  { id: 'preset-baked-potato', name: 'Baked potato', baseAmount: 'per 100 g', caloriesPer100g: 95, proteinPer100g: 2.5, fatPer100g: 0.3, carbsPer100g: 20, aliases: ['oven potato', 'roast potato'] },
+  { id: 'preset-french-fries', name: 'French fries', baseAmount: 'per 100 g', caloriesPer100g: 310, proteinPer100g: 3.4, fatPer100g: 15, carbsPer100g: 41, aliases: ['fries', 'fried potato'] },
+
+  { id: 'preset-boiled-buckwheat-side', name: 'Buckwheat, boiled', baseAmount: 'per 100 g', caloriesPer100g: 110, proteinPer100g: 4, fatPer100g: 1, carbsPer100g: 21, aliases: ['cooked buckwheat'] },
+  { id: 'preset-boiled-bulgur-side', name: 'Bulgur, boiled', baseAmount: 'per 100 g', caloriesPer100g: 110, proteinPer100g: 3, fatPer100g: 0.3, carbsPer100g: 23, aliases: ['cooked bulgur'] },
+  { id: 'preset-boiled-quinoa-side', name: 'Quinoa, boiled', baseAmount: 'per 100 g', caloriesPer100g: 120, proteinPer100g: 4.4, fatPer100g: 1.9, carbsPer100g: 21, aliases: ['cooked quinoa'] },
+
+  { id: 'preset-dorado-steamed', name: 'Dorado, steamed', baseAmount: 'per 100 g', caloriesPer100g: 100, proteinPer100g: 19, fatPer100g: 3, carbsPer100g: 0, aliases: ['sea bream', 'dorada', 'baked dorado'] },
+  { id: 'preset-seabass-steamed', name: 'Sea bass, steamed', baseAmount: 'per 100 g', caloriesPer100g: 100, proteinPer100g: 18, fatPer100g: 2.5, carbsPer100g: 0, aliases: ['baked sea bass', 'branzino'] },
+  { id: 'preset-salmon-steamed', name: 'Salmon, steamed', baseAmount: 'per 100 g', caloriesPer100g: 200, proteinPer100g: 22, fatPer100g: 13, carbsPer100g: 0, aliases: ['baked salmon', 'poached salmon'] },
+  { id: 'preset-cod-steamed', name: 'Cod, steamed', baseAmount: 'per 100 g', caloriesPer100g: 80, proteinPer100g: 18, fatPer100g: 0.7, carbsPer100g: 0, aliases: ['boiled cod', 'baked cod'] },
+  { id: 'preset-pollock-steamed', name: 'Pollock, steamed', baseAmount: 'per 100 g', caloriesPer100g: 75, proteinPer100g: 16, fatPer100g: 0.9, carbsPer100g: 0, aliases: ['boiled pollock'] },
+  { id: 'preset-pikeperch-steamed', name: 'Pike perch, steamed', baseAmount: 'per 100 g', caloriesPer100g: 84, proteinPer100g: 19, fatPer100g: 0.8, carbsPer100g: 0, aliases: ['zander', 'walleye'] },
+  { id: 'preset-hake-steamed', name: 'Hake, steamed', baseAmount: 'per 100 g', caloriesPer100g: 86, proteinPer100g: 16, fatPer100g: 2, carbsPer100g: 0, aliases: ['boiled hake'] },
+  { id: 'preset-pink-salmon-steamed', name: 'Pink salmon, steamed', baseAmount: 'per 100 g', caloriesPer100g: 140, proteinPer100g: 21, fatPer100g: 6, carbsPer100g: 0, aliases: ['baked pink salmon', 'humpback salmon'] },
+  { id: 'preset-mackerel-baked', name: 'Mackerel, baked', baseAmount: 'per 100 g', caloriesPer100g: 190, proteinPer100g: 18, fatPer100g: 13, carbsPer100g: 0, aliases: ['baked mackerel'] },
+
+  { id: 'preset-chicken-breast-boiled', name: 'Chicken breast, boiled', baseAmount: 'per 100 g', caloriesPer100g: 130, proteinPer100g: 27, fatPer100g: 2, carbsPer100g: 0, aliases: ['steamed chicken breast', 'poached chicken'] },
+  { id: 'preset-chicken-cutlets', name: 'Chicken cutlets', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 16, fatPer100g: 10, carbsPer100g: 6, aliases: ['chicken patties', 'chicken kotlety'] },
+  { id: 'preset-turkey-cutlets', name: 'Turkey cutlets', baseAmount: 'per 100 g', caloriesPer100g: 150, proteinPer100g: 17, fatPer100g: 7, carbsPer100g: 5, aliases: ['turkey patties'] },
+  { id: 'preset-meatballs', name: 'Meatballs', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 12, fatPer100g: 10, carbsPer100g: 8, aliases: ['beef meatballs'] },
+  { id: 'preset-beef-stew', name: 'Beef stew', baseAmount: 'per 100 g', caloriesPer100g: 180, proteinPer100g: 16, fatPer100g: 12, carbsPer100g: 2, aliases: ['braised beef', 'stewed beef'] },
+
+  { id: 'preset-boiled-egg', name: 'Boiled egg', baseAmount: 'per 100 g', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1, aliases: ['hard boiled egg'] },
+  { id: 'preset-fried-eggs', name: 'Fried eggs', baseAmount: 'per 100 g', caloriesPer100g: 200, proteinPer100g: 13, fatPer100g: 16, carbsPer100g: 1, aliases: ['sunny side up'] },
+
+  { id: 'preset-cottage-cheese-bake', name: 'Cottage cheese bake', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 16, fatPer100g: 5, carbsPer100g: 15, aliases: ['curd bake', 'zapekanka'] },
+
+  { id: 'preset-broccoli-steamed', name: 'Broccoli, steamed', baseAmount: 'per 100 g', caloriesPer100g: 35, proteinPer100g: 3, fatPer100g: 0.4, carbsPer100g: 7, aliases: ['boiled broccoli'] },
+  { id: 'preset-cauliflower-steamed', name: 'Cauliflower, steamed', baseAmount: 'per 100 g', caloriesPer100g: 25, proteinPer100g: 2, fatPer100g: 0.3, carbsPer100g: 5, aliases: ['boiled cauliflower'] },
+  { id: 'preset-vegetables-steamed', name: 'Vegetables, steamed', baseAmount: 'per 100 g', caloriesPer100g: 45, proteinPer100g: 2.5, fatPer100g: 0.5, carbsPer100g: 8, aliases: ['mixed steamed veg', 'veg stew'] },
+  { id: 'preset-zucchini-steamed', name: 'Zucchini, steamed', baseAmount: 'per 100 g', caloriesPer100g: 20, proteinPer100g: 1, fatPer100g: 0.3, carbsPer100g: 4, aliases: ['boiled zucchini', 'courgette'] },
+
+  { id: 'preset-mushroom-soup', name: 'Mushroom soup', baseAmount: 'per 100 g', caloriesPer100g: 50, proteinPer100g: 2, fatPer100g: 3, carbsPer100g: 4, aliases: ['cream of mushroom'] },
 ];
 
 export function getNutritionValuesForGrams(preset: NutritionFoodPreset, gramsValue: string) {
