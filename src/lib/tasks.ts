@@ -1863,23 +1863,40 @@ export async function listNutritionEntries(session: AppSession): Promise<Nutriti
 
 export async function listCustomNutritionFoods(session: AppSession): Promise<CustomNutritionFood[]> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('custom_nutrition_foods')
-    .select('id, name, brand, barcode, serving_grams, serving_json, base_mode, base_quantity, calories, protein, fat, carbs')
-    .eq('user_id', session.userId)
-    .order('updated_at', { ascending: false });
-  if (isMissingCustomNutritionFoodsTableError(error)) {
-    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then refresh.');
+  const optionalCols = ['serving_grams', 'serving_json', 'barcode'];
+  const omit = new Set<string>();
+  let data: Record<string, unknown>[] | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const cols = ['id', 'name', 'brand', 'barcode', 'serving_grams', 'serving_json', 'base_mode', 'base_quantity', 'calories', 'protein', 'fat', 'carbs']
+      .filter((c) => !omit.has(c))
+      .join(', ');
+    const result = await client
+      .from('custom_nutrition_foods')
+      .select(cols)
+      .eq('user_id', session.userId)
+      .order('updated_at', { ascending: false });
+    if (!result.error) {
+      data = result.data as unknown as Record<string, unknown>[];
+      break;
+    }
+    if (isMissingCustomNutritionFoodsTableError(result.error)) {
+      throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then refresh.');
+    }
+    const missingCol = missingColumnName(result.error);
+    if (missingCol && optionalCols.includes(missingCol) && !omit.has(missingCol)) {
+      omit.add(missingCol);
+      continue;
+    }
+    throw result.error;
   }
-  if (error) throw error;
   return (data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    brand: row.brand || undefined,
-    barcode: row.barcode || undefined,
+    id: row.id as string,
+    name: row.name as string,
+    brand: (row.brand as string) || undefined,
+    barcode: (row.barcode as string) || undefined,
     servingGrams: row.serving_grams != null ? Number(row.serving_grams) : undefined,
     serving: (row.serving_json as CustomNutritionFood['serving']) || undefined,
-    baseMode: row.base_mode || '100g',
+    baseMode: (row.base_mode as CustomNutritionFood['baseMode']) || '100g',
     baseQuantity: Number(row.base_quantity) || 100,
     calories: Number(row.calories) || 0,
     protein: Number(row.protein) || 0,
@@ -1900,16 +1917,14 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
   }
 
   const nextIds = new Set(foods.map((food) => food.id));
-  const { error } = await client.from('custom_nutrition_foods').upsert(
-    foods.map((food) => ({
+  const buildRow = (food: CustomNutritionFood, omit: Set<string>) => {
+    const row: Record<string, unknown> = {
       id: food.id,
       user_id: session.userId,
       family_id: session.familyId,
       name: food.name,
       brand: food.brand || null,
       barcode: food.barcode || null,
-      serving_grams: food.servingGrams ?? null,
-      serving_json: food.serving ?? null,
       base_mode: food.baseMode,
       base_quantity: food.baseQuantity,
       calories: food.calories,
@@ -1917,11 +1932,31 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
       fat: food.fat,
       carbs: food.carbs,
       updated_at: new Date().toISOString(),
-    })),
-    { onConflict: 'id' },
-  );
-  if (isMissingCustomNutritionFoodsTableError(error)) {
-    throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+    };
+    if (!omit.has('serving_grams')) row.serving_grams = food.servingGrams ?? null;
+    if (!omit.has('serving_json')) row.serving_json = food.serving ?? null;
+    if (!omit.has('barcode')) row.barcode = food.barcode || null;
+    return row;
+  };
+  // Save resiliently: if an optional column has not been migrated yet, drop it and retry
+  // instead of failing the whole save (which would otherwise lose the user's data).
+  const omit = new Set<string>();
+  let error: unknown = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const result = await client
+      .from('custom_nutrition_foods')
+      .upsert(foods.map((food) => buildRow(food, omit)), { onConflict: 'id' });
+    error = result.error;
+    if (!error) break;
+    if (isMissingCustomNutritionFoodsTableError(error)) {
+      throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
+    }
+    const missingCol = missingColumnName(error);
+    if (missingCol && !omit.has(missingCol)) {
+      omit.add(missingCol);
+      continue;
+    }
+    break;
   }
   if (error) throw error;
 
@@ -2025,6 +2060,23 @@ function isMissingCustomNutritionFoodsTableError(error: unknown) {
     message.includes("Could not find the table 'public.custom_nutrition_foods'") ||
     message.includes("Could not find the table 'custom_nutrition_foods'")
   );
+}
+
+// Returns the name of an un-migrated optional column referenced by a PostgREST error, if any.
+function missingColumnName(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  for (const col of ['serving_json', 'serving_grams', 'barcode']) {
+    if (
+      message.includes(`'${col}' column`) ||
+      message.includes(`"${col}"`) ||
+      message.includes(`column ${col} `) ||
+      message.includes(`.${col}`)
+    ) {
+      return col;
+    }
+  }
+  return null;
 }
 
 function parseEventNotes(notes: string | null): Record<string, string> {
