@@ -246,6 +246,12 @@ export function NutritionScreen({
   // Recent reflects the foods actually in your diary (newest first). When you delete
   // an entry, the food drops out of Recent — it is not a separate sticky history.
   const recentPresets = useMemo(() => {
+    // Prefer the full saved custom food (which carries both grams + serving units)
+    // over the entry-derived preset when the names match.
+    const savedByName = new Map<string, NutritionFoodPreset>();
+    for (const food of customFoodPresets) {
+      savedByName.set(normalizeNutritionSearchText(food.name), customNutritionFoodToPreset(food));
+    }
     const seen = new Set<string>();
     const result: NutritionFoodPreset[] = [];
     for (const entry of nutritionEntries) {
@@ -253,11 +259,11 @@ export function NutritionScreen({
       const key = normalizeNutritionSearchText(entry.source.displayName);
       if (!key || seen.has(key)) continue;
       seen.add(key);
-      result.push(presetFromEntrySource(entry.source, `recent-${entry.id}`));
+      result.push(savedByName.get(key) || presetFromEntrySource(entry.source, `recent-${entry.id}`));
       if (result.length >= 25) break;
     }
     return result;
-  }, [nutritionEntries]);
+  }, [nutritionEntries, customFoodPresets]);
 
   const frequentPresets = useMemo(
     () =>
