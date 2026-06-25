@@ -665,8 +665,12 @@ export function NutritionScreen({
   }
 
   async function estimateByName() {
+    if (aiEstimateLoading) return;
     const name = (foodSearch.trim() || draftMealName.trim());
-    if (!name || aiEstimateLoading) return;
+    if (!name) {
+      setMealPhotoError('Type a dish name first, then tap AI.');
+      return;
+    }
     setAiEstimateLoading(true);
     setMealPhotoError(null);
     try {
@@ -998,6 +1002,14 @@ export function NutritionScreen({
                         <Text style={styles.toolIconGlyph}>◉</Text>
                         <Text style={styles.toolIconLabel}>Photo</Text>
                       </Pressable>
+                      <Pressable
+                        style={[styles.toolIconBtn, aiEstimateLoading && styles.aiEstimateBtnDisabled]}
+                        disabled={aiEstimateLoading}
+                        onPress={estimateByName}
+                      >
+                        <Text style={styles.toolIconGlyph}>✨</Text>
+                        <Text style={styles.toolIconLabel}>{aiEstimateLoading ? '…' : 'AI'}</Text>
+                      </Pressable>
                     </View>
                   </View>
                 ) : null}
@@ -1121,20 +1133,6 @@ export function NutritionScreen({
                     ) : null}
                     {!foodSearch.trim() && addTab === 'search' ? (
                       <Text style={styles.searchEmptyHint}>Start typing to search the nutrition database.</Text>
-                    ) : null}
-                    {foodSearch.trim().length >= 2 ? (
-                      <Pressable
-                        style={[styles.aiEstimateBtn, aiEstimateLoading && styles.aiEstimateBtnDisabled]}
-                        disabled={aiEstimateLoading}
-                        onPress={estimateByName}
-                      >
-                        <Text style={styles.aiEstimateBtnTitle}>
-                          {aiEstimateLoading ? 'Estimating…' : `✨ Estimate “${foodSearch.trim()}” with AI`}
-                        </Text>
-                        <Text style={styles.aiEstimateBtnText}>
-                          Best for home-cooked dishes (mashed potatoes, soups) where barcodes give the dry product.
-                        </Text>
-                      </Pressable>
                     ) : null}
                     {foodSearch.trim() && !hasExactFoodMatch ? (
                       <Pressable
@@ -2683,27 +2681,8 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 12,
       fontWeight: '700',
     },
-    aiEstimateBtn: {
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      backgroundColor: colors.selection,
-      padding: 14,
-      marginBottom: 10,
-    },
     aiEstimateBtnDisabled: {
       opacity: 0.6,
-    },
-    aiEstimateBtnTitle: {
-      color: colors.primary,
-      fontSize: 15,
-      fontWeight: '800',
-      marginBottom: 3,
-    },
-    aiEstimateBtnText: {
-      color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 17,
     },
     customFoodBtn: {
       borderRadius: 18,
