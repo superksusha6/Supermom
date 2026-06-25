@@ -303,8 +303,18 @@ export function NutritionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekViewportWidth]);
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
+  // The weight/volume unit (g or ml) used for the grams option and the serving-size label.
+  const baseUnitLabel = (selectedPreset?.baseMode || '100g') === '100ml' ? 'ml' : 'g';
+  // Serving weight: explicit if set, otherwise default to 100 so every per-100 food still
+  // offers a "serving (100 g)" option, like FatSecret.
+  const servingWeight =
+    selectedPreset && selectedPreset.baseMode !== 'serving'
+      ? selectedPreset.servingGrams && selectedPreset.servingGrams > 0
+        ? selectedPreset.servingGrams
+        : 100
+      : 0;
   // A serving-based view of the selected food. Prefer independent per-serving values; otherwise
-  // build one serving from the serving weight (e.g. an Open Food Facts product) on the per-100g basis.
+  // build one serving from the serving weight on the per-100g/ml basis.
   const servingLoggingPreset: NutritionFoodPreset | null = (() => {
     if (!selectedPreset) return null;
     if (selectedPreset.serving) {
@@ -319,13 +329,13 @@ export function NutritionScreen({
         carbsPer100g: selectedPreset.serving.carbs,
       };
     }
-    if (selectedPreset.baseMode !== 'serving' && selectedPreset.servingGrams && selectedPreset.servingGrams > 0) {
-      const f = selectedPreset.servingGrams / 100;
+    if (selectedPreset.baseMode !== 'serving' && servingWeight > 0) {
+      const f = servingWeight / 100;
       return {
         ...selectedPreset,
         baseMode: 'serving',
         baseQuantity: 1,
-        baseAmount: `per serving (${selectedPreset.servingGrams} g)`,
+        baseAmount: `per serving (${servingWeight} ${baseUnitLabel})`,
         caloriesPer100g: Math.round(selectedPreset.caloriesPer100g * f),
         proteinPer100g: Math.round(selectedPreset.proteinPer100g * f * 10) / 10,
         fatPer100g: Math.round(selectedPreset.fatPer100g * f * 10) / 10,
@@ -339,9 +349,15 @@ export function NutritionScreen({
   const effectiveLoggingPreset =
     loggingServing && servingLoggingPreset ? servingLoggingPreset : selectedPreset;
   const servingUnitLabel = `serving${
-    selectedPreset?.servingGrams && selectedPreset.servingGrams > 0 ? ` (${selectedPreset.servingGrams} g)` : ''
+    selectedPreset?.serving
+      ? selectedPreset.servingGrams && selectedPreset.servingGrams > 0
+        ? ` (${selectedPreset.servingGrams} ${baseUnitLabel})`
+        : ''
+      : servingWeight > 0
+        ? ` (${servingWeight} ${baseUnitLabel})`
+        : ''
   }`;
-  const gramsUnitLabel = (selectedPreset?.baseMode || '100g') === '100ml' ? 'ml' : 'g';
+  const gramsUnitLabel = baseUnitLabel;
   const logUnits: Array<{ kind: 'serving' | 'grams'; label: string }> = selectedPreset
     ? [
         ...(canLogServing ? [{ kind: 'serving' as const, label: servingUnitLabel }] : []),
@@ -1024,20 +1040,18 @@ export function NutritionScreen({
         <Text style={styles.sectionHint}>Tap `+` on any meal to add products for the selected day.</Text>
         <View style={styles.todaySummaryBar}>
           <View style={styles.todaySummaryPrimary}>
-            <Text style={styles.todaySummaryLabel}>Selected day eaten</Text>
+            <Text style={styles.todaySummaryLabel}>{plan ? 'Calories left' : 'Selected day eaten'}</Text>
             <View style={styles.todaySummaryHeadline}>
-              <Text
-                style={[
-                  styles.todaySummaryCalories,
-                  plan && totals.calories > plan.calories && styles.todaySummaryCaloriesOver,
-                ]}
-              >
-                {totals.calories}
+              <Text style={styles.todaySummaryCalories}>
+                {plan ? Math.max(0, Math.round(plan.calories - totals.calories)) : totals.calories}
               </Text>
-              <Text style={styles.todaySummaryCaloriesTarget}>
-                {plan ? `/ ${Math.round(plan.calories)} kcal` : 'kcal'}
-              </Text>
+              <Text style={styles.todaySummaryCaloriesTarget}>{plan ? 'left' : 'kcal'}</Text>
             </View>
+            {plan && totals.calories > plan.calories ? (
+              <Text style={styles.todaySummaryOver}>
+                {`+${Math.round(totals.calories - plan.calories)} kcal over`}
+              </Text>
+            ) : null}
           </View>
           {plan ? (
             <View style={styles.macroBars}>
@@ -2079,9 +2093,12 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       paddingVertical: 12,
       marginBottom: 12,
       gap: 8,
+      alignSelf: isMobile ? 'stretch' : 'flex-start',
+      maxWidth: isMobile ? undefined : 520,
+      width: isMobile ? undefined : '100%',
     },
     todaySummaryPrimary: {
-      gap: 4,
+      gap: 2,
     },
     todaySummaryLabel: {
       color: colors.subtext,
@@ -2100,13 +2117,15 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '900',
       letterSpacing: -0.5,
     },
-    todaySummaryCaloriesOver: {
-      color: '#ef4444',
-    },
     todaySummaryCaloriesTarget: {
       color: colors.subtext,
       fontSize: 14,
       fontWeight: '700',
+    },
+    todaySummaryOver: {
+      color: '#ef4444',
+      fontSize: 13,
+      fontWeight: '800',
     },
     macroBars: {
       gap: 12,
