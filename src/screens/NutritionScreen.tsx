@@ -119,6 +119,8 @@ export function NutritionScreen({
   // At log time, whether the user is logging this food by serving (vs by grams).
   const [loggingServing, setLoggingServing] = useState(false);
   const [unitPickerOpen, setUnitPickerOpen] = useState(false);
+  // When set, the custom-food editor is editing this saved food's definition (no diary entry).
+  const [editingCustomFoodId, setEditingCustomFoodId] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<NutritionFoodPreset | null>(null);
   const [customFoodMode, setCustomFoodMode] = useState(false);
   const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
@@ -748,6 +750,44 @@ export function NutritionScreen({
     setExpandedMeal(null);
   }
 
+  function editCustomFood(item: NutritionFoodPreset) {
+    const isServingBase = (item.baseMode || '100g') === 'serving';
+    const serv =
+      item.serving ||
+      (isServingBase
+        ? {
+            calories: item.caloriesPer100g,
+            protein: item.proteinPer100g,
+            fat: item.fatPer100g,
+            carbs: item.carbsPer100g,
+          }
+        : null);
+    setCustomFoodMode(true);
+    setPhotoEstimateMode(false);
+    setEditingEntryId(null);
+    setEditingCustomFoodId(item.id);
+    setSelectedPreset(null);
+    setLoggingServing(false);
+    setUnitPickerOpen(false);
+    setDraftMealName(item.name);
+    setCustomBrand(item.brand || '');
+    setCustomBarcode(item.barcode || '');
+    setCustomServingType(item.baseMode === '100ml' ? '100ml' : '100g');
+    setDraftCalories(isServingBase ? '' : String(item.caloriesPer100g ?? ''));
+    setDraftProtein(isServingBase ? '' : String(item.proteinPer100g ?? ''));
+    setDraftFat(isServingBase ? '' : String(item.fatPer100g ?? ''));
+    setDraftCarbs(isServingBase ? '' : String(item.carbsPer100g ?? ''));
+    setDraftServingCalories(serv ? String(serv.calories ?? '') : '');
+    setDraftServingProtein(serv ? String(serv.protein ?? '') : '');
+    setDraftServingFat(serv ? String(serv.fat ?? '') : '');
+    setDraftServingCarbs(serv ? String(serv.carbs ?? '') : '');
+    setCustomServingGrams(item.servingGrams ? String(item.servingGrams) : '');
+    setDraftGrams('100');
+    setAddFoodFlow('search');
+    setFoodSearch('');
+    setExpandedMeal(null);
+  }
+
   function renderPresetRow(item: NutritionFoodPreset) {
     return (
       <Pressable key={item.id} style={styles.catalogResultCard} onPress={() => applyPresetSelection(item)}>
@@ -769,6 +809,17 @@ export function NutritionScreen({
         >
           {quickAddedIds.includes(item.id) ? <Text style={styles.quickAddPillText}>✓</Text> : null}
         </Pressable>
+        {item.isCustom ? (
+          <Pressable
+            style={styles.editPresetPill}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              editCustomFood(item);
+            }}
+          >
+            <Text style={styles.editPresetPillText}>✎</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.catalogResultTopRow}>
           <View style={styles.catalogResultCopy}>
             <Text style={styles.catalogResultTitle}>{item.name}</Text>
@@ -1158,12 +1209,12 @@ export function NutritionScreen({
         </ScrollView>
       ) : null}
 
-      <Modal visible={!!activeMealType} transparent animationType="fade" onRequestClose={() => { setActiveMealType(null); setEditingEntryId(null); }}>
+      <Modal visible={!!activeMealType} transparent animationType="fade" onRequestClose={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }}>
         <View style={styles.modalScrim}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setActiveMealType(null); setEditingEntryId(null); }} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }} />
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalEyebrow}>{editingEntryId ? 'Edit product' : 'Add product'}</Text>
+              <Text style={styles.modalEyebrow}>{editingCustomFoodId ? 'Edit food' : editingEntryId ? 'Edit product' : 'Add product'}</Text>
               <Text style={styles.modalTitle}>
                 {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
               </Text>
@@ -1338,6 +1389,7 @@ export function NutritionScreen({
                         style={styles.customFoodBtn}
                         onPress={() => {
                           setCustomFoodMode(true);
+                          setEditingCustomFoodId(null);
                           setSelectedPreset(null);
                           setDraftMealName(foodSearch.trim());
                           setDraftCalories('');
@@ -1398,6 +1450,7 @@ export function NutritionScreen({
                         style={styles.customFoodCloseBtn}
                         onPress={() => {
                           setCustomFoodMode(false);
+                          setEditingCustomFoodId(null);
                           setPhotoEstimateMode(false);
                           setCustomBrand('');
                           setCustomBarcode('');
@@ -1622,7 +1675,7 @@ export function NutritionScreen({
             <View style={styles.modalActions}>
               <Pressable
                 style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
-                onPress={() => { setActiveMealType(null); setEditingEntryId(null); }}
+                onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }}
               >
                 <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && styles.modalDoneBtnText]}>
                   {sessionAddedCount > 0 ? 'Done' : 'Cancel'}
@@ -1687,7 +1740,7 @@ export function NutritionScreen({
                         baseC = servC;
                       }
                       const nextCustomFood: CustomNutritionFood = {
-                        id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
+                        id: editingCustomFoodId || (selectedPreset?.isCustom ? selectedPreset.id : createUuid()),
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
@@ -1704,6 +1757,26 @@ export function NutritionScreen({
                         const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
                         return [nextCustomFood, ...filtered];
                       });
+                      // Editing a saved food's definition: update it and close, no diary entry.
+                      if (editingCustomFoodId) {
+                        setEditingCustomFoodId(null);
+                        setCustomFoodMode(false);
+                        setSelectedPreset(null);
+                        setDraftMealName('');
+                        setDraftCalories('');
+                        setDraftProtein('');
+                        setDraftFat('');
+                        setDraftCarbs('');
+                        setDraftServingCalories('');
+                        setDraftServingProtein('');
+                        setDraftServingFat('');
+                        setDraftServingCarbs('');
+                        setCustomServingGrams('');
+                        setDraftGrams('100');
+                        setFoodSearch('');
+                        setAddTab('saved');
+                        return;
+                      }
                     }
                     if (customFoodPreviewPreset && customFoodPreviewValues) {
                       nextEntryCalories = customFoodPreviewValues.calories || '0';
@@ -1776,7 +1849,7 @@ export function NutritionScreen({
                   setEditingEntryId(null);
                 }}
               >
-                <Text style={styles.primaryBtnText}>{editingEntryId ? 'Update' : '✓ Add'}</Text>
+                <Text style={styles.primaryBtnText}>{editingCustomFoodId ? 'Save changes' : editingEntryId ? 'Update' : '✓ Add'}</Text>
               </Pressable>
               ) : null}
             </View>
@@ -2834,6 +2907,25 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     },
     favoritePillTextActive: {
       color: '#d97706',
+    },
+    editPresetPill: {
+      position: 'absolute',
+      top: 10,
+      right: 44,
+      zIndex: 2,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editPresetPillText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '900',
     },
     quickAddPill: {
       position: 'absolute',
