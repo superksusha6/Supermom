@@ -1339,21 +1339,32 @@ export function NutritionScreen({
                         <Pressable
                           key={option.key}
                           style={[styles.pillBtn, customServingType === option.key && styles.pillBtnActive]}
-                          onPress={() => setCustomServingType(option.key)}
+                          onPress={() => {
+                            if (option.key !== customServingType) {
+                              // New basis → clear the numbers so you enter fresh values for it.
+                              setDraftCalories('');
+                              setDraftProtein('');
+                              setDraftFat('');
+                              setDraftCarbs('');
+                            }
+                            setCustomServingType(option.key);
+                          }}
                         >
                           <Text style={[styles.pillBtnText, customServingType === option.key && styles.pillBtnTextActive]}>{option.label}</Text>
                         </Pressable>
                       ))}
                     </View>
-                    {customServingType !== 'serving' ? (
-                      <TextInput
-                        placeholder={`Serving size optional — 1 serving = ? ${customServingType === '100ml' ? 'ml' : 'g'} (e.g. 1 kiwi = 75)`}
-                        style={styles.input}
-                        value={customServingGrams}
-                        onChangeText={(text) => setCustomServingGrams(cleanNutritionNumber(text))}
-                        keyboardType="decimal-pad"
-                      />
-                    ) : null}
+                    <TextInput
+                      placeholder={
+                        customServingType === 'serving'
+                          ? '1 serving weighs ? g (so it can also be logged by grams)'
+                          : `Serving size optional — 1 serving = ? ${customServingType === '100ml' ? 'ml' : 'g'} (e.g. 1 kiwi = 75)`
+                      }
+                      style={styles.input}
+                      value={customServingGrams}
+                      onChangeText={(text) => setCustomServingGrams(cleanNutritionNumber(text))}
+                      keyboardType="decimal-pad"
+                    />
                   </View>
                 ) : null}
               </View>
@@ -1498,23 +1509,44 @@ export function NutritionScreen({
                     savePresetToLibrary(selectedPreset);
                   }
                   if (customFoodMode) {
-                    const normalizedBaseQuantity = customServingType === 'serving' ? 1 : 100;
                     if (!photoEstimateMode) {
+                      const servingWeight = Number(customServingGrams);
+                      const isServingMode = customServingType === 'serving';
+                      const cal0 = Number(draftCalories) || 0;
+                      const p0 = Number(draftProtein.replace(',', '.')) || 0;
+                      const f0 = Number(draftFat.replace(',', '.')) || 0;
+                      const c0 = Number(draftCarbs.replace(',', '.')) || 0;
+                      let foodBaseMode: '100g' | '100ml' | 'serving' = customServingType;
+                      let foodBaseQuantity = isServingMode ? 1 : 100;
+                      let foodCal = cal0;
+                      let foodP = p0;
+                      let foodF = f0;
+                      let foodC = c0;
+                      let foodServingGrams: number | undefined = !isServingMode && servingWeight > 0 ? servingWeight : undefined;
+                      // Entered per serving + a known serving weight → convert to a per-100g food so it
+                      // can be logged by grams or by serving.
+                      if (isServingMode && servingWeight > 0) {
+                        const k = 100 / servingWeight;
+                        foodBaseMode = '100g';
+                        foodBaseQuantity = 100;
+                        foodCal = Math.round(cal0 * k * 10) / 10;
+                        foodP = Math.round(p0 * k * 10) / 10;
+                        foodF = Math.round(f0 * k * 10) / 10;
+                        foodC = Math.round(c0 * k * 10) / 10;
+                        foodServingGrams = servingWeight;
+                      }
                       const nextCustomFood: CustomNutritionFood = {
                         id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
-                        servingGrams:
-                          customServingType !== 'serving' && Number(customServingGrams) > 0
-                            ? Number(customServingGrams)
-                            : undefined,
-                        baseMode: customServingType,
-                        baseQuantity: normalizedBaseQuantity,
-                        calories: Number(draftCalories) || 0,
-                        protein: Number(draftProtein.replace(',', '.')) || 0,
-                        fat: Number(draftFat.replace(',', '.')) || 0,
-                        carbs: Number(draftCarbs.replace(',', '.')) || 0,
+                        servingGrams: foodServingGrams,
+                        baseMode: foodBaseMode,
+                        baseQuantity: foodBaseQuantity,
+                        calories: foodCal,
+                        protein: foodP,
+                        fat: foodF,
+                        carbs: foodC,
                       };
                       onCustomFoodPresetsChange((prev) => {
                         const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
