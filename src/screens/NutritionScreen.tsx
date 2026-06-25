@@ -101,6 +101,7 @@ export function NutritionScreen({
   const [addTab, setAddTab] = useState<'search' | 'recent' | 'frequent' | 'saved'>('recent');
   const [sessionAddedCount, setSessionAddedCount] = useState(0);
   const [sessionAddedName, setSessionAddedName] = useState('');
+  const [quickAddedIds, setQuickAddedIds] = useState<string[]>([]);
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -494,6 +495,7 @@ export function NutritionScreen({
     if (item.source && item.source !== 'custom') savePresetToLibrary(item);
     setSessionAddedCount((prev) => prev + 1);
     setSessionAddedName(item.name);
+    setQuickAddedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
   }
 
   function registerRecentPreset(presetId: string) {
@@ -540,6 +542,7 @@ export function NutritionScreen({
     setAddTab('recent');
     setSessionAddedCount(0);
     setSessionAddedName('');
+    setQuickAddedIds([]);
     setActiveMealType(mealKey);
     setDraftMealName('');
     setDraftCalories('');
@@ -599,13 +602,13 @@ export function NutritionScreen({
           <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
         </Pressable>
         <Pressable
-          style={styles.quickAddPill}
+          style={[styles.quickAddPill, quickAddedIds.includes(item.id) && styles.quickAddPillActive]}
           onPress={(event) => {
             event.stopPropagation?.();
             quickAddPreset(item);
           }}
         >
-          <Text style={styles.quickAddPillText}>✓</Text>
+          {quickAddedIds.includes(item.id) ? <Text style={styles.quickAddPillText}>✓</Text> : null}
         </Pressable>
         <View style={styles.catalogResultTopRow}>
           <View style={styles.catalogResultCopy}>
@@ -2649,11 +2652,15 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       width: 34,
       height: 34,
       borderRadius: 17,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      backgroundColor: colors.primary,
+      borderWidth: 2,
+      borderColor: '#c7d2e3',
+      backgroundColor: '#ffffff',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    quickAddPillActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
     },
     quickAddPillText: {
       color: '#ffffff',
