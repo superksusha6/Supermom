@@ -118,6 +118,7 @@ export function NutritionScreen({
   const [draftGrams, setDraftGrams] = useState('100');
   // At log time, whether the user is logging this food by serving (vs by grams).
   const [loggingServing, setLoggingServing] = useState(false);
+  const [unitPickerOpen, setUnitPickerOpen] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<NutritionFoodPreset | null>(null);
   const [customFoodMode, setCustomFoodMode] = useState(false);
   const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
@@ -302,24 +303,51 @@ export function NutritionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekViewportWidth]);
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
-  // A serving-based view of the selected food (uses its per-serving values directly).
-  const servingLoggingPreset: NutritionFoodPreset | null =
-    selectedPreset && selectedPreset.serving
-      ? {
-          ...selectedPreset,
-          baseMode: 'serving',
-          baseQuantity: 1,
-          baseAmount: 'per 1 serving',
-          caloriesPer100g: selectedPreset.serving.calories,
-          proteinPer100g: selectedPreset.serving.protein,
-          fatPer100g: selectedPreset.serving.fat,
-          carbsPer100g: selectedPreset.serving.carbs,
-        }
-      : null;
+  // A serving-based view of the selected food. Prefer independent per-serving values; otherwise
+  // build one serving from the serving weight (e.g. an Open Food Facts product) on the per-100g basis.
+  const servingLoggingPreset: NutritionFoodPreset | null = (() => {
+    if (!selectedPreset) return null;
+    if (selectedPreset.serving) {
+      return {
+        ...selectedPreset,
+        baseMode: 'serving',
+        baseQuantity: 1,
+        baseAmount: 'per 1 serving',
+        caloriesPer100g: selectedPreset.serving.calories,
+        proteinPer100g: selectedPreset.serving.protein,
+        fatPer100g: selectedPreset.serving.fat,
+        carbsPer100g: selectedPreset.serving.carbs,
+      };
+    }
+    if (selectedPreset.baseMode !== 'serving' && selectedPreset.servingGrams && selectedPreset.servingGrams > 0) {
+      const f = selectedPreset.servingGrams / 100;
+      return {
+        ...selectedPreset,
+        baseMode: 'serving',
+        baseQuantity: 1,
+        baseAmount: `per serving (${selectedPreset.servingGrams} g)`,
+        caloriesPer100g: Math.round(selectedPreset.caloriesPer100g * f),
+        proteinPer100g: Math.round(selectedPreset.proteinPer100g * f * 10) / 10,
+        fatPer100g: Math.round(selectedPreset.fatPer100g * f * 10) / 10,
+        carbsPer100g: Math.round(selectedPreset.carbsPer100g * f * 10) / 10,
+      };
+    }
+    return null;
+  })();
   const canLogServing = !!servingLoggingPreset || selectedPreset?.baseMode === 'serving';
   const canLogGrams = !!selectedPreset && selectedPreset.baseMode !== 'serving';
   const effectiveLoggingPreset =
     loggingServing && servingLoggingPreset ? servingLoggingPreset : selectedPreset;
+  const servingUnitLabel = `serving${
+    selectedPreset?.servingGrams && selectedPreset.servingGrams > 0 ? ` (${selectedPreset.servingGrams} g)` : ''
+  }`;
+  const gramsUnitLabel = (selectedPreset?.baseMode || '100g') === '100ml' ? 'ml' : 'g';
+  const logUnits: Array<{ kind: 'serving' | 'grams'; label: string }> = selectedPreset
+    ? [
+        ...(canLogServing ? [{ kind: 'serving' as const, label: servingUnitLabel }] : []),
+        ...(canLogGrams ? [{ kind: 'grams' as const, label: gramsUnitLabel }] : []),
+      ]
+    : [];
   const selectedPresetValues = effectiveLoggingPreset ? getNutritionValuesForGrams(effectiveLoggingPreset, draftGrams) : null;
   const selectedPresetBaseMode = effectiveLoggingPreset?.baseMode || '100g';
   const selectedPresetReference = effectiveLoggingPreset
@@ -392,9 +420,10 @@ export function NutritionScreen({
         const isOver = ratio > 1;
         const over = Math.max(0, Math.round(item.current - item.target));
         const overPercent = Math.max(0, Math.round((ratio - 1) * 100));
-        const status = isOver ? 'over' : ratio >= 0.95 ? 'done' : 'under';
-        const color = status === 'over' ? '#ef4444' : status === 'done' ? '#22c55e' : colors.primary;
-        return { ...item, ratio, fill, isOver, over, overPercent, status, color };
+        // Only the calories bar turns red on overflow; macros stay blue and just
+        // surface the excess amount as text.
+        const color = item.key === 'calories' && isOver ? '#ef4444' : colors.primary;
+        return { ...item, ratio, fill, isOver, over, overPercent, color };
       })
     : [];
 
@@ -627,6 +656,7 @@ export function NutritionScreen({
     const next = getNutritionValuesForGrams(computeFrom, defaultAmount);
     setSelectedPreset(item);
     setLoggingServing(startServing);
+    setUnitPickerOpen(false);
     setDraftMealName(displayTitle);
     setDraftCalories(next.calories);
     setDraftProtein(next.protein);
@@ -1023,7 +1053,7 @@ export function NutritionScreen({
                         {` / ${Math.round(item.target)} ${item.unit}`}
                       </Text>
                       {item.isOver ? (
-                        <Text style={styles.macroBarOver}>
+                        <Text style={[styles.macroBarOver, { color: item.color }]}>
                           {`  +${item.over} ${item.unit} (${item.overPercent}%)`}
                         </Text>
                       ) : null}
@@ -1417,43 +1447,63 @@ export function NutritionScreen({
               <View style={styles.modalSection}>
                 {showNutritionEditor ? (
                   <>
-                    {!customFoodMode && selectedPreset && canLogServing && canLogGrams ? (
-                      <View style={styles.pillRow}>
-                        <Pressable
-                          style={[styles.pillBtn, !loggingServing && styles.pillBtnActive]}
-                          onPress={() => setLoggingMode(false)}
-                        >
-                          <Text style={[styles.pillBtnText, !loggingServing && styles.pillBtnTextActive]}>
-                            {selectedPreset.baseMode === '100ml' ? 'Per 100 ml' : 'Per 100 g'}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.pillBtn, loggingServing && styles.pillBtnActive]}
-                          onPress={() => setLoggingMode(true)}
-                        >
-                          <Text style={[styles.pillBtnText, loggingServing && styles.pillBtnTextActive]}>Per serving</Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
                     {(() => {
                       const unit = customFoodMode ? customServingType : selectedPresetBaseMode;
                       const isServing = unit === 'serving';
+                      // Custom-food creation keeps a plain grams field; selecting a food shows a unit picker.
+                      const showUnitPicker = !customFoodMode && !!selectedPreset && logUnits.length > 1;
                       return (
-                        <View style={styles.gramsRow}>
-                          <View style={styles.gramsInputWrap}>
-                            <Text style={styles.fieldLabel}>{isServing ? 'Servings' : unit === '100ml' ? 'Volume' : 'Amount'}</Text>
-                            <TextInput
-                              placeholder={isServing ? 'How many servings' : unit === '100ml' ? 'ml' : 'Grams'}
-                              keyboardType="decimal-pad"
-                              style={styles.input}
-                              value={draftGrams}
-                              onChangeText={(text) => applyDraftGrams(text)}
-                            />
+                        <>
+                          <View style={styles.gramsRow}>
+                            <View style={styles.gramsInputWrap}>
+                              <Text style={styles.fieldLabel}>{isServing ? 'Amount' : unit === '100ml' ? 'Volume' : 'Amount'}</Text>
+                              <TextInput
+                                placeholder={isServing ? 'How many' : unit === '100ml' ? 'ml' : 'Grams'}
+                                keyboardType="decimal-pad"
+                                style={styles.input}
+                                value={draftGrams}
+                                onChangeText={(text) => applyDraftGrams(text)}
+                              />
+                            </View>
+                            {showUnitPicker ? (
+                              <Pressable
+                                style={styles.unitSelect}
+                                onPress={() => setUnitPickerOpen((prev) => !prev)}
+                              >
+                                <Text style={styles.unitSelectText} numberOfLines={1}>
+                                  {loggingServing ? servingUnitLabel : gramsUnitLabel}
+                                </Text>
+                                <Text style={styles.unitSelectCaret}>{unitPickerOpen ? '▴' : '▾'}</Text>
+                              </Pressable>
+                            ) : (
+                              <View style={styles.gramsUnitChip}>
+                                <Text style={styles.gramsUnitChipText}>{isServing ? servingUnitLabel : unit === '100ml' ? 'ml' : 'g'}</Text>
+                              </View>
+                            )}
                           </View>
-                          <View style={styles.gramsUnitChip}>
-                            <Text style={styles.gramsUnitChipText}>{isServing ? '× serving' : unit === '100ml' ? 'ml' : 'g'}</Text>
-                          </View>
-                        </View>
+                          {showUnitPicker && unitPickerOpen ? (
+                            <View style={styles.unitMenu}>
+                              {logUnits.map((u) => {
+                                const active = u.kind === 'serving' ? loggingServing : !loggingServing;
+                                return (
+                                  <Pressable
+                                    key={u.kind}
+                                    style={[styles.unitMenuItem, active && styles.unitMenuItemActive]}
+                                    onPress={() => {
+                                      setLoggingMode(u.kind === 'serving');
+                                      setUnitPickerOpen(false);
+                                    }}
+                                  >
+                                    <Text style={[styles.unitMenuItemText, active && styles.unitMenuItemTextActive]}>
+                                      {u.kind === 'serving' ? `1 ${u.label}` : u.label}
+                                    </Text>
+                                    {active ? <Text style={styles.unitMenuCheck}>✓</Text> : null}
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          ) : null}
+                        </>
                       );
                     })()}
                     {customFoodMode ? (
@@ -1508,6 +1558,14 @@ export function NutritionScreen({
                         <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftServingCarbs} onChangeText={(text) => setDraftServingCarbs(cleanNutritionNumber(text))} />
                       </View>
                     </View>
+                    <Text style={styles.fieldLabel}>1 serving weighs (optional) — shown as the unit label, e.g. "serving (100 g)"</Text>
+                    <TextInput
+                      placeholder="Grams per serving"
+                      style={styles.input}
+                      value={customServingGrams}
+                      onChangeText={(text) => setCustomServingGrams(cleanNutritionNumber(text))}
+                      keyboardType="decimal-pad"
+                    />
                     {customFoodPreviewValues ? (
                       <>
                         <Text style={styles.portionResultLabel}>For {draftGrams || '0'} {customServingType === '100ml' ? 'ml' : 'g'} you log:</Text>
@@ -1591,6 +1649,7 @@ export function NutritionScreen({
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
                         serving: servingMacros,
+                        servingGrams: Number(customServingGrams) > 0 ? Number(customServingGrams) : undefined,
                         baseMode: foodBaseMode,
                         baseQuantity: foodBaseMode === 'serving' ? 1 : 100,
                         // For a serving-only food, store the serving values as the base too.
@@ -3038,6 +3097,66 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: colors.text,
       fontSize: 16,
       fontWeight: '800',
+    },
+    unitSelect: {
+      minWidth: isMobile ? undefined : 150,
+      width: isMobile ? '100%' : undefined,
+      height: 50,
+      marginBottom: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+      gap: 8,
+    },
+    unitSelectText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+      flexShrink: 1,
+    },
+    unitSelectCaret: {
+      color: colors.subtext,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    unitMenu: {
+      marginTop: -4,
+      marginBottom: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      overflow: 'hidden',
+    },
+    unitMenuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    unitMenuItemActive: {
+      backgroundColor: colors.glassSoft,
+    },
+    unitMenuItemText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    unitMenuItemTextActive: {
+      color: colors.primary,
+    },
+    unitMenuCheck: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '900',
     },
     portionResultLabel: {
       color: colors.subtext,
