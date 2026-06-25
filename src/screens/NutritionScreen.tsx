@@ -1353,24 +1353,17 @@ export function NutritionScreen({
                       </View>
                     </View>
                     {customFoodPreviewValues ? (
-                      <View style={styles.macroPreviewGrid}>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.calories || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>kcal for this amount</Text>
+                      <>
+                        <Text style={styles.portionResultLabel}>For {draftGrams || '0'} {customServingType === '100ml' ? 'ml' : 'g'} you log:</Text>
+                        <View style={styles.macroChipsRow}>
+                          <View style={[styles.macroChip, styles.macroChipPrimary]}>
+                            <Text style={styles.macroChipText}>{customFoodPreviewValues.calories || '0'} kcal</Text>
+                          </View>
+                          <View style={styles.macroChip}><Text style={styles.macroChipText}>P {customFoodPreviewValues.protein || '0'}</Text></View>
+                          <View style={styles.macroChip}><Text style={styles.macroChipText}>F {customFoodPreviewValues.fat || '0'}</Text></View>
+                          <View style={styles.macroChip}><Text style={styles.macroChipText}>C {customFoodPreviewValues.carbs || '0'}</Text></View>
                         </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.protein || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Protein</Text>
-                        </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.fat || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Fat</Text>
-                        </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{customFoodPreviewValues.carbs || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Carbs</Text>
-                        </View>
-                      </View>
+                      </>
                     ) : null}
                       </>
                     ) : selectedPresetValues ? (
@@ -1378,23 +1371,13 @@ export function NutritionScreen({
                       <Text style={styles.portionResultLabel}>
                         {`For ${draftGrams || '0'} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'} you log:`}
                       </Text>
-                      <View style={styles.macroPreviewGrid}>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.calories || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>kcal</Text>
+                      <View style={styles.macroChipsRow}>
+                        <View style={[styles.macroChip, styles.macroChipPrimary]}>
+                          <Text style={styles.macroChipText}>{selectedPresetValues.calories || '0'} kcal</Text>
                         </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.protein || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Protein</Text>
-                        </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.fat || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Fat</Text>
-                        </View>
-                        <View style={styles.macroPreviewCard}>
-                          <Text style={styles.macroPreviewValue}>{selectedPresetValues.carbs || '0'}</Text>
-                          <Text style={styles.macroPreviewLabel}>Carbs</Text>
-                        </View>
+                        <View style={styles.macroChip}><Text style={styles.macroChipText}>P {selectedPresetValues.protein || '0'}</Text></View>
+                        <View style={styles.macroChip}><Text style={styles.macroChipText}>F {selectedPresetValues.fat || '0'}</Text></View>
+                        <View style={styles.macroChip}><Text style={styles.macroChipText}>C {selectedPresetValues.carbs || '0'}</Text></View>
                       </View>
                       </>
                     ) : null}
@@ -1507,7 +1490,7 @@ export function NutritionScreen({
                   setEditingEntryId(null);
                 }}
               >
-                <Text style={styles.primaryBtnText}>{editingEntryId ? 'Update' : 'Save'}</Text>
+                <Text style={styles.primaryBtnText}>{editingEntryId ? 'Update' : '✓ Add'}</Text>
               </Pressable>
             </View>
             </ScrollView>
@@ -2923,6 +2906,29 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '700',
       marginTop: 12,
       marginBottom: 8,
+    },
+    macroChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 4,
+    },
+    macroChip: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+    },
+    macroChipPrimary: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    macroChipText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
     },
     macroPreviewGrid: {
       flexDirection: 'row',
