@@ -10,6 +10,11 @@ import { analyzeMealPhoto, estimateMealByText } from '@/lib/mealVision';
 import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
+// Macro bars are drawn on a track that spans the norm plus 25% headroom, so an
+// over-target value can visibly cross the norm marker instead of clipping at 100%.
+const MACRO_BAR_MAX_SCALE = 1.25;
+const NORM_BAR_FRACTION = 1 / MACRO_BAR_MAX_SCALE;
+
 type Props = {
   personalProfile: PersonalProfile;
   nutritionGoal: NutritionGoal;
@@ -335,24 +340,19 @@ export function NutritionScreen({
   const showNutritionEditor = addFoodFlow === 'search' || !!selectedPreset || customFoodMode;
   const nutritionProgress = plan
     ? [
-        { key: 'calories', label: 'Calories', short: 'K', current: totals.calories, target: plan.calories, size: 122, stroke: 8, unit: 'kcal' },
-        { key: 'protein', label: 'Protein', short: 'P', current: totals.protein, target: plan.protein, size: 98, stroke: 8, unit: 'g' },
-        { key: 'carbs', label: 'Carbs', short: 'C', current: totals.carbs, target: plan.carbs, size: 74, stroke: 8, unit: 'g' },
-        { key: 'fat', label: 'Fat', short: 'F', current: totals.fat, target: plan.fat, size: 50, stroke: 8, unit: 'g' },
+        { key: 'calories', label: 'Calories', current: totals.calories, target: plan.calories, unit: 'kcal' },
+        { key: 'protein', label: 'Protein', current: totals.protein, target: plan.protein, unit: 'g' },
+        { key: 'carbs', label: 'Carbs', current: totals.carbs, target: plan.carbs, unit: 'g' },
+        { key: 'fat', label: 'Fat', current: totals.fat, target: plan.fat, unit: 'g' },
       ].map((item) => {
         const ratio = item.target > 0 ? item.current / item.target : 0;
-        const progress = Math.max(0.08, Math.min(ratio, 1));
-        const remaining = Math.max(0, Math.round(item.target - item.current));
-        const status = ratio > 1.05 ? 'over' : ratio >= 1 ? 'done' : ratio >= 0.6 ? 'mid' : 'low';
-        const color =
-          status === 'over'
-            ? '#166534'
-            : status === 'done'
-              ? '#22c55e'
-              : status === 'mid'
-                ? '#f59e0b'
-                : '#ef4444';
-        return { ...item, ratio, progress, remaining, status, color };
+        // Bars are scaled so the norm (100%) sits at NORM_BAR_FRACTION of the track,
+        // leaving headroom on the right for an overflow segment to visibly cross the limit.
+        const fill = Math.min(ratio, MACRO_BAR_MAX_SCALE) / MACRO_BAR_MAX_SCALE;
+        const isOver = ratio > 1;
+        const status = isOver ? 'over' : ratio >= 0.95 ? 'done' : 'under';
+        const color = status === 'over' ? '#ef4444' : status === 'done' ? '#22c55e' : colors.primary;
+        return { ...item, ratio, fill, isOver, status, color };
       })
     : [];
 
@@ -918,96 +918,52 @@ export function NutritionScreen({
             </Text>
           </View>
         ) : null}
-        <View style={styles.macroSummaryRow}>
-          {[
-            { label: 'Fat', value: `${totals.fat}` },
-            { label: 'Carbs', value: `${totals.carbs}` },
-            { label: 'Protein', value: `${totals.protein}` },
-            { label: 'RDI', value: rdiPercent !== null ? `${rdiPercent}%` : '—' },
-            { label: 'Calories', value: `${totals.calories}`, strong: true },
-          ].map((cell) => (
-            <View key={cell.label} style={styles.macroSummaryCell}>
-              <Text style={styles.macroSummaryLabel}>{cell.label}</Text>
-              <Text style={[styles.macroSummaryValue, cell.strong && styles.macroSummaryValueStrong]}>{cell.value}</Text>
-            </View>
-          ))}
-        </View>
         <Text style={styles.sectionHint}>Tap `+` on any meal to add products for the selected day.</Text>
         <View style={styles.todaySummaryBar}>
-          <View style={styles.todaySummaryTopRow}>
-            <View style={styles.todaySummaryPrimary}>
-              <Text style={styles.todaySummaryLabel}>Selected day eaten</Text>
-              <Text style={styles.todaySummaryCalories}>{totals.calories} kcal</Text>
+          <View style={styles.todaySummaryPrimary}>
+            <Text style={styles.todaySummaryLabel}>Selected day eaten</Text>
+            <View style={styles.todaySummaryHeadline}>
+              <Text
+                style={[
+                  styles.todaySummaryCalories,
+                  plan && totals.calories > plan.calories && styles.todaySummaryCaloriesOver,
+                ]}
+              >
+                {totals.calories}
+              </Text>
+              <Text style={styles.todaySummaryCaloriesTarget}>
+                {plan ? `/ ${Math.round(plan.calories)} kcal` : 'kcal'}
+              </Text>
             </View>
           </View>
           {plan ? (
-            <View style={styles.progressShowcase}>
-              <View style={styles.multiRingWrap}>
-                {nutritionProgress.map((item) => (
-                  <View
-                    key={item.key}
-                    style={[
-                      styles.multiRingTrack,
-                      {
-                        width: item.size,
-                        height: item.size,
-                        borderRadius: item.size / 2,
-                        borderWidth: item.stroke,
-                        borderColor: `${item.color}24`,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.multiRingArc,
-                        {
-                          width: item.size,
-                          height: item.size,
-                          borderRadius: item.size / 2,
-                          borderWidth: item.stroke,
-                          borderTopColor: item.color,
-                          borderRightColor: item.color,
-                          transform: [{ rotate: `${item.progress * 270 - 135}deg` }],
-                        },
-                      ]}
-                    />
-                  </View>
-                ))}
-                <View style={styles.multiRingCenter}>
-                  <Text style={styles.multiRingCenterLabel}>Day</Text>
-                  <Text style={styles.multiRingCenterValue}>{totals.calories}</Text>
-                  <Text style={styles.multiRingCenterMeta}>kcal</Text>
-                </View>
-              </View>
-              <View style={styles.progressLegend}>
-                {nutritionProgress.map((item) => (
-                  <View key={item.key} style={styles.legendRow}>
-                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                    <View style={styles.legendCopy}>
-                      <Text style={styles.legendTitle}>{item.label}</Text>
-                      <Text style={styles.legendMeta}>
-                        {Math.round(item.current)}/{Math.round(item.target)} {item.unit}
+            <View style={styles.macroBars}>
+              {nutritionProgress.map((item) => (
+                <View key={item.key} style={styles.macroBarRow}>
+                  <View style={styles.macroBarHeader}>
+                    <Text style={styles.macroBarLabel}>{item.label}</Text>
+                    <Text style={styles.macroBarValue}>
+                      <Text style={[styles.macroBarCurrent, { color: item.color }]}>
+                        {Math.round(item.current)}
                       </Text>
-                    </View>
-                    <Text style={styles.legendStatus}>
-                      {item.status === 'over'
-                        ? 'over'
-                        : item.status === 'done'
-                          ? 'done'
-                          : item.status === 'mid'
-                            ? 'getting there'
-                            : 'low'}
+                      <Text style={styles.macroBarTarget}>
+                        {` / ${Math.round(item.target)} ${item.unit}`}
+                      </Text>
                     </Text>
                   </View>
-                ))}
-              </View>
+                  <View style={styles.macroBarTrack}>
+                    <View
+                      style={[
+                        styles.macroBarFill,
+                        { width: `${item.fill * 100}%`, backgroundColor: item.color },
+                      ]}
+                    />
+                    <View style={[styles.macroBarNormMark, { left: `${NORM_BAR_FRACTION * 100}%` }]} />
+                  </View>
+                </View>
+              ))}
             </View>
           ) : null}
-          <View style={styles.todaySummaryMacros}>
-            <Text style={styles.todaySummaryMacro}>P {totals.protein}</Text>
-            <Text style={styles.todaySummaryMacro}>C {totals.carbs}</Text>
-            <Text style={styles.todaySummaryMacro}>F {totals.fat}</Text>
-          </View>
         </View>
         <View style={styles.mealCardsWrap}>
           {mealData.map((section) => {
@@ -1472,7 +1428,9 @@ export function NutritionScreen({
                     ) : selectedPresetValues ? (
                       <>
                       <Text style={styles.portionResultLabel}>
-                        {`For ${draftGrams || '0'} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'} you log:`}
+                        {selectedPresetBaseMode === 'serving'
+                          ? 'For 1 serving you log:'
+                          : `For ${draftGrams || '0'} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'} you log:`}
                       </Text>
                       <View style={styles.macroChipsRow}>
                         <View style={[styles.macroChip, styles.macroChipPrimary]}>
@@ -1523,17 +1481,20 @@ export function NutritionScreen({
                       let foodF = f0;
                       let foodC = c0;
                       let foodServingGrams: number | undefined = !isServingMode && servingWeight > 0 ? servingWeight : undefined;
-                      // Entered per serving + a known serving weight → convert to a per-100g food so it
-                      // can be logged by grams or by serving.
-                      if (isServingMode && servingWeight > 0) {
-                        const k = 100 / servingWeight;
+                      // Always store as a per-100g food so it can be logged by grams or serving.
+                      // Per-serving entry with a known weight → convert; without a weight the entered
+                      // numbers are treated as per-100g (never store a serving-only food).
+                      if (isServingMode) {
                         foodBaseMode = '100g';
                         foodBaseQuantity = 100;
-                        foodCal = Math.round(cal0 * k * 10) / 10;
-                        foodP = Math.round(p0 * k * 10) / 10;
-                        foodF = Math.round(f0 * k * 10) / 10;
-                        foodC = Math.round(c0 * k * 10) / 10;
-                        foodServingGrams = servingWeight;
+                        if (servingWeight > 0) {
+                          const k = 100 / servingWeight;
+                          foodCal = Math.round(cal0 * k * 10) / 10;
+                          foodP = Math.round(p0 * k * 10) / 10;
+                          foodF = Math.round(f0 * k * 10) / 10;
+                          foodC = Math.round(c0 * k * 10) / 10;
+                          foodServingGrams = servingWeight;
+                        }
                       }
                       const nextCustomFood: CustomNutritionFood = {
                         id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
