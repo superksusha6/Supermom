@@ -99,6 +99,8 @@ export function NutritionScreen({
   const [expandedMeal, setExpandedMeal] = useState<NutritionMealType | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [addTab, setAddTab] = useState<'search' | 'recent' | 'frequent' | 'saved'>('recent');
+  const [sessionAddedCount, setSessionAddedCount] = useState(0);
+  const [sessionAddedName, setSessionAddedName] = useState('');
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -442,6 +444,51 @@ export function NutritionScreen({
     }
   }
 
+  function quickAddPreset(item: NutritionFoodPreset) {
+    if (!activeMealType) return;
+    const baseMode = item.baseMode || '100g';
+    const amount =
+      baseMode === 'serving'
+        ? String(item.baseQuantity || 1)
+        : item.servingGrams && item.servingGrams > 0
+          ? String(item.servingGrams)
+          : '100';
+    const values = getNutritionValuesForGrams(item, amount);
+    const entry: NutritionFoodEntry = {
+      id: createUuid(),
+      name: formatNutritionEntryName({
+        name: item.name,
+        grams: amount,
+        customBrand: item.brand || '',
+        customFoodMode: baseMode !== '100g',
+        customServingType: baseMode,
+      }),
+      mealType: activeMealType,
+      date: selectedDateKey,
+      calories: values.calories,
+      protein: values.protein,
+      fat: values.fat,
+      carbs: values.carbs,
+      source: {
+        displayName: item.name,
+        brand: item.brand,
+        grams: amount,
+        baseMode,
+        baseQuantity: item.baseQuantity || (baseMode === 'serving' ? 1 : 100),
+        caloriesPer100g: item.caloriesPer100g,
+        proteinPer100g: item.proteinPer100g,
+        fatPer100g: item.fatPer100g,
+        carbsPer100g: item.carbsPer100g,
+        servingGrams: item.servingGrams,
+      },
+    };
+    onNutritionEntriesChange((prev) => [entry, ...prev]);
+    registerRecentPreset(item.id);
+    if (item.source && item.source !== 'custom') savePresetToLibrary(item);
+    setSessionAddedCount((prev) => prev + 1);
+    setSessionAddedName(item.name);
+  }
+
   function registerRecentPreset(presetId: string) {
     setLibraryMeta((prev) => ({
       ...prev,
@@ -484,6 +531,8 @@ export function NutritionScreen({
   function openMealAdder(mealKey: NutritionMealType) {
     setEditingEntryId(null);
     setAddTab('recent');
+    setSessionAddedCount(0);
+    setSessionAddedName('');
     setActiveMealType(mealKey);
     setDraftMealName('');
     setDraftCalories('');
@@ -558,6 +607,15 @@ export function NutritionScreen({
           }}
         >
           <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
+        </Pressable>
+        <Pressable
+          style={styles.quickAddPill}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            quickAddPreset(item);
+          }}
+        >
+          <Text style={styles.quickAddPillText}>✓</Text>
         </Pressable>
         <View style={styles.catalogResultTopRow}>
           <View style={styles.catalogResultCopy}>
@@ -1068,6 +1126,14 @@ export function NutritionScreen({
                         </Pressable>
                       ))}
                     </View>
+                    {sessionAddedCount > 0 ? (
+                      <View style={styles.sessionAddedBanner}>
+                        <Text style={styles.sessionAddedText}>
+                          {`✓ Added ${sessionAddedCount} item${sessionAddedCount === 1 ? '' : 's'}${sessionAddedName ? ` · last: ${sessionAddedName}` : ''}`}
+                        </Text>
+                        <Text style={styles.sessionAddedHint}>Tap ✓ on a food to add it · tap a row to set grams · Done to finish</Text>
+                      </View>
+                    ) : null}
                     {foodSearch.trim().length >= 1 && filteredFoodPresets.length ? (
                       <View style={styles.quickSection}>
                         <View style={styles.quickSectionHeader}>
@@ -1173,36 +1239,7 @@ export function NutritionScreen({
                         {!catalogSearchLoading && !visibleCatalogResults.length && !catalogSearchError ? (
                           <Text style={styles.catalogEmpty}>Try a more specific product name or save it manually as a custom food.</Text>
                         ) : null}
-                        {visibleCatalogResults.map((item) => (
-                          <Pressable
-                            key={item.id}
-                            style={styles.catalogResultCard}
-                            onPress={() => applyPresetSelection(item)}
-                          >
-                            <Pressable
-                              style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
-                              onPress={(event) => {
-                                event.stopPropagation?.();
-                                toggleFavoritePreset(item);
-                              }}
-                            >
-                              <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
-                            </Pressable>
-                            <View style={styles.catalogResultTopRow}>
-                              <View style={styles.catalogResultCopy}>
-                                <Text style={styles.catalogResultTitle}>{item.name}</Text>
-                                <Text style={styles.catalogResultSubtitle}>
-                                  {item.brand?.trim()
-                                    ? `${item.brand.trim()} · ${item.baseAmount}`
-                                    : item.baseAmount}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.catalogResultMacros}>
-                              {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
-                            </Text>
-                          </Pressable>
-                        ))}
+                        {visibleCatalogResults.map((item) => renderPresetRow(item))}
                       </View>
                     ) : null}
                   </>
@@ -1372,8 +1409,13 @@ export function NutritionScreen({
                 ) : null}
               </View>
             <View style={styles.modalActions}>
-              <Pressable style={styles.modalGhostBtn} onPress={() => { setActiveMealType(null); setEditingEntryId(null); }}>
-                <Text style={styles.modalGhostBtnText}>Cancel</Text>
+              <Pressable
+                style={[styles.modalGhostBtn, sessionAddedCount > 0 && !selectedPreset && !customFoodMode && styles.modalDoneBtn]}
+                onPress={() => { setActiveMealType(null); setEditingEntryId(null); }}
+              >
+                <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && !selectedPreset && !customFoodMode && styles.modalDoneBtnText]}>
+                  {sessionAddedCount > 0 && !selectedPreset && !customFoodMode ? 'Done' : 'Cancel'}
+                </Text>
               </Pressable>
               <Pressable
                 style={styles.primaryBtn}
@@ -2588,6 +2630,53 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     favoritePillTextActive: {
       color: '#d97706',
     },
+    quickAddPill: {
+      position: 'absolute',
+      right: 10,
+      bottom: 10,
+      zIndex: 2,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickAddPillText: {
+      color: '#ffffff',
+      fontSize: 17,
+      fontWeight: '900',
+      lineHeight: 19,
+    },
+    sessionAddedBanner: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      marginBottom: 12,
+      gap: 2,
+    },
+    sessionAddedText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    sessionAddedHint: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    modalDoneBtn: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    modalDoneBtnText: {
+      color: '#ffffff',
+    },
     presetCardActive: {
       borderColor: colors.primary,
       backgroundColor: colors.selection,
@@ -2680,6 +2769,7 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: colors.text,
       fontSize: 12,
       fontWeight: '700',
+      paddingRight: 44,
     },
     aiEstimateBtnDisabled: {
       opacity: 0.6,
