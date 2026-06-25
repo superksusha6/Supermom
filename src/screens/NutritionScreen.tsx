@@ -116,6 +116,7 @@ export function NutritionScreen({
   const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
   const [customBrand, setCustomBrand] = useState('');
   const [customBarcode, setCustomBarcode] = useState('');
+  const [customServingGrams, setCustomServingGrams] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [customServingType, setCustomServingType] = useState<'100g' | '100ml' | 'serving'>('100g');
   const [catalogResults, setCatalogResults] = useState<NutritionFoodPreset[]>([]);
@@ -612,6 +613,7 @@ export function NutritionScreen({
     setPhotoEstimateMode(false);
     setCustomBrand('');
     setCustomBarcode('');
+    setCustomServingGrams('');
     setCustomServingType('100g');
     setMealPhotoError(null);
     setMealPhotoNote(null);
@@ -792,6 +794,7 @@ export function NutritionScreen({
       setDraftMealName(estimate.mealName);
       setCustomBrand('');
       setCustomBarcode('');
+      setCustomServingGrams('');
       setCustomServingType('100g');
       setDraftGrams(String(Math.max(1, Math.round(estimate.estimatedAmountGrams || 100))));
       setDraftCalories(String(estimate.caloriesPer100g));
@@ -1262,6 +1265,7 @@ export function NutritionScreen({
                           setDraftGrams('100');
                           setCustomBrand('');
                           setCustomBarcode('');
+                          setCustomServingGrams('');
                           setCustomServingType('100g');
                         }}
                       >
@@ -1310,6 +1314,7 @@ export function NutritionScreen({
                           setPhotoEstimateMode(false);
                           setCustomBrand('');
                           setCustomBarcode('');
+                          setCustomServingGrams('');
                           setMealPhotoError(null);
                           setMealPhotoNote(null);
                         }}
@@ -1340,6 +1345,15 @@ export function NutritionScreen({
                         </Pressable>
                       ))}
                     </View>
+                    {customServingType !== 'serving' ? (
+                      <TextInput
+                        placeholder={`Serving size optional — 1 serving = ? ${customServingType === '100ml' ? 'ml' : 'g'} (e.g. 1 kiwi = 75)`}
+                        style={styles.input}
+                        value={customServingGrams}
+                        onChangeText={(text) => setCustomServingGrams(cleanNutritionNumber(text))}
+                        keyboardType="decimal-pad"
+                      />
+                    ) : null}
                   </View>
                 ) : null}
               </View>
@@ -1385,6 +1399,19 @@ export function NutritionScreen({
                         <View style={styles.gramsUnitChip}>
                           <Text style={styles.gramsUnitChipText}>{(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'ml' : 'g'}</Text>
                         </View>
+                      </View>
+                    ) : null}
+                    {!customFoodMode && selectedPreset && selectedPreset.servingGrams ? (
+                      <View style={styles.servingChipRow}>
+                        <Pressable
+                          style={[styles.servingChip, draftGrams === String(selectedPreset.servingGrams) && styles.servingChipActive]}
+                          onPress={() => applyDraftGrams(String(selectedPreset.servingGrams))}
+                        >
+                          <Text style={[styles.servingChipText, draftGrams === String(selectedPreset.servingGrams) && styles.servingChipTextActive]}>
+                            1 serving · {selectedPreset.servingGrams} {selectedPresetBaseMode === '100ml' ? 'ml' : 'g'}
+                          </Text>
+                        </Pressable>
+                        <Text style={styles.servingChipHint}>or type grams above</Text>
                       </View>
                     ) : null}
                     {customFoodMode ? (
@@ -1478,6 +1505,10 @@ export function NutritionScreen({
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
+                        servingGrams:
+                          customServingType !== 'serving' && Number(customServingGrams) > 0
+                            ? Number(customServingGrams)
+                            : undefined,
                         baseMode: customServingType,
                         baseQuantity: normalizedBaseQuantity,
                         calories: Number(draftCalories) || 0,
@@ -1547,6 +1578,7 @@ export function NutritionScreen({
                   setPhotoEstimateMode(false);
                   setCustomBrand('');
                   setCustomBarcode('');
+                  setCustomServingGrams('');
                   setCustomServingType('100g');
                   setCatalogResults([]);
                   setCatalogSearchError(null);
@@ -3022,6 +3054,37 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: colors.text,
       fontSize: 13,
       fontWeight: '800',
+    },
+    servingChipRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 8,
+      flexWrap: 'wrap',
+    },
+    servingChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    servingChipActive: {
+      backgroundColor: colors.primary,
+    },
+    servingChipText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    servingChipTextActive: {
+      color: '#ffffff',
+    },
+    servingChipHint: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
     },
     macroPreviewGrid: {
       flexDirection: 'row',

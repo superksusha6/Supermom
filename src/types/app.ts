@@ -87,6 +87,7 @@ export type CustomNutritionFood = {
   name: string;
   brand?: string;
   barcode?: string;
+  servingGrams?: number;
   baseMode: '100g' | '100ml' | 'serving';
   baseQuantity: number;
   calories: number;
