@@ -1026,6 +1026,7 @@ create table if not exists public.custom_nutrition_foods (
 
 alter table public.custom_nutrition_foods add column if not exists barcode text;
 alter table public.custom_nutrition_foods add column if not exists serving_grams numeric(10,2);
+alter table public.custom_nutrition_foods add column if not exists serving_json jsonb;
 create index if not exists custom_nutrition_foods_barcode_idx
   on public.custom_nutrition_foods (user_id, barcode);
 

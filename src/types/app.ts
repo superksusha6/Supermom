@@ -82,12 +82,21 @@ export type NutritionFoodEntry = {
   source?: NutritionEntrySource;
 };
 
+export type NutritionMacros = {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+};
+
 export type CustomNutritionFood = {
   id: string;
   name: string;
   brand?: string;
   barcode?: string;
   servingGrams?: number;
+  // Independent per-serving values (used as-is, not converted from grams).
+  serving?: NutritionMacros;
   baseMode: '100g' | '100ml' | 'serving';
   baseQuantity: number;
   calories: number;

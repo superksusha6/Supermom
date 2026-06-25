@@ -10,11 +10,6 @@ import { analyzeMealPhoto, estimateMealByText } from '@/lib/mealVision';
 import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
-// Macro bars are drawn on a track that spans the norm plus 25% headroom, so an
-// over-target value can visibly cross the norm marker instead of clipping at 100%.
-const MACRO_BAR_MAX_SCALE = 1.25;
-const NORM_BAR_FRACTION = 1 / MACRO_BAR_MAX_SCALE;
-
 type Props = {
   personalProfile: PersonalProfile;
   nutritionGoal: NutritionGoal;
@@ -114,8 +109,15 @@ export function NutritionScreen({
   const [draftProtein, setDraftProtein] = useState('');
   const [draftFat, setDraftFat] = useState('');
   const [draftCarbs, setDraftCarbs] = useState('');
+  // Independent per-serving values for a custom food (entered directly, not converted).
+  const [draftServingCalories, setDraftServingCalories] = useState('');
+  const [draftServingProtein, setDraftServingProtein] = useState('');
+  const [draftServingFat, setDraftServingFat] = useState('');
+  const [draftServingCarbs, setDraftServingCarbs] = useState('');
   const [foodSearch, setFoodSearch] = useState('');
   const [draftGrams, setDraftGrams] = useState('100');
+  // At log time, whether the user is logging this food by serving (vs by grams).
+  const [loggingServing, setLoggingServing] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<NutritionFoodPreset | null>(null);
   const [customFoodMode, setCustomFoodMode] = useState(false);
   const [photoEstimateMode, setPhotoEstimateMode] = useState(false);
@@ -300,43 +302,81 @@ export function NutritionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekViewportWidth]);
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
-  const selectedPresetValues = selectedPreset ? getNutritionValuesForGrams(selectedPreset, draftGrams) : null;
-  const selectedPresetBaseMode = selectedPreset?.baseMode || '100g';
-  const selectedPresetReference = selectedPreset
-    ? selectedPreset.servingGrams && selectedPreset.servingGrams > 0
+  // A serving-based view of the selected food (uses its per-serving values directly).
+  const servingLoggingPreset: NutritionFoodPreset | null =
+    selectedPreset && selectedPreset.serving
       ? {
-          label: `Per serving · ${selectedPreset.servingGrams} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'}`,
-          values: getNutritionValuesForGrams(selectedPreset, String(selectedPreset.servingGrams)),
+          ...selectedPreset,
+          baseMode: 'serving',
+          baseQuantity: 1,
+          baseAmount: 'per 1 serving',
+          caloriesPer100g: selectedPreset.serving.calories,
+          proteinPer100g: selectedPreset.serving.protein,
+          fatPer100g: selectedPreset.serving.fat,
+          carbsPer100g: selectedPreset.serving.carbs,
+        }
+      : null;
+  const canLogServing = !!servingLoggingPreset || selectedPreset?.baseMode === 'serving';
+  const canLogGrams = !!selectedPreset && selectedPreset.baseMode !== 'serving';
+  const effectiveLoggingPreset =
+    loggingServing && servingLoggingPreset ? servingLoggingPreset : selectedPreset;
+  const selectedPresetValues = effectiveLoggingPreset ? getNutritionValuesForGrams(effectiveLoggingPreset, draftGrams) : null;
+  const selectedPresetBaseMode = effectiveLoggingPreset?.baseMode || '100g';
+  const selectedPresetReference = effectiveLoggingPreset
+    ? effectiveLoggingPreset.baseMode === 'serving'
+      ? {
+          label: 'Per 1 serving',
+          values: getNutritionValuesForGrams(effectiveLoggingPreset, '1'),
         }
       : {
-          label: selectedPreset.baseAmount,
+          label: effectiveLoggingPreset.baseAmount,
           values: {
-            calories: String(selectedPreset.caloriesPer100g),
-            protein: String(selectedPreset.proteinPer100g),
-            fat: String(selectedPreset.fatPer100g),
-            carbs: String(selectedPreset.carbsPer100g),
+            calories: String(effectiveLoggingPreset.caloriesPer100g),
+            protein: String(effectiveLoggingPreset.proteinPer100g),
+            fat: String(effectiveLoggingPreset.fatPer100g),
+            carbs: String(effectiveLoggingPreset.carbsPer100g),
           },
         }
     : null;
+  const customHasPer100 =
+    (Number(draftCalories.replace(',', '.')) || 0) > 0 ||
+    (Number(draftProtein.replace(',', '.')) || 0) > 0 ||
+    (Number(draftFat.replace(',', '.')) || 0) > 0 ||
+    (Number(draftCarbs.replace(',', '.')) || 0) > 0;
+  const customPreviewServing = !customHasPer100 && (Number(draftServingCalories.replace(',', '.')) || 0) > 0;
   const customFoodPreviewPreset = useMemo<NutritionFoodPreset | null>(() => {
     if (!customFoodMode || !draftMealName.trim()) return null;
+    // When only per-serving was filled, preview/log that serving directly.
+    if (customPreviewServing) {
+      return {
+        id: 'custom-preview',
+        name: draftMealName.trim(),
+        baseAmount: 'per 1 serving',
+        baseMode: 'serving',
+        baseQuantity: 1,
+        caloriesPer100g: Number(draftServingCalories.replace(',', '.')) || 0,
+        proteinPer100g: Number(draftServingProtein.replace(',', '.')) || 0,
+        fatPer100g: Number(draftServingFat.replace(',', '.')) || 0,
+        carbsPer100g: Number(draftServingCarbs.replace(',', '.')) || 0,
+      };
+    }
     return {
       id: 'custom-preview',
       name: draftMealName.trim(),
-      baseAmount: customServingType === 'serving' ? 'per 1 serving' : `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
+      baseAmount: `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
       baseMode: customServingType,
-      baseQuantity: customServingType === 'serving' ? 1 : 100,
+      baseQuantity: 100,
       caloriesPer100g: Number(draftCalories.replace(',', '.')) || 0,
       proteinPer100g: Number(draftProtein.replace(',', '.')) || 0,
       fatPer100g: Number(draftFat.replace(',', '.')) || 0,
       carbsPer100g: Number(draftCarbs.replace(',', '.')) || 0,
     };
-  }, [customFoodMode, customServingType, draftCalories, draftCarbs, draftFat, draftMealName, draftProtein]);
+  }, [customFoodMode, customServingType, customPreviewServing, draftCalories, draftCarbs, draftFat, draftMealName, draftProtein, draftServingCalories, draftServingProtein, draftServingFat, draftServingCarbs]);
   const customFoodPreviewValues = useMemo(() => {
     if (!customFoodPreviewPreset) return null;
-    const amount = customServingType === 'serving' ? '1' : draftGrams || '100';
+    const amount = customFoodPreviewPreset.baseMode === 'serving' ? '1' : draftGrams || '100';
     return getNutritionValuesForGrams(customFoodPreviewPreset, amount);
-  }, [customFoodPreviewPreset, customServingType, draftGrams]);
+  }, [customFoodPreviewPreset, draftGrams]);
   const showNutritionEditor = addFoodFlow === 'search' || !!selectedPreset || customFoodMode;
   const nutritionProgress = plan
     ? [
@@ -346,13 +386,15 @@ export function NutritionScreen({
         { key: 'fat', label: 'Fat', current: totals.fat, target: plan.fat, unit: 'g' },
       ].map((item) => {
         const ratio = item.target > 0 ? item.current / item.target : 0;
-        // Bars are scaled so the norm (100%) sits at NORM_BAR_FRACTION of the track,
-        // leaving headroom on the right for an overflow segment to visibly cross the limit.
-        const fill = Math.min(ratio, MACRO_BAR_MAX_SCALE) / MACRO_BAR_MAX_SCALE;
+        // The norm fills the whole track: 100% = full bar. Over-target just caps the
+        // fill at 100% and turns it red, with the exact excess shown next to the value.
+        const fill = Math.min(ratio, 1);
         const isOver = ratio > 1;
+        const over = Math.max(0, Math.round(item.current - item.target));
+        const overPercent = Math.max(0, Math.round((ratio - 1) * 100));
         const status = isOver ? 'over' : ratio >= 0.95 ? 'done' : 'under';
         const color = status === 'over' ? '#ef4444' : status === 'done' ? '#22c55e' : colors.primary;
-        return { ...item, ratio, fill, isOver, status, color };
+        return { ...item, ratio, fill, isOver, over, overPercent, status, color };
       })
     : [];
 
@@ -499,16 +541,17 @@ export function NutritionScreen({
   }
 
   function quickAddSelected() {
-    if (!selectedPreset || !activeMealType || cardAddedFlash) return;
-    const baseMode = selectedPreset.baseMode || '100g';
-    const grams = draftGrams || '100';
-    const values = getNutritionValuesForGrams(selectedPreset, grams);
+    if (!effectiveLoggingPreset || !activeMealType || cardAddedFlash) return;
+    const logPreset = effectiveLoggingPreset;
+    const baseMode = logPreset.baseMode || '100g';
+    const grams = draftGrams || (baseMode === 'serving' ? '1' : '100');
+    const values = getNutritionValuesForGrams(logPreset, grams);
     const entry: NutritionFoodEntry = {
       id: createUuid(),
       name: formatNutritionEntryName({
-        name: selectedPreset.name,
+        name: logPreset.name,
         grams,
-        customBrand: selectedPreset.brand || '',
+        customBrand: logPreset.brand || '',
         customFoodMode: baseMode !== '100g',
         customServingType: baseMode,
       }),
@@ -519,28 +562,29 @@ export function NutritionScreen({
       fat: values.fat,
       carbs: values.carbs,
       source: {
-        displayName: selectedPreset.name,
-        brand: selectedPreset.brand,
+        displayName: logPreset.name,
+        brand: logPreset.brand,
         grams,
         baseMode,
-        baseQuantity: selectedPreset.baseQuantity || (baseMode === 'serving' ? 1 : 100),
-        caloriesPer100g: selectedPreset.caloriesPer100g,
-        proteinPer100g: selectedPreset.proteinPer100g,
-        fatPer100g: selectedPreset.fatPer100g,
-        carbsPer100g: selectedPreset.carbsPer100g,
-        servingGrams: selectedPreset.servingGrams,
+        baseQuantity: logPreset.baseQuantity || (baseMode === 'serving' ? 1 : 100),
+        caloriesPer100g: logPreset.caloriesPer100g,
+        proteinPer100g: logPreset.proteinPer100g,
+        fatPer100g: logPreset.fatPer100g,
+        carbsPer100g: logPreset.carbsPer100g,
+        servingGrams: logPreset.servingGrams,
       },
     };
     onNutritionEntriesChange((prev) => [entry, ...prev]);
-    registerRecentPreset(selectedPreset.id);
-    if (selectedPreset.source && selectedPreset.source !== 'custom') savePresetToLibrary(selectedPreset);
+    registerRecentPreset(logPreset.id);
+    if (logPreset.source && logPreset.source !== 'custom') savePresetToLibrary(logPreset);
     setSessionAddedCount((prev) => prev + 1);
-    setSessionAddedName(selectedPreset.name);
+    setSessionAddedName(logPreset.name);
     // Fill the circle with a check briefly, then return to search for the next product.
     setCardAddedFlash(true);
     setTimeout(() => {
       setCardAddedFlash(false);
       setSelectedPreset(null);
+      setLoggingServing(false);
       setDraftMealName('');
       setDraftCalories('');
       setDraftProtein('');
@@ -573,20 +617,22 @@ export function NutritionScreen({
   function applyPresetSelection(item: NutritionFoodPreset) {
     const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
     const baseMode = item.baseMode || '100g';
-    const defaultAmount =
-      baseMode === 'serving'
-        ? String(item.baseQuantity || 1)
-        : item.servingGrams && item.servingGrams > 0
-          ? String(item.servingGrams)
-          : String(item.baseQuantity || 100);
-    const next = getNutritionValuesForGrams(item, defaultAmount);
+    const startServing = baseMode === 'serving';
+    const defaultAmount = startServing
+      ? '1'
+      : item.servingGrams && item.servingGrams > 0
+        ? String(item.servingGrams)
+        : '100';
+    const computeFrom = startServing ? item : item;
+    const next = getNutritionValuesForGrams(computeFrom, defaultAmount);
     setSelectedPreset(item);
+    setLoggingServing(startServing);
     setDraftMealName(displayTitle);
     setDraftCalories(next.calories);
     setDraftProtein(next.protein);
     setDraftFat(next.fat);
     setDraftCarbs(next.carbs);
-    setCustomServingType(baseMode);
+    setCustomServingType(baseMode === 'serving' ? '100g' : baseMode);
     setDraftGrams(defaultAmount);
     setFoodSearch(displayTitle);
   }
@@ -612,6 +658,11 @@ export function NutritionScreen({
     setCustomBrand('');
     setCustomBarcode('');
     setCustomServingGrams('');
+    setDraftServingCalories('');
+    setDraftServingProtein('');
+    setDraftServingFat('');
+    setDraftServingCarbs('');
+    setLoggingServing(false);
     setCustomServingType('100g');
     setMealPhotoError(null);
     setMealPhotoNote(null);
@@ -630,6 +681,7 @@ export function NutritionScreen({
     setEditingEntryId(entry.id);
     setActiveMealType(entry.mealType);
     setSelectedPreset(preset);
+    setLoggingServing(source.baseMode === 'serving');
     setDraftMealName(source.displayName);
     setDraftCalories(values.calories);
     setDraftProtein(values.protein);
@@ -683,12 +735,30 @@ export function NutritionScreen({
   function applyDraftGrams(value: string) {
     const grams = cleanNutritionNumber(value);
     setDraftGrams(grams);
-    if (selectedPreset) {
-      const next = getNutritionValuesForGrams(selectedPreset, grams);
+    if (effectiveLoggingPreset) {
+      const next = getNutritionValuesForGrams(effectiveLoggingPreset, grams);
       setDraftCalories(next.calories);
       setDraftProtein(next.protein);
       setDraftFat(next.fat);
       setDraftCarbs(next.carbs);
+    }
+  }
+
+  function setLoggingMode(serving: boolean) {
+    setLoggingServing(serving);
+    const target = serving && servingLoggingPreset ? servingLoggingPreset : selectedPreset;
+    const nextAmount = serving
+      ? '1'
+      : selectedPreset?.servingGrams && selectedPreset.servingGrams > 0
+        ? String(selectedPreset.servingGrams)
+        : '100';
+    setDraftGrams(nextAmount);
+    if (target) {
+      const v = getNutritionValuesForGrams(target, nextAmount);
+      setDraftCalories(v.calories);
+      setDraftProtein(v.protein);
+      setDraftFat(v.fat);
+      setDraftCarbs(v.carbs);
     }
   }
 
@@ -793,6 +863,11 @@ export function NutritionScreen({
       setCustomBrand('');
       setCustomBarcode('');
       setCustomServingGrams('');
+      setDraftServingCalories('');
+      setDraftServingProtein('');
+      setDraftServingFat('');
+      setDraftServingCarbs('');
+      setLoggingServing(false);
       setCustomServingType('100g');
       setDraftGrams(String(Math.max(1, Math.round(estimate.estimatedAmountGrams || 100))));
       setDraftCalories(String(estimate.caloriesPer100g));
@@ -947,6 +1022,11 @@ export function NutritionScreen({
                       <Text style={styles.macroBarTarget}>
                         {` / ${Math.round(item.target)} ${item.unit}`}
                       </Text>
+                      {item.isOver ? (
+                        <Text style={styles.macroBarOver}>
+                          {`  +${item.over} ${item.unit} (${item.overPercent}%)`}
+                        </Text>
+                      ) : null}
                     </Text>
                   </View>
                   <View style={styles.macroBarTrack}>
@@ -956,7 +1036,6 @@ export function NutritionScreen({
                         { width: `${item.fill * 100}%`, backgroundColor: item.color },
                       ]}
                     />
-                    <View style={[styles.macroBarNormMark, { left: `${NORM_BAR_FRACTION * 100}%` }]} />
                   </View>
                 </View>
               ))}
@@ -1220,6 +1299,11 @@ export function NutritionScreen({
                           setCustomBrand('');
                           setCustomBarcode('');
                           setCustomServingGrams('');
+                          setDraftServingCalories('');
+                          setDraftServingProtein('');
+                          setDraftServingFat('');
+                          setDraftServingCarbs('');
+                          setLoggingServing(false);
                           setCustomServingType('100g');
                         }}
                       >
@@ -1269,6 +1353,11 @@ export function NutritionScreen({
                           setCustomBrand('');
                           setCustomBarcode('');
                           setCustomServingGrams('');
+                          setDraftServingCalories('');
+                          setDraftServingProtein('');
+                          setDraftServingFat('');
+                          setDraftServingCarbs('');
+                          setLoggingServing(false);
                           setMealPhotoError(null);
                           setMealPhotoNote(null);
                         }}
@@ -1286,39 +1375,18 @@ export function NutritionScreen({
                     />
                     <View style={styles.pillRow}>
                       {[
-                        { key: '100g' as const, label: '100 g' },
-                        { key: '100ml' as const, label: '100 ml' },
-                        { key: 'serving' as const, label: '1 serving' },
+                        { key: '100g' as const, label: 'Per 100 g' },
+                        { key: '100ml' as const, label: 'Per 100 ml' },
                       ].map((option) => (
                         <Pressable
                           key={option.key}
                           style={[styles.pillBtn, customServingType === option.key && styles.pillBtnActive]}
-                          onPress={() => {
-                            if (option.key !== customServingType) {
-                              // New basis → clear the numbers so you enter fresh values for it.
-                              setDraftCalories('');
-                              setDraftProtein('');
-                              setDraftFat('');
-                              setDraftCarbs('');
-                            }
-                            setCustomServingType(option.key);
-                          }}
+                          onPress={() => setCustomServingType(option.key)}
                         >
                           <Text style={[styles.pillBtnText, customServingType === option.key && styles.pillBtnTextActive]}>{option.label}</Text>
                         </Pressable>
                       ))}
                     </View>
-                    <TextInput
-                      placeholder={
-                        customServingType === 'serving'
-                          ? '1 serving weighs ? g (so it can also be logged by grams)'
-                          : `Serving size optional — 1 serving = ? ${customServingType === '100ml' ? 'ml' : 'g'} (e.g. 1 kiwi = 75)`
-                      }
-                      style={styles.input}
-                      value={customServingGrams}
-                      onChangeText={(text) => setCustomServingGrams(cleanNutritionNumber(text))}
-                      keyboardType="decimal-pad"
-                    />
                   </View>
                 ) : null}
               </View>
@@ -1349,36 +1417,45 @@ export function NutritionScreen({
               <View style={styles.modalSection}>
                 {showNutritionEditor ? (
                   <>
-                    {!(customFoodMode ? customServingType === 'serving' : selectedPresetBaseMode === 'serving') ? (
-                      <View style={styles.gramsRow}>
-                        <View style={styles.gramsInputWrap}>
-                          <Text style={styles.fieldLabel}>{(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'Volume' : 'Amount'}</Text>
-                          <TextInput
-                            placeholder={(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'ml' : 'Grams'}
-                            keyboardType="decimal-pad"
-                            style={styles.input}
-                            value={draftGrams}
-                            onChangeText={(text) => applyDraftGrams(text)}
-                          />
-                        </View>
-                        <View style={styles.gramsUnitChip}>
-                          <Text style={styles.gramsUnitChipText}>{(customFoodMode ? customServingType : selectedPresetBaseMode) === '100ml' ? 'ml' : 'g'}</Text>
-                        </View>
-                      </View>
-                    ) : null}
-                    {!customFoodMode && selectedPreset && selectedPreset.servingGrams ? (
-                      <View style={styles.servingChipRow}>
+                    {!customFoodMode && selectedPreset && canLogServing && canLogGrams ? (
+                      <View style={styles.pillRow}>
                         <Pressable
-                          style={[styles.servingChip, draftGrams === String(selectedPreset.servingGrams) && styles.servingChipActive]}
-                          onPress={() => applyDraftGrams(String(selectedPreset.servingGrams))}
+                          style={[styles.pillBtn, !loggingServing && styles.pillBtnActive]}
+                          onPress={() => setLoggingMode(false)}
                         >
-                          <Text style={[styles.servingChipText, draftGrams === String(selectedPreset.servingGrams) && styles.servingChipTextActive]}>
-                            1 serving · {selectedPreset.servingGrams} {selectedPresetBaseMode === '100ml' ? 'ml' : 'g'}
+                          <Text style={[styles.pillBtnText, !loggingServing && styles.pillBtnTextActive]}>
+                            {selectedPreset.baseMode === '100ml' ? 'Per 100 ml' : 'Per 100 g'}
                           </Text>
                         </Pressable>
-                        <Text style={styles.servingChipHint}>or type grams above</Text>
+                        <Pressable
+                          style={[styles.pillBtn, loggingServing && styles.pillBtnActive]}
+                          onPress={() => setLoggingMode(true)}
+                        >
+                          <Text style={[styles.pillBtnText, loggingServing && styles.pillBtnTextActive]}>Per serving</Text>
+                        </Pressable>
                       </View>
                     ) : null}
+                    {(() => {
+                      const unit = customFoodMode ? customServingType : selectedPresetBaseMode;
+                      const isServing = unit === 'serving';
+                      return (
+                        <View style={styles.gramsRow}>
+                          <View style={styles.gramsInputWrap}>
+                            <Text style={styles.fieldLabel}>{isServing ? 'Servings' : unit === '100ml' ? 'Volume' : 'Amount'}</Text>
+                            <TextInput
+                              placeholder={isServing ? 'How many servings' : unit === '100ml' ? 'ml' : 'Grams'}
+                              keyboardType="decimal-pad"
+                              style={styles.input}
+                              value={draftGrams}
+                              onChangeText={(text) => applyDraftGrams(text)}
+                            />
+                          </View>
+                          <View style={styles.gramsUnitChip}>
+                            <Text style={styles.gramsUnitChipText}>{isServing ? '× serving' : unit === '100ml' ? 'ml' : 'g'}</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
                     {customFoodMode ? (
                       <>
                     <View style={styles.row}>
@@ -1409,6 +1486,28 @@ export function NutritionScreen({
                         <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftCarbs} onChangeText={(text) => setDraftCarbs(cleanNutritionNumber(text))} />
                       </View>
                     </View>
+                    <Text style={styles.servingSectionLabel}>Per 1 serving (optional)</Text>
+                    <Text style={styles.servingSectionHint}>Fill this if 1 serving is logged as-is (e.g. 1 kiwi). Values are used directly, not converted.</Text>
+                    <View style={styles.row}>
+                      <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>Calories / serving</Text>
+                        <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftServingCalories} onChangeText={(text) => setDraftServingCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
+                      </View>
+                      <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>Protein / serving</Text>
+                        <TextInput placeholder="Protein" keyboardType="decimal-pad" style={styles.input} value={draftServingProtein} onChangeText={(text) => setDraftServingProtein(cleanNutritionNumber(text))} />
+                      </View>
+                    </View>
+                    <View style={styles.row}>
+                      <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>Fat / serving</Text>
+                        <TextInput placeholder="Fat" keyboardType="decimal-pad" style={styles.input} value={draftServingFat} onChangeText={(text) => setDraftServingFat(cleanNutritionNumber(text))} />
+                      </View>
+                      <View style={styles.half}>
+                        <Text style={styles.fieldLabel}>Carbs / serving</Text>
+                        <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftServingCarbs} onChangeText={(text) => setDraftServingCarbs(cleanNutritionNumber(text))} />
+                      </View>
+                    </View>
                     {customFoodPreviewValues ? (
                       <>
                         <Text style={styles.portionResultLabel}>For {draftGrams || '0'} {customServingType === '100ml' ? 'ml' : 'g'} you log:</Text>
@@ -1427,7 +1526,7 @@ export function NutritionScreen({
                       <>
                       <Text style={styles.portionResultLabel}>
                         {selectedPresetBaseMode === 'serving'
-                          ? 'For 1 serving you log:'
+                          ? `For ${draftGrams || '1'} serving${(draftGrams || '1') === '1' ? '' : 's'} you log:`
                           : `For ${draftGrams || '0'} ${selectedPresetBaseMode === '100ml' ? 'ml' : 'g'} you log:`}
                       </Text>
                       <View style={styles.macroChipsRow}>
@@ -1466,46 +1565,39 @@ export function NutritionScreen({
                   }
                   if (customFoodMode) {
                     if (!photoEstimateMode) {
-                      const servingWeight = Number(customServingGrams);
-                      const isServingMode = customServingType === 'serving';
-                      const cal0 = Number(draftCalories) || 0;
-                      const p0 = Number(draftProtein.replace(',', '.')) || 0;
-                      const f0 = Number(draftFat.replace(',', '.')) || 0;
-                      const c0 = Number(draftCarbs.replace(',', '.')) || 0;
-                      let foodBaseMode: '100g' | '100ml' | 'serving' = customServingType;
-                      let foodBaseQuantity = isServingMode ? 1 : 100;
-                      let foodCal = cal0;
-                      let foodP = p0;
-                      let foodF = f0;
-                      let foodC = c0;
-                      let foodServingGrams: number | undefined = !isServingMode && servingWeight > 0 ? servingWeight : undefined;
-                      // Always store as a per-100g food so it can be logged by grams or serving.
-                      // Per-serving entry with a known weight → convert; without a weight the entered
-                      // numbers are treated as per-100g (never store a serving-only food).
-                      if (isServingMode) {
-                        foodBaseMode = '100g';
-                        foodBaseQuantity = 100;
-                        if (servingWeight > 0) {
-                          const k = 100 / servingWeight;
-                          foodCal = Math.round(cal0 * k * 10) / 10;
-                          foodP = Math.round(p0 * k * 10) / 10;
-                          foodF = Math.round(f0 * k * 10) / 10;
-                          foodC = Math.round(c0 * k * 10) / 10;
-                          foodServingGrams = servingWeight;
-                        }
-                      }
+                      // Two independent value sets: per-100 (for grams) and per-serving (used as-is).
+                      const per100Cal = Number(draftCalories) || 0;
+                      const per100P = Number(draftProtein.replace(',', '.')) || 0;
+                      const per100F = Number(draftFat.replace(',', '.')) || 0;
+                      const per100C = Number(draftCarbs.replace(',', '.')) || 0;
+                      const hasPer100 = per100Cal > 0 || per100P > 0 || per100F > 0 || per100C > 0;
+                      const servCal = Number(draftServingCalories) || 0;
+                      const servP = Number(draftServingProtein.replace(',', '.')) || 0;
+                      const servF = Number(draftServingFat.replace(',', '.')) || 0;
+                      const servC = Number(draftServingCarbs.replace(',', '.')) || 0;
+                      const hasServing = servCal > 0 || servP > 0 || servF > 0 || servC > 0;
+                      const servingMacros = hasServing
+                        ? { calories: servCal, protein: servP, fat: servF, carbs: servC }
+                        : undefined;
+                      // Grams basis when per-100 was filled; otherwise this is a serving-only food.
+                      const foodBaseMode: '100g' | '100ml' | 'serving' = hasPer100
+                        ? customServingType === 'serving'
+                          ? '100g'
+                          : customServingType
+                        : 'serving';
                       const nextCustomFood: CustomNutritionFood = {
                         id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
-                        servingGrams: foodServingGrams,
+                        serving: servingMacros,
                         baseMode: foodBaseMode,
-                        baseQuantity: foodBaseQuantity,
-                        calories: foodCal,
-                        protein: foodP,
-                        fat: foodF,
-                        carbs: foodC,
+                        baseQuantity: foodBaseMode === 'serving' ? 1 : 100,
+                        // For a serving-only food, store the serving values as the base too.
+                        calories: hasPer100 ? per100Cal : servCal,
+                        protein: hasPer100 ? per100P : servP,
+                        fat: hasPer100 ? per100F : servF,
+                        carbs: hasPer100 ? per100C : servC,
                       };
                       onCustomFoodPresetsChange((prev) => {
                         const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
@@ -1520,14 +1612,18 @@ export function NutritionScreen({
                     }
                   }
                   if (selectedPreset) registerRecentPreset(selectedPreset.id);
-                  const sourcePreset = customFoodMode ? customFoodPreviewPreset : selectedPreset;
+                  const sourcePreset = customFoodMode ? customFoodPreviewPreset : effectiveLoggingPreset;
                   const entrySource: NutritionEntrySource | undefined = sourcePreset
                     ? {
                         displayName: customFoodMode ? draftMealName.trim() : sourcePreset.name,
                         brand: customFoodMode ? customBrand.trim() || undefined : sourcePreset.brand,
-                        grams: draftGrams || '100',
-                        baseMode: customFoodMode ? customServingType : sourcePreset.baseMode || '100g',
-                        baseQuantity: sourcePreset.baseQuantity || (customFoodMode && customServingType === 'serving' ? 1 : 100),
+                        grams: customFoodMode
+                          ? sourcePreset.baseMode === 'serving'
+                            ? '1'
+                            : draftGrams || '100'
+                          : draftGrams || (sourcePreset.baseMode === 'serving' ? '1' : '100'),
+                        baseMode: sourcePreset.baseMode || '100g',
+                        baseQuantity: sourcePreset.baseQuantity || (sourcePreset.baseMode === 'serving' ? 1 : 100),
                         caloriesPer100g: sourcePreset.caloriesPer100g,
                         proteinPer100g: sourcePreset.proteinPer100g,
                         fatPer100g: sourcePreset.fatPer100g,
@@ -1996,13 +2092,10 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       bottom: 0,
       borderRadius: 5,
     },
-    macroBarNormMark: {
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
-      width: 2,
-      marginLeft: -1,
-      backgroundColor: 'rgba(15,23,42,0.38)',
+    macroBarOver: {
+      color: '#ef4444',
+      fontSize: 13,
+      fontWeight: '800',
     },
     input: {
       borderRadius: 14,
@@ -2951,6 +3044,18 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 12,
       fontWeight: '700',
       marginTop: 12,
+      marginBottom: 8,
+    },
+    servingSectionLabel: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+      marginTop: 16,
+    },
+    servingSectionHint: {
+      color: colors.subtext,
+      fontSize: 11,
+      marginTop: 2,
       marginBottom: 8,
     },
     macroChipsRow: {

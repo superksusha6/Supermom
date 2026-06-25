@@ -1865,7 +1865,7 @@ export async function listCustomNutritionFoods(session: AppSession): Promise<Cus
   const client = requireClient();
   const { data, error } = await client
     .from('custom_nutrition_foods')
-    .select('id, name, brand, barcode, serving_grams, base_mode, base_quantity, calories, protein, fat, carbs')
+    .select('id, name, brand, barcode, serving_grams, serving_json, base_mode, base_quantity, calories, protein, fat, carbs')
     .eq('user_id', session.userId)
     .order('updated_at', { ascending: false });
   if (isMissingCustomNutritionFoodsTableError(error)) {
@@ -1878,6 +1878,7 @@ export async function listCustomNutritionFoods(session: AppSession): Promise<Cus
     brand: row.brand || undefined,
     barcode: row.barcode || undefined,
     servingGrams: row.serving_grams != null ? Number(row.serving_grams) : undefined,
+    serving: (row.serving_json as CustomNutritionFood['serving']) || undefined,
     baseMode: row.base_mode || '100g',
     baseQuantity: Number(row.base_quantity) || 100,
     calories: Number(row.calories) || 0,
@@ -1908,6 +1909,7 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
       brand: food.brand || null,
       barcode: food.barcode || null,
       serving_grams: food.servingGrams ?? null,
+      serving_json: food.serving ?? null,
       base_mode: food.baseMode,
       base_quantity: food.baseQuantity,
       calories: food.calories,

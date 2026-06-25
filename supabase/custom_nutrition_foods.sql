@@ -19,6 +19,8 @@ create table if not exists public.custom_nutrition_foods (
 alter table public.custom_nutrition_foods add column if not exists barcode text;
 -- Optional serving size in grams (e.g. 1 fruit = 75 g) so a 100g food can also be logged per serving.
 alter table public.custom_nutrition_foods add column if not exists serving_grams numeric(10,2);
+-- Independent per-serving macros {calories,protein,fat,carbs} entered directly (no gram conversion).
+alter table public.custom_nutrition_foods add column if not exists serving_json jsonb;
 create index if not exists custom_nutrition_foods_barcode_idx
   on public.custom_nutrition_foods (user_id, barcode);
 

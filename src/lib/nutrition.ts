@@ -1,4 +1,4 @@
-import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMacros, NutritionPace, NutritionSex } from '@/types/app';
 
 export type NutritionFoodPreset = {
   id: string;
@@ -9,6 +9,7 @@ export type NutritionFoodPreset = {
   brand?: string;
   barcode?: string;
   servingGrams?: number;
+  serving?: NutritionMacros;
   aliases?: string[];
   isCustom?: boolean;
   source?: 'custom' | 'open_food_facts' | 'usda';
@@ -184,12 +185,15 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
 
 export function getNutritionValuesForGrams(preset: NutritionFoodPreset, gramsValue: string) {
   if ((preset.baseMode || '100g') === 'serving') {
+    // For serving-based items the amount is the number of servings (used as-is, no gram conversion).
+    const count = Math.max(0, toNumber(gramsValue));
+    const mult = count > 0 ? count : 1;
     return {
-      grams: preset.baseQuantity || 1,
-      calories: String(Math.round(preset.caloriesPer100g)),
-      protein: String(Math.round(preset.proteinPer100g * 10) / 10),
-      fat: String(Math.round(preset.fatPer100g * 10) / 10),
-      carbs: String(Math.round(preset.carbsPer100g * 10) / 10),
+      grams: count > 0 ? count : 1,
+      calories: String(Math.round(preset.caloriesPer100g * mult)),
+      protein: String(Math.round(preset.proteinPer100g * mult * 10) / 10),
+      fat: String(Math.round(preset.fatPer100g * mult * 10) / 10),
+      carbs: String(Math.round(preset.carbsPer100g * mult * 10) / 10),
     };
   }
   const grams = Math.max(0, toNumber(gramsValue));
@@ -217,6 +221,7 @@ export function customNutritionFoodToPreset(food: CustomNutritionFood): Nutritio
     brand: food.brand,
     barcode: food.barcode,
     servingGrams: food.servingGrams || undefined,
+    serving: food.serving,
     isCustom: true,
     source: 'custom',
     sourceLabel: 'Saved',
@@ -236,6 +241,7 @@ export function nutritionPresetToCustomFood(preset: NutritionFoodPreset): Custom
     brand: preset.brand?.trim() || undefined,
     barcode: preset.barcode?.trim() || undefined,
     servingGrams: preset.servingGrams || undefined,
+    serving: preset.serving,
     baseMode,
     baseQuantity: Math.max(1, preset.baseQuantity || defaultBaseQuantity),
     calories: Math.max(0, Math.round(preset.caloriesPer100g * 10) / 10),
