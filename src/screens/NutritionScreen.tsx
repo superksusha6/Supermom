@@ -373,8 +373,6 @@ export function NutritionScreen({
     return count;
   }, [loggedDates]);
 
-  const rdiPercent = plan && plan.calories > 0 ? Math.round((totals.calories / plan.calories) * 100) : null;
-
   useEffect(() => {
     const query = foodSearch.trim();
     if (customFoodMode || photoEstimateMode || !activeMealType || query.length < 2) {
@@ -1893,36 +1891,6 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 13,
       fontWeight: '700',
     },
-    macroSummaryRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      justifyContent: 'space-between',
-      paddingVertical: 12,
-      paddingHorizontal: 6,
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 12,
-    },
-    macroSummaryCell: {
-      flex: 1,
-      alignItems: 'center',
-      gap: 3,
-    },
-    macroSummaryLabel: {
-      color: colors.subtext,
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    macroSummaryValue: {
-      color: colors.text,
-      fontSize: 16,
-      fontWeight: '700',
-    },
-    macroSummaryValueStrong: {
-      fontSize: 20,
-      fontWeight: '900',
-    },
     mealCaloriesCol: {
       alignItems: 'flex-end',
       justifyContent: 'center',
@@ -1957,11 +1925,8 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       marginBottom: 12,
       gap: 8,
     },
-    todaySummaryTopRow: {
-      gap: 12,
-    },
     todaySummaryPrimary: {
-      gap: 6,
+      gap: 4,
     },
     todaySummaryLabel: {
       color: colors.subtext,
@@ -1969,112 +1934,75 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '700',
       textTransform: 'uppercase',
     },
+    todaySummaryHeadline: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 6,
+    },
     todaySummaryCalories: {
       color: colors.text,
-      fontSize: 20,
-      fontWeight: '800',
+      fontSize: 34,
+      fontWeight: '900',
+      letterSpacing: -0.5,
     },
-    progressShowcase: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: 16,
+    todaySummaryCaloriesOver: {
+      color: '#ef4444',
+    },
+    todaySummaryCaloriesTarget: {
+      color: colors.subtext,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    macroBars: {
+      gap: 12,
       marginTop: 6,
     },
-    multiRingWrap: {
-      width: 130,
-      height: 130,
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
+    macroBarRow: {
+      gap: 6,
     },
-    multiRingTrack: {
-      position: 'absolute',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    multiRingArc: {
-      position: 'absolute',
-      borderLeftColor: 'transparent',
-      borderBottomColor: 'transparent',
-    },
-    multiRingCenter: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: '#ffffff',
-      gap: 0,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.92)',
-    },
-    multiRingCenterLabel: {
-      color: colors.subtext,
-      fontSize: 9,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-    },
-    multiRingCenterValue: {
-      color: colors.text,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    multiRingCenterMeta: {
-      color: colors.subtext,
-      fontSize: 9,
-      fontWeight: '700',
-    },
-    progressLegend: {
-      flex: 1,
-      minWidth: 180,
-      gap: 8,
-    },
-    legendRow: {
+    macroBarHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
     },
-    legendDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-    },
-    legendCopy: {
-      flex: 1,
-      gap: 1,
-    },
-    legendTitle: {
+    macroBarLabel: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '800',
     },
-    legendMeta: {
+    macroBarValue: {
+      fontSize: 13,
+    },
+    macroBarCurrent: {
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    macroBarTarget: {
       color: colors.subtext,
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: '600',
     },
-    legendStatus: {
-      color: colors.subtext,
-      fontSize: 11,
-      fontWeight: '700',
-    },
-    todaySummaryMacros: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    todaySummaryMacro: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: '700',
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassSoft,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+    macroBarTrack: {
+      position: 'relative',
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: 'rgba(120,134,160,0.18)',
       overflow: 'hidden',
+    },
+    macroBarFill: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      borderRadius: 5,
+    },
+    macroBarNormMark: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      width: 2,
+      marginLeft: -1,
+      backgroundColor: 'rgba(15,23,42,0.38)',
     },
     input: {
       borderRadius: 14,
