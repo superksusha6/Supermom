@@ -232,14 +232,21 @@ export function NutritionScreen({
     return counts;
   }, [nutritionEntries]);
 
-  const recentPresets = useMemo(
-    () =>
-      libraryMeta.recentIds
-        .map((id) => allFoodPresets.find((preset) => preset.id === id))
-        .filter((preset): preset is NutritionFoodPreset => !!preset)
-        .slice(0, 25),
-    [libraryMeta.recentIds, allFoodPresets],
-  );
+  // Recent reflects the foods actually in your diary (newest first). When you delete
+  // an entry, the food drops out of Recent — it is not a separate sticky history.
+  const recentPresets = useMemo(() => {
+    const seen = new Set<string>();
+    const result: NutritionFoodPreset[] = [];
+    for (const entry of nutritionEntries) {
+      if (!entry.source) continue;
+      const key = normalizeNutritionSearchText(entry.source.displayName);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(presetFromEntrySource(entry.source, `recent-${entry.id}`));
+      if (result.length >= 25) break;
+    }
+    return result;
+  }, [nutritionEntries]);
 
   const frequentPresets = useMemo(
     () =>
@@ -560,24 +567,7 @@ export function NutritionScreen({
   function editNutritionEntry(entry: NutritionFoodEntry) {
     const source = entry.source;
     if (!source) return;
-    const preset: NutritionFoodPreset = {
-      id: `entry-src-${entry.id}`,
-      name: source.displayName,
-      brand: source.brand,
-      baseAmount:
-        source.baseMode === 'serving'
-          ? 'per 1 serving'
-          : `per ${source.baseQuantity} ${source.baseMode === '100ml' ? 'ml' : 'g'}`,
-      baseMode: source.baseMode,
-      baseQuantity: source.baseQuantity,
-      servingGrams: source.servingGrams,
-      source: 'custom',
-      sourceLabel: 'Saved',
-      caloriesPer100g: source.caloriesPer100g,
-      proteinPer100g: source.proteinPer100g,
-      fatPer100g: source.fatPer100g,
-      carbsPer100g: source.carbsPer100g,
-    };
+    const preset = presetFromEntrySource(source, `entry-src-${entry.id}`);
     const values = getNutritionValuesForGrams(preset, source.grams);
     setEditingEntryId(entry.id);
     setActiveMealType(entry.mealType);
@@ -1606,6 +1596,27 @@ function formatReadableDate(dateKey: string) {
   const [year, month, day] = dateKey.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function presetFromEntrySource(source: NutritionEntrySource, idSeed: string): NutritionFoodPreset {
+  return {
+    id: idSeed,
+    name: source.displayName,
+    brand: source.brand,
+    baseAmount:
+      source.baseMode === 'serving'
+        ? 'per 1 serving'
+        : `per ${source.baseQuantity} ${source.baseMode === '100ml' ? 'ml' : 'g'}`,
+    baseMode: source.baseMode,
+    baseQuantity: source.baseQuantity,
+    servingGrams: source.servingGrams,
+    source: 'custom',
+    sourceLabel: 'Saved',
+    caloriesPer100g: source.caloriesPer100g,
+    proteinPer100g: source.proteinPer100g,
+    fatPer100g: source.fatPer100g,
+    carbsPer100g: source.carbsPer100g,
+  };
 }
 
 function formatNutritionEntryName({
