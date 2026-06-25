@@ -102,6 +102,7 @@ export function NutritionScreen({
   const [sessionAddedCount, setSessionAddedCount] = useState(0);
   const [sessionAddedName, setSessionAddedName] = useState('');
   const [quickAddedIds, setQuickAddedIds] = useState<string[]>([]);
+  const [cardAddedFlash, setCardAddedFlash] = useState(false);
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -496,6 +497,60 @@ export function NutritionScreen({
     setSessionAddedCount((prev) => prev + 1);
     setSessionAddedName(item.name);
     setQuickAddedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+  }
+
+  function quickAddSelected() {
+    if (!selectedPreset || !activeMealType || cardAddedFlash) return;
+    const baseMode = selectedPreset.baseMode || '100g';
+    const grams = draftGrams || '100';
+    const values = getNutritionValuesForGrams(selectedPreset, grams);
+    const entry: NutritionFoodEntry = {
+      id: createUuid(),
+      name: formatNutritionEntryName({
+        name: selectedPreset.name,
+        grams,
+        customBrand: selectedPreset.brand || '',
+        customFoodMode: baseMode !== '100g',
+        customServingType: baseMode,
+      }),
+      mealType: activeMealType,
+      date: selectedDateKey,
+      calories: values.calories,
+      protein: values.protein,
+      fat: values.fat,
+      carbs: values.carbs,
+      source: {
+        displayName: selectedPreset.name,
+        brand: selectedPreset.brand,
+        grams,
+        baseMode,
+        baseQuantity: selectedPreset.baseQuantity || (baseMode === 'serving' ? 1 : 100),
+        caloriesPer100g: selectedPreset.caloriesPer100g,
+        proteinPer100g: selectedPreset.proteinPer100g,
+        fatPer100g: selectedPreset.fatPer100g,
+        carbsPer100g: selectedPreset.carbsPer100g,
+        servingGrams: selectedPreset.servingGrams,
+      },
+    };
+    onNutritionEntriesChange((prev) => [entry, ...prev]);
+    registerRecentPreset(selectedPreset.id);
+    if (selectedPreset.source && selectedPreset.source !== 'custom') savePresetToLibrary(selectedPreset);
+    setSessionAddedCount((prev) => prev + 1);
+    setSessionAddedName(selectedPreset.name);
+    // Fill the circle with a check briefly, then return to search for the next product.
+    setCardAddedFlash(true);
+    setTimeout(() => {
+      setCardAddedFlash(false);
+      setSelectedPreset(null);
+      setDraftMealName('');
+      setDraftCalories('');
+      setDraftProtein('');
+      setDraftFat('');
+      setDraftCarbs('');
+      setDraftGrams('100');
+      setFoodSearch('');
+      setAddTab('recent');
+    }, 550);
   }
 
   function registerRecentPreset(presetId: string) {
@@ -1291,14 +1346,24 @@ export function NutritionScreen({
 
               {selectedPreset && selectedPresetReference ? (
                 <View style={styles.productInfoCard}>
-                  <Text style={styles.productInfoTitle}>{selectedPreset.name}</Text>
-                  <Text style={styles.productInfoSubtitle}>{selectedPresetReference.label}</Text>
-                  <View style={styles.productInfoStats}>
-                    <Text style={styles.productInfoStat}>{selectedPresetReference.values.calories} kcal</Text>
-                    <Text style={styles.productInfoStat}>P {selectedPresetReference.values.protein}</Text>
-                    <Text style={styles.productInfoStat}>F {selectedPresetReference.values.fat}</Text>
-                    <Text style={styles.productInfoStat}>C {selectedPresetReference.values.carbs}</Text>
+                  <View style={styles.productInfoCopy}>
+                    <Text style={styles.productInfoTitle}>{selectedPreset.name}</Text>
+                    <Text style={styles.productInfoSubtitle}>{selectedPresetReference.label}</Text>
+                    <View style={styles.productInfoStats}>
+                      <Text style={styles.productInfoStat}>{selectedPresetReference.values.calories} kcal</Text>
+                      <Text style={styles.productInfoStat}>P {selectedPresetReference.values.protein}</Text>
+                      <Text style={styles.productInfoStat}>F {selectedPresetReference.values.fat}</Text>
+                      <Text style={styles.productInfoStat}>C {selectedPresetReference.values.carbs}</Text>
+                    </View>
                   </View>
+                  {!editingEntryId ? (
+                    <Pressable
+                      style={[styles.cardAddPill, cardAddedFlash && styles.cardAddPillActive]}
+                      onPress={quickAddSelected}
+                    >
+                      {cardAddedFlash ? <Text style={styles.cardAddPillText}>✓</Text> : null}
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -1386,13 +1451,14 @@ export function NutritionScreen({
               </View>
             <View style={styles.modalActions}>
               <Pressable
-                style={[styles.modalGhostBtn, sessionAddedCount > 0 && !selectedPreset && !customFoodMode && styles.modalDoneBtn]}
+                style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
                 onPress={() => { setActiveMealType(null); setEditingEntryId(null); }}
               >
-                <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && !selectedPreset && !customFoodMode && styles.modalDoneBtnText]}>
-                  {sessionAddedCount > 0 && !selectedPreset && !customFoodMode ? 'Done' : 'Cancel'}
+                <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && styles.modalDoneBtnText]}>
+                  {sessionAddedCount > 0 ? 'Done' : 'Cancel'}
                 </Text>
               </Pressable>
+              {customFoodMode || editingEntryId ? (
               <Pressable
                 style={styles.primaryBtn}
                 onPress={() => {
@@ -1492,6 +1558,7 @@ export function NutritionScreen({
               >
                 <Text style={styles.primaryBtnText}>{editingEntryId ? 'Update' : '✓ Add'}</Text>
               </Pressable>
+              ) : null}
             </View>
             </ScrollView>
           </View>
@@ -2845,7 +2912,33 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       backgroundColor: '#ffffff',
       padding: 12,
       marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    productInfoCopy: {
+      flex: 1,
       gap: 6,
+    },
+    cardAddPill: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      borderWidth: 2,
+      borderColor: '#c7d2e3',
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardAddPillActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    cardAddPillText: {
+      color: '#ffffff',
+      fontSize: 22,
+      fontWeight: '900',
+      lineHeight: 24,
     },
     productInfoTitle: {
       color: colors.text,
