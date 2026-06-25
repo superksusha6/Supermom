@@ -1037,7 +1037,6 @@ export function NutritionScreen({
             </Text>
           </View>
         ) : null}
-        <Text style={styles.sectionHint}>Tap `+` on any meal to add products for the selected day.</Text>
         <View style={styles.todaySummaryBar}>
           <View style={styles.todaySummaryPrimary}>
             <Text style={styles.todaySummaryLabel}>{plan ? 'Calories left' : 'Selected day eaten'}</Text>
@@ -1465,7 +1464,7 @@ export function NutritionScreen({
                       const unit = customFoodMode ? customServingType : selectedPresetBaseMode;
                       const isServing = unit === 'serving';
                       // Custom-food creation keeps a plain grams field; selecting a food shows a unit picker.
-                      const showUnitPicker = !customFoodMode && !!selectedPreset && logUnits.length > 1;
+                      const showUnitPicker = !customFoodMode && !!selectedPreset && logUnits.length >= 1;
                       return (
                         <>
                           <View style={styles.gramsRow}>
@@ -1651,26 +1650,49 @@ export function NutritionScreen({
                       const servingMacros = hasServing
                         ? { calories: servCal, protein: servP, fat: servF, carbs: servC }
                         : undefined;
-                      // Grams basis when per-100 was filled; otherwise this is a serving-only food.
-                      const foodBaseMode: '100g' | '100ml' | 'serving' = hasPer100
-                        ? customServingType === 'serving'
-                          ? '100g'
-                          : customServingType
-                        : 'serving';
+                      const servingWeightInput = Number(customServingGrams) || 0;
+                      // Decide the per-100 (grams) basis:
+                      // 1) per-100 filled → use it.
+                      // 2) only per-serving + a serving weight → derive per-100 so grams still works.
+                      // 3) only per-serving, no weight → serving-only food (grams unavailable).
+                      let foodBaseMode: '100g' | '100ml' | 'serving';
+                      let baseCal: number;
+                      let baseP: number;
+                      let baseF: number;
+                      let baseC: number;
+                      if (hasPer100) {
+                        foodBaseMode = customServingType === 'serving' ? '100g' : customServingType;
+                        baseCal = per100Cal;
+                        baseP = per100P;
+                        baseF = per100F;
+                        baseC = per100C;
+                      } else if (hasServing && servingWeightInput > 0) {
+                        const k = 100 / servingWeightInput;
+                        foodBaseMode = '100g';
+                        baseCal = Math.round(servCal * k);
+                        baseP = Math.round(servP * k * 10) / 10;
+                        baseF = Math.round(servF * k * 10) / 10;
+                        baseC = Math.round(servC * k * 10) / 10;
+                      } else {
+                        foodBaseMode = 'serving';
+                        baseCal = servCal;
+                        baseP = servP;
+                        baseF = servF;
+                        baseC = servC;
+                      }
                       const nextCustomFood: CustomNutritionFood = {
                         id: selectedPreset?.isCustom ? selectedPreset.id : createUuid(),
                         name: draftMealName.trim(),
                         brand: customBrand.trim() || undefined,
                         barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
                         serving: servingMacros,
-                        servingGrams: Number(customServingGrams) > 0 ? Number(customServingGrams) : undefined,
+                        servingGrams: servingWeightInput > 0 ? servingWeightInput : undefined,
                         baseMode: foodBaseMode,
                         baseQuantity: foodBaseMode === 'serving' ? 1 : 100,
-                        // For a serving-only food, store the serving values as the base too.
-                        calories: hasPer100 ? per100Cal : servCal,
-                        protein: hasPer100 ? per100P : servP,
-                        fat: hasPer100 ? per100F : servF,
-                        carbs: hasPer100 ? per100C : servC,
+                        calories: baseCal,
+                        protein: baseP,
+                        fat: baseF,
+                        carbs: baseC,
                       };
                       onCustomFoodPresetsChange((prev) => {
                         const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
@@ -1901,12 +1923,6 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '700',
       fontSize: 13,
     },
-    sectionHint: {
-      color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 18,
-      marginBottom: 12,
-    },
     weekHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2085,14 +2101,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: '#7c2d12',
     },
     todaySummaryBar: {
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      marginBottom: 12,
-      gap: 8,
+      marginTop: 4,
+      marginBottom: 16,
+      gap: 10,
       alignSelf: isMobile ? 'stretch' : 'flex-start',
       maxWidth: isMobile ? undefined : 520,
       width: isMobile ? undefined : '100%',
