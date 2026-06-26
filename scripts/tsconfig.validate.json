@@ -14,6 +14,7 @@
   },
   "include": [
     "validateRecipeNutrition.ts",
+    "pilotBreakfasts.ts",
     "../src/lib/recipeNutrition.ts",
     "../src/lib/recipeIngredients.ts",
     "../src/lib/nutrition.ts"

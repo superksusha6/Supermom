@@ -10,4 +10,5 @@ Module._resolveFilename = function (request, ...rest) {
   return originalResolve.call(this, mapped, ...rest);
 };
 
-require(path.join(OUT, 'scripts', 'validateRecipeNutrition.js'));
+const entry = process.argv[2] || 'validateRecipeNutrition.js';
+require(path.join(OUT, 'scripts', entry));

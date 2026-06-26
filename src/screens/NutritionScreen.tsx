@@ -317,9 +317,20 @@ export function NutritionScreen({
   // The weight/volume unit (g or ml) of the food's base, used for labels.
   const baseUnitLabel = (selectedPreset?.baseMode || '100g') === '100ml' ? 'ml' : 'g';
   const isLiquidPreset = (selectedPreset?.baseMode || '100g') === '100ml';
-  // A tablespoon: 15 g/ml. Available for liquids and tagged semi-liquids only.
+  // A tablespoon: 15 g/ml. Available for liquids, tagged semi-liquids, and foods whose
+  // name reads as a spoonable dry/sticky product (flour, sugar, cocoa, honey, sauce…).
   const SPOON_SIZE = 15;
-  const spoonable = !!selectedPreset && selectedPreset.baseMode !== 'serving' && (isLiquidPreset || selectedPreset.spoonable === true);
+  const SPOONABLE_NAME_HINTS = [
+    'flour', 'sugar', 'cocoa', 'starch', 'semolina', 'powder', 'honey', 'jam', 'jelly',
+    'ketchup', 'mayonnaise', 'mustard', 'sauce', 'syrup', 'spread', 'hummus', 'tahini',
+    'oil', 'butter', 'yogurt', 'yoghurt', 'cream', 'paste', 'pesto', 'condensed milk', 'bran',
+  ];
+  const spoonable =
+    !!selectedPreset &&
+    selectedPreset.baseMode !== 'serving' &&
+    (isLiquidPreset ||
+      selectedPreset.spoonable === true ||
+      SPOONABLE_NAME_HINTS.some((hint) => selectedPreset.name.toLowerCase().includes(hint)));
   // Real serving weight only (no faked "1 serving = 100 g").
   const servingWeight =
     selectedPreset && selectedPreset.baseMode !== 'serving' && selectedPreset.servingGrams && selectedPreset.servingGrams > 0

@@ -44,4 +44,9 @@ export const RECIPE_INGREDIENT_SUPPLEMENT: NutritionFoodPreset[] = [
 
   { id: 'ing-bread', name: 'Bread', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 265, proteinPer100g: 9, fatPer100g: 3.2, carbsPer100g: 49, aliases: ['bread', 'white bread', 'toast', 'baguette'] },
   { id: 'ing-breadcrumbs', name: 'Breadcrumbs', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 395, proteinPer100g: 13.4, fatPer100g: 5.3, carbsPer100g: 72, aliases: ['breadcrumbs', 'panko'] },
+
+  { id: 'ing-semolina-dry', name: 'Semolina, dry', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 360, proteinPer100g: 12.7, fatPer100g: 1.1, carbsPer100g: 73, aliases: ['semolina', 'manka', 'cream of wheat'] },
+  // Granola macros are derived from the homemade-granola recipe in this pilot
+  // (oats + honey + oil + almonds + raisins), per 100 g of the finished mix.
+  { id: 'ing-granola', name: 'Granola', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 421, proteinPer100g: 9.6, fatPer100g: 18.1, carbsPer100g: 55.5, aliases: ['granola', 'muesli'] },
 ];
