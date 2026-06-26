@@ -318,6 +318,25 @@ export type RecipeIngredient = {
   foodRef?: string;
 };
 
+// A single selectable alternative inside a RecipeChoice. `ingredient` is the food
+// this option adds to the recipe; omit it for a "none / remove" option (e.g. no
+// sweetener) so the option contributes nothing.
+export type RecipeChoiceOption = {
+  id: string;
+  label: string;
+  ingredient?: RecipeIngredient;
+};
+
+// A curated customization slot on a recipe (e.g. liquid: milk/water, sweetener:
+// sugar/honey/none). The user picks one option; nutrition recomputes live. Slots
+// are authored deliberately so swaps stay sensible (no flour→oil nonsense).
+export type RecipeChoice = {
+  id: string;
+  label: string;
+  defaultOptionId: string;
+  options: RecipeChoiceOption[];
+};
+
 export type RecipeStep = {
   id: string;
   text: string;
@@ -347,7 +366,12 @@ export type Recipe = {
   // computed deterministically; 'approx' = at least one ingredient fell back to a
   // name match or estimated amount. Drives the "≈ approx" label in the UI.
   nutritionConfidence?: 'verified' | 'approx';
+  // Always-present base ingredients. `nutritionPerServing` is computed for the
+  // default selection of `choices`.
   ingredients: RecipeIngredient[];
+  // Optional customization slots (liquid, sweetener, add-ons). When present the UI
+  // lets the user switch/remove and recomputes nutrition for the chosen selection.
+  choices?: RecipeChoice[];
   steps: RecipeStep[];
   photoUri?: string;
   suitableForChildren?: boolean;

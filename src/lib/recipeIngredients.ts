@@ -24,6 +24,8 @@ export const RECIPE_INGREDIENT_SUPPLEMENT: NutritionFoodPreset[] = [
   { id: 'ing-sugar', name: 'Sugar', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 387, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 100, aliases: ['sugar', 'white sugar', 'caster sugar'] },
   { id: 'ing-brown-sugar', name: 'Brown sugar', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 380, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 98, aliases: ['brown sugar'] },
   { id: 'ing-honey', name: 'Honey', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 304, proteinPer100g: 0.3, fatPer100g: 0, carbsPer100g: 82, aliases: ['honey'] },
+  // Erythritol / stevia-type sweetener, labeled ~0 kcal. Used as a "sugar substitute" swap option.
+  { id: 'ing-sweetener', name: 'Sweetener (0 cal)', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 0, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0, aliases: ['sweetener', 'sugar substitute', 'stevia', 'erythritol'] },
   { id: 'ing-maple-syrup', name: 'Maple syrup', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 260, proteinPer100g: 0, fatPer100g: 0.1, carbsPer100g: 67, aliases: ['maple syrup'] },
 
   { id: 'ing-lentils-dry', name: 'Lentils, dry', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 352, proteinPer100g: 24.6, fatPer100g: 1.1, carbsPer100g: 63, aliases: ['lentils', 'red lentils', 'green lentils'] },

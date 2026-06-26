@@ -1,4 +1,4 @@
-import type { RecipeIngredient, RecipeNutrition } from '@/types/app';
+import type { RecipeChoice, RecipeIngredient, RecipeNutrition } from '@/types/app';
 import { NUTRITION_FOOD_PRESETS, type NutritionFoodPreset } from '@/lib/nutrition';
 import { RECIPE_INGREDIENT_SUPPLEMENT } from '@/lib/recipeIngredients';
 
@@ -201,4 +201,33 @@ export function computeRecipeNutrition(ingredients: RecipeIngredient[], servings
   };
 
   return { nutrition, confidence: verified ? 'verified' : 'approx', diagnostics };
+}
+
+// Selection maps a choice id to the chosen option id. Missing entries fall back to
+// the choice's default option.
+export type RecipeSelection = Record<string, string>;
+
+// Builds the concrete ingredient list for a given selection: base ingredients plus,
+// for each choice, the ingredient of the selected (or default) option. Options
+// without an ingredient (e.g. "no sweetener") contribute nothing.
+export function resolveRecipeIngredients(
+  baseIngredients: RecipeIngredient[],
+  choices?: RecipeChoice[],
+  selection?: RecipeSelection,
+): RecipeIngredient[] {
+  const resolved = [...baseIngredients];
+  for (const choice of choices || []) {
+    const chosenId = selection?.[choice.id] ?? choice.defaultOptionId;
+    const option = choice.options.find((item) => item.id === chosenId) ?? choice.options.find((item) => item.id === choice.defaultOptionId);
+    if (option?.ingredient) resolved.push(option.ingredient);
+  }
+  return resolved;
+}
+
+export function computeRecipeNutritionForSelection(
+  recipe: { ingredients: RecipeIngredient[]; choices?: RecipeChoice[]; servings: number },
+  selection?: RecipeSelection,
+): RecipeNutritionResult {
+  const ingredients = resolveRecipeIngredients(recipe.ingredients, recipe.choices, selection);
+  return computeRecipeNutrition(ingredients, recipe.servings);
 }

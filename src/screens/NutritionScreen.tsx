@@ -907,6 +907,167 @@ export function NutritionScreen({
     }
   }
 
+  function commitProduct() {
+    if (!draftMealName.trim() || !activeMealType) return;
+    let nextEntryCalories = draftCalories || '0';
+    let nextEntryProtein = draftProtein || '0';
+    let nextEntryFat = draftFat || '0';
+    let nextEntryCarbs = draftCarbs || '0';
+    if (selectedPreset && selectedPreset.source && selectedPreset.source !== 'custom') {
+      savePresetToLibrary(selectedPreset);
+    }
+    if (customFoodMode) {
+      if (!photoEstimateMode) {
+        // Two independent value sets: per-100 (for grams) and per-serving (used as-is).
+        const per100Cal = Number(draftCalories) || 0;
+        const per100P = Number(draftProtein.replace(',', '.')) || 0;
+        const per100F = Number(draftFat.replace(',', '.')) || 0;
+        const per100C = Number(draftCarbs.replace(',', '.')) || 0;
+        const hasPer100 = per100Cal > 0 || per100P > 0 || per100F > 0 || per100C > 0;
+        const servCal = Number(draftServingCalories) || 0;
+        const servP = Number(draftServingProtein.replace(',', '.')) || 0;
+        const servF = Number(draftServingFat.replace(',', '.')) || 0;
+        const servC = Number(draftServingCarbs.replace(',', '.')) || 0;
+        const hasServing = servCal > 0 || servP > 0 || servF > 0 || servC > 0;
+        const servingMacros = hasServing
+          ? { calories: servCal, protein: servP, fat: servF, carbs: servC }
+          : undefined;
+        const servingWeightInput = Number(customServingGrams) || 0;
+        let foodBaseMode: '100g' | '100ml' | 'serving';
+        let baseCal: number;
+        let baseP: number;
+        let baseF: number;
+        let baseC: number;
+        if (hasPer100) {
+          foodBaseMode = customServingType === 'serving' ? '100g' : customServingType;
+          baseCal = per100Cal;
+          baseP = per100P;
+          baseF = per100F;
+          baseC = per100C;
+        } else if (hasServing && servingWeightInput > 0) {
+          const k = 100 / servingWeightInput;
+          foodBaseMode = '100g';
+          baseCal = Math.round(servCal * k);
+          baseP = Math.round(servP * k * 10) / 10;
+          baseF = Math.round(servF * k * 10) / 10;
+          baseC = Math.round(servC * k * 10) / 10;
+        } else {
+          foodBaseMode = 'serving';
+          baseCal = servCal;
+          baseP = servP;
+          baseF = servF;
+          baseC = servC;
+        }
+        const nextCustomFood: CustomNutritionFood = {
+          id: editingCustomFoodId || (selectedPreset?.isCustom ? selectedPreset.id : createUuid()),
+          name: draftMealName.trim(),
+          brand: customBrand.trim() || undefined,
+          barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
+          serving: servingMacros,
+          servingGrams: servingWeightInput > 0 ? servingWeightInput : undefined,
+          baseMode: foodBaseMode,
+          baseQuantity: foodBaseMode === 'serving' ? 1 : 100,
+          calories: baseCal,
+          protein: baseP,
+          fat: baseF,
+          carbs: baseC,
+        };
+        onCustomFoodPresetsChange((prev) => {
+          const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
+          return [nextCustomFood, ...filtered];
+        });
+        // Editing a saved food's definition: update it and close, no diary entry.
+        if (editingCustomFoodId) {
+          setEditingCustomFoodId(null);
+          setCustomFoodMode(false);
+          setSelectedPreset(null);
+          setDraftMealName('');
+          setDraftCalories('');
+          setDraftProtein('');
+          setDraftFat('');
+          setDraftCarbs('');
+          setDraftServingCalories('');
+          setDraftServingProtein('');
+          setDraftServingFat('');
+          setDraftServingCarbs('');
+          setCustomServingGrams('');
+          setDraftGrams('100');
+          setFoodSearch('');
+          setAddTab('saved');
+          return;
+        }
+      }
+      if (customFoodPreviewPreset && customFoodPreviewValues) {
+        nextEntryCalories = customFoodPreviewValues.calories || '0';
+        nextEntryProtein = customFoodPreviewValues.protein || '0';
+        nextEntryFat = customFoodPreviewValues.fat || '0';
+        nextEntryCarbs = customFoodPreviewValues.carbs || '0';
+      }
+    }
+    if (selectedPreset) registerRecentPreset(selectedPreset.id);
+    const sourcePreset = customFoodMode ? customFoodPreviewPreset : effectiveLoggingPreset;
+    const entrySource: NutritionEntrySource | undefined = sourcePreset
+      ? {
+          displayName: customFoodMode ? draftMealName.trim() : sourcePreset.name,
+          brand: customFoodMode ? customBrand.trim() || undefined : sourcePreset.brand,
+          grams: customFoodMode
+            ? sourcePreset.baseMode === 'serving'
+              ? '1'
+              : draftGrams || '100'
+            : draftGrams || (sourcePreset.baseMode === 'serving' ? '1' : '100'),
+          baseMode: sourcePreset.baseMode || '100g',
+          baseQuantity: sourcePreset.baseQuantity || (sourcePreset.baseMode === 'serving' ? 1 : 100),
+          caloriesPer100g: sourcePreset.caloriesPer100g,
+          proteinPer100g: sourcePreset.proteinPer100g,
+          fatPer100g: sourcePreset.fatPer100g,
+          carbsPer100g: sourcePreset.carbsPer100g,
+          servingGrams: sourcePreset.servingGrams,
+        }
+      : undefined;
+    const builtEntry: NutritionFoodEntry = {
+      id: editingEntryId || createUuid(),
+      name: formatNutritionEntryName({
+        name: draftMealName.trim(),
+        grams: draftGrams,
+        customBrand,
+        customFoodMode,
+        customServingType,
+      }),
+      mealType: activeMealType,
+      date: selectedDateKey,
+      calories: nextEntryCalories,
+      protein: nextEntryProtein,
+      fat: nextEntryFat,
+      carbs: nextEntryCarbs,
+      source: entrySource,
+    };
+    onNutritionEntriesChange((prev) =>
+      editingEntryId
+        ? prev.map((entry) => (entry.id === editingEntryId ? builtEntry : entry))
+        : [builtEntry, ...prev],
+    );
+    setDraftMealName('');
+    setDraftCalories('');
+    setDraftProtein('');
+    setDraftFat('');
+    setDraftCarbs('');
+    setFoodSearch('');
+    setDraftGrams('100');
+    setSelectedPreset(null);
+    setCustomFoodMode(false);
+    setPhotoEstimateMode(false);
+    setCustomBrand('');
+    setCustomBarcode('');
+    setCustomServingGrams('');
+    setCustomServingType('100g');
+    setCatalogResults([]);
+    setCatalogSearchError(null);
+    setMealPhotoError(null);
+    setMealPhotoNote(null);
+    setActiveMealType(null);
+    setEditingEntryId(null);
+  }
+
   async function openBarcodeScanner() {
     try {
       // On web the browser prompts for camera access via getUserMedia inside the scanner
@@ -1255,11 +1416,30 @@ export function NutritionScreen({
         <View style={styles.modalScrim}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }} />
           <View style={styles.modalCard}>
+            <View style={styles.modalHeaderBar}>
+              <View style={styles.modalHeaderCopy}>
+                <Text style={styles.modalEyebrow}>{editingCustomFoodId ? 'Edit food' : editingEntryId ? 'Edit product' : 'Add product'}</Text>
+                <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                  {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
+                </Text>
+              </View>
+              <View style={styles.modalHeaderActions}>
+                <Pressable
+                  style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
+                  onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }}
+                >
+                  <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && styles.modalDoneBtnText]}>
+                    {sessionAddedCount > 0 ? 'Done' : 'Cancel'}
+                  </Text>
+                </Pressable>
+                {customFoodMode || editingEntryId ? (
+                  <Pressable style={styles.primaryBtn} onPress={commitProduct}>
+                    <Text style={styles.primaryBtnText}>{editingCustomFoodId ? 'Save changes' : editingEntryId ? 'Update' : '✓ Add'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-              <Text style={styles.modalEyebrow}>{editingCustomFoodId ? 'Edit food' : editingEntryId ? 'Edit product' : 'Add product'}</Text>
-              <Text style={styles.modalTitle}>
-                {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
-              </Text>
               <View style={styles.modalSection}>
                 {!customFoodMode ? (
                   <View style={styles.searchRow}>
@@ -1701,187 +1881,6 @@ export function NutritionScreen({
                 ) : null}
               </View>
             </ScrollView>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
-                onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }}
-              >
-                <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && styles.modalDoneBtnText]}>
-                  {sessionAddedCount > 0 ? 'Done' : 'Cancel'}
-                </Text>
-              </Pressable>
-              {customFoodMode || editingEntryId ? (
-              <Pressable
-                style={styles.primaryBtn}
-                onPress={() => {
-                  if (!draftMealName.trim() || !activeMealType) return;
-                  let nextEntryCalories = draftCalories || '0';
-                  let nextEntryProtein = draftProtein || '0';
-                  let nextEntryFat = draftFat || '0';
-                  let nextEntryCarbs = draftCarbs || '0';
-                  if (selectedPreset && selectedPreset.source && selectedPreset.source !== 'custom') {
-                    savePresetToLibrary(selectedPreset);
-                  }
-                  if (customFoodMode) {
-                    if (!photoEstimateMode) {
-                      // Two independent value sets: per-100 (for grams) and per-serving (used as-is).
-                      const per100Cal = Number(draftCalories) || 0;
-                      const per100P = Number(draftProtein.replace(',', '.')) || 0;
-                      const per100F = Number(draftFat.replace(',', '.')) || 0;
-                      const per100C = Number(draftCarbs.replace(',', '.')) || 0;
-                      const hasPer100 = per100Cal > 0 || per100P > 0 || per100F > 0 || per100C > 0;
-                      const servCal = Number(draftServingCalories) || 0;
-                      const servP = Number(draftServingProtein.replace(',', '.')) || 0;
-                      const servF = Number(draftServingFat.replace(',', '.')) || 0;
-                      const servC = Number(draftServingCarbs.replace(',', '.')) || 0;
-                      const hasServing = servCal > 0 || servP > 0 || servF > 0 || servC > 0;
-                      const servingMacros = hasServing
-                        ? { calories: servCal, protein: servP, fat: servF, carbs: servC }
-                        : undefined;
-                      const servingWeightInput = Number(customServingGrams) || 0;
-                      // Decide the per-100 (grams) basis:
-                      // 1) per-100 filled → use it.
-                      // 2) only per-serving + a serving weight → derive per-100 so grams still works.
-                      // 3) only per-serving, no weight → serving-only food (grams unavailable).
-                      let foodBaseMode: '100g' | '100ml' | 'serving';
-                      let baseCal: number;
-                      let baseP: number;
-                      let baseF: number;
-                      let baseC: number;
-                      if (hasPer100) {
-                        foodBaseMode = customServingType === 'serving' ? '100g' : customServingType;
-                        baseCal = per100Cal;
-                        baseP = per100P;
-                        baseF = per100F;
-                        baseC = per100C;
-                      } else if (hasServing && servingWeightInput > 0) {
-                        const k = 100 / servingWeightInput;
-                        foodBaseMode = '100g';
-                        baseCal = Math.round(servCal * k);
-                        baseP = Math.round(servP * k * 10) / 10;
-                        baseF = Math.round(servF * k * 10) / 10;
-                        baseC = Math.round(servC * k * 10) / 10;
-                      } else {
-                        foodBaseMode = 'serving';
-                        baseCal = servCal;
-                        baseP = servP;
-                        baseF = servF;
-                        baseC = servC;
-                      }
-                      const nextCustomFood: CustomNutritionFood = {
-                        id: editingCustomFoodId || (selectedPreset?.isCustom ? selectedPreset.id : createUuid()),
-                        name: draftMealName.trim(),
-                        brand: customBrand.trim() || undefined,
-                        barcode: customBarcode.trim() || selectedPreset?.barcode || undefined,
-                        serving: servingMacros,
-                        servingGrams: servingWeightInput > 0 ? servingWeightInput : undefined,
-                        baseMode: foodBaseMode,
-                        baseQuantity: foodBaseMode === 'serving' ? 1 : 100,
-                        calories: baseCal,
-                        protein: baseP,
-                        fat: baseF,
-                        carbs: baseC,
-                      };
-                      onCustomFoodPresetsChange((prev) => {
-                        const filtered = prev.filter((item) => item.id !== nextCustomFood.id);
-                        return [nextCustomFood, ...filtered];
-                      });
-                      // Editing a saved food's definition: update it and close, no diary entry.
-                      if (editingCustomFoodId) {
-                        setEditingCustomFoodId(null);
-                        setCustomFoodMode(false);
-                        setSelectedPreset(null);
-                        setDraftMealName('');
-                        setDraftCalories('');
-                        setDraftProtein('');
-                        setDraftFat('');
-                        setDraftCarbs('');
-                        setDraftServingCalories('');
-                        setDraftServingProtein('');
-                        setDraftServingFat('');
-                        setDraftServingCarbs('');
-                        setCustomServingGrams('');
-                        setDraftGrams('100');
-                        setFoodSearch('');
-                        setAddTab('saved');
-                        return;
-                      }
-                    }
-                    if (customFoodPreviewPreset && customFoodPreviewValues) {
-                      nextEntryCalories = customFoodPreviewValues.calories || '0';
-                      nextEntryProtein = customFoodPreviewValues.protein || '0';
-                      nextEntryFat = customFoodPreviewValues.fat || '0';
-                      nextEntryCarbs = customFoodPreviewValues.carbs || '0';
-                    }
-                  }
-                  if (selectedPreset) registerRecentPreset(selectedPreset.id);
-                  const sourcePreset = customFoodMode ? customFoodPreviewPreset : effectiveLoggingPreset;
-                  const entrySource: NutritionEntrySource | undefined = sourcePreset
-                    ? {
-                        displayName: customFoodMode ? draftMealName.trim() : sourcePreset.name,
-                        brand: customFoodMode ? customBrand.trim() || undefined : sourcePreset.brand,
-                        grams: customFoodMode
-                          ? sourcePreset.baseMode === 'serving'
-                            ? '1'
-                            : draftGrams || '100'
-                          : draftGrams || (sourcePreset.baseMode === 'serving' ? '1' : '100'),
-                        baseMode: sourcePreset.baseMode || '100g',
-                        baseQuantity: sourcePreset.baseQuantity || (sourcePreset.baseMode === 'serving' ? 1 : 100),
-                        caloriesPer100g: sourcePreset.caloriesPer100g,
-                        proteinPer100g: sourcePreset.proteinPer100g,
-                        fatPer100g: sourcePreset.fatPer100g,
-                        carbsPer100g: sourcePreset.carbsPer100g,
-                        servingGrams: sourcePreset.servingGrams,
-                      }
-                    : undefined;
-                  const builtEntry: NutritionFoodEntry = {
-                    id: editingEntryId || createUuid(),
-                    name: formatNutritionEntryName({
-                      name: draftMealName.trim(),
-                      grams: draftGrams,
-                      customBrand,
-                      customFoodMode,
-                      customServingType,
-                    }),
-                    mealType: activeMealType,
-                    date: selectedDateKey,
-                    calories: nextEntryCalories,
-                    protein: nextEntryProtein,
-                    fat: nextEntryFat,
-                    carbs: nextEntryCarbs,
-                    source: entrySource,
-                  };
-                  onNutritionEntriesChange((prev) =>
-                    editingEntryId
-                      ? prev.map((entry) => (entry.id === editingEntryId ? builtEntry : entry))
-                      : [builtEntry, ...prev],
-                  );
-                  setDraftMealName('');
-                  setDraftCalories('');
-                  setDraftProtein('');
-                  setDraftFat('');
-                  setDraftCarbs('');
-                  setFoodSearch('');
-                  setDraftGrams('100');
-                  setSelectedPreset(null);
-                  setCustomFoodMode(false);
-                  setPhotoEstimateMode(false);
-                  setCustomBrand('');
-                  setCustomBarcode('');
-                  setCustomServingGrams('');
-                  setCustomServingType('100g');
-                  setCatalogResults([]);
-                  setCatalogSearchError(null);
-                  setMealPhotoError(null);
-                  setMealPhotoNote(null);
-                  setActiveMealType(null);
-                  setEditingEntryId(null);
-                }}
-              >
-                <Text style={styles.primaryBtnText}>{editingCustomFoodId ? 'Save changes' : editingEntryId ? 'Update' : '✓ Add'}</Text>
-              </Pressable>
-              ) : null}
-            </View>
           </View>
         </View>
       </Modal>
@@ -2613,8 +2612,34 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     modalScroll: {
       flexShrink: 1,
     },
+    modalHeaderBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      paddingHorizontal: isMobile ? 14 : 18,
+      paddingTop: isMobile ? 12 : 14,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: '#e1e8f2',
+      backgroundColor: 'rgba(248,250,252,0.98)',
+    },
+    modalHeaderCopy: {
+      flex: 1,
+    },
+    modalHeaderTitle: {
+      color: colors.text,
+      fontSize: isMobile ? 19 : 22,
+      fontWeight: '800',
+    },
+    modalHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
     modalContent: {
       padding: isMobile ? 14 : 18,
+      paddingTop: isMobile ? 12 : 14,
       paddingBottom: isMobile ? 16 : 20,
     },
     modalSection: {

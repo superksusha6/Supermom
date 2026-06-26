@@ -1,133 +1,106 @@
 /* eslint-disable no-console */
-// Pilot: 15 breakfasts authored the verified way (explicit grams + foodRef).
-// Runs computeRecipeNutrition over them and prints a review table.
-import type { RecipeIngredient } from '@/types/app';
-import { computeRecipeNutrition } from '@/lib/recipeNutrition';
+// Pilot: 15 flexible breakfasts (verified) with customization slots.
+// Runs the engine for the default selection and a few alternative selections.
+import type { RecipeChoice, RecipeIngredient } from '@/types/app';
+import { computeRecipeNutritionForSelection, type RecipeSelection } from '@/lib/recipeNutrition';
 
-type Authored = { id: string; title: string; servings: number; ingredients: RecipeIngredient[] };
+type Authored = {
+  id: string;
+  title: string;
+  servings: number;
+  ingredients: RecipeIngredient[];
+  choices?: RecipeChoice[];
+};
 
-const ing = (name: string, grams: number, foodRef: string, optional?: boolean): RecipeIngredient => ({
+const ing = (name: string, grams: number, foodRef: string): RecipeIngredient => ({
   id: foodRef,
   name,
   amount: grams + ' g',
   grams,
   foodRef,
-  optional,
 });
 
+const opt = (id: string, label: string, ingredient?: RecipeIngredient) => ({ id, label, ingredient });
+const choice = (id: string, label: string, defaultOptionId: string, options: ReturnType<typeof opt>[]): RecipeChoice => ({
+  id,
+  label,
+  defaultOptionId,
+  options,
+});
+
+const liquid = (grams: number) =>
+  choice('liquid', 'Liquid', 'milk', [
+    opt('milk', 'Milk', ing('milk', grams, 'preset-milk-3-2')),
+    opt('water', 'Water', ing('water', grams, 'preset-water')),
+  ]);
+
+const sweetener = (defaultId: string, sugarG = 8, honeyG = 10) =>
+  choice('sweetener', 'Sweetener', defaultId, [
+    opt('sugar', 'Sugar', ing('sugar', sugarG, 'ing-sugar')),
+    opt('honey', 'Honey', ing('honey', honeyG, 'ing-honey')),
+    opt('sweetener', 'Sweetener (0 cal)', ing('sweetener', 1, 'ing-sweetener')),
+    opt('none', 'None'),
+  ]);
+
 const BREAKFASTS: Authored[] = [
-  {
-    id: 'classic-omelet', title: 'Classic omelet', servings: 1,
-    ingredients: [ing('eggs', 100, 'preset-egg'), ing('milk', 30, 'preset-milk-3-2'), ing('butter', 5, 'preset-butter')],
-  },
-  {
-    id: 'scrambled-eggs', title: 'Scrambled eggs', servings: 1,
-    ingredients: [ing('eggs', 100, 'preset-egg'), ing('butter', 5, 'preset-butter'), ing('milk', 15, 'preset-milk-3-2')],
-  },
-  {
-    id: 'fried-eggs', title: 'Fried eggs', servings: 1,
-    ingredients: [ing('eggs', 100, 'preset-egg'), ing('sunflower oil', 5, 'preset-sunflower-oil')],
-  },
-  {
-    id: 'boiled-eggs', title: 'Boiled eggs', servings: 1,
-    ingredients: [ing('eggs', 100, 'preset-egg')],
-  },
-  {
-    id: 'oatmeal-porridge-milk', title: 'Oatmeal porridge (milk)', servings: 1,
-    ingredients: [ing('rolled oats', 50, 'preset-oatmeal-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('honey', 10, 'ing-honey')],
-  },
-  {
-    id: 'oatmeal-porridge-water', title: 'Oatmeal porridge (water)', servings: 1,
-    ingredients: [ing('rolled oats', 50, 'preset-oatmeal-dry'), ing('water', 200, 'preset-water')],
-  },
-  {
-    id: 'rice-porridge-milk', title: 'Rice porridge (milk)', servings: 1,
-    ingredients: [ing('rice', 50, 'preset-rice-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('sugar', 8, 'ing-sugar'), ing('butter', 5, 'preset-butter')],
-  },
-  {
-    id: 'rice-porridge-water', title: 'Rice porridge (water)', servings: 1,
-    ingredients: [ing('rice', 50, 'preset-rice-dry'), ing('water', 200, 'preset-water')],
-  },
-  {
-    id: 'semolina-porridge-milk', title: 'Semolina porridge (milk)', servings: 1,
-    ingredients: [ing('semolina', 40, 'ing-semolina-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('sugar', 8, 'ing-sugar'), ing('butter', 5, 'preset-butter')],
-  },
-  {
-    id: 'semolina-porridge-water', title: 'Semolina porridge (water)', servings: 1,
-    ingredients: [ing('semolina', 40, 'ing-semolina-dry'), ing('water', 200, 'preset-water')],
-  },
-  {
-    id: 'buckwheat-porridge-milk', title: 'Buckwheat porridge (milk)', servings: 1,
-    ingredients: [ing('buckwheat', 50, 'preset-buckwheat-dry'), ing('milk', 150, 'preset-milk-3-2'), ing('butter', 5, 'preset-butter')],
-  },
-  {
-    id: 'buckwheat-porridge-water', title: 'Buckwheat porridge (water)', servings: 1,
-    ingredients: [ing('buckwheat', 50, 'preset-buckwheat-dry'), ing('water', 150, 'preset-water')],
-  },
-  {
-    id: 'syrniki', title: 'Syrniki', servings: 2,
-    ingredients: [ing('cottage cheese', 250, 'preset-cottage-cheese-5'), ing('egg', 50, 'preset-egg'), ing('flour', 40, 'preset-wheat-flour-white'), ing('sugar', 15, 'ing-sugar'), ing('sunflower oil', 10, 'preset-sunflower-oil')],
-  },
-  {
-    id: 'cottage-cheese-bake', title: 'Cottage cheese bake', servings: 4,
-    ingredients: [ing('cottage cheese', 500, 'preset-cottage-cheese-5'), ing('eggs', 100, 'preset-egg'), ing('semolina', 40, 'ing-semolina-dry'), ing('sugar', 40, 'ing-sugar'), ing('raisins', 30, 'ing-raisins')],
-  },
-  {
-    id: 'banana-pancakes', title: 'Banana pancakes', servings: 2,
-    ingredients: [ing('banana', 120, 'preset-banana'), ing('egg', 50, 'preset-egg'), ing('flour', 90, 'preset-wheat-flour-white'), ing('milk', 120, 'preset-milk-3-2'), ing('sunflower oil', 7, 'preset-sunflower-oil')],
-  },
-  {
-    id: 'french-toast', title: 'French toast', servings: 2,
-    ingredients: [ing('bread', 120, 'ing-bread'), ing('eggs', 100, 'preset-egg'), ing('milk', 80, 'preset-milk-3-2'), ing('butter', 10, 'preset-butter'), ing('sugar', 5, 'ing-sugar')],
-  },
-  {
-    id: 'homemade-granola', title: 'Homemade granola', servings: 6,
-    ingredients: [ing('rolled oats', 200, 'preset-oatmeal-dry'), ing('honey', 60, 'ing-honey'), ing('sunflower oil', 30, 'preset-sunflower-oil'), ing('almonds', 60, 'preset-almonds'), ing('raisins', 50, 'ing-raisins')],
-  },
+  { id: 'classic-omelet', title: 'Classic omelet', servings: 1, ingredients: [ing('eggs', 100, 'preset-egg'), ing('milk', 30, 'preset-milk-3-2'), ing('butter', 5, 'preset-butter')] },
+  { id: 'scrambled-eggs', title: 'Scrambled eggs', servings: 1, ingredients: [ing('eggs', 100, 'preset-egg'), ing('butter', 5, 'preset-butter'), ing('milk', 15, 'preset-milk-3-2')] },
+  { id: 'fried-eggs', title: 'Fried eggs', servings: 1, ingredients: [ing('eggs', 100, 'preset-egg'), ing('sunflower oil', 5, 'preset-sunflower-oil')] },
+  { id: 'boiled-eggs', title: 'Boiled eggs', servings: 1, ingredients: [ing('eggs', 100, 'preset-egg')] },
+
+  { id: 'oatmeal-porridge', title: 'Oatmeal porridge', servings: 1, ingredients: [ing('rolled oats', 50, 'preset-oatmeal-dry')], choices: [liquid(200), sweetener('honey')] },
+  { id: 'rice-porridge', title: 'Rice porridge', servings: 1, ingredients: [ing('rice', 50, 'preset-rice-dry'), ing('butter', 5, 'preset-butter')], choices: [liquid(200), sweetener('sugar')] },
+  { id: 'semolina-porridge', title: 'Semolina porridge', servings: 1, ingredients: [ing('semolina', 40, 'ing-semolina-dry'), ing('butter', 5, 'preset-butter')], choices: [liquid(200), sweetener('sugar')] },
+  { id: 'buckwheat-porridge', title: 'Buckwheat porridge', servings: 1, ingredients: [ing('buckwheat', 50, 'preset-buckwheat-dry'), ing('butter', 5, 'preset-butter')], choices: [liquid(150), sweetener('none')] },
+
+  { id: 'syrniki', title: 'Syrniki', servings: 2, ingredients: [ing('cottage cheese', 250, 'preset-cottage-cheese-5'), ing('egg', 50, 'preset-egg'), ing('flour', 40, 'preset-wheat-flour-white'), ing('sunflower oil', 10, 'preset-sunflower-oil')], choices: [sweetener('sugar', 15)] },
+  { id: 'cottage-cheese-bake', title: 'Cottage cheese bake', servings: 4, ingredients: [ing('cottage cheese', 500, 'preset-cottage-cheese-5'), ing('eggs', 100, 'preset-egg'), ing('semolina', 40, 'ing-semolina-dry'), ing('raisins', 30, 'ing-raisins')], choices: [sweetener('sugar', 40)] },
+  { id: 'banana-pancakes', title: 'Banana pancakes', servings: 2, ingredients: [ing('banana', 120, 'preset-banana'), ing('egg', 50, 'preset-egg'), ing('flour', 90, 'preset-wheat-flour-white'), ing('milk', 120, 'preset-milk-3-2'), ing('sunflower oil', 7, 'preset-sunflower-oil')] },
+  { id: 'french-toast', title: 'French toast', servings: 2, ingredients: [ing('bread', 120, 'ing-bread'), ing('eggs', 100, 'preset-egg'), ing('milk', 80, 'preset-milk-3-2'), ing('butter', 10, 'preset-butter')], choices: [sweetener('sugar', 5)] },
+  { id: 'homemade-granola', title: 'Homemade granola', servings: 6, ingredients: [ing('rolled oats', 200, 'preset-oatmeal-dry'), ing('honey', 60, 'ing-honey'), ing('sunflower oil', 30, 'preset-sunflower-oil'), ing('almonds', 60, 'preset-almonds'), ing('raisins', 50, 'ing-raisins')] },
   {
     id: 'yogurt-berries-granola', title: 'Yogurt with berries & granola', servings: 1,
-    ingredients: [ing('greek yogurt', 150, 'preset-greek-yogurt'), ing('blueberries', 80, 'preset-blueberry'), ing('granola', 40, 'ing-granola'), ing('honey', 10, 'ing-honey')],
+    ingredients: [ing('greek yogurt', 150, 'preset-greek-yogurt'), ing('blueberries', 80, 'preset-blueberry'), ing('granola', 40, 'ing-granola')],
+    choices: [choice('topping', 'Honey', 'honey', [opt('honey', 'Honey', ing('honey', 10, 'ing-honey')), opt('none', 'None')])],
   },
   {
     id: 'avocado-toast', title: 'Avocado toast', servings: 1,
-    ingredients: [ing('bread', 70, 'ing-bread'), ing('avocado', 100, 'preset-avocado'), ing('egg', 50, 'preset-egg')],
+    ingredients: [ing('bread', 70, 'ing-bread'), ing('avocado', 100, 'preset-avocado')],
+    choices: [choice('egg', 'Egg', 'with', [opt('with', 'With egg', ing('egg', 50, 'preset-egg')), opt('without', 'Without egg')])],
   },
 ];
 
 const pad = (s: string | number, n: number) => String(s).padEnd(n);
 const padL = (s: string | number, n: number) => String(s).padStart(n);
 
-console.log(pad('Recipe', 30) + padL('kcal', 6) + padL('P', 6) + padL('F', 6) + padL('C', 6) + '  conf');
-console.log('-'.repeat(64));
-
-let allVerified = true;
-const problems: string[] = [];
-
-for (const recipe of BREAKFASTS) {
-  const r = computeRecipeNutrition(recipe.ingredients, recipe.servings);
-  if (r.confidence !== 'verified') allVerified = false;
+function row(title: string, servings: number, ingredients: RecipeIngredient[], choices: RecipeChoice[] | undefined, selection?: RecipeSelection) {
+  const r = computeRecipeNutritionForSelection({ ingredients, choices, servings }, selection);
   const n = r.nutrition;
-  console.log(pad(recipe.title, 30) + padL(n.calories, 6) + padL(n.protein, 6) + padL(n.fat, 6) + padL(n.carbs, 6) + '  ' + r.confidence);
-  for (const d of r.diagnostics) {
-    if (d.via !== 'foodRef' || d.grams == null) {
-      problems.push(recipe.title + ' -> ' + d.name + ' [' + d.via + ', ' + (d.grams ?? 'no grams') + ']');
-    }
-  }
+  return { line: pad(title, 32) + padL(n.calories, 6) + padL(n.protein, 6) + padL(n.fat, 6) + padL(n.carbs, 6) + '  ' + r.confidence, conf: r.confidence };
 }
 
+console.log('DEFAULT SELECTION');
+console.log(pad('Recipe', 32) + padL('kcal', 6) + padL('P', 6) + padL('F', 6) + padL('C', 6) + '  conf');
+console.log('-'.repeat(66));
+let allVerified = true;
+for (const b of BREAKFASTS) {
+  const out = row(b.title, b.servings, b.ingredients, b.choices);
+  if (out.conf !== 'verified') allVerified = false;
+  console.log(out.line);
+}
 console.log('\nAll verified: ' + allVerified);
-if (problems.length) {
-  console.log('Problems:');
-  problems.forEach((p) => console.log('  ' + p));
-}
 
-// Detailed per-ingredient breakdown for a quick sanity read.
-console.log('\n--- breakdown (per serving contribution) ---');
-for (const recipe of BREAKFASTS) {
-  const r = computeRecipeNutrition(recipe.ingredients, recipe.servings);
-  console.log('\n' + recipe.title + '  (' + recipe.servings + ' serv) -> ' + r.nutrition.calories + ' kcal');
-  for (const d of r.diagnostics) {
-    const k = d.contribution ? Math.round(d.contribution.calories / recipe.servings) : 0;
-    console.log('  ' + pad(d.name, 18) + padL(d.grams ?? '?', 5) + 'g  ' + padL(k, 5) + ' kcal  (' + d.matchedFood + ')');
-  }
-}
+console.log('\nALTERNATIVE SELECTIONS (proves live recompute)');
+console.log('-'.repeat(66));
+const find = (id: string) => BREAKFASTS.find((b) => b.id === id)!;
+const show = (label: string, id: string, selection: RecipeSelection) => {
+  const b = find(id);
+  console.log(pad(label, 40) + row(b.title, b.servings, b.ingredients, b.choices, selection).line.slice(32));
+};
+show('Oatmeal: water + no sweetener', 'oatmeal-porridge', { liquid: 'water', sweetener: 'none' });
+show('Oatmeal: water + sweetener(0)', 'oatmeal-porridge', { liquid: 'water', sweetener: 'sweetener' });
+show('Rice: water + no sweetener', 'rice-porridge', { liquid: 'water', sweetener: 'none' });
+show('Semolina: water + no sweetener', 'semolina-porridge', { liquid: 'water', sweetener: 'none' });
+show('Buckwheat: water (default no sweet)', 'buckwheat-porridge', { liquid: 'water' });
+show('Syrniki: sweetener(0) instead of sugar', 'syrniki', { sweetener: 'sweetener' });
+show('Avocado toast: without egg', 'avocado-toast', { egg: 'without' });
