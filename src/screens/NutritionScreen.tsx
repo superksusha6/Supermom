@@ -281,6 +281,18 @@ export function NutritionScreen({
     [allFoodPresets, entryUsageCounts],
   );
 
+  // Merged "Recent" list: recently used + frequently used, deduped (one category).
+  const usedPresets = useMemo(() => {
+    const seen = new Set<string>();
+    const out: NutritionFoodPreset[] = [];
+    for (const p of [...recentPresets, ...frequentPresets]) {
+      const key = normalizeNutritionSearchText(p.name);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  }, [recentPresets, frequentPresets]);
   const savedPresets = useMemo(() => customFoodPresets.map(customNutritionFoodToPreset), [customFoodPresets]);
   const visibleCatalogResults = useMemo(() => {
     const existingKeys = new Set(
@@ -1324,16 +1336,14 @@ export function NutritionScreen({
                     <View style={styles.addTabsRow}>
                       {([
                         { key: 'recent', label: 'Recent' },
-                        { key: 'frequent', label: 'Frequent' },
                         { key: 'saved', label: 'Saved' },
-                        { key: 'search', label: 'Search' },
                       ] as const).map((tab) => (
                         <Pressable
                           key={tab.key}
                           style={[styles.addTab, addTab === tab.key && styles.addTabActive]}
                           onPress={() => {
                             setAddTab(tab.key);
-                            if (tab.key !== 'search') setFoodSearch('');
+                            setFoodSearch('');
                           }}
                         >
                           <Text style={[styles.addTabText, addTab === tab.key && styles.addTabTextActive]}>{tab.label}</Text>
@@ -1386,19 +1396,10 @@ export function NutritionScreen({
                     ) : null}
                     {!foodSearch.trim() && addTab === 'recent' ? (
                       <View style={styles.presetListWrap}>
-                        {recentPresets.length ? (
-                          recentPresets.map((p) => renderPresetRow(p, true))
+                        {usedPresets.length ? (
+                          usedPresets.map((p) => renderPresetRow(p, true))
                         ) : (
                           <Text style={styles.catalogEmpty}>Nothing yet — foods you add will show up here for quick re-adding.</Text>
-                        )}
-                      </View>
-                    ) : null}
-                    {!foodSearch.trim() && addTab === 'frequent' ? (
-                      <View style={styles.presetListWrap}>
-                        {frequentPresets.length ? (
-                          frequentPresets.map((p) => renderPresetRow(p, true))
-                        ) : (
-                          <Text style={styles.catalogEmpty}>No frequent foods yet — they appear once you log the same food a few times.</Text>
                         )}
                       </View>
                     ) : null}
@@ -1410,9 +1411,6 @@ export function NutritionScreen({
                           <Text style={styles.catalogEmpty}>No saved foods yet — scanned and custom foods are saved here.</Text>
                         )}
                       </View>
-                    ) : null}
-                    {!foodSearch.trim() && addTab === 'search' ? (
-                      <Text style={styles.searchEmptyHint}>Start typing to search the nutrition database.</Text>
                     ) : null}
                     {foodSearch.trim() && !hasExactFoodMatch ? (
                       <Pressable

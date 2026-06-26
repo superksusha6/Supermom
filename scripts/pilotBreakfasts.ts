@@ -33,20 +33,36 @@ const BREAKFASTS: Authored[] = [
     ingredients: [ing('eggs', 100, 'preset-egg')],
   },
   {
-    id: 'oatmeal-porridge', title: 'Oatmeal porridge', servings: 1,
+    id: 'oatmeal-porridge-milk', title: 'Oatmeal porridge (milk)', servings: 1,
     ingredients: [ing('rolled oats', 50, 'preset-oatmeal-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('honey', 10, 'ing-honey')],
   },
   {
-    id: 'rice-milk-porridge', title: 'Rice milk porridge', servings: 1,
+    id: 'oatmeal-porridge-water', title: 'Oatmeal porridge (water)', servings: 1,
+    ingredients: [ing('rolled oats', 50, 'preset-oatmeal-dry'), ing('water', 200, 'preset-water')],
+  },
+  {
+    id: 'rice-porridge-milk', title: 'Rice porridge (milk)', servings: 1,
     ingredients: [ing('rice', 50, 'preset-rice-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('sugar', 8, 'ing-sugar'), ing('butter', 5, 'preset-butter')],
   },
   {
-    id: 'semolina-porridge', title: 'Semolina porridge', servings: 1,
+    id: 'rice-porridge-water', title: 'Rice porridge (water)', servings: 1,
+    ingredients: [ing('rice', 50, 'preset-rice-dry'), ing('water', 200, 'preset-water')],
+  },
+  {
+    id: 'semolina-porridge-milk', title: 'Semolina porridge (milk)', servings: 1,
     ingredients: [ing('semolina', 40, 'ing-semolina-dry'), ing('milk', 200, 'preset-milk-3-2'), ing('sugar', 8, 'ing-sugar'), ing('butter', 5, 'preset-butter')],
   },
   {
-    id: 'buckwheat-porridge', title: 'Buckwheat porridge', servings: 1,
+    id: 'semolina-porridge-water', title: 'Semolina porridge (water)', servings: 1,
+    ingredients: [ing('semolina', 40, 'ing-semolina-dry'), ing('water', 200, 'preset-water')],
+  },
+  {
+    id: 'buckwheat-porridge-milk', title: 'Buckwheat porridge (milk)', servings: 1,
     ingredients: [ing('buckwheat', 50, 'preset-buckwheat-dry'), ing('milk', 150, 'preset-milk-3-2'), ing('butter', 5, 'preset-butter')],
+  },
+  {
+    id: 'buckwheat-porridge-water', title: 'Buckwheat porridge (water)', servings: 1,
+    ingredients: [ing('buckwheat', 50, 'preset-buckwheat-dry'), ing('water', 150, 'preset-water')],
   },
   {
     id: 'syrniki', title: 'Syrniki', servings: 2,
@@ -74,7 +90,7 @@ const BREAKFASTS: Authored[] = [
   },
   {
     id: 'avocado-toast', title: 'Avocado toast', servings: 1,
-    ingredients: [ing('bread', 70, 'ing-bread'), ing('avocado', 100, 'preset-avocado'), ing('egg', 50, 'preset-egg'), ing('olive oil', 3, 'preset-olive-oil')],
+    ingredients: [ing('bread', 70, 'ing-bread'), ing('avocado', 100, 'preset-avocado'), ing('egg', 50, 'preset-egg')],
   },
 ];
 
