@@ -800,49 +800,55 @@ export function NutritionScreen({
     setExpandedMeal(null);
   }
 
-  function renderPresetRow(item: NutritionFoodPreset) {
+  function renderPresetRow(item: NutritionFoodPreset, nameOnly = false) {
+    const isLiquid = (item.baseMode || '100g') === '100ml';
+    const usePiece = !!item.pieceLabel && !!item.servingGrams;
+    const portionLabel = usePiece
+      ? `${item.pieceLabel} (${item.servingGrams} ${isLiquid ? 'ml' : 'g'})`
+      : isLiquid
+        ? '100 ml'
+        : '100 g';
+    const rowKcal = usePiece
+      ? Math.round((item.caloriesPer100g * (item.servingGrams as number)) / 100)
+      : Math.round(item.caloriesPer100g);
+    const infoLine = `${item.brand?.trim() ? `${item.brand.trim()} · ` : ''}${portionLabel} · ${rowKcal} kcal`;
     return (
       <Pressable key={item.id} style={styles.catalogResultCard} onPress={() => applyPresetSelection(item)}>
-        <Pressable
-          style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            toggleFavoritePreset(item);
-          }}
-        >
-          <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.quickAddPill, quickAddedIds.includes(item.id) && styles.quickAddPillActive]}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            quickAddPreset(item);
-          }}
-        >
-          {quickAddedIds.includes(item.id) ? <Text style={styles.quickAddPillText}>✓</Text> : null}
-        </Pressable>
-        {item.isCustom ? (
+        <View style={styles.catalogResultCopy}>
+          <Text style={styles.catalogResultTitle} numberOfLines={1}>{item.name}</Text>
+          {nameOnly ? null : <Text style={styles.catalogResultSubtitle} numberOfLines={1}>{infoLine}</Text>}
+        </View>
+        <View style={styles.catalogResultActions}>
           <Pressable
-            style={styles.editPresetPill}
+            style={[styles.favoritePill, libraryMeta.favorites.includes(item.id) && styles.favoritePillActive]}
             onPress={(event) => {
               event.stopPropagation?.();
-              editCustomFood(item);
+              toggleFavoritePreset(item);
             }}
           >
-            <Text style={styles.editPresetPillText}>✎</Text>
+            <Text style={[styles.favoritePillText, libraryMeta.favorites.includes(item.id) && styles.favoritePillTextActive]}>★</Text>
           </Pressable>
-        ) : null}
-        <View style={styles.catalogResultTopRow}>
-          <View style={styles.catalogResultCopy}>
-            <Text style={styles.catalogResultTitle}>{item.name}</Text>
-            <Text style={styles.catalogResultSubtitle}>
-              {item.brand?.trim() ? `${item.brand.trim()} · ${item.baseAmount}` : item.baseAmount}
-            </Text>
-          </View>
+          {item.isCustom ? (
+            <Pressable
+              style={styles.editPresetPill}
+              onPress={(event) => {
+                event.stopPropagation?.();
+                editCustomFood(item);
+              }}
+            >
+              <Text style={styles.editPresetPillText}>✎</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={[styles.quickAddPill, quickAddedIds.includes(item.id) && styles.quickAddPillActive]}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              quickAddPreset(item);
+            }}
+          >
+            {quickAddedIds.includes(item.id) ? <Text style={styles.quickAddPillText}>✓</Text> : null}
+          </Pressable>
         </View>
-        <Text style={styles.catalogResultMacros}>
-          {item.caloriesPer100g} kcal · P {item.proteinPer100g} · F {item.fatPer100g} · C {item.carbsPer100g}
-        </Text>
       </Pressable>
     );
   }
@@ -1371,7 +1377,7 @@ export function NutritionScreen({
                     {!foodSearch.trim() && addTab === 'recent' ? (
                       <View style={styles.presetListWrap}>
                         {recentPresets.length ? (
-                          recentPresets.map(renderPresetRow)
+                          recentPresets.map((p) => renderPresetRow(p, true))
                         ) : (
                           <Text style={styles.catalogEmpty}>Nothing yet — foods you add will show up here for quick re-adding.</Text>
                         )}
@@ -1380,7 +1386,7 @@ export function NutritionScreen({
                     {!foodSearch.trim() && addTab === 'frequent' ? (
                       <View style={styles.presetListWrap}>
                         {frequentPresets.length ? (
-                          frequentPresets.map(renderPresetRow)
+                          frequentPresets.map((p) => renderPresetRow(p, true))
                         ) : (
                           <Text style={styles.catalogEmpty}>No frequent foods yet — they appear once you log the same food a few times.</Text>
                         )}
@@ -1389,7 +1395,7 @@ export function NutritionScreen({
                     {!foodSearch.trim() && addTab === 'saved' ? (
                       <View style={styles.presetListWrap}>
                         {savedPresets.length ? (
-                          savedPresets.map(renderPresetRow)
+                          savedPresets.map((p) => renderPresetRow(p, false))
                         ) : (
                           <Text style={styles.catalogEmpty}>No saved foods yet — scanned and custom foods are saved here.</Text>
                         )}
@@ -2897,13 +2903,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       elevation: 4,
     },
     favoritePill: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      zIndex: 2,
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: '#ffffff',
@@ -2923,13 +2925,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       color: '#d97706',
     },
     editPresetPill: {
-      position: 'absolute',
-      top: 10,
-      right: 44,
-      zIndex: 2,
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: '#ffffff',
@@ -2942,13 +2940,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontWeight: '900',
     },
     quickAddPill: {
-      position: 'absolute',
-      right: 10,
-      bottom: 10,
-      zIndex: 2,
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       borderWidth: 2,
       borderColor: '#c7d2e3',
       backgroundColor: '#ffffff',
@@ -2964,6 +2958,11 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 17,
       fontWeight: '900',
       lineHeight: 19,
+    },
+    quickAddPillPlus: {
+      color: colors.primary,
+      fontSize: 20,
+      lineHeight: 22,
     },
     sessionAddedBanner: {
       borderRadius: 14,
@@ -3046,18 +3045,20 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       lineHeight: 17,
     },
     catalogResultCard: {
-      position: 'relative',
-      borderRadius: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: '#d9e4f2',
+      borderColor: '#e1e8f2',
       backgroundColor: '#ffffff',
-      padding: 12,
-      gap: 6,
-      shadowColor: colors.shadow,
-      shadowOpacity: 0.12,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      gap: 10,
+    },
+    catalogResultActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     catalogResultTopRow: {
       flexDirection: 'row',
@@ -3067,7 +3068,7 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     },
     catalogResultCopy: {
       flex: 1,
-      gap: 2,
+      gap: 1,
     },
     catalogResultTitle: {
       color: colors.text,

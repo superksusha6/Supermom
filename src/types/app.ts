@@ -310,6 +310,12 @@ export type RecipeIngredient = {
   name: string;
   amount: string;
   optional?: boolean;
+  // Verified-nutrition authoring fields. `grams` is the canonical mass (or ml for
+  // liquids) used to compute macros; `foodRef` pins the ingredient to a specific
+  // nutrition source (preset id, `usda-<fdcId>`, or `off-<code>`) so the match is
+  // deterministic instead of relying on name lookup.
+  grams?: number;
+  foodRef?: string;
 };
 
 export type RecipeStep = {
@@ -337,6 +343,10 @@ export type Recipe = {
   tags: string[];
   classifiers: RecipeClassifier[];
   nutritionPerServing: RecipeNutrition;
+  // 'verified' = every ingredient has explicit grams + foodRef and macros were
+  // computed deterministically; 'approx' = at least one ingredient fell back to a
+  // name match or estimated amount. Drives the "≈ approx" label in the UI.
+  nutritionConfidence?: 'verified' | 'approx';
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   photoUri?: string;

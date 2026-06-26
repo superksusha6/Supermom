@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": false,
+    "outDir": "../.validate-out",
+    "rootDir": "..",
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": [
+    "validateRecipeNutrition.ts",
+    "../src/lib/recipeNutrition.ts",
+    "../src/lib/recipeIngredients.ts",
+    "../src/lib/nutrition.ts"
+  ]
+}
