@@ -672,13 +672,9 @@ export function NutritionScreen({
     const displayTitle = item.brand?.trim() ? `${item.brand.trim()} ${item.name}` : item.name;
     const baseMode = item.baseMode || '100g';
     const startServing = baseMode === 'serving';
-    const defaultAmount = startServing
-      ? '1'
-      : item.servingGrams && item.servingGrams > 0
-        ? String(item.servingGrams)
-        : '100';
-    const computeFrom = startServing ? item : item;
-    const next = getNutritionValuesForGrams(computeFrom, defaultAmount);
+    // Grams/ml default to 100; the serving weight only applies to the serving unit.
+    const defaultAmount = startServing ? '1' : '100';
+    const next = getNutritionValuesForGrams(item, defaultAmount);
     setSelectedPreset(item);
     setLoggingServing(startServing);
     setUnitPickerOpen(false);
@@ -851,11 +847,8 @@ export function NutritionScreen({
   function setLoggingMode(serving: boolean) {
     setLoggingServing(serving);
     const target = serving && servingLoggingPreset ? servingLoggingPreset : selectedPreset;
-    const nextAmount = serving
-      ? '1'
-      : selectedPreset?.servingGrams && selectedPreset.servingGrams > 0
-        ? String(selectedPreset.servingGrams)
-        : '100';
+    // Serving → 1 serving; grams/ml → 100 (not the serving weight).
+    const nextAmount = serving ? '1' : '100';
     setDraftGrams(nextAmount);
     if (target) {
       const v = getNutritionValuesForGrams(target, nextAmount);
