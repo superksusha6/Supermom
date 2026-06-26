@@ -5,3 +5,4 @@ npm-debug.*
 .env
 .DS_Store
 .vercel
+dist
