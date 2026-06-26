@@ -89,7 +89,10 @@ export function NutritionScreen({
   quickActionRequest,
   renderInlineContent = true,
 }: Props) {
-  const usdaApiKey = process.env.EXPO_PUBLIC_USDA_API_KEY || '';
+  // USDA FoodData Central for accurate reference foods (e.g. "boiled egg", "chicken breast").
+  // Falls back to USDA's public DEMO_KEY when no dedicated key is configured (low rate limits;
+  // set EXPO_PUBLIC_USDA_API_KEY for production-grade limits).
+  const usdaApiKey = process.env.EXPO_PUBLIC_USDA_API_KEY || 'DEMO_KEY';
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
