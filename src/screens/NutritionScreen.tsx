@@ -456,7 +456,6 @@ export function NutritionScreen({
     const amount = customFoodPreviewPreset.baseMode === 'serving' ? '1' : draftGrams || '100';
     return getNutritionValuesForGrams(customFoodPreviewPreset, amount);
   }, [customFoodPreviewPreset, draftGrams]);
-  const showNutritionEditor = addFoodFlow === 'search' || !!selectedPreset || customFoodMode;
   const nutritionProgress = plan
     ? [
         { key: 'calories', label: 'Calories', current: totals.calories, target: plan.calories, unit: 'kcal' },
@@ -1244,7 +1243,7 @@ export function NutritionScreen({
         <View style={styles.modalScrim}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }} />
           <View style={styles.modalCard}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalEyebrow}>{editingCustomFoodId ? 'Edit food' : editingEntryId ? 'Edit product' : 'Add product'}</Text>
               <Text style={styles.modalTitle}>
                 {mealSections.find((item) => item.key === activeMealType)?.title || 'Meal'}
@@ -1548,7 +1547,7 @@ export function NutritionScreen({
               ) : null}
 
               <View style={styles.modalSection}>
-                {showNutritionEditor ? (
+                {selectedPreset || customFoodMode ? (
                   <>
                     {(() => {
                       const unit = customFoodMode ? customServingType : selectedPresetBaseMode;
@@ -1703,6 +1702,7 @@ export function NutritionScreen({
                   </>
                 ) : null}
               </View>
+            </ScrollView>
             <View style={styles.modalActions}>
               <Pressable
                 style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
@@ -1884,7 +1884,6 @@ export function NutritionScreen({
               </Pressable>
               ) : null}
             </View>
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -2612,6 +2611,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       shadowOffset: { width: 0, height: 16 },
       elevation: 20,
       overflow: 'hidden',
+    },
+    modalScroll: {
+      flexShrink: 1,
     },
     modalContent: {
       padding: isMobile ? 14 : 18,
@@ -3416,7 +3418,12 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       flexDirection: isMobile ? 'column-reverse' : 'row',
       justifyContent: 'flex-end',
       gap: 10,
-      marginTop: 8,
+      paddingHorizontal: isMobile ? 14 : 18,
+      paddingTop: 12,
+      paddingBottom: isMobile ? 14 : 18,
+      borderTopWidth: 1,
+      borderTopColor: '#e1e8f2',
+      backgroundColor: 'rgba(248,250,252,0.98)',
     },
     modalGhostBtn: {
       alignItems: 'center',
