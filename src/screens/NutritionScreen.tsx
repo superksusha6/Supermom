@@ -313,13 +313,11 @@ export function NutritionScreen({
   const selectedDateLabel = selectedDateKey === todayDateKey ? 'Today' : formatReadableDate(selectedDateKey);
   // The weight/volume unit (g or ml) used for the grams option and the serving-size label.
   const baseUnitLabel = (selectedPreset?.baseMode || '100g') === '100ml' ? 'ml' : 'g';
-  // Serving weight: explicit if set, otherwise default to 100 so every per-100 food still
-  // offers a "serving (100 g)" option, like FatSecret.
+  // Serving weight: only a real, known serving weight counts. We no longer fake "1 serving = 100 g",
+  // because that just duplicated the grams option and gave misleading per-100g values.
   const servingWeight =
-    selectedPreset && selectedPreset.baseMode !== 'serving'
-      ? selectedPreset.servingGrams && selectedPreset.servingGrams > 0
-        ? selectedPreset.servingGrams
-        : 100
+    selectedPreset && selectedPreset.baseMode !== 'serving' && selectedPreset.servingGrams && selectedPreset.servingGrams > 0
+      ? selectedPreset.servingGrams
       : 0;
   // A serving-based view of the selected food. Prefer independent per-serving values; otherwise
   // build one serving from the serving weight on the per-100g/ml basis.

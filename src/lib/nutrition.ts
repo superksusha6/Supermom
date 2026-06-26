@@ -27,9 +27,9 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-ground-beef', name: 'Ground beef', baseAmount: 'per 100 g', caloriesPer100g: 270, proteinPer100g: 26, fatPer100g: 20, carbsPer100g: 0 },
   { id: 'preset-salmon', name: 'Salmon', baseAmount: 'per 100 g', caloriesPer100g: 208, proteinPer100g: 20, fatPer100g: 13, carbsPer100g: 0 },
   { id: 'preset-tuna-canned', name: 'Tuna, canned', baseAmount: 'per 100 g', caloriesPer100g: 130, proteinPer100g: 29, fatPer100g: 1, carbsPer100g: 0 },
-  { id: 'preset-egg', name: 'Egg', baseAmount: 'per 100 g', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1 },
-  { id: 'preset-egg-white', name: 'Egg white', baseAmount: 'per 100 g', caloriesPer100g: 52, proteinPer100g: 10.9, fatPer100g: 0.2, carbsPer100g: 0.7 },
-  { id: 'preset-egg-yolk', name: 'Egg yolk', baseAmount: 'per 100 g', caloriesPer100g: 322, proteinPer100g: 15.9, fatPer100g: 26.5, carbsPer100g: 3.6 },
+  { id: 'preset-egg', name: 'Egg', baseAmount: 'per 100 g', servingGrams: 50, caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1 },
+  { id: 'preset-egg-white', name: 'Egg white', baseAmount: 'per 100 g', servingGrams: 33, caloriesPer100g: 52, proteinPer100g: 10.9, fatPer100g: 0.2, carbsPer100g: 0.7 },
+  { id: 'preset-egg-yolk', name: 'Egg yolk', baseAmount: 'per 100 g', servingGrams: 17, caloriesPer100g: 322, proteinPer100g: 15.9, fatPer100g: 26.5, carbsPer100g: 3.6 },
   { id: 'preset-cottage-cheese-5', name: 'Cottage cheese 5%', baseAmount: 'per 100 g', caloriesPer100g: 120, proteinPer100g: 17, fatPer100g: 5, carbsPer100g: 3 },
   { id: 'preset-greek-yogurt', name: 'Greek yogurt', baseAmount: 'per 100 g', caloriesPer100g: 60, proteinPer100g: 10, fatPer100g: 2, carbsPer100g: 3 },
 
@@ -49,7 +49,7 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-buckwheat-porridge-milk', name: 'Buckwheat porridge, milk', baseAmount: 'per 100 g', caloriesPer100g: 118, proteinPer100g: 4.3, fatPer100g: 3.1, carbsPer100g: 19 },
   { id: 'preset-pasta-cooked', name: 'Pasta, cooked', baseAmount: 'per 100 g', caloriesPer100g: 130, proteinPer100g: 5, fatPer100g: 1, carbsPer100g: 25 },
 
-  { id: 'preset-avocado', name: 'Avocado', baseAmount: 'per 100 g', caloriesPer100g: 160, proteinPer100g: 2, fatPer100g: 15, carbsPer100g: 9 },
+  { id: 'preset-avocado', name: 'Avocado', baseAmount: 'per 100 g', servingGrams: 150, caloriesPer100g: 160, proteinPer100g: 2, fatPer100g: 15, carbsPer100g: 9 },
   { id: 'preset-olive-oil', name: 'Olive oil', baseAmount: 'per 100 g', caloriesPer100g: 884, proteinPer100g: 0, fatPer100g: 100, carbsPer100g: 0 },
   { id: 'preset-sunflower-oil', name: 'Sunflower oil', baseAmount: 'per 100 g', caloriesPer100g: 884, proteinPer100g: 0, fatPer100g: 100, carbsPer100g: 0 },
   { id: 'preset-corn-oil', name: 'Corn oil', baseAmount: 'per 100 g', caloriesPer100g: 884, proteinPer100g: 0, fatPer100g: 100, carbsPer100g: 0 },
@@ -63,11 +63,11 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-butter', name: 'Butter', baseAmount: 'per 100 g', caloriesPer100g: 750, proteinPer100g: 1, fatPer100g: 82, carbsPer100g: 1 },
   { id: 'preset-almonds', name: 'Almonds', baseAmount: 'per 100 g', caloriesPer100g: 580, proteinPer100g: 21, fatPer100g: 50, carbsPer100g: 22 },
 
-  { id: 'preset-banana', name: 'Banana', baseAmount: 'per 100 g', caloriesPer100g: 89, proteinPer100g: 1, fatPer100g: 0.3, carbsPer100g: 23 },
-  { id: 'preset-apple', name: 'Apple', baseAmount: 'per 100 g', caloriesPer100g: 52, proteinPer100g: 0.3, fatPer100g: 0.2, carbsPer100g: 14 },
-  { id: 'preset-pear', name: 'Pear', baseAmount: 'per 100 g', caloriesPer100g: 57, proteinPer100g: 0.4, fatPer100g: 0.1, carbsPer100g: 15 },
-  { id: 'preset-orange', name: 'Orange', baseAmount: 'per 100 g', caloriesPer100g: 47, proteinPer100g: 1, fatPer100g: 0.1, carbsPer100g: 12 },
-  { id: 'preset-mandarin', name: 'Mandarin', baseAmount: 'per 100 g', caloriesPer100g: 53, proteinPer100g: 0.8, fatPer100g: 0.2, carbsPer100g: 13 },
+  { id: 'preset-banana', name: 'Banana', baseAmount: 'per 100 g', servingGrams: 120, caloriesPer100g: 89, proteinPer100g: 1, fatPer100g: 0.3, carbsPer100g: 23 },
+  { id: 'preset-apple', name: 'Apple', baseAmount: 'per 100 g', servingGrams: 180, caloriesPer100g: 52, proteinPer100g: 0.3, fatPer100g: 0.2, carbsPer100g: 14 },
+  { id: 'preset-pear', name: 'Pear', baseAmount: 'per 100 g', servingGrams: 170, caloriesPer100g: 57, proteinPer100g: 0.4, fatPer100g: 0.1, carbsPer100g: 15 },
+  { id: 'preset-orange', name: 'Orange', baseAmount: 'per 100 g', servingGrams: 130, caloriesPer100g: 47, proteinPer100g: 1, fatPer100g: 0.1, carbsPer100g: 12 },
+  { id: 'preset-mandarin', name: 'Mandarin', baseAmount: 'per 100 g', servingGrams: 75, caloriesPer100g: 53, proteinPer100g: 0.8, fatPer100g: 0.2, carbsPer100g: 13 },
   { id: 'preset-strawberry', name: 'Strawberry', baseAmount: 'per 100 g', caloriesPer100g: 32, proteinPer100g: 0.7, fatPer100g: 0.3, carbsPer100g: 8 },
   { id: 'preset-blueberry', name: 'Blueberry', baseAmount: 'per 100 g', caloriesPer100g: 57, proteinPer100g: 0.7, fatPer100g: 0.3, carbsPer100g: 14 },
 
@@ -138,7 +138,7 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-pasta-tomato-sauce', name: 'Pasta with tomato sauce', baseAmount: 'per 100 g', caloriesPer100g: 130, proteinPer100g: 4, fatPer100g: 2, carbsPer100g: 25 },
   { id: 'preset-pasta-chicken', name: 'Pasta with chicken', baseAmount: 'per 100 g', caloriesPer100g: 180, proteinPer100g: 10, fatPer100g: 5, carbsPer100g: 25 },
   { id: 'preset-pasta-creamy-sauce', name: 'Pasta with creamy sauce', baseAmount: 'per 100 g', caloriesPer100g: 220, proteinPer100g: 6, fatPer100g: 10, carbsPer100g: 25 },
-  { id: 'preset-omelet-2-eggs', name: 'Omelet, 2 eggs', baseAmount: 'per 100 g', caloriesPer100g: 150, proteinPer100g: 12, fatPer100g: 11, carbsPer100g: 1 },
+  { id: 'preset-omelet-2-eggs', name: 'Omelet, 2 eggs', baseAmount: 'per 100 g', servingGrams: 120, caloriesPer100g: 150, proteinPer100g: 12, fatPer100g: 11, carbsPer100g: 1 },
   { id: 'preset-omelet-with-milk', name: 'Omelet with milk', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 12, fatPer100g: 13, carbsPer100g: 2 },
   { id: 'preset-omelet-with-vegetables', name: 'Omelet with vegetables', baseAmount: 'per 100 g', caloriesPer100g: 120, proteinPer100g: 10, fatPer100g: 8, carbsPer100g: 4 },
   { id: 'preset-syrniki-classic', name: 'Syrniki, classic', baseAmount: 'per 100 g', caloriesPer100g: 220, proteinPer100g: 12, fatPer100g: 10, carbsPer100g: 20 },
@@ -170,8 +170,8 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-meatballs', name: 'Meatballs', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 12, fatPer100g: 10, carbsPer100g: 8, aliases: ['beef meatballs'] },
   { id: 'preset-beef-stew', name: 'Beef stew', baseAmount: 'per 100 g', caloriesPer100g: 180, proteinPer100g: 16, fatPer100g: 12, carbsPer100g: 2, aliases: ['braised beef', 'stewed beef'] },
 
-  { id: 'preset-boiled-egg', name: 'Boiled egg', baseAmount: 'per 100 g', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1, aliases: ['hard boiled egg'] },
-  { id: 'preset-fried-eggs', name: 'Fried eggs', baseAmount: 'per 100 g', caloriesPer100g: 200, proteinPer100g: 13, fatPer100g: 16, carbsPer100g: 1, aliases: ['sunny side up'] },
+  { id: 'preset-boiled-egg', name: 'Boiled egg', baseAmount: 'per 100 g', servingGrams: 50, caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1, aliases: ['hard boiled egg'] },
+  { id: 'preset-fried-eggs', name: 'Fried eggs', baseAmount: 'per 100 g', servingGrams: 60, caloriesPer100g: 200, proteinPer100g: 13, fatPer100g: 16, carbsPer100g: 1, aliases: ['sunny side up'] },
 
   { id: 'preset-cottage-cheese-bake', name: 'Cottage cheese bake', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 16, fatPer100g: 5, carbsPer100g: 15, aliases: ['curd bake', 'zapekanka'] },
 
