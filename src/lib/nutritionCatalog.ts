@@ -41,6 +41,7 @@ type OpenFoodFactsProductResponse = {
 type UsdaFoodNutrient = {
   nutrientName?: string;
   nutrientNumber?: string;
+  unitName?: string;
   value?: number;
 };
 
@@ -176,10 +177,26 @@ function readUsdaNutrient(nutrients: UsdaFoodNutrient[] | undefined, names: stri
   return null;
 }
 
+// Energy must be read in kcal: USDA exposes "Energy" both in kcal (number 1008) and kJ (1062),
+// so prefer the kcal entry and never grab a kJ value.
+function readUsdaEnergyKcal(nutrients: UsdaFoodNutrient[] | undefined) {
+  for (const nutrient of nutrients || []) {
+    if (nutrient.value == null) continue;
+    if (nutrient.nutrientNumber === '1008') return nutrient.value;
+  }
+  for (const nutrient of nutrients || []) {
+    if (nutrient.value == null) continue;
+    if (nutrient.nutrientName === 'Energy' && (nutrient.unitName || '').toLowerCase() === 'kcal') {
+      return nutrient.value;
+    }
+  }
+  return null;
+}
+
 function mapUsdaFood(food: UsdaFood): NutritionFoodPreset | null {
   const name = collapseWhitespace(food.description);
   if (!name) return null;
-  const calories = readUsdaNutrient(food.foodNutrients, ['Energy'], ['1008']);
+  const calories = readUsdaEnergyKcal(food.foodNutrients);
   if (calories === null) return null;
   const protein = readUsdaNutrient(food.foodNutrients, ['Protein'], ['1003']) ?? 0;
   const fat = readUsdaNutrient(food.foodNutrients, ['Total lipid (fat)'], ['1004']) ?? 0;
