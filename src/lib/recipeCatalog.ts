@@ -2,6 +2,12 @@ import { Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
 import { IMPORTED_RECIPE_LIBRARY } from '@/lib/generated/importedRecipeCatalog';
 import { SPOONACULAR_RECIPE_LIBRARY } from '@/lib/generated/spoonacularRecipeCatalog';
 import { THEMEALDB_RECIPE_LIBRARY } from '@/lib/generated/themealdbRecipeCatalog';
+import { VERIFIED_RECIPE_LIBRARY } from '@/lib/generated/verifiedRecipeCatalog';
+
+// Meal types already covered by the hand-authored, nutrition-verified library.
+// Generic/imported recipes of these types are dropped so each category is served
+// exclusively by the verified set (per-category cutover; extend as we author more).
+const VERIFIED_COVERED_MEAL_TYPES = new Set<RecipeMealType>(['breakfast']);
 
 export const RECIPE_SECTION_FILTERS: Array<{ key: RecipeMealType | 'all'; label: string }> = [
   { key: 'all', label: 'All' },
@@ -160,11 +166,16 @@ const CURATED_STARTER_RECIPES: Recipe[] = [
   },
 ];
 
-export const STARTER_RECIPE_LIBRARY: Recipe[] = buildStarterRecipeLibrary([
+const GENERIC_RECIPE_LIBRARY: Recipe[] = [
   ...CURATED_STARTER_RECIPES,
   ...SPOONACULAR_RECIPE_LIBRARY,
   ...THEMEALDB_RECIPE_LIBRARY,
   ...IMPORTED_RECIPE_LIBRARY,
+].filter((recipe) => !VERIFIED_COVERED_MEAL_TYPES.has(recipe.mealType));
+
+export const STARTER_RECIPE_LIBRARY: Recipe[] = buildStarterRecipeLibrary([
+  ...VERIFIED_RECIPE_LIBRARY,
+  ...GENERIC_RECIPE_LIBRARY,
 ]);
 
 function buildStarterRecipeLibrary(source: Recipe[]) {
@@ -195,6 +206,7 @@ function normalizeRecipeTitle(value: string) {
 
 function scoreRecipeQuality(recipe: Recipe) {
   let score = 0;
+  if (recipe.nutritionConfidence === 'verified') score += 1000;
   if (recipe.id.startsWith('starter-')) score += 100;
   if (recipe.photoUri) score += 30;
   score += recipe.ingredients.length * 4;

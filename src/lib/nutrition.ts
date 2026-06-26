@@ -126,6 +126,9 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-apple-juice', name: 'Apple juice', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 250, caloriesPer100g: 46, proteinPer100g: 0.1, fatPer100g: 0.1, carbsPer100g: 11 },
   { id: 'preset-cola', name: 'Cola', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 250, caloriesPer100g: 42, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 10.6 },
   { id: 'preset-diet-cola', name: 'Cola zero sugar', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 250, caloriesPer100g: 0, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0 },
+  { id: 'preset-coca-cola-zero', name: 'Coca-Cola Zero', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 330, caloriesPer100g: 0, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0, aliases: ['coke zero', 'coca cola zero sugar', 'cola zero'] },
+  { id: 'preset-pepsi-diet', name: 'Pepsi Diet', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 330, caloriesPer100g: 0, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0, aliases: ['diet pepsi', 'pepsi max', 'pepsi zero'] },
+  { id: 'preset-sprite-zero', name: 'Sprite Zero', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 330, caloriesPer100g: 1, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0, aliases: ['sprite zero sugar', 'sprite no sugar'] },
   { id: 'preset-energy-drink', name: 'Energy drink', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 250, caloriesPer100g: 45, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 11 },
   { id: 'preset-sugar-free-energy-drink', name: 'Energy drink zero sugar', baseAmount: 'per 100 ml', baseMode: '100ml', servingGrams: 250, caloriesPer100g: 5, proteinPer100g: 0, fatPer100g: 0, carbsPer100g: 0 },
 
