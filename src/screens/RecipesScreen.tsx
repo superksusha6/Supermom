@@ -212,14 +212,54 @@ function getShortRecipeDescription(recipe: Recipe) {
   return `${compact.slice(0, 85).trimEnd()}...`;
 }
 
+// Lightweight vector-free icons drawn with Views (crisp, consistent, no deps).
+function SearchIcon({ color }: { color: string }) {
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 11, height: 11, borderRadius: 6, borderWidth: 1.8, borderColor: color }} />
+      <View style={{ position: 'absolute', right: 0, bottom: 0, width: 6, height: 1.8, borderRadius: 1, backgroundColor: color, transform: [{ rotate: '45deg' }] }} />
+    </View>
+  );
+}
+
+function FilterIcon({ color }: { color: string }) {
+  return (
+    <View style={{ width: 16, height: 14, justifyContent: 'space-between', paddingVertical: 1 }}>
+      {[2, 8, 5].map((knobLeft, i) => (
+        <View key={i} style={{ height: 2, borderRadius: 1, backgroundColor: color }}>
+          <View style={{ position: 'absolute', top: -2, left: knobLeft, width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function GridIcon({ color }: { color: string }) {
+  return (
+    <View style={{ width: 16, height: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between' }}>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}
+
+function ListIcon({ color }: { color: string }) {
+  return (
+    <View style={{ width: 16, height: 14, justifyContent: 'space-between', paddingVertical: 1 }}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ height: 3, borderRadius: 1.5, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}
+
 export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [search, setSearch] = useState('');
-  const [ingredientSearch, setIngredientSearch] = useState('');
-  const [selectedIngredient, setSelectedIngredient] = useState('');
   const [mealFilter, setMealFilter] = useState<RecipeMealType | 'all'>('all');
   const [classifierFilter, setClassifierFilter] = useState<RecipeClassifier | 'all'>('all');
   const [layoutMode, setLayoutMode] = useState<RecipeLayoutMode>('grid');
@@ -246,22 +286,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const ownedRecipeIds = useMemo(() => new Set(recipes.map((recipe) => recipe.id)), [recipes]);
   const catalogRecipes = useMemo(() => [...recipes, ...starterRecipes], [recipes, starterRecipes]);
   const editingRecipe = useMemo(() => (editingRecipeId ? recipes.find((recipe) => recipe.id === editingRecipeId) || null : null), [editingRecipeId, recipes]);
-  const ingredientSuggestions = useMemo(() => {
-    const query = ingredientSearch.trim().toLowerCase();
-    if (!query) return [];
-    const seen = new Set<string>();
-    return catalogRecipes
-      .flatMap((recipe) => recipe.ingredients.map((ingredient) => ingredient.name.trim()))
-      .filter((name) => {
-        const normalized = name.toLowerCase();
-        if (!normalized.includes(query)) return false;
-        if (seen.has(normalized)) return false;
-        seen.add(normalized);
-        return true;
-      })
-      .sort((left, right) => left.localeCompare(right))
-      .slice(0, 8);
-  }, [catalogRecipes, ingredientSearch]);
 
   const draftNutrition = useMemo(() => {
     return draftIngredientRows.reduce(
@@ -437,16 +461,9 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
 
   const filteredRecipes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const selectedIngredientQuery = selectedIngredient.trim().toLowerCase();
     return catalogRecipes.filter((recipe) => {
       if (mealFilter !== 'all' && recipe.mealType !== mealFilter) return false;
       if (classifierFilter !== 'all' && !recipe.classifiers.includes(classifierFilter)) return false;
-      if (
-        selectedIngredientQuery &&
-        !recipe.ingredients.some((item) => item.name.toLowerCase().includes(selectedIngredientQuery))
-      ) {
-        return false;
-      }
       if (!query) return true;
       const haystack = [
         recipe.title,
@@ -460,7 +477,9 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [catalogRecipes, classifierFilter, mealFilter, search, selectedIngredient]);
+  }, [catalogRecipes, classifierFilter, mealFilter, search]);
+
+  const activeFilterCount = (mealFilter !== 'all' ? 1 : 0) + (classifierFilter !== 'all' ? 1 : 0);
 
   const selectedRecipe = selectedRecipeId ? catalogRecipes.find((recipe) => recipe.id === selectedRecipeId) || null : null;
 
@@ -516,78 +535,49 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
             </Pressable>
           }
         >
-          <TextInput
-            placeholder="Search recipes or ingredients"
-            placeholderTextColor={colors.subtext}
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-          />
-
-          <TextInput
-            placeholder="Choose a product to see matching recipes"
-            placeholderTextColor={colors.subtext}
-            style={styles.searchInput}
-            value={ingredientSearch}
-            onChangeText={(value) => {
-              setIngredientSearch(value);
-              if (!value.trim()) setSelectedIngredient('');
-            }}
-          />
-          {ingredientSuggestions.length > 0 ? (
-            <View style={styles.ingredientSuggestionMenu}>
-              {ingredientSuggestions.map((ingredient) => (
-                <Pressable
-                  key={ingredient}
-                  style={styles.ingredientSuggestionItem}
-                  onPress={() => {
-                    setSelectedIngredient(ingredient);
-                    setIngredientSearch(ingredient);
-                  }}
-                >
-                  <Text style={styles.ingredientSuggestionText}>{ingredient}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {selectedIngredient ? (
-            <View style={styles.selectedIngredientRow}>
-              <View style={styles.selectedIngredientBadge}>
-                <Text style={styles.selectedIngredientBadgeText}>{selectedIngredient}</Text>
-              </View>
-              <Pressable
-                style={styles.clearIngredientBtn}
-                onPress={() => {
-                  setSelectedIngredient('');
-                  setIngredientSearch('');
-                }}
-              >
-                <Text style={styles.clearIngredientBtnText}>Clear product</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={styles.filtersToggleRow}>
-            <Pressable style={[styles.filtersToggleBtn, filtersOpen && styles.filtersToggleBtnActive]} onPress={() => setFiltersOpen((value) => !value)}>
-              <Text style={[styles.filtersToggleBtnText, filtersOpen && styles.filtersToggleBtnTextActive]}>
-                {filtersOpen ? 'Hide filters' : 'Show filters'}
-              </Text>
-            </Pressable>
-            {(mealFilter !== 'all' || classifierFilter !== 'all') ? (
-              <Pressable
-                style={styles.clearIngredientBtn}
-                onPress={() => {
-                  setMealFilter('all');
-                  setClassifierFilter('all');
-                }}
-              >
-                <Text style={styles.clearIngredientBtnText}>Clear filters</Text>
+          <View style={styles.searchRow}>
+            <SearchIcon color={colors.subtext} />
+            <TextInput
+              placeholder="Search recipes"
+              placeholderTextColor={colors.subtext}
+              style={styles.searchField}
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search ? (
+              <Pressable hitSlop={8} style={styles.searchClearBtn} onPress={() => setSearch('')}>
+                <Text style={styles.searchClearText}>×</Text>
               </Pressable>
             ) : null}
           </View>
 
+          <View style={styles.toolbar}>
+            <Pressable
+              style={[styles.filterBtn, (filtersOpen || activeFilterCount > 0) && styles.filterBtnActive]}
+              onPress={() => setFiltersOpen((value) => !value)}
+            >
+              <FilterIcon color={filtersOpen || activeFilterCount > 0 ? '#ffffff' : colors.text} />
+              <Text style={[styles.filterBtnText, (filtersOpen || activeFilterCount > 0) && styles.filterBtnTextActive]}>Filters</Text>
+              {activeFilterCount > 0 ? (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            <View style={styles.segment}>
+              <Pressable style={[styles.segmentBtn, layoutMode === 'grid' && styles.segmentBtnActive]} onPress={() => setLayoutMode('grid')}>
+                <GridIcon color={layoutMode === 'grid' ? '#ffffff' : colors.subtext} />
+              </Pressable>
+              <Pressable style={[styles.segmentBtn, layoutMode === 'list' && styles.segmentBtnActive]} onPress={() => setLayoutMode('list')}>
+                <ListIcon color={layoutMode === 'list' ? '#ffffff' : colors.subtext} />
+              </Pressable>
+            </View>
+          </View>
+
           {filtersOpen ? (
-            <>
+            <View style={styles.filterPanel}>
+              <Text style={styles.filterGroupLabel}>Category</Text>
               <View style={styles.filterRow}>
                 {RECIPE_SECTION_FILTERS.map((filter) => {
                   const active = mealFilter === filter.key;
@@ -598,8 +588,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                   );
                 })}
               </View>
-
-              <Text style={styles.classifierLabel}>Recipe type</Text>
+              <Text style={styles.filterGroupLabel}>Recipe type</Text>
               <View style={styles.filterRow}>
                 {RECIPE_CLASSIFIER_FILTERS.map((filter) => {
                   const active = classifierFilter === filter.key;
@@ -610,33 +599,18 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                   );
                 })}
               </View>
-            </>
+              {mealFilter !== 'all' || classifierFilter !== 'all' ? (
+                <Pressable style={styles.clearFiltersBtn} onPress={() => { setMealFilter('all'); setClassifierFilter('all'); }}>
+                  <Text style={styles.clearFiltersText}>Clear all filters</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
 
-          <View style={[styles.catalogToolbar, isMobile && styles.catalogToolbarMobile]}>
-            <Text style={styles.catalogCountText}>{filteredRecipes.length} recipes</Text>
-            <View style={styles.layoutToggle}>
-              <Pressable
-                style={[styles.layoutToggleBtn, layoutMode === 'list' && styles.layoutToggleBtnActive]}
-                onPress={() => setLayoutMode('list')}
-              >
-                <Text style={[styles.layoutToggleBtnText, styles.layoutToggleIcon, layoutMode === 'list' && styles.layoutToggleBtnTextActive]}>≣</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.layoutToggleBtn, layoutMode === 'grid' && styles.layoutToggleBtnActive]}
-                onPress={() => setLayoutMode('grid')}
-              >
-                <Text style={[styles.layoutToggleBtnText, styles.layoutToggleIcon, layoutMode === 'grid' && styles.layoutToggleBtnTextActive]}>□□</Text>
-              </Pressable>
-            </View>
-          </View>
-        </SectionCard>
-
-        <SectionCard title="Catalog">
           {filteredRecipes.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No recipes match this search</Text>
-              <Text style={styles.emptyText}>Try another ingredient, meal type, or clear the filter.</Text>
+              <Text style={styles.emptyText}>Try another search or clear the filters.</Text>
             </View>
           ) : (
             <View style={[styles.recipeList, layoutMode === 'grid' && styles.recipeGrid]}>
@@ -1216,98 +1190,128 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 15,
       marginBottom: 12,
     },
-    catalogCountText: {
-      color: colors.subtext,
-      fontSize: 13,
-      fontWeight: '700',
-    },
-    catalogToolbar: {
+    searchRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      gap: 12,
-    },
-    layoutToggle: {
-      flexDirection: 'row',
-      gap: 4,
-    },
-    layoutToggleBtn: {
-      width: 30,
-      height: 30,
-      borderRadius: 999,
+      gap: 10,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.glassSoft,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      height: 46,
+      marginBottom: 12,
+    },
+    searchField: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: 0,
+    },
+    searchClearBtn: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.glassStrong,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    layoutToggleBtnActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.selection,
-    },
-    layoutToggleBtnText: {
+    searchClearText: {
       color: colors.subtext,
-      fontSize: 10,
+      fontSize: 16,
       fontWeight: '700',
+      lineHeight: 18,
     },
-    layoutToggleIcon: {
-      fontSize: 12,
-      lineHeight: 12,
+    toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
     },
-    layoutToggleBtnTextActive: {
-      color: colors.text,
-    },
-    ingredientSuggestionMenu: {
+    filterBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 999,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      borderRadius: 16,
-      overflow: 'hidden',
-      marginTop: -4,
-      marginBottom: 12,
-    },
-    ingredientSuggestionItem: {
+      backgroundColor: colors.glassSoft,
       paddingHorizontal: 14,
-      paddingVertical: 11,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      paddingVertical: 9,
     },
-    ingredientSuggestionText: {
+    filterBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    filterBtnText: {
       color: colors.text,
       fontSize: 14,
-      fontWeight: '600',
-    },
-    selectedIngredientRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 12,
-    },
-    selectedIngredientBadge: {
-      borderRadius: 999,
-      backgroundColor: colors.selection,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    selectedIngredientBadgeText: {
-      color: colors.text,
-      fontSize: 13,
       fontWeight: '700',
     },
-    clearIngredientBtn: {
-      borderRadius: 12,
-      backgroundColor: colors.glassSoft,
+    filterBtnTextActive: {
+      color: '#ffffff',
+    },
+    filterBadge: {
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 5,
+    },
+    filterBadgeText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '900',
+    },
+    segment: {
+      flexDirection: 'row',
+      borderRadius: 999,
       borderWidth: 1,
       borderColor: colors.border,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      backgroundColor: colors.glassSoft,
+      padding: 3,
+      gap: 2,
     },
-    clearIngredientBtnText: {
+    segmentBtn: {
+      width: 36,
+      height: 32,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segmentBtnActive: {
+      backgroundColor: colors.primary,
+    },
+    filterPanel: {
+      borderTopWidth: 1,
+      borderColor: colors.border,
+      marginTop: 12,
+      paddingTop: 12,
+      marginBottom: 4,
+      gap: 6,
+    },
+    filterGroupLabel: {
       color: colors.subtext,
       fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: 4,
+    },
+    clearFiltersBtn: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    clearFiltersText: {
+      color: colors.subtext,
+      fontSize: 13,
       fontWeight: '700',
     },
     filterRow: {
@@ -1315,39 +1319,6 @@ const createStyles = (colors: ThemeColors) =>
       flexWrap: 'wrap',
       gap: 8,
       marginBottom: 14,
-    },
-    filtersToggleRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 14,
-    },
-    filtersToggleBtn: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: colors.glassSoft,
-    },
-    filtersToggleBtnActive: {
-      backgroundColor: colors.selection,
-      borderColor: colors.primary,
-    },
-    filtersToggleBtnText: {
-      color: colors.subtext,
-      fontSize: 13,
-      fontWeight: '700',
-    },
-    filtersToggleBtnTextActive: {
-      color: colors.text,
-    },
-    classifierLabel: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: '700',
-      marginBottom: 8,
     },
     filterChip: {
       borderWidth: 1,
@@ -1400,10 +1371,6 @@ const createStyles = (colors: ThemeColors) =>
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       rowGap: 12,
-    },
-    catalogToolbarMobile: {
-      flexDirection: 'column',
-      alignItems: 'flex-start',
     },
     recipeCard: {
       borderWidth: 1,
