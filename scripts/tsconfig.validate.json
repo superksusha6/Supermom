@@ -18,6 +18,7 @@
     "generateRecipes.ts",
     "fetchRecipePhotos.ts",
     "generateAiPhotos.ts",
+    "generateImageMap.ts",
     "recipeSource.ts",
     "../src/lib/recipeNutrition.ts",
     "../src/lib/recipeIngredients.ts",

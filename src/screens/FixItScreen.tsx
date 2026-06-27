@@ -42,7 +42,14 @@ function categoryMeta(key: string) {
 }
 
 function newId() {
-  return `fixit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const c = globalThis.crypto as Crypto | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  // RFC4122 v4 fallback — the DB column is uuid, so the id must be a valid UUID.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChange }: Props) {

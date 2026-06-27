@@ -222,7 +222,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [mealFilter, setMealFilter] = useState<RecipeMealType | 'all'>('all');
   const [classifierFilter, setClassifierFilter] = useState<RecipeClassifier | 'all'>('all');
-  const [layoutMode, setLayoutMode] = useState<RecipeLayoutMode>('list');
+  const [layoutMode, setLayoutMode] = useState<RecipeLayoutMode>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
