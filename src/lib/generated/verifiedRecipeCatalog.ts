@@ -67,7 +67,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 16.1,
       "carbs": 2.6
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7780036/pexels-photo-7780036.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Denys Gromov",
+      "url": "https://www.pexels.com/photo/yellow-dish-on-white-ceramic-plate-7780036/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-scrambled-eggs",
@@ -133,7 +139,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 15.6,
       "carbs": 1.8
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7696496/pexels-photo-7696496.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "cottonbro studio",
+      "url": "https://www.pexels.com/photo/cooked-food-in-the-frying-pan-7696496/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-fried-eggs",
@@ -191,7 +203,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 16,
       "carbs": 1
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/722223/pexels-photo-722223.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Kam Photos",
+      "url": "https://www.pexels.com/photo/fried-egg-with-seasonings-722223/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-boiled-eggs",
@@ -244,7 +262,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 11,
       "carbs": 1
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/36227428/pexels-photo-36227428.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Fino Tereno",
+      "url": "https://www.pexels.com/photo/cracked-boiling-egg-in-water-close-up-36227428/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-oatmeal-porridge",
@@ -371,7 +395,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 9.4,
       "carbs": 48.2
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/1321884/pexels-photo-1321884.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Valeria Boltneva",
+      "url": "https://www.pexels.com/photo/creamy-food-in-round-white-ceramic-bowl-1321884/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-rice-porridge",
@@ -504,7 +534,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 11,
       "carbs": 57.1
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5652188/pexels-photo-5652188.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Kai-Chieh Chan",
+      "url": "https://www.pexels.com/photo/rice-gruel-in-a-bowl-5652188/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-semolina-porridge",
@@ -637,7 +673,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 10.9,
       "carbs": 47.3
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7352787/pexels-photo-7352787.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Max Bonda",
+      "url": "https://www.pexels.com/photo/a-person-eating-a-bowl-of-wheat-porridge-7352787/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-buckwheat-porridge",
@@ -770,7 +812,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 10.4,
       "carbs": 41.6
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10810365/pexels-photo-10810365.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Igor Kocka",
+      "url": "https://www.pexels.com/photo/bowl-of-healthy-food-for-breakfast-10810365/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-syrniki",
@@ -889,7 +937,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 14.2,
       "carbs": 26.7
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/257817/pexels-photo-257817.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Pixabay",
+      "url": "https://www.pexels.com/photo/close-up-of-dessert-served-in-plate-257817/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-cottage-cheese-bake",
@@ -1008,7 +1062,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 9.1,
       "carbs": 27.2
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4040692/pexels-photo-4040692.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "www.kaboompics.com",
+      "url": "https://www.pexels.com/photo/delicious-piece-of-cheesecake-on-plate-4040692/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-banana-pancakes",
@@ -1088,7 +1148,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 8.8,
       "carbs": 51.3
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4725658/pexels-photo-4725658.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Polina Tankilevitch",
+      "url": "https://www.pexels.com/photo/pancakes-and-banana-slices-4725658/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-french-toast",
@@ -1207,7 +1273,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 12.8,
       "carbs": 34.5
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/12091684/pexels-photo-12091684.png?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Vitaly Gorbachev",
+      "url": "https://www.pexels.com/photo/cake-with-fruits-12091684/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-homemade-granola",
@@ -1287,7 +1359,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 12,
       "carbs": 37
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/3905826/pexels-photo-3905826.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Markus Spiske",
+      "url": "https://www.pexels.com/photo/food-in-jars-3905826/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-yogurt-berries-granola",
@@ -1378,7 +1456,13 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 10.5,
       "carbs": 46.1
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/566564/pexels-photo-566564.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Foodie Factor",
+      "url": "https://www.pexels.com/photo/acai-bowl-with-mixed-berries-566564/",
+      "source": "Pexels"
+    }
   },
   {
     "id": "rcp-avocado-toast",
@@ -1460,6 +1544,6323 @@ export const VERIFIED_RECIPE_LIBRARY: Recipe[] = [
       "fat": 22.7,
       "carbs": 43.8
     },
-    "nutritionConfidence": "verified"
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7936964/pexels-photo-7936964.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Nicola Barts",
+      "url": "https://www.pexels.com/photo/bread-with-avocado-7936964/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-greek-salad",
+    "title": "Greek salad",
+    "description": "Cucumber, tomato, pepper, feta and olives.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "Greek",
+    "cookTimeMinutes": 12,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "vegetables",
+      "feta"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegetarian",
+      "quick",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i75",
+        "name": "cucumber",
+        "amount": "150 g cucumber",
+        "grams": 150,
+        "foodRef": "preset-cucumber"
+      },
+      {
+        "id": "i76",
+        "name": "tomato",
+        "amount": "180 g tomato",
+        "grams": 180,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i77",
+        "name": "bell pepper",
+        "amount": "80 g bell pepper",
+        "grams": 80,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i78",
+        "name": "red onion",
+        "amount": "30 g red onion",
+        "grams": 30,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i79",
+        "name": "feta",
+        "amount": "80 g feta",
+        "grams": 80,
+        "foodRef": "ing-feta"
+      },
+      {
+        "id": "i80",
+        "name": "olives",
+        "amount": "50 g olives",
+        "grams": 50,
+        "foodRef": "ing-olives"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i81",
+              "name": "olive oil",
+              "amount": "15 g olive oil",
+              "grams": 15,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Chop the vegetables into chunks."
+      },
+      {
+        "id": "s2",
+        "text": "Add olives and crumbled feta."
+      },
+      {
+        "id": "s3",
+        "text": "Dress with olive oil and oregano and toss."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 247,
+      "protein": 7.9,
+      "fat": 19,
+      "carbs": 12.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/3026013/pexels-photo-3026013.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "TUBARONES PHOTOGRAPHY",
+      "url": "https://www.pexels.com/photo/veggie-dish-on-white-ceramic-bowl-3026013/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-caesar-chicken",
+    "title": "Caesar salad with chicken",
+    "description": "Romaine, grilled chicken, parmesan and croutons.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "chicken",
+      "caesar"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i82",
+        "name": "romaine lettuce",
+        "amount": "150 g romaine",
+        "grams": 150,
+        "foodRef": "ing-romaine"
+      },
+      {
+        "id": "i83",
+        "name": "grilled chicken",
+        "amount": "200 g grilled chicken",
+        "grams": 200,
+        "foodRef": "preset-chicken-breast-grilled"
+      },
+      {
+        "id": "i84",
+        "name": "parmesan",
+        "amount": "20 g parmesan",
+        "grams": 20,
+        "foodRef": "ing-parmesan"
+      },
+      {
+        "id": "i85",
+        "name": "croutons",
+        "amount": "40 g croutons",
+        "grams": 40,
+        "foodRef": "ing-croutons"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "caesar",
+        "options": [
+          {
+            "id": "caesar",
+            "label": "Caesar dressing",
+            "ingredient": {
+              "id": "i86",
+              "name": "caesar dressing",
+              "amount": "40 g Caesar dressing",
+              "grams": 40,
+              "foodRef": "ing-parmesan-dressing"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Slice the grilled chicken."
+      },
+      {
+        "id": "s2",
+        "text": "Toss romaine with dressing."
+      },
+      {
+        "id": "s3",
+        "text": "Top with chicken, parmesan and croutons."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 407,
+      "protein": 38.4,
+      "fat": 19.1,
+      "carbs": 18.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/29935339/pexels-photo-29935339.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "khezez  | خزاز",
+      "url": "https://www.pexels.com/photo/delicious-caesar-salad-with-grilled-chicken-29935339/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-caesar-shrimp",
+    "title": "Caesar salad with shrimp",
+    "description": "Romaine, grilled shrimp, parmesan and croutons.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "shrimp",
+      "caesar"
+    ],
+    "classifiers": [
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i87",
+        "name": "romaine lettuce",
+        "amount": "150 g romaine",
+        "grams": 150,
+        "foodRef": "ing-romaine"
+      },
+      {
+        "id": "i88",
+        "name": "grilled shrimp",
+        "amount": "200 g grilled shrimp",
+        "grams": 200,
+        "foodRef": "preset-shrimp-grilled"
+      },
+      {
+        "id": "i89",
+        "name": "parmesan",
+        "amount": "20 g parmesan",
+        "grams": 20,
+        "foodRef": "ing-parmesan"
+      },
+      {
+        "id": "i90",
+        "name": "croutons",
+        "amount": "40 g croutons",
+        "grams": 40,
+        "foodRef": "ing-croutons"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "caesar",
+        "options": [
+          {
+            "id": "caesar",
+            "label": "Caesar dressing",
+            "ingredient": {
+              "id": "i91",
+              "name": "caesar dressing",
+              "amount": "40 g Caesar dressing",
+              "grams": 40,
+              "foodRef": "ing-parmesan-dressing"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Grill the shrimp briefly."
+      },
+      {
+        "id": "s2",
+        "text": "Toss romaine with dressing."
+      },
+      {
+        "id": "s3",
+        "text": "Top with shrimp, parmesan and croutons."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 342,
+      "protein": 31.4,
+      "fat": 16.5,
+      "carbs": 18.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4669306/pexels-photo-4669306.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Denys Gromov",
+      "url": "https://www.pexels.com/photo/salad-with-shrimps-4669306/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-caprese",
+    "title": "Caprese salad",
+    "description": "Tomato, mozzarella and basil with olive oil.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 8,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "mozzarella",
+      "tomato"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "quick",
+      "gluten_free",
+      "healthy"
+    ],
+    "ingredients": [
+      {
+        "id": "i92",
+        "name": "tomato",
+        "amount": "250 g tomato",
+        "grams": 250,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i93",
+        "name": "mozzarella",
+        "amount": "150 g mozzarella",
+        "grams": 150,
+        "foodRef": "ing-mozzarella"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i94",
+              "name": "olive oil",
+              "amount": "15 g olive oil",
+              "grams": 15,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Slice tomato and mozzarella."
+      },
+      {
+        "id": "s2",
+        "text": "Layer with fresh basil."
+      },
+      {
+        "id": "s3",
+        "text": "Drizzle with olive oil and season."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 301,
+      "protein": 17.9,
+      "fat": 23,
+      "carbs": 6.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5639959/pexels-photo-5639959.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Shameel mukkath",
+      "url": "https://www.pexels.com/photo/sliced-tomatoes-and-mozzarella-cheese-on-wooden-board-5639959/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-tuna-salad",
+    "title": "Tuna salad",
+    "description": "Tuna with greens, corn and fresh vegetables.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "tuna"
+    ],
+    "classifiers": [
+      "high_protein",
+      "quick",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i95",
+        "name": "canned tuna",
+        "amount": "160 g canned tuna",
+        "grams": 160,
+        "foodRef": "preset-tuna-canned"
+      },
+      {
+        "id": "i96",
+        "name": "salad greens",
+        "amount": "100 g salad greens",
+        "grams": 100,
+        "foodRef": "ing-salad-greens"
+      },
+      {
+        "id": "i97",
+        "name": "cucumber",
+        "amount": "100 g cucumber",
+        "grams": 100,
+        "foodRef": "preset-cucumber"
+      },
+      {
+        "id": "i98",
+        "name": "tomato",
+        "amount": "100 g tomato",
+        "grams": 100,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i99",
+        "name": "sweetcorn",
+        "amount": "80 g sweetcorn",
+        "grams": 80,
+        "foodRef": "ing-sweetcorn"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i100",
+              "name": "olive oil",
+              "amount": "10 g olive oil",
+              "grams": 10,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Drain the tuna."
+      },
+      {
+        "id": "s2",
+        "text": "Toss greens, cucumber, tomato and corn."
+      },
+      {
+        "id": "s3",
+        "text": "Top with tuna and dress."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 210,
+      "protein": 26.3,
+      "fat": 6.4,
+      "carbs": 12.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/19572488/pexels-photo-19572488.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Tuğba ÖZTÜRK",
+      "url": "https://www.pexels.com/photo/bowl-of-salad-19572488/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-avocado-salad",
+    "title": "Chicken & avocado salad",
+    "description": "Grilled chicken, avocado and fresh greens.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 18,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "chicken",
+      "avocado"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i101",
+        "name": "grilled chicken",
+        "amount": "200 g grilled chicken",
+        "grams": 200,
+        "foodRef": "preset-chicken-breast-grilled"
+      },
+      {
+        "id": "i102",
+        "name": "avocado",
+        "amount": "150 g avocado",
+        "grams": 150,
+        "foodRef": "preset-avocado"
+      },
+      {
+        "id": "i103",
+        "name": "salad greens",
+        "amount": "100 g salad greens",
+        "grams": 100,
+        "foodRef": "ing-salad-greens"
+      },
+      {
+        "id": "i104",
+        "name": "tomato",
+        "amount": "100 g tomato",
+        "grams": 100,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i105",
+        "name": "cucumber",
+        "amount": "80 g cucumber",
+        "grams": 80,
+        "foodRef": "preset-cucumber"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i106",
+              "name": "olive oil",
+              "amount": "10 g olive oil",
+              "grams": 10,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Slice the grilled chicken and avocado."
+      },
+      {
+        "id": "s2",
+        "text": "Toss greens, tomato and cucumber."
+      },
+      {
+        "id": "s3",
+        "text": "Top with chicken and avocado, then dress."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 357,
+      "protein": 34.4,
+      "fat": 20.2,
+      "carbs": 11.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/30700803/pexels-photo-30700803.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Change C.C",
+      "url": "https://www.pexels.com/photo/delicious-cobb-salad-with-fresh-ingredients-30700803/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-green-salad",
+    "title": "Green salad",
+    "description": "Simple leafy green salad.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 8,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "greens"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "quick",
+      "gluten_free",
+      "low_sugar"
+    ],
+    "ingredients": [
+      {
+        "id": "i107",
+        "name": "salad greens",
+        "amount": "150 g salad greens",
+        "grams": 150,
+        "foodRef": "ing-salad-greens"
+      },
+      {
+        "id": "i108",
+        "name": "cucumber",
+        "amount": "100 g cucumber",
+        "grams": 100,
+        "foodRef": "preset-cucumber"
+      },
+      {
+        "id": "i109",
+        "name": "bell pepper",
+        "amount": "80 g bell pepper",
+        "grams": 80,
+        "foodRef": "preset-bell-pepper"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i110",
+              "name": "olive oil",
+              "amount": "10 g olive oil",
+              "grams": 10,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Wash and tear the greens."
+      },
+      {
+        "id": "s2",
+        "text": "Add sliced cucumber and pepper."
+      },
+      {
+        "id": "s3",
+        "text": "Dress with olive oil and lemon."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 80,
+      "protein": 2.4,
+      "fat": 5.5,
+      "carbs": 6.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4958946/pexels-photo-4958946.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "ROMAN ODINTSOV",
+      "url": "https://www.pexels.com/photo/vegetable-salad-on-black-and-white-ceramic-plate-4958946/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-vegetable-salad",
+    "title": "Vegetable salad",
+    "description": "Chopped tomato, cucumber and pepper.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "vegetables"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "quick",
+      "gluten_free",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i111",
+        "name": "tomato",
+        "amount": "150 g tomato",
+        "grams": 150,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i112",
+        "name": "cucumber",
+        "amount": "150 g cucumber",
+        "grams": 150,
+        "foodRef": "preset-cucumber"
+      },
+      {
+        "id": "i113",
+        "name": "bell pepper",
+        "amount": "100 g bell pepper",
+        "grams": 100,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i114",
+        "name": "red onion",
+        "amount": "30 g red onion",
+        "grams": 30,
+        "foodRef": "preset-onion"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i115",
+              "name": "olive oil",
+              "amount": "15 g olive oil",
+              "grams": 15,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Chop all the vegetables."
+      },
+      {
+        "id": "s2",
+        "text": "Combine in a bowl."
+      },
+      {
+        "id": "s3",
+        "text": "Dress with olive oil and season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 112,
+      "protein": 1.9,
+      "fat": 7.8,
+      "carbs": 9.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/20532525/pexels-photo-20532525.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Audy of  Course",
+      "url": "https://www.pexels.com/photo/salad-with-eggs-in-bowl-20532525/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-beetroot-goat-cheese",
+    "title": "Beetroot & goat cheese salad",
+    "description": "Roasted beetroot, goat cheese and walnuts.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 15,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "beetroot",
+      "goat cheese"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "healthy",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i116",
+        "name": "beetroot",
+        "amount": "200 g cooked beetroot",
+        "grams": 200,
+        "foodRef": "ing-beetroot-cooked"
+      },
+      {
+        "id": "i117",
+        "name": "goat cheese",
+        "amount": "60 g goat cheese",
+        "grams": 60,
+        "foodRef": "ing-goat-cheese"
+      },
+      {
+        "id": "i118",
+        "name": "salad greens",
+        "amount": "60 g salad greens",
+        "grams": 60,
+        "foodRef": "ing-salad-greens"
+      },
+      {
+        "id": "i119",
+        "name": "walnuts",
+        "amount": "30 g walnuts",
+        "grams": 30,
+        "foodRef": "ing-walnuts"
+      },
+      {
+        "id": "i120",
+        "name": "balsamic",
+        "amount": "10 g balsamic",
+        "grams": 10,
+        "foodRef": "ing-balsamic"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i121",
+              "name": "olive oil",
+              "amount": "10 g olive oil",
+              "grams": 10,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Slice the cooked beetroot."
+      },
+      {
+        "id": "s2",
+        "text": "Arrange on greens with crumbled goat cheese and walnuts."
+      },
+      {
+        "id": "s3",
+        "text": "Drizzle with balsamic and olive oil."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 307,
+      "protein": 11.1,
+      "fat": 24.1,
+      "carbs": 14.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10165790/pexels-photo-10165790.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Vladimír  Sládek",
+      "url": "https://www.pexels.com/photo/close-up-shot-of-vegetable-salad-on-white-ceramic-plate-10165790/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-quinoa-salad",
+    "title": "Quinoa & vegetable salad",
+    "description": "Quinoa with chickpeas and fresh vegetables.",
+    "mealType": "salads",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 2,
+    "tags": [
+      "salad",
+      "quinoa",
+      "chickpeas"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i122",
+        "name": "cooked quinoa",
+        "amount": "200 g cooked quinoa",
+        "grams": 200,
+        "foodRef": "preset-boiled-quinoa-side"
+      },
+      {
+        "id": "i123",
+        "name": "chickpeas",
+        "amount": "80 g chickpeas",
+        "grams": 80,
+        "foodRef": "ing-chickpeas-canned"
+      },
+      {
+        "id": "i124",
+        "name": "cucumber",
+        "amount": "100 g cucumber",
+        "grams": 100,
+        "foodRef": "preset-cucumber"
+      },
+      {
+        "id": "i125",
+        "name": "tomato",
+        "amount": "100 g tomato",
+        "grams": 100,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i126",
+        "name": "bell pepper",
+        "amount": "80 g bell pepper",
+        "grams": 80,
+        "foodRef": "preset-bell-pepper"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i127",
+              "name": "olive oil",
+              "amount": "12 g olive oil",
+              "grams": 12,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cook and cool the quinoa."
+      },
+      {
+        "id": "s2",
+        "text": "Mix with chickpeas and chopped vegetables."
+      },
+      {
+        "id": "s3",
+        "text": "Dress with olive oil and lemon."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 257,
+      "protein": 8.5,
+      "fat": 9.2,
+      "carbs": 35.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/3872365/pexels-photo-3872365.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Polina Tankilevitch",
+      "url": "https://www.pexels.com/photo/close-up-photo-of-vegetables-3872365/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-noodle-soup",
+    "title": "Chicken noodle soup",
+    "description": "Light chicken broth with vegetables and noodles.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 35,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "chicken",
+      "noodles"
+    ],
+    "classifiers": [
+      "family",
+      "kids",
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i128",
+        "name": "chicken breast",
+        "amount": "300 g chicken breast",
+        "grams": 300,
+        "foodRef": "preset-chicken-breast-raw"
+      },
+      {
+        "id": "i129",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i130",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i131",
+        "name": "noodles",
+        "amount": "80 g noodles",
+        "grams": 80,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i132",
+        "name": "water",
+        "amount": "1.5 L water",
+        "grams": 1500,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Simmer the chicken until tender, then shred."
+      },
+      {
+        "id": "s2",
+        "text": "Add chopped vegetables and cook until soft."
+      },
+      {
+        "id": "s3",
+        "text": "Add noodles and cook until done; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 212,
+      "protein": 26.1,
+      "fat": 3.1,
+      "carbs": 18.4
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10172749/pexels-photo-10172749.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Jana Ohajdova",
+      "url": "https://www.pexels.com/photo/a-close-up-shot-of-noodles-in-a-bowl-10172749/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-meatball-soup",
+    "title": "Meatball soup",
+    "description": "Broth with small beef meatballs and potato.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 40,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "beef",
+      "meatballs"
+    ],
+    "classifiers": [
+      "family",
+      "kids",
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i133",
+        "name": "ground beef",
+        "amount": "250 g ground beef",
+        "grams": 250,
+        "foodRef": "preset-ground-beef"
+      },
+      {
+        "id": "i134",
+        "name": "potato",
+        "amount": "250 g potato",
+        "grams": 250,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i135",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i136",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i137",
+        "name": "water",
+        "amount": "1.5 L water",
+        "grams": 1500,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Roll the beef into small meatballs."
+      },
+      {
+        "id": "s2",
+        "text": "Simmer with diced potato, carrot and onion."
+      },
+      {
+        "id": "s3",
+        "text": "Cook until the meatballs and vegetables are done; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 235,
+      "protein": 18,
+      "fat": 12.6,
+      "carbs": 15
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/38017797/pexels-photo-38017797.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Muhammad  Khawar Nazir",
+      "url": "https://www.pexels.com/photo/delicious-homemade-meatball-soup-in-white-bowl-38017797/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-vegetable-soup",
+    "title": "Vegetable soup",
+    "description": "Light mixed-vegetable soup.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "vegetables"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "family",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i138",
+        "name": "potato",
+        "amount": "250 g potato",
+        "grams": 250,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i139",
+        "name": "carrot",
+        "amount": "120 g carrot",
+        "grams": 120,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i140",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i141",
+        "name": "zucchini",
+        "amount": "150 g zucchini",
+        "grams": 150,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i142",
+        "name": "bell pepper",
+        "amount": "100 g bell pepper",
+        "grams": 100,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i143",
+        "name": "olive oil",
+        "amount": "10 g olive oil",
+        "grams": 10,
+        "foodRef": "preset-olive-oil"
+      },
+      {
+        "id": "i144",
+        "name": "water",
+        "amount": "1.5 L water",
+        "grams": 1500,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften the onion in oil."
+      },
+      {
+        "id": "s2",
+        "text": "Add the chopped vegetables and water."
+      },
+      {
+        "id": "s3",
+        "text": "Simmer until tender and season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 104,
+      "protein": 2.4,
+      "fat": 2.8,
+      "carbs": 18.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6646157/pexels-photo-6646157.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "RDNE Stock project",
+      "url": "https://www.pexels.com/photo/cooked-food-in-the-bowl-6646157/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-tomato-soup",
+    "title": "Tomato soup",
+    "description": "Smooth tomato soup with a hint of olive oil.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "tomato"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "healthy",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i145",
+        "name": "canned tomatoes",
+        "amount": "400 g canned tomatoes",
+        "grams": 400,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i146",
+        "name": "tomato passata",
+        "amount": "200 g passata",
+        "grams": 200,
+        "foodRef": "ing-tomato-passata"
+      },
+      {
+        "id": "i147",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i148",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      },
+      {
+        "id": "i149",
+        "name": "water",
+        "amount": "800 ml water",
+        "grams": 800,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften the onion in olive oil."
+      },
+      {
+        "id": "s2",
+        "text": "Add tomatoes, passata and water."
+      },
+      {
+        "id": "s3",
+        "text": "Simmer and blend until smooth; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 91,
+      "protein": 2.6,
+      "fat": 4.2,
+      "carbs": 12.4
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/36430086/pexels-photo-36430086.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Willians Huerta",
+      "url": "https://www.pexels.com/photo/chef-garnishing-tomato-soup-with-fresh-ingredients-36430086/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pumpkin-cream-soup",
+    "title": "Pumpkin cream soup",
+    "description": "Velvety pumpkin soup, cream optional.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "pumpkin",
+      "cream"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "healthy",
+      "family",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i150",
+        "name": "pumpkin",
+        "amount": "600 g pumpkin",
+        "grams": 600,
+        "foodRef": "ing-pumpkin"
+      },
+      {
+        "id": "i151",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i152",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i153",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i154",
+        "name": "water",
+        "amount": "800 ml water",
+        "grams": 800,
+        "foodRef": "preset-water"
+      }
+    ],
+    "choices": [
+      {
+        "id": "cream",
+        "label": "Cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With cream",
+            "ingredient": {
+              "id": "i155",
+              "name": "cream",
+              "amount": "100 g cream",
+              "grams": 100,
+              "foodRef": "ing-heavy-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without cream"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften the onion and carrot in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Add pumpkin and water; simmer until soft."
+      },
+      {
+        "id": "s3",
+        "text": "Blend smooth, stir in cream if using; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 170,
+      "protein": 2.7,
+      "fat": 12.3,
+      "carbs": 14.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/9124024/pexels-photo-9124024.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Loren Castillo",
+      "url": "https://www.pexels.com/photo/a-bowl-of-soup-and-spoon-surrounded-by-pumpkins-and-leaves-9124024/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-broccoli-cream-soup",
+    "title": "Broccoli cream soup",
+    "description": "Creamy broccoli soup, cream optional.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "broccoli",
+      "cream"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "healthy",
+      "family",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i156",
+        "name": "broccoli",
+        "amount": "500 g broccoli",
+        "grams": 500,
+        "foodRef": "preset-broccoli"
+      },
+      {
+        "id": "i157",
+        "name": "potato",
+        "amount": "150 g potato",
+        "grams": 150,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i158",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i159",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i160",
+        "name": "water",
+        "amount": "800 ml water",
+        "grams": 800,
+        "foodRef": "preset-water"
+      }
+    ],
+    "choices": [
+      {
+        "id": "cream",
+        "label": "Cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With cream",
+            "ingredient": {
+              "id": "i161",
+              "name": "cream",
+              "amount": "100 g cream",
+              "grams": 100,
+              "foodRef": "ing-heavy-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without cream"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften the onion in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Add broccoli, potato and water; simmer until soft."
+      },
+      {
+        "id": "s3",
+        "text": "Blend smooth, stir in cream if using; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 193,
+      "protein": 5.5,
+      "fat": 12.6,
+      "carbs": 17.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5639476/pexels-photo-5639476.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Shameel mukkath",
+      "url": "https://www.pexels.com/photo/close-up-shot-of-a-bowl-of-soup-5639476/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-mushroom-cream-soup",
+    "title": "Mushroom cream soup",
+    "description": "Earthy mushroom soup, cream optional.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "mushroom",
+      "cream"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i162",
+        "name": "mushrooms",
+        "amount": "400 g mushrooms",
+        "grams": 400,
+        "foodRef": "ing-mushrooms"
+      },
+      {
+        "id": "i163",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i164",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i165",
+        "name": "flour",
+        "amount": "20 g flour",
+        "grams": 20,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i166",
+        "name": "water",
+        "amount": "800 ml water",
+        "grams": 800,
+        "foodRef": "preset-water"
+      }
+    ],
+    "choices": [
+      {
+        "id": "cream",
+        "label": "Cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With cream",
+            "ingredient": {
+              "id": "i167",
+              "name": "cream",
+              "amount": "100 g cream",
+              "grams": 100,
+              "foodRef": "ing-heavy-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without cream"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Sauté the mushrooms and onion in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Stir in flour, then add water and simmer."
+      },
+      {
+        "id": "s3",
+        "text": "Blend smooth, stir in cream if using; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 161,
+      "protein": 4.6,
+      "fat": 12.4,
+      "carbs": 9.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5175536/pexels-photo-5175536.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Shameel mukkath",
+      "url": "https://www.pexels.com/photo/white-and-black-ceramic-bowl-beside-a-bread-5175536/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-lentil-soup",
+    "title": "Lentil soup",
+    "description": "Hearty lentil soup with vegetables.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 40,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "lentils"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "high_protein",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i168",
+        "name": "lentils",
+        "amount": "200 g dry lentils",
+        "grams": 200,
+        "foodRef": "ing-lentils-dry"
+      },
+      {
+        "id": "i169",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i170",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i171",
+        "name": "canned tomatoes",
+        "amount": "200 g canned tomatoes",
+        "grams": 200,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i172",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      },
+      {
+        "id": "i173",
+        "name": "water",
+        "amount": "1.5 L water",
+        "grams": 1500,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften onion and carrot in oil."
+      },
+      {
+        "id": "s2",
+        "text": "Add lentils, tomatoes and water."
+      },
+      {
+        "id": "s3",
+        "text": "Simmer until the lentils are soft; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 243,
+      "protein": 13.6,
+      "fat": 4.5,
+      "carbs": 39.4
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/29850843/pexels-photo-29850843.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Snappr",
+      "url": "https://www.pexels.com/photo/warm-and-hearty-lentil-soup-in-terra-cotta-bowl-29850843/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-minestrone",
+    "title": "Minestrone",
+    "description": "Italian vegetable soup with beans and pasta.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 40,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "vegetables",
+      "beans"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegetarian",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i174",
+        "name": "white beans",
+        "amount": "200 g white beans",
+        "grams": 200,
+        "foodRef": "ing-white-beans-canned"
+      },
+      {
+        "id": "i175",
+        "name": "pasta",
+        "amount": "60 g pasta",
+        "grams": 60,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i176",
+        "name": "canned tomatoes",
+        "amount": "300 g canned tomatoes",
+        "grams": 300,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i177",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i178",
+        "name": "celery",
+        "amount": "80 g celery",
+        "grams": 80,
+        "foodRef": "ing-celery"
+      },
+      {
+        "id": "i179",
+        "name": "zucchini",
+        "amount": "120 g zucchini",
+        "grams": 120,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i180",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i181",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      },
+      {
+        "id": "i182",
+        "name": "water",
+        "amount": "1.2 L water",
+        "grams": 1200,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften onion, carrot and celery in oil."
+      },
+      {
+        "id": "s2",
+        "text": "Add tomatoes, beans, zucchini and water; simmer."
+      },
+      {
+        "id": "s3",
+        "text": "Add pasta and cook until done; season."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 193,
+      "protein": 7.7,
+      "fat": 4.6,
+      "carbs": 32
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/27098516/pexels-photo-27098516.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Valeria Boltneva",
+      "url": "https://www.pexels.com/photo/bowl-of-tomato-soup-27098516/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-cheese-soup",
+    "title": "Cheese soup",
+    "description": "Creamy potato soup with melted cheese.",
+    "mealType": "soups",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "soup",
+      "cheese",
+      "potato"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i183",
+        "name": "cheddar",
+        "amount": "150 g cheddar",
+        "grams": 150,
+        "foodRef": "ing-cheddar"
+      },
+      {
+        "id": "i184",
+        "name": "potato",
+        "amount": "250 g potato",
+        "grams": 250,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i185",
+        "name": "carrot",
+        "amount": "80 g carrot",
+        "grams": 80,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i186",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i187",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i188",
+        "name": "water",
+        "amount": "1 L water",
+        "grams": 1000,
+        "foodRef": "preset-water"
+      }
+    ],
+    "choices": [
+      {
+        "id": "cream",
+        "label": "Cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With cream",
+            "ingredient": {
+              "id": "i189",
+              "name": "cream",
+              "amount": "80 g cream",
+              "grams": 80,
+              "foodRef": "ing-heavy-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without cream"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften onion and carrot in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Add potato and water; simmer until soft and blend."
+      },
+      {
+        "id": "s3",
+        "text": "Stir in grated cheese (and cream if using) until melted."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 312,
+      "protein": 11.6,
+      "fat": 22.8,
+      "carbs": 15.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/12664802/pexels-photo-12664802.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Gonzalo Acuña",
+      "url": "https://www.pexels.com/photo/brown-bread-with-yellow-cream-12664802/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-grilled-chicken-breast",
+    "title": "Grilled chicken breast",
+    "description": "Simple juicy grilled chicken breast.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 18,
+    "servings": 2,
+    "tags": [
+      "chicken",
+      "grill"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free",
+      "quick"
+    ],
+    "ingredients": [
+      {
+        "id": "i190",
+        "name": "chicken breast",
+        "amount": "300 g chicken breast",
+        "grams": 300,
+        "foodRef": "preset-chicken-breast-grilled"
+      },
+      {
+        "id": "i191",
+        "name": "olive oil",
+        "amount": "10 g olive oil",
+        "grams": 10,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Season the chicken."
+      },
+      {
+        "id": "s2",
+        "text": "Brush with oil and grill 6–7 min per side."
+      },
+      {
+        "id": "s3",
+        "text": "Rest and serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 292,
+      "protein": 46.5,
+      "fat": 10.4,
+      "carbs": 0
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/8250430/pexels-photo-8250430.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Julia Filirovska",
+      "url": "https://www.pexels.com/photo/a-pan-with-chicken-breast-8250430/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-cream-sauce",
+    "title": "Chicken in cream sauce",
+    "description": "Tender chicken in a light creamy sauce.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "chicken",
+      "cream"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i192",
+        "name": "chicken breast",
+        "amount": "500 g chicken breast",
+        "grams": 500,
+        "foodRef": "preset-chicken-breast-raw"
+      },
+      {
+        "id": "i193",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i194",
+        "name": "flour",
+        "amount": "15 g flour",
+        "grams": 15,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i195",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "choices": [
+      {
+        "id": "cream",
+        "label": "Cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With cream",
+            "ingredient": {
+              "id": "i196",
+              "name": "cream",
+              "amount": "200 g cream",
+              "grams": 200,
+              "foodRef": "ing-heavy-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without cream"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Brown the chicken pieces in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Add onion and flour, then liquid."
+      },
+      {
+        "id": "s3",
+        "text": "Stir in cream if using and simmer until thick."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 426,
+      "protein": 40.8,
+      "fat": 25.6,
+      "carbs": 6.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/9760214/pexels-photo-9760214.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Biel  Heinrich",
+      "url": "https://www.pexels.com/photo/close-up-photo-of-chicken-pasta-with-broccoli-in-a-white-bowl-9760214/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-cutlets",
+    "title": "Chicken cutlets",
+    "description": "Pan-fried ground chicken cutlets.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "chicken",
+      "cutlets"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i197",
+        "name": "ground chicken",
+        "amount": "500 g ground chicken",
+        "grams": 500,
+        "foodRef": "ing-ground-chicken"
+      },
+      {
+        "id": "i198",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i199",
+        "name": "breadcrumbs",
+        "amount": "50 g breadcrumbs",
+        "grams": 50,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i200",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i201",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix mince with egg, grated onion and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Shape into patties."
+      },
+      {
+        "id": "s3",
+        "text": "Fry in oil until golden and cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 298,
+      "protein": 25.2,
+      "fat": 17.2,
+      "carbs": 10.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7783364/pexels-photo-7783364.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Daniel Fernandez",
+      "url": "https://www.pexels.com/photo/a-mouthwatering-food-with-lettuce-on-ceramic-plate-7783364/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-meatballs",
+    "title": "Chicken meatballs",
+    "description": "Soft chicken meatballs.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "chicken",
+      "meatballs"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i202",
+        "name": "ground chicken",
+        "amount": "500 g ground chicken",
+        "grams": 500,
+        "foodRef": "ing-ground-chicken"
+      },
+      {
+        "id": "i203",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i204",
+        "name": "breadcrumbs",
+        "amount": "40 g breadcrumbs",
+        "grams": 40,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i205",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i206",
+        "name": "sunflower oil",
+        "amount": "15 g oil",
+        "grams": 15,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix mince with egg, onion and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Roll into balls."
+      },
+      {
+        "id": "s3",
+        "text": "Fry or simmer until cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 277,
+      "protein": 24.9,
+      "fat": 15.8,
+      "carbs": 8.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5419345/pexels-photo-5419345.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Polina Tankilevitch",
+      "url": "https://www.pexels.com/photo/meatballs-and-roasted-vegetables-on-a-plate-5419345/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-roast-chicken-vegetables",
+    "title": "Roast chicken with vegetables",
+    "description": "Oven-roasted chicken thighs with potato and carrot.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 50,
+    "servings": 4,
+    "tags": [
+      "chicken",
+      "roast",
+      "vegetables"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i207",
+        "name": "chicken thighs",
+        "amount": "600 g chicken thighs",
+        "grams": 600,
+        "foodRef": "preset-chicken-thigh-skinless-grilled"
+      },
+      {
+        "id": "i208",
+        "name": "potato",
+        "amount": "400 g potato",
+        "grams": 400,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i209",
+        "name": "carrot",
+        "amount": "150 g carrot",
+        "grams": 150,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i210",
+        "name": "onion",
+        "amount": "100 g onion",
+        "grams": 100,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i211",
+        "name": "olive oil",
+        "amount": "20 g olive oil",
+        "grams": 20,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Toss chicken and vegetables with oil and seasoning."
+      },
+      {
+        "id": "s2",
+        "text": "Spread on a tray."
+      },
+      {
+        "id": "s3",
+        "text": "Roast at 200°C until golden and cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 417,
+      "protein": 41.7,
+      "fat": 17.2,
+      "carbs": 23.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/37100056/pexels-photo-37100056.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Lionel Ntasano",
+      "url": "https://www.pexels.com/photo/baked-chicken-with-roasted-vegetables-in-kitchen-37100056/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-turkey-cutlets",
+    "title": "Turkey cutlets",
+    "description": "Lean ground turkey cutlets.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "turkey",
+      "cutlets"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i212",
+        "name": "ground turkey",
+        "amount": "500 g ground turkey",
+        "grams": 500,
+        "foodRef": "ing-ground-turkey"
+      },
+      {
+        "id": "i213",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i214",
+        "name": "breadcrumbs",
+        "amount": "50 g breadcrumbs",
+        "grams": 50,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i215",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i216",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix turkey with egg, onion and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Shape into patties."
+      },
+      {
+        "id": "s3",
+        "text": "Fry until golden and cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 306,
+      "protein": 26.6,
+      "fat": 17.4,
+      "carbs": 10.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/34636425/pexels-photo-34636425.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Novkov Visuals",
+      "url": "https://www.pexels.com/photo/crispy-schnitzel-with-fresh-salad-on-plate-34636425/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-turkey-meatballs",
+    "title": "Turkey meatballs",
+    "description": "Tender turkey meatballs.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "turkey",
+      "meatballs"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i217",
+        "name": "ground turkey",
+        "amount": "500 g ground turkey",
+        "grams": 500,
+        "foodRef": "ing-ground-turkey"
+      },
+      {
+        "id": "i218",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i219",
+        "name": "breadcrumbs",
+        "amount": "40 g breadcrumbs",
+        "grams": 40,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i220",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i221",
+        "name": "sunflower oil",
+        "amount": "15 g oil",
+        "grams": 15,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix turkey with egg, onion and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Roll into balls."
+      },
+      {
+        "id": "s3",
+        "text": "Fry or simmer until cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 286,
+      "protein": 26.3,
+      "fat": 16,
+      "carbs": 8.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/34314421/pexels-photo-34314421.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "ERIVELTO Martins",
+      "url": "https://www.pexels.com/photo/delicious-meatballs-in-rich-tomato-sauce-34314421/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-turkey-fillet-vegetables",
+    "title": "Turkey fillet with vegetables",
+    "description": "Turkey fillet pan-cooked with vegetables.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "turkey",
+      "vegetables"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i222",
+        "name": "turkey fillet",
+        "amount": "500 g turkey fillet",
+        "grams": 500,
+        "foodRef": "preset-turkey-fillet-grilled"
+      },
+      {
+        "id": "i223",
+        "name": "zucchini",
+        "amount": "200 g zucchini",
+        "grams": 200,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i224",
+        "name": "bell pepper",
+        "amount": "150 g bell pepper",
+        "grams": 150,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i225",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i226",
+        "name": "olive oil",
+        "amount": "20 g olive oil",
+        "grams": 20,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Sear the turkey pieces."
+      },
+      {
+        "id": "s2",
+        "text": "Add the vegetables and cook until tender."
+      },
+      {
+        "id": "s3",
+        "text": "Season and serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 258,
+      "protein": 37.3,
+      "fat": 9,
+      "carbs": 5.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/37336823/pexels-photo-37336823.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Kemal Can",
+      "url": "https://www.pexels.com/photo/grilled-chicken-with-leafy-greens-and-vegetables-37336823/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-beef-stroganoff",
+    "title": "Beef stroganoff",
+    "description": "Beef strips in a creamy mushroom sauce.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "Eastern European",
+    "cookTimeMinutes": 35,
+    "servings": 4,
+    "tags": [
+      "beef",
+      "mushroom"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i227",
+        "name": "beef",
+        "amount": "500 g beef",
+        "grams": 500,
+        "foodRef": "preset-beef"
+      },
+      {
+        "id": "i228",
+        "name": "mushrooms",
+        "amount": "200 g mushrooms",
+        "grams": 200,
+        "foodRef": "ing-mushrooms"
+      },
+      {
+        "id": "i229",
+        "name": "onion",
+        "amount": "100 g onion",
+        "grams": 100,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i230",
+        "name": "flour",
+        "amount": "15 g flour",
+        "grams": 15,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i231",
+        "name": "butter",
+        "amount": "15 g butter",
+        "grams": 15,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "choices": [
+      {
+        "id": "sourCream",
+        "label": "Sour cream",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With sour cream",
+            "ingredient": {
+              "id": "i232",
+              "name": "sour cream",
+              "amount": "200 g sour cream",
+              "grams": 200,
+              "foodRef": "ing-sour-cream"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Sear the beef strips and set aside."
+      },
+      {
+        "id": "s2",
+        "text": "Cook onion and mushrooms, dust with flour."
+      },
+      {
+        "id": "s3",
+        "text": "Return beef, add sour cream if using and simmer."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 474,
+      "protein": 35.9,
+      "fat": 31.7,
+      "carbs": 9.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/29935503/pexels-photo-29935503.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "khezez  | خزاز",
+      "url": "https://www.pexels.com/photo/delicious-beef-stroganoff-meal-with-vegetables-29935503/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-goulash",
+    "title": "Goulash",
+    "description": "Slow-cooked beef and pepper stew.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "Hungarian",
+    "cookTimeMinutes": 80,
+    "servings": 4,
+    "tags": [
+      "beef",
+      "stew",
+      "paprika"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i233",
+        "name": "beef",
+        "amount": "500 g beef",
+        "grams": 500,
+        "foodRef": "preset-beef"
+      },
+      {
+        "id": "i234",
+        "name": "onion",
+        "amount": "120 g onion",
+        "grams": 120,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i235",
+        "name": "bell pepper",
+        "amount": "150 g bell pepper",
+        "grams": 150,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i236",
+        "name": "canned tomatoes",
+        "amount": "200 g canned tomatoes",
+        "grams": 200,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i237",
+        "name": "flour",
+        "amount": "15 g flour",
+        "grams": 15,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i238",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Brown the beef with onion."
+      },
+      {
+        "id": "s2",
+        "text": "Add paprika, pepper and tomatoes."
+      },
+      {
+        "id": "s3",
+        "text": "Simmer low until the beef is tender."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 408,
+      "protein": 34.4,
+      "fat": 24,
+      "carbs": 11.4
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10338435/pexels-photo-10338435.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Istvan Szabo",
+      "url": "https://www.pexels.com/photo/a-close-up-shot-of-a-chicken-paprikash-dish-10338435/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-beef-cutlets",
+    "title": "Beef cutlets",
+    "description": "Classic pan-fried beef cutlets.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "Eastern European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "beef",
+      "cutlets"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i239",
+        "name": "ground beef",
+        "amount": "500 g ground beef",
+        "grams": 500,
+        "foodRef": "preset-ground-beef"
+      },
+      {
+        "id": "i240",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i241",
+        "name": "breadcrumbs",
+        "amount": "50 g breadcrumbs",
+        "grams": 50,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i242",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i243",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix beef with egg, onion and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Shape into patties."
+      },
+      {
+        "id": "s3",
+        "text": "Fry until browned and cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 456,
+      "protein": 36,
+      "fat": 32.1,
+      "carbs": 10.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/27390931/pexels-photo-27390931.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Yasin Koçtepe",
+      "url": "https://www.pexels.com/photo/a-plate-of-food-with-fries-and-meat-on-it-27390931/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-beef-stew",
+    "title": "Beef stew",
+    "description": "Hearty beef and potato stew.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 90,
+    "servings": 4,
+    "tags": [
+      "beef",
+      "stew",
+      "potato"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i244",
+        "name": "beef",
+        "amount": "600 g beef",
+        "grams": 600,
+        "foodRef": "preset-beef"
+      },
+      {
+        "id": "i245",
+        "name": "potato",
+        "amount": "300 g potato",
+        "grams": 300,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i246",
+        "name": "carrot",
+        "amount": "150 g carrot",
+        "grams": 150,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i247",
+        "name": "onion",
+        "amount": "100 g onion",
+        "grams": 100,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i248",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Brown the beef."
+      },
+      {
+        "id": "s2",
+        "text": "Add vegetables and water to cover."
+      },
+      {
+        "id": "s3",
+        "text": "Simmer low until everything is tender."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 502,
+      "protein": 41.2,
+      "fat": 27.7,
+      "carbs": 18.8
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/34822475/pexels-photo-34822475.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "SAMY PHOTOGRAPHY",
+      "url": "https://www.pexels.com/photo/traditional-mexican-beef-stew-in-a-bowl-34822475/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-baked-salmon",
+    "title": "Baked salmon",
+    "description": "Oven-baked salmon fillet.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 2,
+    "tags": [
+      "salmon",
+      "fish",
+      "baked"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free",
+      "quick"
+    ],
+    "ingredients": [
+      {
+        "id": "i249",
+        "name": "salmon",
+        "amount": "300 g salmon",
+        "grams": 300,
+        "foodRef": "preset-salmon"
+      },
+      {
+        "id": "i250",
+        "name": "olive oil",
+        "amount": "10 g olive oil",
+        "grams": 10,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Season the salmon and drizzle with oil."
+      },
+      {
+        "id": "s2",
+        "text": "Bake at 200°C for 12–15 minutes."
+      },
+      {
+        "id": "s3",
+        "text": "Serve with lemon."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 356,
+      "protein": 30,
+      "fat": 24.5,
+      "carbs": 0
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/33674236/pexels-photo-33674236.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "pedro furtado",
+      "url": "https://www.pexels.com/photo/gourmet-salmon-dish-with-rice-and-wedges-33674236/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-baked-white-fish",
+    "title": "Baked white fish",
+    "description": "Light baked white fish fillet.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 2,
+    "tags": [
+      "fish",
+      "baked"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free",
+      "quick",
+      "low_sugar"
+    ],
+    "ingredients": [
+      {
+        "id": "i251",
+        "name": "cod",
+        "amount": "300 g cod",
+        "grams": 300,
+        "foodRef": "preset-cod-steamed"
+      },
+      {
+        "id": "i252",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Season the fish."
+      },
+      {
+        "id": "s2",
+        "text": "Drizzle with oil and bake at 200°C for 12–15 minutes."
+      },
+      {
+        "id": "s3",
+        "text": "Serve with lemon."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 186,
+      "protein": 27,
+      "fat": 8.6,
+      "carbs": 0
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/36009488/pexels-photo-36009488.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Milton Das",
+      "url": "https://www.pexels.com/photo/gourmet-fish-fillet-with-spinach-and-sauce-plating-36009488/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-cod-vegetables",
+    "title": "Cod with vegetables",
+    "description": "Baked cod with a vegetable medley.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 4,
+    "tags": [
+      "fish",
+      "cod",
+      "vegetables"
+    ],
+    "classifiers": [
+      "high_protein",
+      "healthy",
+      "gluten_free",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i253",
+        "name": "cod",
+        "amount": "500 g cod",
+        "grams": 500,
+        "foodRef": "preset-cod-steamed"
+      },
+      {
+        "id": "i254",
+        "name": "zucchini",
+        "amount": "200 g zucchini",
+        "grams": 200,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i255",
+        "name": "carrot",
+        "amount": "150 g carrot",
+        "grams": 150,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i256",
+        "name": "bell pepper",
+        "amount": "150 g bell pepper",
+        "grams": 150,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i257",
+        "name": "olive oil",
+        "amount": "20 g olive oil",
+        "grams": 20,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Lay the cod on a bed of sliced vegetables."
+      },
+      {
+        "id": "s2",
+        "text": "Drizzle with oil and season."
+      },
+      {
+        "id": "s3",
+        "text": "Bake at 200°C until the fish flakes."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 178,
+      "protein": 23.8,
+      "fat": 6.2,
+      "carbs": 7.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/28191271/pexels-photo-28191271.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Bingqian Li",
+      "url": "https://www.pexels.com/photo/a-white-plate-with-fish-and-vegetables-on-it-28191271/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-fish-cutlets",
+    "title": "Fish cutlets",
+    "description": "Tender white-fish cutlets.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "fish",
+      "cutlets"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i258",
+        "name": "white fish",
+        "amount": "500 g white fish",
+        "grams": 500,
+        "foodRef": "preset-cod-steamed"
+      },
+      {
+        "id": "i259",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i260",
+        "name": "breadcrumbs",
+        "amount": "50 g breadcrumbs",
+        "grams": 50,
+        "foodRef": "ing-breadcrumbs"
+      },
+      {
+        "id": "i261",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i262",
+        "name": "sunflower oil",
+        "amount": "20 g oil",
+        "grams": 20,
+        "foodRef": "preset-sunflower-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Blitz fish with onion, then mix in egg and breadcrumbs."
+      },
+      {
+        "id": "s2",
+        "text": "Shape into patties."
+      },
+      {
+        "id": "s3",
+        "text": "Fry until golden and cooked through."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 219,
+      "protein": 26,
+      "fat": 7.9,
+      "carbs": 10.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5708088/pexels-photo-5708088.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "JUSTIN JOSEPH",
+      "url": "https://www.pexels.com/photo/cutlets-on-a-white-ceramic-plate-5708088/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pasta-bolognese",
+    "title": "Pasta Bolognese",
+    "description": "Spaghetti with rich beef and tomato sauce.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 40,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "beef",
+      "tomato"
+    ],
+    "classifiers": [
+      "family",
+      "kids",
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i263",
+        "name": "pasta",
+        "amount": "320 g pasta",
+        "grams": 320,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i264",
+        "name": "ground beef",
+        "amount": "300 g ground beef",
+        "grams": 300,
+        "foodRef": "preset-ground-beef"
+      },
+      {
+        "id": "i265",
+        "name": "canned tomatoes",
+        "amount": "300 g canned tomatoes",
+        "grams": 300,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i266",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i267",
+        "name": "carrot",
+        "amount": "80 g carrot",
+        "grams": 80,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i268",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "choices": [
+      {
+        "id": "parmesan",
+        "label": "Parmesan",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With parmesan",
+            "ingredient": {
+              "id": "i269",
+              "name": "parmesan",
+              "amount": "15 g parmesan",
+              "grams": 15,
+              "foodRef": "ing-parmesan"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Brown beef with onion and carrot."
+      },
+      {
+        "id": "s2",
+        "text": "Add tomatoes and simmer into a sauce."
+      },
+      {
+        "id": "s3",
+        "text": "Toss with cooked pasta; top with parmesan."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 571,
+      "protein": 32.1,
+      "fat": 21.2,
+      "carbs": 65.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/31637792/pexels-photo-31637792.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Gu Ko",
+      "url": "https://www.pexels.com/photo/delicious-spaghetti-bolognese-with-fresh-herbs-31637792/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pasta-carbonara",
+    "title": "Pasta Carbonara",
+    "description": "Spaghetti with egg, bacon and parmesan.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "bacon",
+      "egg"
+    ],
+    "classifiers": [
+      "family",
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i270",
+        "name": "pasta",
+        "amount": "320 g pasta",
+        "grams": 320,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i271",
+        "name": "bacon",
+        "amount": "120 g bacon",
+        "grams": 120,
+        "foodRef": "ing-bacon"
+      },
+      {
+        "id": "i272",
+        "name": "eggs",
+        "amount": "2 eggs",
+        "grams": 100,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i273",
+        "name": "parmesan",
+        "amount": "50 g parmesan",
+        "grams": 50,
+        "foodRef": "ing-parmesan"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Crisp the bacon."
+      },
+      {
+        "id": "s2",
+        "text": "Whisk eggs with parmesan."
+      },
+      {
+        "id": "s3",
+        "text": "Toss hot pasta with bacon, then the egg mix off the heat."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 486,
+      "protein": 21.1,
+      "fat": 18.3,
+      "carbs": 57.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/31779533/pexels-photo-31779533.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Adriano Bragi",
+      "url": "https://www.pexels.com/photo/delicious-creamy-spaghetti-carbonara-dish-31779533/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pasta-alfredo",
+    "title": "Pasta Alfredo",
+    "description": "Creamy parmesan pasta.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "cream",
+      "parmesan"
+    ],
+    "classifiers": [
+      "family",
+      "kids",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i274",
+        "name": "pasta",
+        "amount": "320 g pasta",
+        "grams": 320,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i275",
+        "name": "cream",
+        "amount": "200 g cream",
+        "grams": 200,
+        "foodRef": "ing-heavy-cream"
+      },
+      {
+        "id": "i276",
+        "name": "butter",
+        "amount": "20 g butter",
+        "grams": 20,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i277",
+        "name": "parmesan",
+        "amount": "50 g parmesan",
+        "grams": 50,
+        "foodRef": "ing-parmesan"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Melt butter with cream."
+      },
+      {
+        "id": "s2",
+        "text": "Stir in parmesan to a smooth sauce."
+      },
+      {
+        "id": "s3",
+        "text": "Toss with cooked pasta."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 537,
+      "protein": 15.5,
+      "fat": 26.5,
+      "carbs": 57.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/11220208/pexels-photo-11220208.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Engin Akyurt",
+      "url": "https://www.pexels.com/photo/traditional-italian-fettuccine-alfredo-pasta-on-ceramic-plate-11220208/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pasta-pesto",
+    "title": "Pasta with pesto",
+    "description": "Pasta tossed in basil pesto.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 20,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "pesto"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "quick",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i278",
+        "name": "pasta",
+        "amount": "320 g pasta",
+        "grams": 320,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i279",
+        "name": "pesto",
+        "amount": "100 g pesto",
+        "grams": 100,
+        "foodRef": "ing-pesto"
+      }
+    ],
+    "choices": [
+      {
+        "id": "parmesan",
+        "label": "Parmesan",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With parmesan",
+            "ingredient": {
+              "id": "i280",
+              "name": "parmesan",
+              "amount": "15 g parmesan",
+              "grams": 15,
+              "foodRef": "ing-parmesan"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cook the pasta."
+      },
+      {
+        "id": "s2",
+        "text": "Toss with pesto and a splash of pasta water."
+      },
+      {
+        "id": "s3",
+        "text": "Top with parmesan."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 399,
+      "protein": 12.4,
+      "fat": 12.4,
+      "carbs": 57.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4162492/pexels-photo-4162492.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Daniele Sgura",
+      "url": "https://www.pexels.com/photo/delicious-pesto-pasta-on-a-plate-4162492/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-pasta-salmon",
+    "title": "Pasta with salmon",
+    "description": "Creamy pasta with salmon.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "salmon",
+      "cream"
+    ],
+    "classifiers": [
+      "high_protein",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i281",
+        "name": "pasta",
+        "amount": "320 g pasta",
+        "grams": 320,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i282",
+        "name": "salmon",
+        "amount": "250 g salmon",
+        "grams": 250,
+        "foodRef": "preset-salmon"
+      },
+      {
+        "id": "i283",
+        "name": "cream",
+        "amount": "150 g cream",
+        "grams": 150,
+        "foodRef": "ing-heavy-cream"
+      },
+      {
+        "id": "i284",
+        "name": "onion",
+        "amount": "60 g onion",
+        "grams": 60,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i285",
+        "name": "olive oil",
+        "amount": "10 g olive oil",
+        "grams": 10,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cook salmon pieces with onion."
+      },
+      {
+        "id": "s2",
+        "text": "Add cream and simmer to a sauce."
+      },
+      {
+        "id": "s3",
+        "text": "Toss with cooked pasta."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 566,
+      "protein": 23.3,
+      "fat": 25.3,
+      "carbs": 58.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5175574/pexels-photo-5175574.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Shameel mukkath",
+      "url": "https://www.pexels.com/photo/pasta-in-a-ceramic-bowl-5175574/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-lasagna",
+    "title": "Lasagna",
+    "description": "Layered pasta with beef ragu and cheese.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 70,
+    "servings": 6,
+    "tags": [
+      "pasta",
+      "beef",
+      "baked"
+    ],
+    "classifiers": [
+      "family",
+      "kids",
+      "high_protein"
+    ],
+    "ingredients": [
+      {
+        "id": "i286",
+        "name": "lasagna sheets",
+        "amount": "250 g lasagna sheets",
+        "grams": 250,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i287",
+        "name": "ground beef",
+        "amount": "400 g ground beef",
+        "grams": 400,
+        "foodRef": "preset-ground-beef"
+      },
+      {
+        "id": "i288",
+        "name": "canned tomatoes",
+        "amount": "400 g canned tomatoes",
+        "grams": 400,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i289",
+        "name": "mozzarella",
+        "amount": "200 g mozzarella",
+        "grams": 200,
+        "foodRef": "ing-mozzarella"
+      },
+      {
+        "id": "i290",
+        "name": "parmesan",
+        "amount": "50 g parmesan",
+        "grams": 50,
+        "foodRef": "ing-parmesan"
+      },
+      {
+        "id": "i291",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i292",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Make a beef and tomato ragu."
+      },
+      {
+        "id": "s2",
+        "text": "Layer with pasta sheets and cheese."
+      },
+      {
+        "id": "s3",
+        "text": "Bake at 190°C until bubbling and golden."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 501,
+      "protein": 33.9,
+      "fat": 25.6,
+      "carbs": 36.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5724557/pexels-photo-5724557.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Christian Moises Pahati",
+      "url": "https://www.pexels.com/photo/baked-lasagna-on-a-disposable-food-tray-5724557/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-mushroom-risotto",
+    "title": "Mushroom risotto",
+    "description": "Creamy rice with mushrooms and parmesan.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 35,
+    "servings": 4,
+    "tags": [
+      "rice",
+      "mushroom",
+      "risotto"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "family",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i293",
+        "name": "rice",
+        "amount": "300 g rice",
+        "grams": 300,
+        "foodRef": "preset-rice-dry"
+      },
+      {
+        "id": "i294",
+        "name": "mushrooms",
+        "amount": "300 g mushrooms",
+        "grams": 300,
+        "foodRef": "ing-mushrooms"
+      },
+      {
+        "id": "i295",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i296",
+        "name": "butter",
+        "amount": "30 g butter",
+        "grams": 30,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "choices": [
+      {
+        "id": "parmesan",
+        "label": "Parmesan",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With parmesan",
+            "ingredient": {
+              "id": "i297",
+              "name": "parmesan",
+              "amount": "40 g parmesan",
+              "grams": 40,
+              "foodRef": "ing-parmesan"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften onion and mushrooms in butter."
+      },
+      {
+        "id": "s2",
+        "text": "Add rice and ladle in broth gradually, stirring."
+      },
+      {
+        "id": "s3",
+        "text": "Finish with parmesan when creamy."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 382,
+      "protein": 11.5,
+      "fat": 9.7,
+      "carbs": 63.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/8864543/pexels-photo-8864543.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Vinícius Caricatte",
+      "url": "https://www.pexels.com/photo/cooked-food-on-white-ceramic-plate-8864543/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-stuffed-peppers",
+    "title": "Stuffed peppers",
+    "description": "Peppers filled with beef and rice in tomato.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 50,
+    "servings": 4,
+    "tags": [
+      "peppers",
+      "beef",
+      "rice"
+    ],
+    "classifiers": [
+      "family",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i298",
+        "name": "bell pepper",
+        "amount": "400 g bell peppers",
+        "grams": 400,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i299",
+        "name": "ground beef",
+        "amount": "300 g ground beef",
+        "grams": 300,
+        "foodRef": "preset-ground-beef"
+      },
+      {
+        "id": "i300",
+        "name": "rice",
+        "amount": "100 g rice",
+        "grams": 100,
+        "foodRef": "preset-rice-dry"
+      },
+      {
+        "id": "i301",
+        "name": "canned tomatoes",
+        "amount": "200 g canned tomatoes",
+        "grams": 200,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i302",
+        "name": "onion",
+        "amount": "80 g onion",
+        "grams": 80,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i303",
+        "name": "olive oil",
+        "amount": "15 g olive oil",
+        "grams": 15,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mix beef with par-cooked rice and onion."
+      },
+      {
+        "id": "s2",
+        "text": "Stuff the peppers and set in a dish with tomato."
+      },
+      {
+        "id": "s3",
+        "text": "Bake at 190°C until the peppers are soft."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 374,
+      "protein": 23.3,
+      "fat": 19.4,
+      "carbs": 30.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/1438540/pexels-photo-1438540.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Lisa from Pexels",
+      "url": "https://www.pexels.com/photo/green-bell-pepper-stuffed-with-couscous-1438540/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-vegetable-stew",
+    "title": "Vegetable stew",
+    "description": "Mixed vegetables braised in tomato.",
+    "mealType": "main_dish",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 40,
+    "servings": 4,
+    "tags": [
+      "vegetables",
+      "stew"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "family",
+      "budget",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i304",
+        "name": "potato",
+        "amount": "300 g potato",
+        "grams": 300,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i305",
+        "name": "zucchini",
+        "amount": "250 g zucchini",
+        "grams": 250,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i306",
+        "name": "carrot",
+        "amount": "150 g carrot",
+        "grams": 150,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i307",
+        "name": "bell pepper",
+        "amount": "150 g bell pepper",
+        "grams": 150,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i308",
+        "name": "canned tomatoes",
+        "amount": "200 g canned tomatoes",
+        "grams": 200,
+        "foodRef": "ing-canned-tomatoes"
+      },
+      {
+        "id": "i309",
+        "name": "onion",
+        "amount": "100 g onion",
+        "grams": 100,
+        "foodRef": "preset-onion"
+      },
+      {
+        "id": "i310",
+        "name": "olive oil",
+        "amount": "20 g olive oil",
+        "grams": 20,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Soften onion in oil."
+      },
+      {
+        "id": "s2",
+        "text": "Add the chopped vegetables and tomatoes."
+      },
+      {
+        "id": "s3",
+        "text": "Braise gently until everything is tender."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 164,
+      "protein": 4,
+      "fat": 5.6,
+      "carbs": 26.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/29021274/pexels-photo-29021274.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Patrick",
+      "url": "https://www.pexels.com/photo/fresh-mixed-vegetables-close-up-in-stew-29021274/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-mashed-potatoes",
+    "title": "Mashed potatoes",
+    "description": "Creamy mashed potatoes.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "potato",
+      "side"
+    ],
+    "classifiers": [
+      "kids",
+      "family",
+      "vegetarian",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i311",
+        "name": "potato",
+        "amount": "600 g potato",
+        "grams": 600,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i312",
+        "name": "milk",
+        "amount": "100 ml milk",
+        "grams": 100,
+        "foodRef": "preset-milk-3-2"
+      }
+    ],
+    "choices": [
+      {
+        "id": "butter",
+        "label": "Butter",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With butter",
+            "ingredient": {
+              "id": "i313",
+              "name": "butter",
+              "amount": "30 g butter",
+              "grams": 30,
+              "foodRef": "preset-butter"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Boil the potatoes until soft."
+      },
+      {
+        "id": "s2",
+        "text": "Mash with warm milk and butter."
+      },
+      {
+        "id": "s3",
+        "text": "Season and serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 187,
+      "protein": 3.8,
+      "fat": 7.1,
+      "carbs": 26.8
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/13422423/pexels-photo-13422423.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Mateusz Feliksik",
+      "url": "https://www.pexels.com/photo/potatoes-and-a-potato-ricer-13422423/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-baked-potato",
+    "title": "Baked potatoes",
+    "description": "Crispy oven-baked potatoes.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 45,
+    "servings": 4,
+    "tags": [
+      "potato",
+      "side",
+      "baked"
+    ],
+    "classifiers": [
+      "family",
+      "vegan",
+      "gluten_free",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i314",
+        "name": "potato",
+        "amount": "600 g potato",
+        "grams": 600,
+        "foodRef": "preset-baked-potato"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i315",
+              "name": "olive oil",
+              "amount": "15 g olive oil",
+              "grams": 15,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cut the potatoes into wedges."
+      },
+      {
+        "id": "s2",
+        "text": "Toss with oil and seasoning."
+      },
+      {
+        "id": "s3",
+        "text": "Bake at 200°C until golden."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 176,
+      "protein": 3.8,
+      "fat": 4.2,
+      "carbs": 30
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/9203737/pexels-photo-9203737.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Erik Mclean",
+      "url": "https://www.pexels.com/photo/baked-potatoes-on-a-tray-9203737/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-white-rice",
+    "title": "White rice",
+    "description": "Fluffy boiled white rice.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 4,
+    "tags": [
+      "rice",
+      "side"
+    ],
+    "classifiers": [
+      "family",
+      "vegetarian",
+      "gluten_free",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i316",
+        "name": "rice",
+        "amount": "200 g rice",
+        "grams": 200,
+        "foodRef": "preset-rice-dry"
+      }
+    ],
+    "choices": [
+      {
+        "id": "butter",
+        "label": "Butter",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With butter",
+            "ingredient": {
+              "id": "i317",
+              "name": "butter",
+              "amount": "20 g butter",
+              "grams": 20,
+              "foodRef": "preset-butter"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Rinse the rice."
+      },
+      {
+        "id": "s2",
+        "text": "Boil in salted water until tender."
+      },
+      {
+        "id": "s3",
+        "text": "Drain and fluff with butter if using."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 213,
+      "protein": 3.6,
+      "fat": 4.6,
+      "carbs": 39.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5850339/pexels-photo-5850339.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "FOX ^.ᆽ.^= ∫",
+      "url": "https://www.pexels.com/photo/a-rice-in-a-small-bowl-5850339/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-buckwheat-side",
+    "title": "Buckwheat",
+    "description": "Simple boiled buckwheat.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "Eastern European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "buckwheat",
+      "side"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegetarian",
+      "gluten_free",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i318",
+        "name": "buckwheat",
+        "amount": "200 g buckwheat",
+        "grams": 200,
+        "foodRef": "preset-buckwheat-dry"
+      }
+    ],
+    "choices": [
+      {
+        "id": "butter",
+        "label": "Butter",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With butter",
+            "ingredient": {
+              "id": "i319",
+              "name": "butter",
+              "amount": "20 g butter",
+              "grams": 20,
+              "foodRef": "preset-butter"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Rinse the buckwheat."
+      },
+      {
+        "id": "s2",
+        "text": "Simmer covered in salted water until soft."
+      },
+      {
+        "id": "s3",
+        "text": "Fluff with butter if using."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 208,
+      "protein": 6.6,
+      "fat": 5.6,
+      "carbs": 34.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/7307354/pexels-photo-7307354.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Victoria Emerson",
+      "url": "https://www.pexels.com/photo/dish-with-buckwheat-meat-and-green-seasoning-7307354/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-bulgur-side",
+    "title": "Bulgur",
+    "description": "Light fluffy bulgur.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "Mediterranean",
+    "cookTimeMinutes": 20,
+    "servings": 4,
+    "tags": [
+      "bulgur",
+      "side"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegetarian",
+      "budget"
+    ],
+    "ingredients": [
+      {
+        "id": "i320",
+        "name": "bulgur",
+        "amount": "200 g bulgur",
+        "grams": 200,
+        "foodRef": "preset-bulgur-dry"
+      }
+    ],
+    "choices": [
+      {
+        "id": "butter",
+        "label": "Butter",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With butter",
+            "ingredient": {
+              "id": "i321",
+              "name": "butter",
+              "amount": "20 g butter",
+              "grams": 20,
+              "foodRef": "preset-butter"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Rinse the bulgur."
+      },
+      {
+        "id": "s2",
+        "text": "Simmer in salted water until tender."
+      },
+      {
+        "id": "s3",
+        "text": "Fluff with a fork."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 208,
+      "protein": 6.1,
+      "fat": 4.6,
+      "carbs": 38.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10487660/pexels-photo-10487660.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Victoria Bowers",
+      "url": "https://www.pexels.com/photo/brown-wooden-spoon-with-bulgur-10487660/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-quinoa-side",
+    "title": "Quinoa",
+    "description": "Boiled fluffy quinoa.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 20,
+    "servings": 4,
+    "tags": [
+      "quinoa",
+      "side"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i322",
+        "name": "quinoa",
+        "amount": "200 g quinoa",
+        "grams": 200,
+        "foodRef": "preset-quinoa-dry"
+      }
+    ],
+    "choices": [
+      {
+        "id": "butter",
+        "label": "Butter",
+        "defaultOptionId": "with",
+        "options": [
+          {
+            "id": "with",
+            "label": "With butter",
+            "ingredient": {
+              "id": "i323",
+              "name": "butter",
+              "amount": "20 g butter",
+              "grams": 20,
+              "foodRef": "preset-butter"
+            }
+          },
+          {
+            "id": "without",
+            "label": "Without"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Rinse the quinoa."
+      },
+      {
+        "id": "s2",
+        "text": "Simmer in salted water until the grains pop open."
+      },
+      {
+        "id": "s3",
+        "text": "Fluff and serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 223,
+      "protein": 7.1,
+      "fat": 7.1,
+      "carbs": 32.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/248509/pexels-photo-248509.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Pixabay",
+      "url": "https://www.pexels.com/photo/close-up-of-salad-in-bowl-248509/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-baked-vegetables",
+    "title": "Baked vegetables",
+    "description": "Oven-roasted mixed vegetables.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 35,
+    "servings": 4,
+    "tags": [
+      "vegetables",
+      "side",
+      "baked"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "gluten_free",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i324",
+        "name": "zucchini",
+        "amount": "250 g zucchini",
+        "grams": 250,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i325",
+        "name": "bell pepper",
+        "amount": "200 g bell pepper",
+        "grams": 200,
+        "foodRef": "preset-bell-pepper"
+      },
+      {
+        "id": "i326",
+        "name": "carrot",
+        "amount": "150 g carrot",
+        "grams": 150,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i327",
+        "name": "onion",
+        "amount": "100 g onion",
+        "grams": 100,
+        "foodRef": "preset-onion"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i328",
+              "name": "olive oil",
+              "amount": "25 g olive oil",
+              "grams": 25,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Chop the vegetables into chunks."
+      },
+      {
+        "id": "s2",
+        "text": "Toss with oil and seasoning."
+      },
+      {
+        "id": "s3",
+        "text": "Roast at 200°C until caramelised."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 105,
+      "protein": 1.8,
+      "fat": 6.6,
+      "carbs": 11
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/32659125/pexels-photo-32659125.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "🇻🇳🇻🇳Nguyễn Tiến Thịnh 🇻🇳🇻🇳",
+      "url": "https://www.pexels.com/photo/delicious-roasted-vegetables-in-baking-tray-32659125/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-steamed-broccoli",
+    "title": "Steamed broccoli",
+    "description": "Bright steamed broccoli.",
+    "mealType": "sides",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 12,
+    "servings": 4,
+    "tags": [
+      "broccoli",
+      "side"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "gluten_free",
+      "low_sugar",
+      "quick"
+    ],
+    "ingredients": [
+      {
+        "id": "i329",
+        "name": "broccoli",
+        "amount": "500 g broccoli",
+        "grams": 500,
+        "foodRef": "preset-broccoli"
+      }
+    ],
+    "choices": [
+      {
+        "id": "dressing",
+        "label": "Dressing",
+        "defaultOptionId": "oil",
+        "options": [
+          {
+            "id": "oil",
+            "label": "Olive oil",
+            "ingredient": {
+              "id": "i330",
+              "name": "olive oil",
+              "amount": "10 g olive oil",
+              "grams": 10,
+              "foodRef": "preset-olive-oil"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cut the broccoli into florets."
+      },
+      {
+        "id": "s2",
+        "text": "Steam until just tender."
+      },
+      {
+        "id": "s3",
+        "text": "Drizzle with olive oil if using."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 65,
+      "protein": 3.8,
+      "fat": 3,
+      "carbs": 8.8
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/8056670/pexels-photo-8056670.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Mateusz Feliksik",
+      "url": "https://www.pexels.com/photo/freshly-cooked-broccoli-on-stainless-pot-8056670/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-banana-bread",
+    "title": "Banana bread",
+    "description": "Moist banana loaf.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 60,
+    "servings": 8,
+    "tags": [
+      "banana",
+      "baking"
+    ],
+    "classifiers": [
+      "kids",
+      "family",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i331",
+        "name": "flour",
+        "amount": "250 g flour",
+        "grams": 250,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i332",
+        "name": "banana",
+        "amount": "300 g banana",
+        "grams": 300,
+        "foodRef": "preset-banana"
+      },
+      {
+        "id": "i333",
+        "name": "eggs",
+        "amount": "2 eggs",
+        "grams": 100,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i334",
+        "name": "sugar",
+        "amount": "120 g sugar",
+        "grams": 120,
+        "foodRef": "ing-sugar"
+      },
+      {
+        "id": "i335",
+        "name": "butter",
+        "amount": "80 g butter",
+        "grams": 80,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cream butter and sugar, beat in eggs and mashed banana."
+      },
+      {
+        "id": "s2",
+        "text": "Fold in the flour."
+      },
+      {
+        "id": "s3",
+        "text": "Bake in a loaf tin at 175°C for about 50 minutes."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 300,
+      "protein": 5.2,
+      "fat": 10,
+      "carbs": 47.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5419308/pexels-photo-5419308.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Polina Tankilevitch",
+      "url": "https://www.pexels.com/photo/brown-bread-on-white-surface-5419308/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-apple-crumble",
+    "title": "Apple crumble",
+    "description": "Baked apples under a buttery oat crumble.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "British",
+    "cookTimeMinutes": 45,
+    "servings": 6,
+    "tags": [
+      "apple",
+      "baking"
+    ],
+    "classifiers": [
+      "kids",
+      "family",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i336",
+        "name": "apple",
+        "amount": "600 g apple",
+        "grams": 600,
+        "foodRef": "preset-apple"
+      },
+      {
+        "id": "i337",
+        "name": "flour",
+        "amount": "120 g flour",
+        "grams": 120,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i338",
+        "name": "butter",
+        "amount": "80 g butter",
+        "grams": 80,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i339",
+        "name": "sugar",
+        "amount": "80 g sugar",
+        "grams": 80,
+        "foodRef": "ing-sugar"
+      },
+      {
+        "id": "i340",
+        "name": "rolled oats",
+        "amount": "60 g rolled oats",
+        "grams": 60,
+        "foodRef": "preset-oatmeal-dry"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Slice apples into a dish with a little sugar."
+      },
+      {
+        "id": "s2",
+        "text": "Rub flour, oats, butter and sugar into a crumble."
+      },
+      {
+        "id": "s3",
+        "text": "Scatter over and bake at 180°C until golden."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 313,
+      "protein": 3.6,
+      "fat": 11.9,
+      "carbs": 48.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/34618726/pexels-photo-34618726.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Novkov Visuals",
+      "url": "https://www.pexels.com/photo/close-up-of-a-delicious-apple-crumble-tart-34618726/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-baked-apples",
+    "title": "Baked apples",
+    "description": "Whole apples baked with honey and nuts.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 35,
+    "servings": 4,
+    "tags": [
+      "apple",
+      "baked"
+    ],
+    "classifiers": [
+      "healthy",
+      "kids",
+      "family",
+      "gluten_free",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i341",
+        "name": "apple",
+        "amount": "600 g apple",
+        "grams": 600,
+        "foodRef": "preset-apple"
+      },
+      {
+        "id": "i342",
+        "name": "raisins",
+        "amount": "30 g raisins",
+        "grams": 30,
+        "foodRef": "ing-raisins"
+      },
+      {
+        "id": "i343",
+        "name": "walnuts",
+        "amount": "30 g walnuts",
+        "grams": 30,
+        "foodRef": "ing-walnuts"
+      }
+    ],
+    "choices": [
+      {
+        "id": "sweetener",
+        "label": "Sweetener",
+        "defaultOptionId": "honey",
+        "options": [
+          {
+            "id": "sugar",
+            "label": "Sugar",
+            "ingredient": {
+              "id": "i344",
+              "name": "sugar",
+              "amount": "8 g sugar",
+              "grams": 8,
+              "foodRef": "ing-sugar"
+            }
+          },
+          {
+            "id": "honey",
+            "label": "Honey",
+            "ingredient": {
+              "id": "i345",
+              "name": "honey",
+              "amount": "40 g honey",
+              "grams": 40,
+              "foodRef": "ing-honey"
+            }
+          },
+          {
+            "id": "sweetener",
+            "label": "Sweetener (0 cal)",
+            "ingredient": {
+              "id": "i346",
+              "name": "sweetener",
+              "amount": "sweetener to taste",
+              "grams": 1,
+              "foodRef": "ing-sweetener"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Core the apples."
+      },
+      {
+        "id": "s2",
+        "text": "Fill with raisins, nuts and sweetener."
+      },
+      {
+        "id": "s3",
+        "text": "Bake at 180°C until soft."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 180,
+      "protein": 1.9,
+      "fat": 5.2,
+      "carbs": 36.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6210973/pexels-photo-6210973.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Tim Douglas",
+      "url": "https://www.pexels.com/photo/faceless-woman-with-delicious-baked-apples-in-house-6210973/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-oatmeal-cookies",
+    "title": "Oatmeal cookies",
+    "description": "Chewy oat and raisin cookies.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 12,
+    "tags": [
+      "oats",
+      "cookies",
+      "baking"
+    ],
+    "classifiers": [
+      "kids",
+      "family",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i347",
+        "name": "rolled oats",
+        "amount": "200 g rolled oats",
+        "grams": 200,
+        "foodRef": "preset-oatmeal-dry"
+      },
+      {
+        "id": "i348",
+        "name": "flour",
+        "amount": "100 g flour",
+        "grams": 100,
+        "foodRef": "preset-wheat-flour-white"
+      },
+      {
+        "id": "i349",
+        "name": "butter",
+        "amount": "100 g butter",
+        "grams": 100,
+        "foodRef": "preset-butter"
+      },
+      {
+        "id": "i350",
+        "name": "sugar",
+        "amount": "100 g sugar",
+        "grams": 100,
+        "foodRef": "ing-sugar"
+      },
+      {
+        "id": "i351",
+        "name": "egg",
+        "amount": "1 egg",
+        "grams": 50,
+        "foodRef": "preset-egg"
+      },
+      {
+        "id": "i352",
+        "name": "raisins",
+        "amount": "50 g raisins",
+        "grams": 50,
+        "foodRef": "ing-raisins"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cream butter and sugar, beat in the egg."
+      },
+      {
+        "id": "s2",
+        "text": "Mix in oats, flour and raisins."
+      },
+      {
+        "id": "s3",
+        "text": "Spoon onto a tray and bake at 180°C until golden."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 206,
+      "protein": 3.6,
+      "fat": 8.4,
+      "carbs": 28.1
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/8837035/pexels-photo-8837035.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Terrance Barksdale",
+      "url": "https://www.pexels.com/photo/close-up-photo-of-an-oatmeal-cookie-with-raisins-8837035/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chia-pudding",
+    "title": "Chia pudding",
+    "description": "Overnight chia pudding with milk.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 5,
+    "servings": 2,
+    "tags": [
+      "chia",
+      "no bake"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegetarian",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i353",
+        "name": "chia seeds",
+        "amount": "40 g chia seeds",
+        "grams": 40,
+        "foodRef": "ing-chia-seeds"
+      },
+      {
+        "id": "i354",
+        "name": "milk",
+        "amount": "250 ml milk",
+        "grams": 250,
+        "foodRef": "preset-milk-3-2"
+      }
+    ],
+    "choices": [
+      {
+        "id": "sweetener",
+        "label": "Sweetener",
+        "defaultOptionId": "honey",
+        "options": [
+          {
+            "id": "sugar",
+            "label": "Sugar",
+            "ingredient": {
+              "id": "i355",
+              "name": "sugar",
+              "amount": "8 g sugar",
+              "grams": 8,
+              "foodRef": "ing-sugar"
+            }
+          },
+          {
+            "id": "honey",
+            "label": "Honey",
+            "ingredient": {
+              "id": "i356",
+              "name": "honey",
+              "amount": "15 g honey",
+              "grams": 15,
+              "foodRef": "ing-honey"
+            }
+          },
+          {
+            "id": "sweetener",
+            "label": "Sweetener (0 cal)",
+            "ingredient": {
+              "id": "i357",
+              "name": "sweetener",
+              "amount": "sweetener to taste",
+              "grams": 1,
+              "foodRef": "ing-sweetener"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Stir chia into the milk with sweetener."
+      },
+      {
+        "id": "s2",
+        "text": "Chill for a few hours or overnight."
+      },
+      {
+        "id": "s3",
+        "text": "Top with fruit and serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 195,
+      "protein": 7.1,
+      "fat": 10.1,
+      "carbs": 20.8
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5947029/pexels-photo-5947029.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Charlotte May",
+      "url": "https://www.pexels.com/photo/glass-of-tasty-pudding-with-chia-seeds-5947029/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-panna-cotta",
+    "title": "Panna cotta",
+    "description": "Silky set cream dessert.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "Italian",
+    "cookTimeMinutes": 20,
+    "servings": 4,
+    "tags": [
+      "cream",
+      "no bake"
+    ],
+    "classifiers": [
+      "vegetarian",
+      "gluten_free",
+      "family"
+    ],
+    "ingredients": [
+      {
+        "id": "i358",
+        "name": "cream",
+        "amount": "400 g cream",
+        "grams": 400,
+        "foodRef": "ing-heavy-cream"
+      },
+      {
+        "id": "i359",
+        "name": "milk",
+        "amount": "100 ml milk",
+        "grams": 100,
+        "foodRef": "preset-milk-3-2"
+      },
+      {
+        "id": "i360",
+        "name": "sugar",
+        "amount": "60 g sugar",
+        "grams": 60,
+        "foodRef": "ing-sugar"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Warm cream, milk and sugar with gelatin until dissolved."
+      },
+      {
+        "id": "s2",
+        "text": "Pour into moulds."
+      },
+      {
+        "id": "s3",
+        "text": "Chill until set and turn out."
+      }
+    ],
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 413,
+      "protein": 3.6,
+      "fat": 36.8,
+      "carbs": 19.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/5640039/pexels-photo-5640039.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Shameel mukkath",
+      "url": "https://www.pexels.com/photo/panna-cotta-with-caramel-and-fruits-5640039/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-fruit-salad",
+    "title": "Fruit salad",
+    "description": "Fresh mixed fruit.",
+    "mealType": "desserts",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 4,
+    "tags": [
+      "fruit",
+      "no bake"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "gluten_free",
+      "quick",
+      "kids"
+    ],
+    "ingredients": [
+      {
+        "id": "i361",
+        "name": "banana",
+        "amount": "120 g banana",
+        "grams": 120,
+        "foodRef": "preset-banana"
+      },
+      {
+        "id": "i362",
+        "name": "apple",
+        "amount": "180 g apple",
+        "grams": 180,
+        "foodRef": "preset-apple"
+      },
+      {
+        "id": "i363",
+        "name": "orange",
+        "amount": "130 g orange",
+        "grams": 130,
+        "foodRef": "preset-orange"
+      },
+      {
+        "id": "i364",
+        "name": "strawberries",
+        "amount": "100 g strawberries",
+        "grams": 100,
+        "foodRef": "preset-strawberry"
+      },
+      {
+        "id": "i365",
+        "name": "blueberries",
+        "amount": "80 g blueberries",
+        "grams": 80,
+        "foodRef": "preset-blueberry"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Chop all the fruit."
+      },
+      {
+        "id": "s2",
+        "text": "Combine in a bowl."
+      },
+      {
+        "id": "s3",
+        "text": "Serve chilled."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 85,
+      "protein": 1.1,
+      "fat": 0.3,
+      "carbs": 21.9
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/34618713/pexels-photo-34618713.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Novkov Visuals",
+      "url": "https://www.pexels.com/photo/fresh-fruit-salad-with-pineapple-and-strawberries-34618713/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-hummus",
+    "title": "Hummus",
+    "description": "Smooth chickpea and tahini dip.",
+    "mealType": "appetizers",
+    "mealSlot": "snack",
+    "cuisine": "Mediterranean",
+    "cookTimeMinutes": 10,
+    "servings": 4,
+    "tags": [
+      "chickpeas",
+      "dip"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i366",
+        "name": "chickpeas",
+        "amount": "240 g chickpeas",
+        "grams": 240,
+        "foodRef": "ing-chickpeas-canned"
+      },
+      {
+        "id": "i367",
+        "name": "tahini",
+        "amount": "40 g tahini",
+        "grams": 40,
+        "foodRef": "ing-tahini"
+      },
+      {
+        "id": "i368",
+        "name": "olive oil",
+        "amount": "20 g olive oil",
+        "grams": 20,
+        "foodRef": "preset-olive-oil"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Blend chickpeas with tahini and lemon."
+      },
+      {
+        "id": "s2",
+        "text": "Loosen with a little water."
+      },
+      {
+        "id": "s3",
+        "text": "Drizzle with olive oil to serve."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 187,
+      "protein": 6,
+      "fat": 11.9,
+      "carbs": 15.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6145895/pexels-photo-6145895.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Anna Pyshniuk",
+      "url": "https://www.pexels.com/photo/close-up-shot-of-food-in-white-ceramic-bowl-6145895/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-guacamole",
+    "title": "Guacamole",
+    "description": "Fresh avocado dip with tomato.",
+    "mealType": "appetizers",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 4,
+    "tags": [
+      "avocado",
+      "dip"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "gluten_free",
+      "quick"
+    ],
+    "ingredients": [
+      {
+        "id": "i369",
+        "name": "avocado",
+        "amount": "300 g avocado",
+        "grams": 300,
+        "foodRef": "preset-avocado"
+      },
+      {
+        "id": "i370",
+        "name": "tomato",
+        "amount": "80 g tomato",
+        "grams": 80,
+        "foodRef": "preset-tomato"
+      },
+      {
+        "id": "i371",
+        "name": "onion",
+        "amount": "30 g red onion",
+        "grams": 30,
+        "foodRef": "preset-onion"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Mash the avocado with lime and salt."
+      },
+      {
+        "id": "s2",
+        "text": "Stir in diced tomato and onion."
+      },
+      {
+        "id": "s3",
+        "text": "Serve fresh."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 127,
+      "protein": 1.8,
+      "fat": 11.3,
+      "carbs": 8.2
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/4968297/pexels-photo-4968297.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "www.kaboompics.com",
+      "url": "https://www.pexels.com/photo/guacamole-with-nachos-and-tomatoes-beside-fresh-vegetables-4968297/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-berry-smoothie",
+    "title": "Berry smoothie",
+    "description": "Creamy berry and yogurt smoothie.",
+    "mealType": "drinks",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 5,
+    "servings": 2,
+    "tags": [
+      "smoothie",
+      "berries"
+    ],
+    "classifiers": [
+      "healthy",
+      "quick",
+      "vegetarian",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i372",
+        "name": "banana",
+        "amount": "120 g banana",
+        "grams": 120,
+        "foodRef": "preset-banana"
+      },
+      {
+        "id": "i373",
+        "name": "strawberries",
+        "amount": "150 g strawberries",
+        "grams": 150,
+        "foodRef": "preset-strawberry"
+      },
+      {
+        "id": "i374",
+        "name": "blueberries",
+        "amount": "80 g blueberries",
+        "grams": 80,
+        "foodRef": "preset-blueberry"
+      },
+      {
+        "id": "i375",
+        "name": "greek yogurt",
+        "amount": "150 g Greek yogurt",
+        "grams": 150,
+        "foodRef": "preset-greek-yogurt"
+      },
+      {
+        "id": "i376",
+        "name": "milk",
+        "amount": "150 ml milk",
+        "grams": 150,
+        "foodRef": "preset-milk-3-2"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Add everything to a blender."
+      },
+      {
+        "id": "s2",
+        "text": "Blend until smooth."
+      },
+      {
+        "id": "s3",
+        "text": "Serve cold."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 190,
+      "protein": 11.2,
+      "fat": 4.4,
+      "carbs": 31.4
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/13427787/pexels-photo-13427787.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Mateusz Feliksik",
+      "url": "https://www.pexels.com/photo/smoothies-in-drinking-glasses-13427787/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-green-smoothie",
+    "title": "Green smoothie",
+    "description": "Banana, apple and greens smoothie.",
+    "mealType": "drinks",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 5,
+    "servings": 2,
+    "tags": [
+      "smoothie",
+      "greens"
+    ],
+    "classifiers": [
+      "healthy",
+      "vegan",
+      "quick",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i377",
+        "name": "banana",
+        "amount": "120 g banana",
+        "grams": 120,
+        "foodRef": "preset-banana"
+      },
+      {
+        "id": "i378",
+        "name": "spinach",
+        "amount": "60 g spinach",
+        "grams": 60,
+        "foodRef": "ing-salad-greens"
+      },
+      {
+        "id": "i379",
+        "name": "apple",
+        "amount": "180 g apple",
+        "grams": 180,
+        "foodRef": "preset-apple"
+      },
+      {
+        "id": "i380",
+        "name": "water",
+        "amount": "200 ml water",
+        "grams": 200,
+        "foodRef": "preset-water"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Add everything to a blender."
+      },
+      {
+        "id": "s2",
+        "text": "Blend until smooth."
+      },
+      {
+        "id": "s3",
+        "text": "Serve cold."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 107,
+      "protein": 1.5,
+      "fat": 0.5,
+      "carbs": 27.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/11896097/pexels-photo-11896097.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Sirikul R",
+      "url": "https://www.pexels.com/photo/close-up-photograph-of-a-vegetable-smoothie-beside-an-angel-sculpture-11896097/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-lemonade",
+    "title": "Homemade lemonade",
+    "description": "Fresh lemonade, sweeten to taste.",
+    "mealType": "drinks",
+    "mealSlot": "snack",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 4,
+    "tags": [
+      "lemonade",
+      "drink"
+    ],
+    "classifiers": [
+      "vegan",
+      "quick",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i381",
+        "name": "water",
+        "amount": "1 L water",
+        "grams": 1000,
+        "foodRef": "preset-water"
+      }
+    ],
+    "choices": [
+      {
+        "id": "sweetener",
+        "label": "Sweetener",
+        "defaultOptionId": "sugar",
+        "options": [
+          {
+            "id": "sugar",
+            "label": "Sugar",
+            "ingredient": {
+              "id": "i382",
+              "name": "sugar",
+              "amount": "60 g sugar",
+              "grams": 60,
+              "foodRef": "ing-sugar"
+            }
+          },
+          {
+            "id": "honey",
+            "label": "Honey",
+            "ingredient": {
+              "id": "i383",
+              "name": "honey",
+              "amount": "60 g honey",
+              "grams": 60,
+              "foodRef": "ing-honey"
+            }
+          },
+          {
+            "id": "sweetener",
+            "label": "Sweetener (0 cal)",
+            "ingredient": {
+              "id": "i384",
+              "name": "sweetener",
+              "amount": "sweetener to taste",
+              "grams": 1,
+              "foodRef": "ing-sweetener"
+            }
+          },
+          {
+            "id": "none",
+            "label": "None"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Squeeze the lemons."
+      },
+      {
+        "id": "s2",
+        "text": "Stir lemon juice and sweetener into the water."
+      },
+      {
+        "id": "s3",
+        "text": "Chill and serve over ice."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 58,
+      "protein": 0,
+      "fat": 0,
+      "carbs": 15
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6209634/pexels-photo-6209634.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Yan Krukau",
+      "url": "https://www.pexels.com/photo/close-up-of-pitcher-with-fruit-drink-6209634/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-vegetable-puree",
+    "title": "Vegetable purée",
+    "description": "Smooth purée of potato, carrot and zucchini.",
+    "mealType": "main_dish",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 2,
+    "tags": [
+      "baby",
+      "puree",
+      "vegetables"
+    ],
+    "classifiers": [
+      "kids",
+      "healthy",
+      "vegetarian",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i385",
+        "name": "potato",
+        "amount": "200 g potato",
+        "grams": 200,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i386",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i387",
+        "name": "zucchini",
+        "amount": "100 g zucchini",
+        "grams": 100,
+        "foodRef": "preset-zucchini"
+      },
+      {
+        "id": "i388",
+        "name": "butter",
+        "amount": "10 g butter",
+        "grams": 10,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Boil the vegetables until very soft."
+      },
+      {
+        "id": "s2",
+        "text": "Blend smooth with a little cooking water."
+      },
+      {
+        "id": "s3",
+        "text": "Stir in butter and serve warm."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 144,
+      "protein": 3.1,
+      "fat": 4.5,
+      "carbs": 23.6
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6853444/pexels-photo-6853444.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "cottonbro studio",
+      "url": "https://www.pexels.com/photo/a-bowl-of-pumpkin-soup-6853444/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-mac-and-cheese",
+    "title": "Mac and cheese",
+    "description": "Creamy cheesy pasta kids love.",
+    "mealType": "pasta",
+    "mealSlot": "dinner",
+    "cuisine": "European",
+    "cookTimeMinutes": 25,
+    "servings": 4,
+    "tags": [
+      "pasta",
+      "cheese",
+      "kids"
+    ],
+    "classifiers": [
+      "kids",
+      "family",
+      "vegetarian"
+    ],
+    "ingredients": [
+      {
+        "id": "i389",
+        "name": "pasta",
+        "amount": "250 g pasta",
+        "grams": 250,
+        "foodRef": "preset-pasta-dry"
+      },
+      {
+        "id": "i390",
+        "name": "cheddar",
+        "amount": "120 g cheddar",
+        "grams": 120,
+        "foodRef": "ing-cheddar"
+      },
+      {
+        "id": "i391",
+        "name": "milk",
+        "amount": "200 ml milk",
+        "grams": 200,
+        "foodRef": "preset-milk-3-2"
+      },
+      {
+        "id": "i392",
+        "name": "butter",
+        "amount": "20 g butter",
+        "grams": 20,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Cook the pasta."
+      },
+      {
+        "id": "s2",
+        "text": "Make a quick cheese sauce with butter, milk and cheddar."
+      },
+      {
+        "id": "s3",
+        "text": "Stir the pasta through the sauce."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 407,
+      "protein": 16.5,
+      "fat": 16.6,
+      "carbs": 46.7
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/10993148/pexels-photo-10993148.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Barbara G",
+      "url": "https://www.pexels.com/photo/tasty-man-n-cheese-in-plate-on-black-background-10993148/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-chicken-vegetable-puree",
+    "title": "Chicken & vegetable purée",
+    "description": "Gentle chicken, potato and carrot purée.",
+    "mealType": "main_dish",
+    "mealSlot": "lunch",
+    "cuisine": "European",
+    "cookTimeMinutes": 30,
+    "servings": 2,
+    "tags": [
+      "baby",
+      "puree",
+      "chicken"
+    ],
+    "classifiers": [
+      "kids",
+      "healthy",
+      "high_protein",
+      "gluten_free"
+    ],
+    "ingredients": [
+      {
+        "id": "i393",
+        "name": "chicken breast",
+        "amount": "150 g chicken breast",
+        "grams": 150,
+        "foodRef": "preset-chicken-breast-raw"
+      },
+      {
+        "id": "i394",
+        "name": "potato",
+        "amount": "150 g potato",
+        "grams": 150,
+        "foodRef": "preset-potato-boiled"
+      },
+      {
+        "id": "i395",
+        "name": "carrot",
+        "amount": "100 g carrot",
+        "grams": 100,
+        "foodRef": "preset-carrot"
+      },
+      {
+        "id": "i396",
+        "name": "butter",
+        "amount": "10 g butter",
+        "grams": 10,
+        "foodRef": "preset-butter"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Simmer the chicken and vegetables until very soft."
+      },
+      {
+        "id": "s2",
+        "text": "Blend smooth with a little cooking liquid."
+      },
+      {
+        "id": "s3",
+        "text": "Stir in butter and serve warm."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 240,
+      "protein": 25.3,
+      "fat": 7,
+      "carbs": 17.8
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/1370939/pexels-photo-1370939.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Jenna Hamra",
+      "url": "https://www.pexels.com/photo/cream-food-on-plate-1370939/",
+      "source": "Pexels"
+    }
+  },
+  {
+    "id": "rcp-banana-oat-porridge",
+    "title": "Banana oat porridge",
+    "description": "Naturally sweet banana porridge, no added sugar.",
+    "mealType": "breakfast",
+    "mealSlot": "breakfast",
+    "cuisine": "European",
+    "cookTimeMinutes": 10,
+    "servings": 1,
+    "tags": [
+      "baby",
+      "oats",
+      "banana"
+    ],
+    "classifiers": [
+      "kids",
+      "healthy",
+      "vegetarian",
+      "low_sugar"
+    ],
+    "ingredients": [
+      {
+        "id": "i397",
+        "name": "rolled oats",
+        "amount": "40 g rolled oats",
+        "grams": 40,
+        "foodRef": "preset-oatmeal-dry"
+      },
+      {
+        "id": "i398",
+        "name": "banana",
+        "amount": "100 g banana",
+        "grams": 100,
+        "foodRef": "preset-banana"
+      },
+      {
+        "id": "i399",
+        "name": "milk",
+        "amount": "150 ml milk",
+        "grams": 150,
+        "foodRef": "preset-milk-3-2"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "text": "Simmer the oats in milk until creamy."
+      },
+      {
+        "id": "s2",
+        "text": "Mash the banana and stir through."
+      },
+      {
+        "id": "s3",
+        "text": "Serve warm."
+      }
+    ],
+    "suitableForChildren": true,
+    "suitableForFamily": true,
+    "nutritionPerServing": {
+      "calories": 327,
+      "protein": 10.3,
+      "fat": 7.5,
+      "carbs": 54.5
+    },
+    "nutritionConfidence": "verified",
+    "photoUri": "https://images.pexels.com/photos/6050721/pexels-photo-6050721.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "photoCredit": {
+      "name": "Vegan Liftz",
+      "url": "https://www.pexels.com/photo/sliced-bananas-in-white-ceramic-bowl-6050721/",
+      "source": "Pexels"
+    }
   }
 ];

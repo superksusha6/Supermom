@@ -105,6 +105,33 @@ export type CustomNutritionFood = {
   carbs: number;
 };
 
+export type HomeIssueUrgency = 'urgent' | 'normal' | 'low';
+export type HomeIssueStatus = 'new' | 'scheduled' | 'done';
+
+export type HomeIssue = {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  location?: string;
+  urgency: HomeIssueUrgency;
+  status: HomeIssueStatus;
+  reportedBy?: string;
+  providerId?: string;
+  cost?: number;
+  scheduledAt?: string;
+  resolvedAt?: string;
+  createdAt?: string;
+};
+
+export type HomeProvider = {
+  id: string;
+  name: string;
+  category?: string;
+  phone?: string;
+  notes?: string;
+};
+
 export type HabitEntry = {
   id: string;
   title: string;
@@ -374,6 +401,8 @@ export type Recipe = {
   choices?: RecipeChoice[];
   steps: RecipeStep[];
   photoUri?: string;
+  // Attribution for stock photos (e.g. Pexels) — shown as small credit text.
+  photoCredit?: { name: string; url: string; source: string };
   suitableForChildren?: boolean;
   suitableForFamily?: boolean;
 };
@@ -388,6 +417,9 @@ export type WeeklyMealPlanEntry = {
   dayLabel: string;
   slot: MealPlanSlot;
   recipeId?: string;
+  // Chosen recipe customization (choiceId -> optionId) for this planned slot, so the
+  // planner shows the customized nutrition/ingredients. Absent = recipe defaults.
+  recipeSelection?: Record<string, string>;
   customItems?: Array<{
     id: string;
     title: string;

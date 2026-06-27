@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
+import { computeRecipeNutritionForSelection, resolveRecipeIngredients } from '@/lib/recipeNutrition';
 import { MealPlanSlot, Recipe, WeeklyMealPlanEntry } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -209,6 +210,7 @@ export function MealPlannerScreen({
             profileKey: activeProfileKey,
             profileLabel: activeProfile.label,
             recipeId,
+            recipeSelection: undefined,
             customTitle: undefined,
             customCalories: undefined,
             customGrams: undefined,
@@ -235,6 +237,20 @@ export function MealPlannerScreen({
     setSelectedApplyDays([]);
     resetCustomMealDraft();
     setRecipeSearch('');
+  }
+
+  // Per-slot recipe customization (choiceId -> optionId), stored on the entry.
+  function setEntryRecipeSelection(dayKey: string, slot: MealPlanSlot, choiceId: string, optionId: string) {
+    onWeeklyPlanChange((prev) =>
+      prev.map((entry) => {
+        if ((entry.profileKey || 'family') !== activeProfileKey || entry.dayKey !== dayKey || entry.slot !== slot) return entry;
+        return { ...entry, recipeSelection: { ...(entry.recipeSelection || {}), [choiceId]: optionId } };
+      }),
+    );
+  }
+
+  function recipeCaloriesForEntry(recipe: Recipe, entry?: WeeklyMealPlanEntry) {
+    return computeRecipeNutritionForSelection(recipe, entry?.recipeSelection).nutrition.calories;
   }
 
   function setCustomMealForSlot(dayKey: string, slot: MealPlanSlot) {
@@ -405,7 +421,7 @@ export function MealPlannerScreen({
         {recipe ? (
           <>
             <Text style={[styles.weekGridRecipeTitle, compact && styles.weekGridRecipeTitleCompact]}>{recipe.title}</Text>
-            <Text style={styles.weekGridRecipeMeta}>{recipe.nutritionPerServing.calories} kcal</Text>
+            <Text style={styles.weekGridRecipeMeta}>{recipeCaloriesForEntry(recipe, entry)} kcal</Text>
           </>
         ) : customMealTitle ? (
           <>
@@ -528,7 +544,7 @@ export function MealPlannerScreen({
                           {recipe ? (
                             <>
                               <Text style={styles.weekGridRecipeTitle}>{recipe.title}</Text>
-                              <Text style={styles.weekGridRecipeMeta}>{recipe.nutritionPerServing.calories} kcal</Text>
+                              <Text style={styles.weekGridRecipeMeta}>{recipeCaloriesForEntry(recipe, entry)} kcal</Text>
                             </>
                           ) : customMealTitle ? (
                             <>
@@ -777,7 +793,7 @@ export function MealPlannerScreen({
                 <View style={styles.slotDetailCard}>
                   <Text style={styles.slotDetailTitle}>{recipe.title}</Text>
                   <Text style={styles.slotDetailMeta}>
-                    {recipe.cookTimeMinutes} min • {recipe.servings} servings • {recipe.nutritionPerServing.calories} kcal
+                    {recipe.cookTimeMinutes} min • {recipe.servings} servings • {recipeCaloriesForEntry(recipe, entry)} kcal
                   </Text>
                   <View style={styles.exportActions}>
                     <Pressable
@@ -793,8 +809,34 @@ export function MealPlannerScreen({
                       <Text style={styles.staffExportBtnPrimaryText}>Share recipe</Text>
                     </Pressable>
                   </View>
+                  {recipe.choices?.length ? (
+                    <View style={styles.slotChoices}>
+                      {recipe.choices.map((choiceItem) => {
+                        const currentOptionId = entry?.recipeSelection?.[choiceItem.id] ?? choiceItem.defaultOptionId;
+                        return (
+                          <View key={choiceItem.id} style={styles.slotChoiceRow}>
+                            <Text style={styles.slotChoiceLabel}>{choiceItem.label}</Text>
+                            <View style={styles.slotChoiceOptions}>
+                              {choiceItem.options.map((option) => {
+                                const active = option.id === currentOptionId;
+                                return (
+                                  <Pressable
+                                    key={option.id}
+                                    style={[styles.slotChoiceChip, active && styles.slotChoiceChipActive]}
+                                    onPress={() => setEntryRecipeSelection(detailTarget.dayKey, detailTarget.slot, choiceItem.id, option.id)}
+                                  >
+                                    <Text style={[styles.slotChoiceChipText, active && styles.slotChoiceChipTextActive]}>{option.label}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                   <Text style={styles.detailSectionTitle}>Ingredients</Text>
-                  {recipe.ingredients.map((ingredient) => (
+                  {resolveRecipeIngredients(recipe.ingredients, recipe.choices, entry?.recipeSelection).map((ingredient) => (
                     <Text key={ingredient.id} style={styles.detailText}>• {ingredient.amount} {ingredient.name}</Text>
                   ))}
                   <Text style={styles.detailSectionTitle}>Steps</Text>
@@ -1770,6 +1812,44 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '700',
       lineHeight: 18,
+    },
+    slotChoices: {
+      gap: 8,
+      marginTop: 4,
+    },
+    slotChoiceRow: {
+      gap: 6,
+    },
+    slotChoiceLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    slotChoiceOptions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    slotChoiceChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    slotChoiceChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    slotChoiceChipText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    slotChoiceChipTextActive: {
+      color: '#ffffff',
     },
     detailSectionTitle: {
       color: colors.text,

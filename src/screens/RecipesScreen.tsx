@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
-import { Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
+import { NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
 import { cleanNutritionNumber, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
+import { computeRecipeNutritionForSelection, resolveRecipeIngredients, type RecipeSelection } from '@/lib/recipeNutrition';
+import { RECIPE_IMAGES } from '@/lib/generated/recipeImageMap';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -12,7 +14,33 @@ type Props = {
   onRecipeCreate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeUpdate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeDelete: (recipeId: string) => Promise<void> | void;
+  onNutritionEntriesChange?: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
 };
+
+const LOG_MEAL_TYPES: NutritionMealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+function createRecipeLogId() {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function todayDateKey() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function defaultMealTypeForSlot(slot?: Recipe['mealSlot']): NutritionMealType {
+  if (slot === 'breakfast' || slot === 'brunch') return 'breakfast';
+  if (slot === 'lunch') return 'lunch';
+  if (slot === 'dinner') return 'dinner';
+  return 'snack';
+}
 
 type RecipeLayoutMode = 'list' | 'grid';
 
@@ -141,6 +169,37 @@ function getRecipePlaceholderTone(mealType: RecipeMealType) {
   }
 }
 
+function getRecipePlaceholderEmoji(mealType: RecipeMealType) {
+  switch (mealType) {
+    case 'breakfast':
+    case 'brunch':
+      return '🍳';
+    case 'soups':
+      return '🍲';
+    case 'salads':
+      return '🥗';
+    case 'pasta':
+      return '🍝';
+    case 'pizza':
+      return '🍕';
+    case 'sandwiches':
+      return '🥪';
+    case 'sides':
+      return '🥔';
+    case 'desserts':
+    case 'baking':
+      return '🍰';
+    case 'drinks':
+      return '🥤';
+    case 'appetizers':
+      return '🥣';
+    case 'sauces':
+      return '🥫';
+    default:
+      return '🍽️';
+  }
+}
+
 function getShortRecipeDescription(recipe: Recipe) {
   const text = recipe.description.trim();
   if (!text) return '';
@@ -153,7 +212,7 @@ function getShortRecipeDescription(recipe: Recipe) {
   return `${compact.slice(0, 85).trimEnd()}...`;
 }
 
-export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete }: Props) {
+export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
@@ -405,6 +464,47 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
 
   const selectedRecipe = selectedRecipeId ? catalogRecipes.find((recipe) => recipe.id === selectedRecipeId) || null : null;
 
+  // Live customization: chosen option per choice slot; recomputed nutrition + ingredients.
+  const [recipeSelection, setRecipeSelection] = useState<RecipeSelection>({});
+  const [logMealType, setLogMealType] = useState<NutritionMealType>('lunch');
+  const [logServings, setLogServings] = useState(1);
+  const [logAdded, setLogAdded] = useState(false);
+  useEffect(() => {
+    setRecipeSelection({});
+    setLogServings(1);
+    setLogAdded(false);
+    setLogMealType(defaultMealTypeForSlot(selectedRecipe?.mealSlot));
+    // selectedRecipe is keyed by selectedRecipeId; re-running on id change is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRecipeId]);
+
+  const recipeView = useMemo(() => {
+    if (!selectedRecipe) return null;
+    return {
+      nutrition: computeRecipeNutritionForSelection(selectedRecipe, recipeSelection).nutrition,
+      ingredients: resolveRecipeIngredients(selectedRecipe.ingredients, selectedRecipe.choices, recipeSelection),
+    };
+  }, [selectedRecipe, recipeSelection]);
+
+  function handleLogToToday() {
+    if (!selectedRecipe || !recipeView || !onNutritionEntriesChange) return;
+    const servings = Math.max(1, logServings);
+    const n = recipeView.nutrition;
+    const round1 = (value: number) => Math.round(value * servings * 10) / 10;
+    const entry: NutritionFoodEntry = {
+      id: createRecipeLogId(),
+      name: `${selectedRecipe.title}${servings > 1 ? ` ×${servings}` : ''}`,
+      mealType: logMealType,
+      date: todayDateKey(),
+      calories: String(Math.round(n.calories * servings)),
+      protein: String(round1(n.protein)),
+      fat: String(round1(n.fat)),
+      carbs: String(round1(n.carbs)),
+    };
+    onNutritionEntriesChange((prev) => [entry, ...prev]);
+    setLogAdded(true);
+  }
+
   return (
     <>
       <ScrollView contentContainerStyle={styles.content}>
@@ -552,9 +652,9 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                     style={[styles.recipeCard, gridMode && styles.recipeCardGrid, gridMode && isMobile && styles.recipeCardGridMobile, active && styles.recipeCardActive]}
                     onPress={() => setSelectedRecipeId(recipe.id)}
                   >
-                    {recipe.photoUri ? (
+                    {RECIPE_IMAGES[recipe.id] || recipe.photoUri ? (
                       <View style={[styles.recipeCardPhotoFrame, gridMode && styles.recipeCardPhotoFrameGrid]}>
-                        <Image source={{ uri: recipe.photoUri }} style={[styles.recipeCardPhoto, gridMode && styles.recipeCardPhotoGrid]} resizeMode="cover" />
+                        <Image source={RECIPE_IMAGES[recipe.id] || { uri: recipe.photoUri }} style={[styles.recipeCardPhoto, gridMode && styles.recipeCardPhotoGrid]} resizeMode="cover" />
                       </View>
                     ) : (
                       <View
@@ -571,6 +671,11 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                             { backgroundColor: `${placeholderTone.accent}22` },
                           ]}
                         />
+                        <View style={styles.recipeCardPhotoEmojiWrap} pointerEvents="none">
+                          <Text style={[styles.recipeCardPhotoEmoji, gridMode && styles.recipeCardPhotoEmojiGrid]}>
+                            {getRecipePlaceholderEmoji(recipe.mealType)}
+                          </Text>
+                        </View>
                         <Text style={[styles.recipeCardPhotoLabel, gridMode && styles.recipeCardPhotoLabelGrid, { color: placeholderTone.accent }]}>
                           {selectedMealTypeLabel(recipe.mealType)}
                         </Text>
@@ -630,7 +735,29 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 </Pressable>
               </View>
 
-              {selectedRecipe.photoUri ? <Image source={{ uri: selectedRecipe.photoUri }} style={[styles.modalRecipePhoto, isMobile && styles.modalRecipePhotoMobile]} resizeMode="cover" /> : null}
+              {RECIPE_IMAGES[selectedRecipe.id] || selectedRecipe.photoUri ? (
+                <Image
+                  source={RECIPE_IMAGES[selectedRecipe.id] || { uri: selectedRecipe.photoUri }}
+                  style={[styles.modalRecipePhoto, isMobile && styles.modalRecipePhotoMobile]}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.modalRecipePhoto,
+                    isMobile && styles.modalRecipePhotoMobile,
+                    styles.modalPhotoPlaceholder,
+                    { backgroundColor: getRecipePlaceholderTone(selectedRecipe.mealType).bg },
+                  ]}
+                >
+                  <Text style={styles.modalPhotoPlaceholderEmoji}>{getRecipePlaceholderEmoji(selectedRecipe.mealType)}</Text>
+                </View>
+              )}
+              {!RECIPE_IMAGES[selectedRecipe.id] && selectedRecipe.photoUri && selectedRecipe.photoCredit ? (
+                <Text style={styles.photoCreditText}>
+                  Photo: {selectedRecipe.photoCredit.name} / {selectedRecipe.photoCredit.source}
+                </Text>
+              ) : null}
 
               <View style={[styles.modalStatsRow, isMobile && styles.modalStatsRowMobile]}>
                 <View style={styles.modalStatCard}>
@@ -649,19 +776,19 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
 
               <View style={[styles.nutritionRow, isMobile && styles.nutritionRowMobile]}>
                 <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
-                  <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.calories}</Text>
+                  <Text style={styles.nutritionValue}>{(recipeView?.nutrition ?? selectedRecipe.nutritionPerServing).calories}</Text>
                   <Text style={styles.nutritionLabel}>kcal</Text>
                 </View>
                 <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
-                  <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.protein} g</Text>
+                  <Text style={styles.nutritionValue}>{(recipeView?.nutrition ?? selectedRecipe.nutritionPerServing).protein} g</Text>
                   <Text style={styles.nutritionLabel}>protein</Text>
                 </View>
                 <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
-                  <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.fat} g</Text>
+                  <Text style={styles.nutritionValue}>{(recipeView?.nutrition ?? selectedRecipe.nutritionPerServing).fat} g</Text>
                   <Text style={styles.nutritionLabel}>fat</Text>
                 </View>
                 <View style={[styles.nutritionCard, isMobile && styles.nutritionCardMobile]}>
-                  <Text style={styles.nutritionValue}>{selectedRecipe.nutritionPerServing.carbs} g</Text>
+                  <Text style={styles.nutritionValue}>{(recipeView?.nutrition ?? selectedRecipe.nutritionPerServing).carbs} g</Text>
                   <Text style={styles.nutritionLabel}>carbs</Text>
                 </View>
               </View>
@@ -678,13 +805,41 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                   </View>
                 ) : null}
 
+                {selectedRecipe.choices?.length ? (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Customize</Text>
+                    {selectedRecipe.choices.map((choiceItem) => {
+                      const currentOptionId = recipeSelection[choiceItem.id] ?? choiceItem.defaultOptionId;
+                      return (
+                        <View key={choiceItem.id} style={styles.choiceRow}>
+                          <Text style={styles.choiceLabel}>{choiceItem.label}</Text>
+                          <View style={styles.choiceOptions}>
+                            {choiceItem.options.map((option) => {
+                              const active = option.id === currentOptionId;
+                              return (
+                                <Pressable
+                                  key={option.id}
+                                  style={[styles.choiceChip, active && styles.choiceChipActive]}
+                                  onPress={() => setRecipeSelection((prev) => ({ ...prev, [choiceItem.id]: option.id }))}
+                                >
+                                  <Text style={[styles.choiceChipText, active && styles.choiceChipTextActive]}>{option.label}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailHint}>Nutrition values are shown per serving.</Text>
                 </View>
 
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSectionTitle}>Ingredients</Text>
-                  {selectedRecipe.ingredients.map((ingredient) => (
+                  {(recipeView?.ingredients ?? selectedRecipe.ingredients).map((ingredient) => (
                     <View key={ingredient.id} style={styles.detailRow}>
                       <Text style={styles.detailBullet}>•</Text>
                       <Text style={styles.detailText}>
@@ -707,10 +862,49 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                   ))}
                 </View>
 
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>Use Later</Text>
-                  <Text style={styles.futureText}>Next step: connect this recipe to the weekly meal planner and staff meals screen.</Text>
-                </View>
+                {onNutritionEntriesChange ? (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Log this meal</Text>
+                    <View style={styles.choiceOptions}>
+                      {LOG_MEAL_TYPES.map((mealTypeOption) => {
+                        const active = logMealType === mealTypeOption;
+                        return (
+                          <Pressable
+                            key={mealTypeOption}
+                            style={[styles.choiceChip, active && styles.choiceChipActive]}
+                            onPress={() => {
+                              setLogMealType(mealTypeOption);
+                              setLogAdded(false);
+                            }}
+                          >
+                            <Text style={[styles.choiceChipText, active && styles.choiceChipTextActive]}>
+                              {mealTypeOption.charAt(0).toUpperCase() + mealTypeOption.slice(1)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.logServingsRow}>
+                      <Text style={styles.choiceLabel}>Servings</Text>
+                      <View style={styles.stepper}>
+                        <Pressable style={styles.stepperBtn} onPress={() => { setLogServings((value) => Math.max(1, value - 1)); setLogAdded(false); }}>
+                          <Text style={styles.stepperBtnText}>−</Text>
+                        </Pressable>
+                        <Text style={styles.stepperValue}>{logServings}</Text>
+                        <Pressable style={styles.stepperBtn} onPress={() => { setLogServings((value) => value + 1); setLogAdded(false); }}>
+                          <Text style={styles.stepperBtnText}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    <Pressable style={[styles.logBtn, logAdded && styles.logBtnDone]} onPress={handleLogToToday}>
+                      <Text style={styles.logBtnText}>
+                        {logAdded
+                          ? 'Added to today ✓  ·  add again'
+                          : `Add to today  ·  ${Math.round((recipeView?.nutrition.calories ?? 0) * Math.max(1, logServings))} kcal`}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </ScrollView>
             </View>
           ) : null}
@@ -1294,6 +1488,33 @@ const createStyles = (colors: ThemeColors) =>
     recipeCardPhotoLabelGrid: {
       fontSize: 11,
       letterSpacing: 0.6,
+    },
+    recipeCardPhotoEmojiWrap: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    recipeCardPhotoEmoji: {
+      fontSize: 64,
+      opacity: 0.9,
+    },
+    recipeCardPhotoEmojiGrid: {
+      fontSize: 40,
+    },
+    modalPhotoPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalPhotoPlaceholderEmoji: {
+      fontSize: 72,
+      opacity: 0.9,
+    },
+    photoCreditText: {
+      color: colors.subtext,
+      fontSize: 10,
+      marginTop: -6,
+      marginBottom: 6,
+      textAlign: 'right',
     },
     recipeCardTop: {
       flexDirection: 'row',
@@ -1907,6 +2128,90 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
       fontSize: 13,
       lineHeight: 18,
+    },
+    choiceRow: {
+      gap: 8,
+      paddingVertical: 6,
+    },
+    choiceLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    choiceOptions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    choiceChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    choiceChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    choiceChipText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    choiceChipTextActive: {
+      color: '#ffffff',
+    },
+    logServingsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    stepperBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepperBtnText: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+      lineHeight: 20,
+    },
+    stepperValue: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '800',
+      minWidth: 20,
+      textAlign: 'center',
+    },
+    logBtn: {
+      marginTop: 10,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    logBtnDone: {
+      backgroundColor: '#22c55e',
+    },
+    logBtnText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '800',
     },
     detailRow: {
       flexDirection: 'row',

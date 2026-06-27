@@ -16,6 +16,8 @@
     "validateRecipeNutrition.ts",
     "pilotBreakfasts.ts",
     "generateRecipes.ts",
+    "fetchRecipePhotos.ts",
+    "generateAiPhotos.ts",
     "recipeSource.ts",
     "../src/lib/recipeNutrition.ts",
     "../src/lib/recipeIngredients.ts",

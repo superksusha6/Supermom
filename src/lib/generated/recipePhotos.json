@@ -1,0 +1,506 @@
+{
+  "rcp-classic-omelet": {
+    "photoUri": "https://images.pexels.com/photos/7780036/pexels-photo-7780036.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Denys Gromov",
+    "url": "https://www.pexels.com/photo/yellow-dish-on-white-ceramic-plate-7780036/",
+    "source": "Pexels"
+  },
+  "rcp-scrambled-eggs": {
+    "photoUri": "https://images.pexels.com/photos/7696496/pexels-photo-7696496.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "cottonbro studio",
+    "url": "https://www.pexels.com/photo/cooked-food-in-the-frying-pan-7696496/",
+    "source": "Pexels"
+  },
+  "rcp-fried-eggs": {
+    "photoUri": "https://images.pexels.com/photos/722223/pexels-photo-722223.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Kam Photos",
+    "url": "https://www.pexels.com/photo/fried-egg-with-seasonings-722223/",
+    "source": "Pexels"
+  },
+  "rcp-boiled-eggs": {
+    "photoUri": "https://images.pexels.com/photos/36227428/pexels-photo-36227428.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Fino Tereno",
+    "url": "https://www.pexels.com/photo/cracked-boiling-egg-in-water-close-up-36227428/",
+    "source": "Pexels"
+  },
+  "rcp-oatmeal-porridge": {
+    "photoUri": "https://images.pexels.com/photos/1321884/pexels-photo-1321884.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Valeria Boltneva",
+    "url": "https://www.pexels.com/photo/creamy-food-in-round-white-ceramic-bowl-1321884/",
+    "source": "Pexels"
+  },
+  "rcp-rice-porridge": {
+    "photoUri": "https://images.pexels.com/photos/5652188/pexels-photo-5652188.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Kai-Chieh Chan",
+    "url": "https://www.pexels.com/photo/rice-gruel-in-a-bowl-5652188/",
+    "source": "Pexels"
+  },
+  "rcp-semolina-porridge": {
+    "photoUri": "https://images.pexels.com/photos/7352787/pexels-photo-7352787.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Max Bonda",
+    "url": "https://www.pexels.com/photo/a-person-eating-a-bowl-of-wheat-porridge-7352787/",
+    "source": "Pexels"
+  },
+  "rcp-buckwheat-porridge": {
+    "photoUri": "https://images.pexels.com/photos/10810365/pexels-photo-10810365.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Igor Kocka",
+    "url": "https://www.pexels.com/photo/bowl-of-healthy-food-for-breakfast-10810365/",
+    "source": "Pexels"
+  },
+  "rcp-syrniki": {
+    "photoUri": "https://images.pexels.com/photos/257817/pexels-photo-257817.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Pixabay",
+    "url": "https://www.pexels.com/photo/close-up-of-dessert-served-in-plate-257817/",
+    "source": "Pexels"
+  },
+  "rcp-cottage-cheese-bake": {
+    "photoUri": "https://images.pexels.com/photos/4040692/pexels-photo-4040692.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "www.kaboompics.com",
+    "url": "https://www.pexels.com/photo/delicious-piece-of-cheesecake-on-plate-4040692/",
+    "source": "Pexels"
+  },
+  "rcp-banana-pancakes": {
+    "photoUri": "https://images.pexels.com/photos/4725658/pexels-photo-4725658.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Polina Tankilevitch",
+    "url": "https://www.pexels.com/photo/pancakes-and-banana-slices-4725658/",
+    "source": "Pexels"
+  },
+  "rcp-yogurt-berries-granola": {
+    "photoUri": "https://images.pexels.com/photos/566564/pexels-photo-566564.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Foodie Factor",
+    "url": "https://www.pexels.com/photo/acai-bowl-with-mixed-berries-566564/",
+    "source": "Pexels"
+  },
+  "rcp-avocado-toast": {
+    "photoUri": "https://images.pexels.com/photos/7936964/pexels-photo-7936964.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Nicola Barts",
+    "url": "https://www.pexels.com/photo/bread-with-avocado-7936964/",
+    "source": "Pexels"
+  },
+  "rcp-greek-salad": {
+    "photoUri": "https://images.pexels.com/photos/3026013/pexels-photo-3026013.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "TUBARONES PHOTOGRAPHY",
+    "url": "https://www.pexels.com/photo/veggie-dish-on-white-ceramic-bowl-3026013/",
+    "source": "Pexels"
+  },
+  "rcp-caesar-chicken": {
+    "photoUri": "https://images.pexels.com/photos/29935339/pexels-photo-29935339.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "khezez  | خزاز",
+    "url": "https://www.pexels.com/photo/delicious-caesar-salad-with-grilled-chicken-29935339/",
+    "source": "Pexels"
+  },
+  "rcp-caesar-shrimp": {
+    "photoUri": "https://images.pexels.com/photos/4669306/pexels-photo-4669306.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Denys Gromov",
+    "url": "https://www.pexels.com/photo/salad-with-shrimps-4669306/",
+    "source": "Pexels"
+  },
+  "rcp-caprese": {
+    "photoUri": "https://images.pexels.com/photos/5639959/pexels-photo-5639959.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Shameel mukkath",
+    "url": "https://www.pexels.com/photo/sliced-tomatoes-and-mozzarella-cheese-on-wooden-board-5639959/",
+    "source": "Pexels"
+  },
+  "rcp-green-salad": {
+    "photoUri": "https://images.pexels.com/photos/4958946/pexels-photo-4958946.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "ROMAN ODINTSOV",
+    "url": "https://www.pexels.com/photo/vegetable-salad-on-black-and-white-ceramic-plate-4958946/",
+    "source": "Pexels"
+  },
+  "rcp-vegetable-salad": {
+    "photoUri": "https://images.pexels.com/photos/20532525/pexels-photo-20532525.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Audy of  Course",
+    "url": "https://www.pexels.com/photo/salad-with-eggs-in-bowl-20532525/",
+    "source": "Pexels"
+  },
+  "rcp-beetroot-goat-cheese": {
+    "photoUri": "https://images.pexels.com/photos/10165790/pexels-photo-10165790.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Vladimír  Sládek",
+    "url": "https://www.pexels.com/photo/close-up-shot-of-vegetable-salad-on-white-ceramic-plate-10165790/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-noodle-soup": {
+    "photoUri": "https://images.pexels.com/photos/10172749/pexels-photo-10172749.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Jana Ohajdova",
+    "url": "https://www.pexels.com/photo/a-close-up-shot-of-noodles-in-a-bowl-10172749/",
+    "source": "Pexels"
+  },
+  "rcp-meatball-soup": {
+    "photoUri": "https://images.pexels.com/photos/38017797/pexels-photo-38017797.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Muhammad  Khawar Nazir",
+    "url": "https://www.pexels.com/photo/delicious-homemade-meatball-soup-in-white-bowl-38017797/",
+    "source": "Pexels"
+  },
+  "rcp-tomato-soup": {
+    "photoUri": "https://images.pexels.com/photos/36430086/pexels-photo-36430086.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Willians Huerta",
+    "url": "https://www.pexels.com/photo/chef-garnishing-tomato-soup-with-fresh-ingredients-36430086/",
+    "source": "Pexels"
+  },
+  "rcp-pumpkin-cream-soup": {
+    "photoUri": "https://images.pexels.com/photos/9124024/pexels-photo-9124024.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Loren Castillo",
+    "url": "https://www.pexels.com/photo/a-bowl-of-soup-and-spoon-surrounded-by-pumpkins-and-leaves-9124024/",
+    "source": "Pexels"
+  },
+  "rcp-mushroom-cream-soup": {
+    "photoUri": "https://images.pexels.com/photos/5175536/pexels-photo-5175536.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Shameel mukkath",
+    "url": "https://www.pexels.com/photo/white-and-black-ceramic-bowl-beside-a-bread-5175536/",
+    "source": "Pexels"
+  },
+  "rcp-lentil-soup": {
+    "photoUri": "https://images.pexels.com/photos/29850843/pexels-photo-29850843.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Snappr",
+    "url": "https://www.pexels.com/photo/warm-and-hearty-lentil-soup-in-terra-cotta-bowl-29850843/",
+    "source": "Pexels"
+  },
+  "rcp-grilled-chicken-breast": {
+    "photoUri": "https://images.pexels.com/photos/8250430/pexels-photo-8250430.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Julia Filirovska",
+    "url": "https://www.pexels.com/photo/a-pan-with-chicken-breast-8250430/",
+    "source": "Pexels"
+  },
+  "rcp-roast-chicken-vegetables": {
+    "photoUri": "https://images.pexels.com/photos/37100056/pexels-photo-37100056.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Lionel Ntasano",
+    "url": "https://www.pexels.com/photo/baked-chicken-with-roasted-vegetables-in-kitchen-37100056/",
+    "source": "Pexels"
+  },
+  "rcp-beef-stroganoff": {
+    "photoUri": "https://images.pexels.com/photos/29935503/pexels-photo-29935503.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "khezez  | خزاز",
+    "url": "https://www.pexels.com/photo/delicious-beef-stroganoff-meal-with-vegetables-29935503/",
+    "source": "Pexels"
+  },
+  "rcp-beef-cutlets": {
+    "photoUri": "https://images.pexels.com/photos/27390931/pexels-photo-27390931.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Yasin Koçtepe",
+    "url": "https://www.pexels.com/photo/a-plate-of-food-with-fries-and-meat-on-it-27390931/",
+    "source": "Pexels"
+  },
+  "rcp-beef-stew": {
+    "photoUri": "https://images.pexels.com/photos/34822475/pexels-photo-34822475.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "SAMY PHOTOGRAPHY",
+    "url": "https://www.pexels.com/photo/traditional-mexican-beef-stew-in-a-bowl-34822475/",
+    "source": "Pexels"
+  },
+  "rcp-cod-vegetables": {
+    "photoUri": "https://images.pexels.com/photos/28191271/pexels-photo-28191271.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Bingqian Li",
+    "url": "https://www.pexels.com/photo/a-white-plate-with-fish-and-vegetables-on-it-28191271/",
+    "source": "Pexels"
+  },
+  "rcp-fish-cutlets": {
+    "photoUri": "https://images.pexels.com/photos/5708088/pexels-photo-5708088.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "JUSTIN JOSEPH",
+    "url": "https://www.pexels.com/photo/cutlets-on-a-white-ceramic-plate-5708088/",
+    "source": "Pexels"
+  },
+  "rcp-pasta-bolognese": {
+    "photoUri": "https://images.pexels.com/photos/31637792/pexels-photo-31637792.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Gu Ko",
+    "url": "https://www.pexels.com/photo/delicious-spaghetti-bolognese-with-fresh-herbs-31637792/",
+    "source": "Pexels"
+  },
+  "rcp-pasta-carbonara": {
+    "photoUri": "https://images.pexels.com/photos/31779533/pexels-photo-31779533.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Adriano Bragi",
+    "url": "https://www.pexels.com/photo/delicious-creamy-spaghetti-carbonara-dish-31779533/",
+    "source": "Pexels"
+  },
+  "rcp-pasta-alfredo": {
+    "photoUri": "https://images.pexels.com/photos/11220208/pexels-photo-11220208.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Engin Akyurt",
+    "url": "https://www.pexels.com/photo/traditional-italian-fettuccine-alfredo-pasta-on-ceramic-plate-11220208/",
+    "source": "Pexels"
+  },
+  "rcp-pasta-pesto": {
+    "photoUri": "https://images.pexels.com/photos/4162492/pexels-photo-4162492.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Daniele Sgura",
+    "url": "https://www.pexels.com/photo/delicious-pesto-pasta-on-a-plate-4162492/",
+    "source": "Pexels"
+  },
+  "rcp-pasta-salmon": {
+    "photoUri": "https://images.pexels.com/photos/5175574/pexels-photo-5175574.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Shameel mukkath",
+    "url": "https://www.pexels.com/photo/pasta-in-a-ceramic-bowl-5175574/",
+    "source": "Pexels"
+  },
+  "rcp-lasagna": {
+    "photoUri": "https://images.pexels.com/photos/5724557/pexels-photo-5724557.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Christian Moises Pahati",
+    "url": "https://www.pexels.com/photo/baked-lasagna-on-a-disposable-food-tray-5724557/",
+    "source": "Pexels"
+  },
+  "rcp-mushroom-risotto": {
+    "photoUri": "https://images.pexels.com/photos/8864543/pexels-photo-8864543.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Vinícius Caricatte",
+    "url": "https://www.pexels.com/photo/cooked-food-on-white-ceramic-plate-8864543/",
+    "source": "Pexels"
+  },
+  "rcp-stuffed-peppers": {
+    "photoUri": "https://images.pexels.com/photos/1438540/pexels-photo-1438540.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Lisa from Pexels",
+    "url": "https://www.pexels.com/photo/green-bell-pepper-stuffed-with-couscous-1438540/",
+    "source": "Pexels"
+  },
+  "rcp-vegetable-stew": {
+    "photoUri": "https://images.pexels.com/photos/29021274/pexels-photo-29021274.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Patrick",
+    "url": "https://www.pexels.com/photo/fresh-mixed-vegetables-close-up-in-stew-29021274/",
+    "source": "Pexels"
+  },
+  "rcp-mashed-potatoes": {
+    "photoUri": "https://images.pexels.com/photos/13422423/pexels-photo-13422423.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Mateusz Feliksik",
+    "url": "https://www.pexels.com/photo/potatoes-and-a-potato-ricer-13422423/",
+    "source": "Pexels"
+  },
+  "rcp-baked-potato": {
+    "photoUri": "https://images.pexels.com/photos/9203737/pexels-photo-9203737.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Erik Mclean",
+    "url": "https://www.pexels.com/photo/baked-potatoes-on-a-tray-9203737/",
+    "source": "Pexels"
+  },
+  "rcp-bulgur-side": {
+    "photoUri": "https://images.pexels.com/photos/10487660/pexels-photo-10487660.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Victoria Bowers",
+    "url": "https://www.pexels.com/photo/brown-wooden-spoon-with-bulgur-10487660/",
+    "source": "Pexels"
+  },
+  "rcp-baked-vegetables": {
+    "photoUri": "https://images.pexels.com/photos/32659125/pexels-photo-32659125.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "🇻🇳🇻🇳Nguyễn Tiến Thịnh 🇻🇳🇻🇳",
+    "url": "https://www.pexels.com/photo/delicious-roasted-vegetables-in-baking-tray-32659125/",
+    "source": "Pexels"
+  },
+  "rcp-steamed-broccoli": {
+    "photoUri": "https://images.pexels.com/photos/8056670/pexels-photo-8056670.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Mateusz Feliksik",
+    "url": "https://www.pexels.com/photo/freshly-cooked-broccoli-on-stainless-pot-8056670/",
+    "source": "Pexels"
+  },
+  "rcp-banana-bread": {
+    "photoUri": "https://images.pexels.com/photos/5419308/pexels-photo-5419308.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Polina Tankilevitch",
+    "url": "https://www.pexels.com/photo/brown-bread-on-white-surface-5419308/",
+    "source": "Pexels"
+  },
+  "rcp-apple-crumble": {
+    "photoUri": "https://images.pexels.com/photos/34618726/pexels-photo-34618726.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Novkov Visuals",
+    "url": "https://www.pexels.com/photo/close-up-of-a-delicious-apple-crumble-tart-34618726/",
+    "source": "Pexels"
+  },
+  "rcp-baked-apples": {
+    "photoUri": "https://images.pexels.com/photos/6210973/pexels-photo-6210973.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Tim Douglas",
+    "url": "https://www.pexels.com/photo/faceless-woman-with-delicious-baked-apples-in-house-6210973/",
+    "source": "Pexels"
+  },
+  "rcp-oatmeal-cookies": {
+    "photoUri": "https://images.pexels.com/photos/8837035/pexels-photo-8837035.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Terrance Barksdale",
+    "url": "https://www.pexels.com/photo/close-up-photo-of-an-oatmeal-cookie-with-raisins-8837035/",
+    "source": "Pexels"
+  },
+  "rcp-chia-pudding": {
+    "photoUri": "https://images.pexels.com/photos/5947029/pexels-photo-5947029.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Charlotte May",
+    "url": "https://www.pexels.com/photo/glass-of-tasty-pudding-with-chia-seeds-5947029/",
+    "source": "Pexels"
+  },
+  "rcp-panna-cotta": {
+    "photoUri": "https://images.pexels.com/photos/5640039/pexels-photo-5640039.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Shameel mukkath",
+    "url": "https://www.pexels.com/photo/panna-cotta-with-caramel-and-fruits-5640039/",
+    "source": "Pexels"
+  },
+  "rcp-fruit-salad": {
+    "photoUri": "https://images.pexels.com/photos/34618713/pexels-photo-34618713.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Novkov Visuals",
+    "url": "https://www.pexels.com/photo/fresh-fruit-salad-with-pineapple-and-strawberries-34618713/",
+    "source": "Pexels"
+  },
+  "rcp-guacamole": {
+    "photoUri": "https://images.pexels.com/photos/4968297/pexels-photo-4968297.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "www.kaboompics.com",
+    "url": "https://www.pexels.com/photo/guacamole-with-nachos-and-tomatoes-beside-fresh-vegetables-4968297/",
+    "source": "Pexels"
+  },
+  "rcp-mac-and-cheese": {
+    "photoUri": "https://images.pexels.com/photos/10993148/pexels-photo-10993148.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Barbara G",
+    "url": "https://www.pexels.com/photo/tasty-man-n-cheese-in-plate-on-black-background-10993148/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-vegetable-puree": {
+    "photoUri": "https://images.pexels.com/photos/1370939/pexels-photo-1370939.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Jenna Hamra",
+    "url": "https://www.pexels.com/photo/cream-food-on-plate-1370939/",
+    "source": "Pexels"
+  },
+  "rcp-banana-oat-porridge": {
+    "photoUri": "https://images.pexels.com/photos/6050721/pexels-photo-6050721.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Vegan Liftz",
+    "url": "https://www.pexels.com/photo/sliced-bananas-in-white-ceramic-bowl-6050721/",
+    "source": "Pexels"
+  },
+  "rcp-french-toast": {
+    "photoUri": "https://images.pexels.com/photos/12091684/pexels-photo-12091684.png?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Vitaly Gorbachev",
+    "url": "https://www.pexels.com/photo/cake-with-fruits-12091684/",
+    "source": "Pexels"
+  },
+  "rcp-homemade-granola": {
+    "photoUri": "https://images.pexels.com/photos/3905826/pexels-photo-3905826.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Markus Spiske",
+    "url": "https://www.pexels.com/photo/food-in-jars-3905826/",
+    "source": "Pexels"
+  },
+  "rcp-tuna-salad": {
+    "photoUri": "https://images.pexels.com/photos/19572488/pexels-photo-19572488.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Tuğba ÖZTÜRK",
+    "url": "https://www.pexels.com/photo/bowl-of-salad-19572488/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-avocado-salad": {
+    "photoUri": "https://images.pexels.com/photos/30700803/pexels-photo-30700803.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Change C.C",
+    "url": "https://www.pexels.com/photo/delicious-cobb-salad-with-fresh-ingredients-30700803/",
+    "source": "Pexels"
+  },
+  "rcp-quinoa-salad": {
+    "photoUri": "https://images.pexels.com/photos/3872365/pexels-photo-3872365.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Polina Tankilevitch",
+    "url": "https://www.pexels.com/photo/close-up-photo-of-vegetables-3872365/",
+    "source": "Pexels"
+  },
+  "rcp-vegetable-soup": {
+    "photoUri": "https://images.pexels.com/photos/6646157/pexels-photo-6646157.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "RDNE Stock project",
+    "url": "https://www.pexels.com/photo/cooked-food-in-the-bowl-6646157/",
+    "source": "Pexels"
+  },
+  "rcp-broccoli-cream-soup": {
+    "photoUri": "https://images.pexels.com/photos/5639476/pexels-photo-5639476.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Shameel mukkath",
+    "url": "https://www.pexels.com/photo/close-up-shot-of-a-bowl-of-soup-5639476/",
+    "source": "Pexels"
+  },
+  "rcp-minestrone": {
+    "photoUri": "https://images.pexels.com/photos/27098516/pexels-photo-27098516.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Valeria Boltneva",
+    "url": "https://www.pexels.com/photo/bowl-of-tomato-soup-27098516/",
+    "source": "Pexels"
+  },
+  "rcp-cheese-soup": {
+    "photoUri": "https://images.pexels.com/photos/12664802/pexels-photo-12664802.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Gonzalo Acuña",
+    "url": "https://www.pexels.com/photo/brown-bread-with-yellow-cream-12664802/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-cream-sauce": {
+    "photoUri": "https://images.pexels.com/photos/9760214/pexels-photo-9760214.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Biel  Heinrich",
+    "url": "https://www.pexels.com/photo/close-up-photo-of-chicken-pasta-with-broccoli-in-a-white-bowl-9760214/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-cutlets": {
+    "photoUri": "https://images.pexels.com/photos/7783364/pexels-photo-7783364.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Daniel Fernandez",
+    "url": "https://www.pexels.com/photo/a-mouthwatering-food-with-lettuce-on-ceramic-plate-7783364/",
+    "source": "Pexels"
+  },
+  "rcp-chicken-meatballs": {
+    "photoUri": "https://images.pexels.com/photos/5419345/pexels-photo-5419345.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Polina Tankilevitch",
+    "url": "https://www.pexels.com/photo/meatballs-and-roasted-vegetables-on-a-plate-5419345/",
+    "source": "Pexels"
+  },
+  "rcp-turkey-cutlets": {
+    "photoUri": "https://images.pexels.com/photos/34636425/pexels-photo-34636425.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Novkov Visuals",
+    "url": "https://www.pexels.com/photo/crispy-schnitzel-with-fresh-salad-on-plate-34636425/",
+    "source": "Pexels"
+  },
+  "rcp-turkey-meatballs": {
+    "photoUri": "https://images.pexels.com/photos/34314421/pexels-photo-34314421.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "ERIVELTO Martins",
+    "url": "https://www.pexels.com/photo/delicious-meatballs-in-rich-tomato-sauce-34314421/",
+    "source": "Pexels"
+  },
+  "rcp-turkey-fillet-vegetables": {
+    "photoUri": "https://images.pexels.com/photos/37336823/pexels-photo-37336823.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Kemal Can",
+    "url": "https://www.pexels.com/photo/grilled-chicken-with-leafy-greens-and-vegetables-37336823/",
+    "source": "Pexels"
+  },
+  "rcp-goulash": {
+    "photoUri": "https://images.pexels.com/photos/10338435/pexels-photo-10338435.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Istvan Szabo",
+    "url": "https://www.pexels.com/photo/a-close-up-shot-of-a-chicken-paprikash-dish-10338435/",
+    "source": "Pexels"
+  },
+  "rcp-baked-salmon": {
+    "photoUri": "https://images.pexels.com/photos/33674236/pexels-photo-33674236.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "pedro furtado",
+    "url": "https://www.pexels.com/photo/gourmet-salmon-dish-with-rice-and-wedges-33674236/",
+    "source": "Pexels"
+  },
+  "rcp-baked-white-fish": {
+    "photoUri": "https://images.pexels.com/photos/36009488/pexels-photo-36009488.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Milton Das",
+    "url": "https://www.pexels.com/photo/gourmet-fish-fillet-with-spinach-and-sauce-plating-36009488/",
+    "source": "Pexels"
+  },
+  "rcp-white-rice": {
+    "photoUri": "https://images.pexels.com/photos/5850339/pexels-photo-5850339.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "FOX ^.ᆽ.^= ∫",
+    "url": "https://www.pexels.com/photo/a-rice-in-a-small-bowl-5850339/",
+    "source": "Pexels"
+  },
+  "rcp-buckwheat-side": {
+    "photoUri": "https://images.pexels.com/photos/7307354/pexels-photo-7307354.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Victoria Emerson",
+    "url": "https://www.pexels.com/photo/dish-with-buckwheat-meat-and-green-seasoning-7307354/",
+    "source": "Pexels"
+  },
+  "rcp-quinoa-side": {
+    "photoUri": "https://images.pexels.com/photos/248509/pexels-photo-248509.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Pixabay",
+    "url": "https://www.pexels.com/photo/close-up-of-salad-in-bowl-248509/",
+    "source": "Pexels"
+  },
+  "rcp-hummus": {
+    "photoUri": "https://images.pexels.com/photos/6145895/pexels-photo-6145895.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Anna Pyshniuk",
+    "url": "https://www.pexels.com/photo/close-up-shot-of-food-in-white-ceramic-bowl-6145895/",
+    "source": "Pexels"
+  },
+  "rcp-berry-smoothie": {
+    "photoUri": "https://images.pexels.com/photos/13427787/pexels-photo-13427787.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Mateusz Feliksik",
+    "url": "https://www.pexels.com/photo/smoothies-in-drinking-glasses-13427787/",
+    "source": "Pexels"
+  },
+  "rcp-green-smoothie": {
+    "photoUri": "https://images.pexels.com/photos/11896097/pexels-photo-11896097.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Sirikul R",
+    "url": "https://www.pexels.com/photo/close-up-photograph-of-a-vegetable-smoothie-beside-an-angel-sculpture-11896097/",
+    "source": "Pexels"
+  },
+  "rcp-lemonade": {
+    "photoUri": "https://images.pexels.com/photos/6209634/pexels-photo-6209634.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "Yan Krukau",
+    "url": "https://www.pexels.com/photo/close-up-of-pitcher-with-fruit-drink-6209634/",
+    "source": "Pexels"
+  },
+  "rcp-vegetable-puree": {
+    "photoUri": "https://images.pexels.com/photos/6853444/pexels-photo-6853444.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200",
+    "name": "cottonbro studio",
+    "url": "https://www.pexels.com/photo/a-bowl-of-pumpkin-soup-6853444/",
+    "source": "Pexels"
+  }
+}

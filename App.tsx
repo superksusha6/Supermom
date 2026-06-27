@@ -29,6 +29,8 @@ import {
   listCustomNutritionFoods,
   listFridgeItems,
   listHabitEntries,
+  listHomeIssues,
+  listHomeProviders,
   listNutritionEntries,
   listApprovalRequests,
   listPurchaseRequests,
@@ -43,6 +45,8 @@ import {
   replaceGeneratedChildEvents,
   replaceCycleEntries,
   replaceCustomNutritionFoods,
+  replaceHomeIssues,
+  replaceHomeProviders,
   replaceFridgeItems,
   replaceHabitEntries,
   replaceNutritionEntries,
@@ -71,6 +75,7 @@ import {
   updateTaskStatus,
 } from '@/lib/tasks';
 import { CalendarScreen } from '@/screens/CalendarScreen';
+import { FixItScreen } from '@/screens/FixItScreen';
 import { ChildrenScreen } from '@/screens/ChildrenScreen';
 import { HabitsScreen } from '@/screens/HabitsScreen';
 import { NutritionScreen } from '@/screens/NutritionScreen';
@@ -79,12 +84,12 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, HabitChallenge, HabitEntry, MealPlanSlot, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
 
-type Screen = 'calendar' | 'food' | 'family' | 'wellness';
+type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit';
 type FoodTab = 'recipes' | 'plan' | 'shopping';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
 type ParentLabel = 'Mom' | 'Dad';
@@ -716,6 +721,8 @@ function AppShell() {
   const [calorieOverride, setCalorieOverride] = useState('');
   const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
+  const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
+  const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
   const [habits, setHabits] = useState<HabitEntry[]>(() => loadLocalHabits());
   const [habitChallenges] = useState<HabitChallenge[]>([]);
   const [habitRemindersEnabled, setHabitRemindersEnabled] = useState(() => loadLocalHabitRemindersEnabled());
@@ -807,6 +814,13 @@ function AppShell() {
   const habitsLoadedRef = useRef(false);
   const nutritionLoadedRef = useRef(false);
   const customNutritionFoodsLoadedRef = useRef(false);
+  const homeFixitLoadedRef = useRef(false);
+  const homeIssuesRef = useRef<HomeIssue[]>([]);
+  const homeProvidersRef = useRef<HomeProvider[]>([]);
+  const homeIssuesSaveInFlightRef = useRef(false);
+  const homeIssuesNeedsResaveRef = useRef(false);
+  const homeProvidersSaveInFlightRef = useRef(false);
+  const homeProvidersNeedsResaveRef = useRef(false);
   const fridgeLoadedRef = useRef(false);
   const fridgeSaveInFlightRef = useRef(false);
   const fridgePendingSaveRef = useRef<FridgeItem[] | null>(null);
@@ -924,6 +938,60 @@ function AppShell() {
     customNutritionFoodsRef.current = nextValue;
     setCustomNutritionFoods(nextValue);
     void persistCustomNutritionFoods();
+  };
+
+  const persistHomeIssues = async () => {
+    if (homeIssuesSaveInFlightRef.current) {
+      homeIssuesNeedsResaveRef.current = true;
+      return;
+    }
+    const activeSession = sessionRef.current;
+    if (!activeSession || !isSupabaseConfigured || !homeFixitLoadedRef.current) return;
+    homeIssuesSaveInFlightRef.current = true;
+    try {
+      do {
+        homeIssuesNeedsResaveRef.current = false;
+        await replaceHomeIssues(activeSession, homeIssuesRef.current);
+      } while (homeIssuesNeedsResaveRef.current);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not save home issues.');
+    } finally {
+      homeIssuesSaveInFlightRef.current = false;
+    }
+  };
+
+  const persistHomeProviders = async () => {
+    if (homeProvidersSaveInFlightRef.current) {
+      homeProvidersNeedsResaveRef.current = true;
+      return;
+    }
+    const activeSession = sessionRef.current;
+    if (!activeSession || !isSupabaseConfigured || !homeFixitLoadedRef.current) return;
+    homeProvidersSaveInFlightRef.current = true;
+    try {
+      do {
+        homeProvidersNeedsResaveRef.current = false;
+        await replaceHomeProviders(activeSession, homeProvidersRef.current);
+      } while (homeProvidersNeedsResaveRef.current);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not save home contacts.');
+    } finally {
+      homeProvidersSaveInFlightRef.current = false;
+    }
+  };
+
+  const handleHomeIssuesChange: Dispatch<SetStateAction<HomeIssue[]>> = (value) => {
+    const nextValue = typeof value === 'function' ? value(homeIssuesRef.current) : value;
+    homeIssuesRef.current = nextValue;
+    setHomeIssues(nextValue);
+    void persistHomeIssues();
+  };
+
+  const handleHomeProvidersChange: Dispatch<SetStateAction<HomeProvider[]>> = (value) => {
+    const nextValue = typeof value === 'function' ? value(homeProvidersRef.current) : value;
+    homeProvidersRef.current = nextValue;
+    setHomeProviders(nextValue);
+    void persistHomeProviders();
   };
 
   const handleMealPlanProfilesChange: Dispatch<SetStateAction<MealPlanProfilePreference[]>> = (value) => {
@@ -1591,6 +1659,7 @@ function AppShell() {
     habitsLoadedRef.current = false;
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;
+    homeFixitLoadedRef.current = false;
     await Promise.all([
       refreshLiveTasks(ctx),
       refreshLiveCalendar(ctx),
@@ -1636,6 +1705,23 @@ function AppShell() {
         setCustomNutritionFoods([]);
         setTasksError(error instanceof Error ? error.message : 'Could not load custom foods.');
       }),
+      Promise.all([listHomeIssues(ctx), listHomeProviders(ctx)])
+        .then(([issues, provs]) => {
+          homeIssuesRef.current = issues;
+          homeProvidersRef.current = provs;
+          setHomeIssues(issues);
+          setHomeProviders(provs);
+          homeFixitLoadedRef.current = true;
+        })
+        .catch(() => {
+          // Tables may not be migrated yet — keep the section usable locally; the
+          // migration hint surfaces when the user first tries to save.
+          homeIssuesRef.current = [];
+          homeProvidersRef.current = [];
+          setHomeIssues([]);
+          setHomeProviders([]);
+          homeFixitLoadedRef.current = true;
+        }),
     ]);
   }
 
@@ -1962,6 +2048,10 @@ function AppShell() {
     setCalorieOverride('');
     setNutritionEntries([]);
     setCustomNutritionFoods([]);
+    setHomeIssues([]);
+    setHomeProviders([]);
+    homeIssuesRef.current = [];
+    homeProvidersRef.current = [];
     nutritionEntriesRef.current = [];
     customNutritionFoodsRef.current = [];
     habitsLoadedRef.current = false;
@@ -2006,6 +2096,7 @@ function AppShell() {
     preferencesLoadedRef.current = false;
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;
+    homeFixitLoadedRef.current = false;
     fridgeLoadedRef.current = false;
     manualThemeSelectionRef.current = false;
     nutritionSaveInFlightRef.current = false;
@@ -4129,6 +4220,7 @@ function AppShell() {
         <NavButton label="Food" active={screen === 'food'} onPress={() => setScreen('food')} />
         <NavButton label="Family" active={screen === 'family'} onPress={() => setScreen('family')} />
         <NavButton label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} />
+        <NavButton label="Fix it" active={screen === 'fixit'} onPress={() => setScreen('fixit')} />
       </View>
       {screen === 'food' ? (
         <View style={styles.subnav}>
@@ -4530,6 +4622,7 @@ function AppShell() {
             onRecipeCreate={handleRecipeCreate}
             onRecipeUpdate={handleRecipeUpdate}
             onRecipeDelete={handleRecipeDelete}
+            onNutritionEntriesChange={handleNutritionEntriesChange}
           />
         ) : null}
 
@@ -4552,6 +4645,15 @@ function AppShell() {
             challenges={habitChallenges}
             habitRemindersEnabled={habitRemindersEnabled}
             quickActionRequest={dashboardWellnessQuickAction}
+          />
+        ) : null}
+
+        {screen === 'fixit' ? (
+          <FixItScreen
+            issues={homeIssues}
+            onIssuesChange={handleHomeIssuesChange}
+            providers={homeProviders}
+            onProvidersChange={handleHomeProvidersChange}
           />
         ) : null}
 

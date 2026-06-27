@@ -6,12 +6,33 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Recipe } from '@/types/app';
 import { computeRecipeNutritionForSelection } from '@/lib/recipeNutrition';
-import { AUTHORED_BREAKFASTS, type AuthoredRecipe } from './recipeSource';
+import { AUTHORED_BREAKFASTS, AUTHORED_SALADS, AUTHORED_SOUPS, AUTHORED_MAINS, AUTHORED_SIDES, AUTHORED_DESSERTS, AUTHORED_SNACKS, AUTHORED_KIDS, type AuthoredRecipe } from './recipeSource';
 
-const AUTHORED: AuthoredRecipe[] = [...AUTHORED_BREAKFASTS];
+const AUTHORED: AuthoredRecipe[] = [
+  ...AUTHORED_BREAKFASTS,
+  ...AUTHORED_SALADS,
+  ...AUTHORED_SOUPS,
+  ...AUTHORED_MAINS,
+  ...AUTHORED_SIDES,
+  ...AUTHORED_DESSERTS,
+  ...AUTHORED_SNACKS,
+  ...AUTHORED_KIDS,
+];
+
+const projectRoot = path.resolve(__dirname, '..', '..');
+
+// Photo map (Pexels URLs + attribution), produced by scripts/fetchRecipePhotos.ts.
+type PhotoEntry = { photoUri: string; name: string; url: string; source: string };
+let photoMap: Record<string, PhotoEntry> = {};
+try {
+  photoMap = JSON.parse(fs.readFileSync(path.join(projectRoot, 'src', 'lib', 'generated', 'recipePhotos.json'), 'utf8'));
+} catch {
+  photoMap = {};
+}
 
 const recipes: Recipe[] = [];
 let allVerified = true;
+let withPhoto = 0;
 
 for (const authored of AUTHORED) {
   const result = computeRecipeNutritionForSelection(authored, undefined);
@@ -22,9 +43,16 @@ for (const authored of AUTHORED) {
       if (d.via !== 'foodRef' || d.grams == null) console.error('  ' + d.name + ' [' + d.via + ', ' + (d.grams ?? 'no grams') + ']');
     }
   }
-  recipes.push({ ...authored, nutritionPerServing: result.nutrition, nutritionConfidence: result.confidence });
+  const photo = photoMap[authored.id];
+  if (photo) withPhoto++;
+  recipes.push({
+    ...authored,
+    nutritionPerServing: result.nutrition,
+    nutritionConfidence: result.confidence,
+    ...(photo ? { photoUri: photo.photoUri, photoCredit: { name: photo.name, url: photo.url, source: photo.source } } : {}),
+  });
   const n = result.nutrition;
-  console.log(authored.id.padEnd(30) + String(n.calories).padStart(5) + ' kcal  ' + result.confidence);
+  console.log(authored.id.padEnd(30) + String(n.calories).padStart(5) + ' kcal  ' + result.confidence + (photo ? '  📷' : ''));
 }
 
 if (!allVerified) {
@@ -40,7 +68,6 @@ const header =
 const body = JSON.stringify(recipes, null, 2);
 const output = header + body + ';\n';
 
-const projectRoot = path.resolve(__dirname, '..', '..');
 const outPath = path.join(projectRoot, 'src', 'lib', 'generated', 'verifiedRecipeCatalog.ts');
 fs.writeFileSync(outPath, output, 'utf8');
 console.log('\nWrote ' + recipes.length + ' recipes -> ' + path.relative(projectRoot, outPath));

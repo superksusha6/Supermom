@@ -34,8 +34,11 @@ export const RECIPE_INGREDIENT_SUPPLEMENT: NutritionFoodPreset[] = [
 
   { id: 'ing-bacon', name: 'Bacon', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 393, proteinPer100g: 12.6, fatPer100g: 37, carbsPer100g: 1.4, aliases: ['bacon', 'pancetta'] },
   { id: 'ing-shrimp-raw', name: 'Shrimp, raw', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 99, proteinPer100g: 24, fatPer100g: 0.3, carbsPer100g: 0.2, aliases: ['shrimp', 'prawns'] },
+  { id: 'ing-ground-chicken', name: 'Ground chicken', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 143, proteinPer100g: 17.4, fatPer100g: 8.1, carbsPer100g: 0, aliases: ['ground chicken', 'chicken mince', 'minced chicken'] },
+  { id: 'ing-ground-turkey', name: 'Ground turkey', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 150, proteinPer100g: 18.5, fatPer100g: 8.3, carbsPer100g: 0, aliases: ['ground turkey', 'turkey mince', 'minced turkey'] },
 
   { id: 'ing-pesto', name: 'Pesto', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 418, proteinPer100g: 5.8, fatPer100g: 41, carbsPer100g: 6.3, aliases: ['pesto', 'basil pesto'] },
+  { id: 'ing-tahini', name: 'Tahini', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 595, proteinPer100g: 17, fatPer100g: 53.8, carbsPer100g: 21.2, aliases: ['tahini', 'sesame paste'] },
   { id: 'ing-mayonnaise', name: 'Mayonnaise', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 680, proteinPer100g: 1, fatPer100g: 75, carbsPer100g: 0.6, aliases: ['mayo', 'mayonnaise'] },
   { id: 'ing-parmesan-dressing', name: 'Caesar dressing', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 542, proteinPer100g: 2.5, fatPer100g: 57, carbsPer100g: 3.4, aliases: ['caesar dressing'] },
 
@@ -46,6 +49,17 @@ export const RECIPE_INGREDIENT_SUPPLEMENT: NutritionFoodPreset[] = [
 
   { id: 'ing-bread', name: 'Bread', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 265, proteinPer100g: 9, fatPer100g: 3.2, carbsPer100g: 49, aliases: ['bread', 'white bread', 'toast', 'baguette'] },
   { id: 'ing-breadcrumbs', name: 'Breadcrumbs', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 395, proteinPer100g: 13.4, fatPer100g: 5.3, carbsPer100g: 72, aliases: ['breadcrumbs', 'panko'] },
+  { id: 'ing-croutons', name: 'Croutons', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 407, proteinPer100g: 11.9, fatPer100g: 6.6, carbsPer100g: 73.5, aliases: ['croutons'] },
+
+  { id: 'ing-romaine', name: 'Romaine lettuce', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 17, proteinPer100g: 1.2, fatPer100g: 0.3, carbsPer100g: 3.3, aliases: ['romaine', 'lettuce', 'cos lettuce'] },
+  { id: 'ing-salad-greens', name: 'Salad greens', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 23, proteinPer100g: 2.2, fatPer100g: 0.5, carbsPer100g: 3.5, aliases: ['salad greens', 'mixed greens', 'arugula', 'rocket', 'spinach', 'mesclun', 'leaves'] },
+  { id: 'ing-beetroot-cooked', name: 'Beetroot, cooked', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 44, proteinPer100g: 1.7, fatPer100g: 0.2, carbsPer100g: 10, aliases: ['beetroot', 'beets', 'beet'] },
+  { id: 'ing-sweetcorn', name: 'Sweetcorn, canned', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 81, proteinPer100g: 2.9, fatPer100g: 0.6, carbsPer100g: 19, aliases: ['corn', 'sweetcorn', 'sweet corn'] },
+  { id: 'ing-balsamic', name: 'Balsamic vinegar', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 88, proteinPer100g: 0.5, fatPer100g: 0, carbsPer100g: 17, aliases: ['balsamic', 'balsamic vinegar'] },
+
+  { id: 'ing-pumpkin', name: 'Pumpkin', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 26, proteinPer100g: 1, fatPer100g: 0.1, carbsPer100g: 6.5, aliases: ['pumpkin', 'squash', 'butternut'] },
+  { id: 'ing-mushrooms', name: 'Mushrooms', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 22, proteinPer100g: 3.1, fatPer100g: 0.3, carbsPer100g: 3.3, aliases: ['mushrooms', 'champignon', 'button mushrooms'] },
+  { id: 'ing-celery', name: 'Celery', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 16, proteinPer100g: 0.7, fatPer100g: 0.2, carbsPer100g: 3, aliases: ['celery', 'celery stalk'] },
 
   { id: 'ing-semolina-dry', name: 'Semolina, dry', baseAmount: 'per 100 g', source: 'usda', sourceLabel: 'USDA', caloriesPer100g: 360, proteinPer100g: 12.7, fatPer100g: 1.1, carbsPer100g: 73, aliases: ['semolina', 'manka', 'cream of wheat'] },
   // Granola macros are derived from the homemade-granola recipe in this pilot

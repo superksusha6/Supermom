@@ -10,6 +10,8 @@ import {
   FridgeItemStatus,
   FridgeItemUnit,
   HabitEntry,
+  HomeIssue,
+  HomeProvider,
   NutritionFoodEntry,
   NutritionGoal,
   NutritionPace,
@@ -2174,4 +2176,122 @@ function toIsoFromAppDeadline(value: string) {
   const timePart = timeParts.join(' ').trim();
   if (!datePart || !timePart) return null;
   return composeStartsAt(datePart, timePart);
+}
+
+// --- Fix it: home issues + saved repair contacts -------------------------------------------
+
+function isMissingHomeTableError(error: unknown, table: string) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes(`relation "public.${table}" does not exist`) ||
+    message.includes(`Could not find the table 'public.${table}'`) ||
+    message.includes(`Could not find the table '${table}'`)
+  );
+}
+
+const HOME_FIXIT_MIGRATION_HINT =
+  'Supabase "Fix it" tables are missing. Run /Users/ksu/promom/smart-mom-app/supabase/home_fixit.sql in the Supabase SQL Editor, then refresh.';
+
+export async function listHomeIssues(session: AppSession): Promise<HomeIssue[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('home_issues')
+    .select('id, title, description, category, location, urgency, status, reported_by, provider_id, cost, scheduled_at, resolved_at, created_at')
+    .eq('family_id', session.familyId)
+    .order('created_at', { ascending: false });
+  if (isMissingHomeTableError(error, 'home_issues')) throw new Error(HOME_FIXIT_MIGRATION_HINT);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description || undefined,
+    category: row.category || 'other',
+    location: row.location || undefined,
+    urgency: (row.urgency as HomeIssue['urgency']) || 'normal',
+    status: (row.status as HomeIssue['status']) || 'new',
+    reportedBy: row.reported_by || undefined,
+    providerId: row.provider_id || undefined,
+    cost: row.cost != null ? Number(row.cost) : undefined,
+    scheduledAt: row.scheduled_at || undefined,
+    resolvedAt: row.resolved_at || undefined,
+    createdAt: row.created_at || undefined,
+  }));
+}
+
+export async function replaceHomeIssues(session: AppSession, issues: HomeIssue[]) {
+  const client = requireClient();
+  if (issues.length > 0) {
+    const { error } = await client.from('home_issues').upsert(
+      issues.map((issue) => ({
+        id: issue.id,
+        family_id: session.familyId,
+        created_by: session.userId,
+        title: issue.title,
+        description: issue.description || null,
+        category: issue.category || 'other',
+        location: issue.location || null,
+        urgency: issue.urgency || 'normal',
+        status: issue.status || 'new',
+        reported_by: issue.reportedBy || null,
+        provider_id: issue.providerId || null,
+        cost: issue.cost ?? null,
+        scheduled_at: issue.scheduledAt || null,
+        resolved_at: issue.resolvedAt || null,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'id' },
+    );
+    if (isMissingHomeTableError(error, 'home_issues')) throw new Error(HOME_FIXIT_MIGRATION_HINT);
+    if (error) throw error;
+  }
+  const keepIds = issues.map((issue) => issue.id);
+  let removal = client.from('home_issues').delete().eq('family_id', session.familyId);
+  if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
+  const { error: deleteError } = await removal;
+  if (deleteError && !isMissingHomeTableError(deleteError, 'home_issues')) throw deleteError;
+}
+
+export async function listHomeProviders(session: AppSession): Promise<HomeProvider[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('home_providers')
+    .select('id, name, category, phone, notes')
+    .eq('family_id', session.familyId)
+    .order('created_at', { ascending: false });
+  if (isMissingHomeTableError(error, 'home_providers')) throw new Error(HOME_FIXIT_MIGRATION_HINT);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category || undefined,
+    phone: row.phone || undefined,
+    notes: row.notes || undefined,
+  }));
+}
+
+export async function replaceHomeProviders(session: AppSession, providers: HomeProvider[]) {
+  const client = requireClient();
+  if (providers.length > 0) {
+    const { error } = await client.from('home_providers').upsert(
+      providers.map((provider) => ({
+        id: provider.id,
+        family_id: session.familyId,
+        created_by: session.userId,
+        name: provider.name,
+        category: provider.category || null,
+        phone: provider.phone || null,
+        notes: provider.notes || null,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'id' },
+    );
+    if (isMissingHomeTableError(error, 'home_providers')) throw new Error(HOME_FIXIT_MIGRATION_HINT);
+    if (error) throw error;
+  }
+  const keepIds = providers.map((provider) => provider.id);
+  let removal = client.from('home_providers').delete().eq('family_id', session.familyId);
+  if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
+  const { error: deleteError } = await removal;
+  if (deleteError && !isMissingHomeTableError(deleteError, 'home_providers')) throw deleteError;
 }
