@@ -287,15 +287,16 @@ export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChan
               {wizStep === 'area' ? (
                 <>
                   <Text style={styles.modalTitle}>What area?</Text>
-                  {FIXIT_TREE.map((area) => (
-                    <Pressable key={area.key} style={styles.optionRow} onPress={() => { setWizArea(area); setWizItem(null); setWizStep('item'); }}>
-                      <Text style={styles.optionEmoji}>{area.emoji}</Text>
-                      <Text style={styles.optionText}>{area.label}</Text>
-                      <Text style={styles.optionChevron}>›</Text>
-                    </Pressable>
-                  ))}
-                  <Pressable style={styles.optionOther} onPress={() => { setWizArea(null); setWizItem(null); setWizStep('custom'); }}>
-                    <Text style={styles.optionOtherText}>Something else — type it</Text>
+                  <View style={styles.tileGrid}>
+                    {FIXIT_TREE.map((area) => (
+                      <Pressable key={area.key} style={styles.tile} onPress={() => { setWizArea(area); setWizItem(null); setWizStep('item'); }}>
+                        <Text style={styles.tileEmoji}>{area.emoji}</Text>
+                        <Text style={styles.tileText} numberOfLines={2}>{area.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable style={styles.otherLink} onPress={() => { setWizArea(null); setWizItem(null); setWizStep('custom'); }}>
+                    <Text style={styles.otherLinkText}>Something else — type it</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -303,14 +304,15 @@ export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChan
               {wizStep === 'item' && wizArea ? (
                 <>
                   <Text style={styles.modalTitle}>{wizArea.emoji} Which item?</Text>
-                  {wizArea.items.map((item) => (
-                    <Pressable key={item.key} style={styles.optionRow} onPress={() => { setWizItem(item); setWizStep('symptom'); }}>
-                      <Text style={styles.optionText}>{item.label}</Text>
-                      <Text style={styles.optionChevron}>›</Text>
-                    </Pressable>
-                  ))}
-                  <Pressable style={styles.optionOther} onPress={() => { setWizItem(null); setWizStep('custom'); }}>
-                    <Text style={styles.optionOtherText}>Something else — type it</Text>
+                  <View style={styles.pillsWrap}>
+                    {wizArea.items.map((item) => (
+                      <Pressable key={item.key} style={styles.pickPill} onPress={() => { setWizItem(item); setWizStep('symptom'); }}>
+                        <Text style={styles.pickPillText}>{item.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable style={styles.otherLink} onPress={() => { setWizItem(null); setWizStep('custom'); }}>
+                    <Text style={styles.otherLinkText}>Something else — type it</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -318,15 +320,15 @@ export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChan
               {wizStep === 'symptom' && wizItem ? (
                 <>
                   <Text style={styles.modalTitle}>{wizItem.label} — what’s wrong?</Text>
-                  {wizItem.symptoms.map((s) => (
-                    <Pressable key={s.key} style={styles.optionRow} onPress={() => pickSymptom(s)}>
-                      <Text style={styles.optionText}>{s.label}</Text>
-                      {s.urgency === 'urgent' ? <Text style={styles.optionUrgent}>🔴</Text> : null}
-                      <Text style={styles.optionChevron}>›</Text>
-                    </Pressable>
-                  ))}
-                  <Pressable style={styles.optionOther} onPress={() => setWizStep('custom')}>
-                    <Text style={styles.optionOtherText}>Something else — type it</Text>
+                  <View style={styles.pillsWrap}>
+                    {wizItem.symptoms.map((s) => (
+                      <Pressable key={s.key} style={styles.pickPill} onPress={() => pickSymptom(s)}>
+                        <Text style={styles.pickPillText}>{s.urgency === 'urgent' ? '🔴 ' : ''}{s.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable style={styles.otherLink} onPress={() => setWizStep('custom')}>
+                    <Text style={styles.otherLinkText}>Something else — type it</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -343,7 +345,7 @@ export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChan
                     autoFocus
                     multiline
                   />
-                  <Pressable style={[styles.primaryBtn, styles.fullBtn]} onPress={submitCustom}>
+                  <Pressable style={[styles.primaryBtn, styles.continueBtn]} onPress={submitCustom}>
                     <Text style={styles.primaryBtnText}>Continue</Text>
                   </Pressable>
                 </>
@@ -366,28 +368,32 @@ export function FixItScreen({ issues, onIssuesChange, providers, onProvidersChan
                   <Text style={styles.fieldLabel}>Get a pro</Text>
                   {resProvider && resProvider.phone ? (
                     <>
-                      <Pressable style={[styles.primaryBtn, styles.fullBtn]} onPress={() => messagePro(resProvider.phone, resTitle)}>
-                        <Text style={styles.primaryBtnText}>💬 Message {firstName(resProvider.name)}</Text>
-                      </Pressable>
-                      <Pressable style={[styles.secondaryBtn, styles.fullBtn]} onPress={() => callPhone(resProvider.phone)}>
-                        <Text style={styles.secondaryBtnText}>📞 Call {firstName(resProvider.name)}</Text>
-                      </Pressable>
+                      <View style={styles.btnRow}>
+                        <Pressable style={[styles.primaryBtn, styles.rowBtn]} onPress={() => messagePro(resProvider.phone, resTitle)}>
+                          <Text style={styles.primaryBtnText}>💬 Message</Text>
+                        </Pressable>
+                        <Pressable style={[styles.secondaryBtn, styles.rowBtn]} onPress={() => callPhone(resProvider.phone)}>
+                          <Text style={styles.secondaryBtnText}>📞 Call</Text>
+                        </Pressable>
+                      </View>
                       <Text style={styles.hintText}>Sends {firstName(resProvider.name)}: “{resTitle}”.</Text>
                     </>
                   ) : (
                     <>
-                      <Pressable style={[styles.primaryBtn, styles.fullBtn]} onPress={() => { setWizOpen(false); openProviderForm(null, resCategory); }}>
-                        <Text style={styles.primaryBtnText}>➕ Add {resCatMeta.label.toLowerCase()}</Text>
-                      </Pressable>
-                      <Pressable style={[styles.secondaryBtn, styles.fullBtn]} onPress={() => findNearby(resCategory)}>
-                        <Text style={styles.secondaryBtnText}>🔍 Find one nearby</Text>
-                      </Pressable>
+                      <View style={styles.btnRow}>
+                        <Pressable style={[styles.primaryBtn, styles.rowBtn]} onPress={() => { setWizOpen(false); openProviderForm(null, resCategory); }}>
+                          <Text style={styles.primaryBtnText}>➕ Add</Text>
+                        </Pressable>
+                        <Pressable style={[styles.secondaryBtn, styles.rowBtn]} onPress={() => findNearby(resCategory)}>
+                          <Text style={styles.secondaryBtnText}>🔍 Find nearby</Text>
+                        </Pressable>
+                      </View>
                       <Text style={styles.hintText}>No {resCatMeta.label.toLowerCase()} saved yet. It’s already logged for the family.</Text>
                     </>
                   )}
 
-                  <Pressable style={[styles.ghostBtn, styles.fullBtn, { marginTop: 14 }]} onPress={() => setWizOpen(false)}>
-                    <Text style={styles.ghostBtnText}>Done</Text>
+                  <Pressable style={styles.doneLink} onPress={() => setWizOpen(false)}>
+                    <Text style={styles.doneLinkText}>Done</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -589,13 +595,20 @@ const createStyles = (colors: ThemeColors) =>
     modalContent: { padding: 18, gap: 4 },
     modalEyebrow: { color: colors.subtext, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
     modalTitle: { color: colors.text, fontSize: 20, fontWeight: '800', marginBottom: 10 },
-    optionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e1e8f2', paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8 },
-    optionEmoji: { fontSize: 20 },
-    optionText: { color: '#14233b', fontSize: 15, fontWeight: '700', flex: 1 },
-    optionUrgent: { fontSize: 12 },
-    optionChevron: { color: colors.subtext, fontSize: 18, fontWeight: '800' },
-    optionOther: { borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: '#c7d2e3', paddingHorizontal: 14, paddingVertical: 14, marginTop: 4 },
-    optionOtherText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
+    tileGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    tile: { width: '31.5%', backgroundColor: '#ffffff', borderRadius: 14, borderWidth: 1, borderColor: '#e1e8f2', paddingVertical: 14, paddingHorizontal: 6, alignItems: 'center', gap: 6, marginBottom: 10 },
+    tileEmoji: { fontSize: 24 },
+    tileText: { color: '#14233b', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+    pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    pickPill: { borderRadius: 999, borderWidth: 1, borderColor: '#d9e4f2', backgroundColor: '#ffffff', paddingHorizontal: 14, paddingVertical: 10 },
+    pickPillText: { color: '#14233b', fontSize: 14, fontWeight: '700' },
+    otherLink: { alignSelf: 'flex-start', paddingVertical: 10, marginTop: 6 },
+    otherLinkText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
+    btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+    rowBtn: { flex: 1, alignItems: 'center' },
+    continueBtn: { alignSelf: 'flex-start', marginTop: 12 },
+    doneLink: { alignSelf: 'center', paddingVertical: 10, marginTop: 14 },
+    doneLinkText: { color: colors.subtext, fontSize: 14, fontWeight: '800' },
     tipCard: { backgroundColor: '#f0f9ff', borderRadius: 12, borderWidth: 1, borderColor: '#bae6fd', padding: 14, gap: 4, marginBottom: 6 },
     tipHeader: { color: '#0369a1', fontSize: 13, fontWeight: '800', marginBottom: 2 },
     tipLine: { color: '#14233b', fontSize: 14, lineHeight: 20 },

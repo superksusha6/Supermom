@@ -620,14 +620,15 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 const placeholderTone = getRecipePlaceholderTone(recipe.mealType);
                 const shortDescription = getShortRecipeDescription(recipe);
                 const gridMode = layoutMode === 'grid';
+                const listRow = !gridMode && !isMobile;
                 return (
                   <Pressable
                     key={recipe.id}
-                    style={[styles.recipeCard, gridMode && styles.recipeCardGrid, gridMode && isMobile && styles.recipeCardGridMobile, active && styles.recipeCardActive]}
+                    style={[styles.recipeCard, gridMode && styles.recipeCardGrid, gridMode && isMobile && styles.recipeCardGridMobile, listRow && styles.recipeCardListRow, active && styles.recipeCardActive]}
                     onPress={() => setSelectedRecipeId(recipe.id)}
                   >
                     {RECIPE_IMAGES[recipe.id] || recipe.photoUri ? (
-                      <View style={[styles.recipeCardPhotoFrame, gridMode && styles.recipeCardPhotoFrameGrid]}>
+                      <View style={[styles.recipeCardPhotoFrame, gridMode && styles.recipeCardPhotoFrameGrid, listRow && styles.recipeCardPhotoFrameListRow]}>
                         <Image source={RECIPE_IMAGES[recipe.id] || { uri: recipe.photoUri }} style={[styles.recipeCardPhoto, gridMode && styles.recipeCardPhotoGrid]} resizeMode="cover" />
                       </View>
                     ) : (
@@ -635,6 +636,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                         style={[
                           styles.recipeCardPhotoFallback,
                           gridMode && styles.recipeCardPhotoFallbackGrid,
+                          listRow && styles.recipeCardPhotoFrameListRow,
                           { backgroundColor: placeholderTone.bg },
                         ]}
                       >
@@ -655,7 +657,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                         </Text>
                       </View>
                     )}
-                    <View style={styles.recipeCardTop}>
+                    <View style={[styles.recipeCardTop, listRow && styles.recipeCardTopListRow]}>
                       <View style={styles.recipeMetaWrap}>
                         <Text style={[styles.recipeTitle, gridMode && styles.recipeTitleGrid]} numberOfLines={gridMode ? 2 : 3}>
                           {recipe.title}
@@ -1383,6 +1385,20 @@ const createStyles = (colors: ThemeColors) =>
     recipeCardGrid: {
       width: '31.8%',
       padding: 10,
+    },
+    recipeCardListRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    recipeCardPhotoFrameListRow: {
+      width: 200,
+      height: 132,
+      marginBottom: 0,
+      flexShrink: 0,
+    },
+    recipeCardTopListRow: {
+      flex: 1,
     },
     recipeCardGridMobile: {
       width: '48.2%',
