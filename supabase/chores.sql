@@ -9,15 +9,18 @@ create table if not exists public.chores (
   recurrence text not null default 'weekly',   -- 'daily' | 'weekly' | 'once'
   verifier text not null default 'none',         -- 'none' | 'parent' | 'nanny'
   points int not null default 0,
-  status text not null default 'todo',           -- 'todo' | 'done' | 'verified'
+  last_done_date date,
+  last_verified_date date,
   sort_order int not null default 0,
   created_by uuid not null references auth.users(id) on delete restrict,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
--- Migration for installs created before the verifier column existed.
+-- Migrations for installs created before these columns existed.
 alter table public.chores add column if not exists verifier text not null default 'none';
+alter table public.chores add column if not exists last_done_date date;
+alter table public.chores add column if not exists last_verified_date date;
 
 create index if not exists chores_family_idx on public.chores (family_id);
 

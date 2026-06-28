@@ -24,6 +24,32 @@ function verifierLabel(v: ChoreVerifier) {
   return v === 'parent' ? 'checked by me' : v === 'nanny' ? 'checked by nanny' : '';
 }
 
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function weekKey(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / 86400000 / 7);
+  return `${date.getUTCFullYear()}-W${week}`;
+}
+// Is a stored completion date "in the current period" for this recurrence?
+function inCurrentPeriod(dateStr: string | undefined, recurrence: ChoreRecurrence) {
+  if (!dateStr) return false;
+  if (recurrence === 'once') return true;
+  if (recurrence === 'weekly') return weekKey(dateStr) === weekKey(todayKey());
+  return dateStr === todayKey();
+}
+function derivedStatus(chore: Chore): 'todo' | 'done' | 'verified' {
+  if (inCurrentPeriod(chore.lastVerifiedDate, chore.recurrence)) return 'verified';
+  if (inCurrentPeriod(chore.lastDoneDate, chore.recurrence)) return 'done';
+  return 'todo';
+}
+
 function newId() {
   const c = globalThis.crypto as Crypto | undefined;
   if (c?.randomUUID) return c.randomUUID();
@@ -81,7 +107,8 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
       recurrence,
       verifier,
       points: editing?.points || 0,
-      status: editing?.status || 'todo',
+      lastDoneDate: editing?.lastDoneDate,
+      lastVerifiedDate: editing?.lastVerifiedDate,
     };
     onChoresChange((prev) => (editing ? prev.map((c) => (c.id === editing.id ? next : c)) : [next, ...prev]));
     setFormOpen(false);
@@ -90,12 +117,16 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
     onChoresChange((prev) => prev.filter((c) => c.id !== id));
     setFormOpen(false);
   }
-  function setChoreStatus(id: string, status: Chore['status']) {
-    onChoresChange((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+  function patchChore(id: string, patch: Partial<Chore>) {
+    onChoresChange((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
-  // Circle: todo -> done (mark done). done/verified -> todo (reset, e.g. next day).
+  // Circle: not-done-this-period -> mark done today; already done -> undo for this period.
   function toggle(chore: Chore) {
-    setChoreStatus(chore.id, chore.status === 'todo' ? 'done' : 'todo');
+    if (derivedStatus(chore) === 'todo') patchChore(chore.id, { lastDoneDate: todayKey() });
+    else patchChore(chore.id, { lastDoneDate: undefined, lastVerifiedDate: undefined });
+  }
+  function verify(chore: Chore) {
+    patchChore(chore.id, { lastVerifiedDate: todayKey() });
   }
 
   return (
@@ -109,7 +140,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
           <Text style={styles.addBtnText}>+ Add</Text>
         </Pressable>
       </View>
-      <Text style={styles.subtitle}>Assign chores to your kids, mark them done. Stars & pocket money can be added later.</Text>
+      <Text style={styles.subtitle}>Assign chores; daily ones reset every day, weekly ones every week. Stars & pocket money come later.</Text>
 
       {chores.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -118,13 +149,14 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
         </View>
       ) : (
         groups.map((g) => {
-          const done = g.list.filter((c) => c.status !== 'todo').length;
+          const done = g.list.filter((c) => derivedStatus(c) !== 'todo').length;
           return (
             <View key={g.id || 'anyone'} style={styles.group}>
               <Text style={styles.groupLabel}>{g.name} · {done}/{g.list.length}</Text>
               {g.list.map((chore) => {
-                const completed = chore.status !== 'todo';
-                const awaitingCheck = chore.status === 'done' && chore.verifier !== 'none';
+                const status = derivedStatus(chore);
+                const completed = status !== 'todo';
+                const awaitingCheck = status === 'done' && chore.verifier !== 'none';
                 const checkBy = chore.verifier === 'nanny' ? 'Nanny' : 'Me';
                 return (
                   <View key={chore.id} style={styles.choreCard}>
@@ -135,14 +167,14 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
                       <Text style={[styles.choreTitle, completed && styles.choreTitleDone]} numberOfLines={1}>{chore.title}</Text>
                       <Text style={styles.choreMeta}>
                         {RECURRENCE.find((r) => r.key === chore.recurrence)?.label}
-                        {chore.status === 'verified' ? ` · ✓ ${verifierLabel(chore.verifier)}` : chore.verifier !== 'none' ? ` · ${verifierLabel(chore.verifier)}` : ''}
+                        {status === 'verified' ? ` · ✓ ${verifierLabel(chore.verifier)}` : chore.verifier !== 'none' ? ` · ${verifierLabel(chore.verifier)}` : ''}
                       </Text>
                     </Pressable>
                     {awaitingCheck ? (
-                      <Pressable style={styles.verifyPill} onPress={() => setChoreStatus(chore.id, 'verified')}>
+                      <Pressable style={styles.verifyPill} onPress={() => verify(chore)}>
                         <Text style={styles.verifyPillText}>Verify ({checkBy})</Text>
                       </Pressable>
-                    ) : chore.status === 'verified' ? (
+                    ) : status === 'verified' ? (
                       <Text style={styles.verifiedTag}>✓ checked</Text>
                     ) : null}
                   </View>

@@ -143,7 +143,10 @@ export type Chore = {
   recurrence: ChoreRecurrence;
   verifier: ChoreVerifier;
   points: number;
-  status: ChoreStatus;
+  // Date (YYYY-MM-DD) the chore was last marked done / verified. "Done for the
+  // current period" is derived from these + recurrence, so it resets each day/week.
+  lastDoneDate?: string;
+  lastVerifiedDate?: string;
 };
 
 export type HabitEntry = {
