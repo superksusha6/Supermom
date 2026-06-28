@@ -9,6 +9,7 @@ import {
   FridgeItemCategory,
   FridgeItemStatus,
   FridgeItemUnit,
+  Chore,
   HabitEntry,
   HomeIssue,
   HomeProvider,
@@ -2294,4 +2295,59 @@ export async function replaceHomeProviders(session: AppSession, providers: HomeP
   if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
   const { error: deleteError } = await removal;
   if (deleteError && !isMissingHomeTableError(deleteError, 'home_providers')) throw deleteError;
+}
+
+// --- Chores --------------------------------------------------------------------------------
+
+const CHORES_MIGRATION_HINT =
+  'Supabase "chores" table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/chores.sql in the Supabase SQL Editor, then refresh.';
+
+export async function listChores(session: AppSession): Promise<Chore[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('chores')
+    .select('id, title, child_profile_id, recurrence, requires_approval, points, status, sort_order')
+    .eq('family_id', session.familyId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    childId: row.child_profile_id || undefined,
+    recurrence: (row.recurrence as Chore['recurrence']) || 'weekly',
+    requiresApproval: !!row.requires_approval,
+    points: Number(row.points) || 0,
+    status: (row.status as Chore['status']) || 'todo',
+  }));
+}
+
+export async function replaceChores(session: AppSession, chores: Chore[]) {
+  const client = requireClient();
+  if (chores.length > 0) {
+    const { error } = await client.from('chores').upsert(
+      chores.map((chore, index) => ({
+        id: chore.id,
+        family_id: session.familyId,
+        created_by: session.userId,
+        title: chore.title,
+        child_profile_id: chore.childId || null,
+        recurrence: chore.recurrence,
+        requires_approval: chore.requiresApproval,
+        points: chore.points || 0,
+        status: chore.status,
+        sort_order: index,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'id' },
+    );
+    if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+    if (error) throw error;
+  }
+  const keepIds = chores.map((chore) => chore.id);
+  let removal = client.from('chores').delete().eq('family_id', session.familyId);
+  if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
+  const { error: deleteError } = await removal;
+  if (deleteError && !isMissingHomeTableError(deleteError, 'chores')) throw deleteError;
 }

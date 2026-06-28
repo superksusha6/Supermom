@@ -254,6 +254,15 @@ function ListIcon({ color }: { color: string }) {
   );
 }
 
+// Authored amounts sometimes already contain the food name ("300 g avocado"),
+// while user recipes keep them separate ("200 g" + "flour"). Avoid duplicating.
+function formatIngredientLine(ingredient: { amount: string; name: string; optional?: boolean }) {
+  const amount = ingredient.amount.trim();
+  const name = ingredient.name.trim();
+  const base = amount.toLowerCase().includes(name.toLowerCase()) ? amount : `${amount} ${name}`.trim();
+  return ingredient.optional ? `${base} (optional)` : base;
+}
+
 export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
@@ -657,35 +666,34 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                         </Text>
                       </View>
                     )}
-                    <View style={[styles.recipeCardTop, listRow && styles.recipeCardTopListRow]}>
-                      <View style={styles.recipeMetaWrap}>
-                        <Text style={[styles.recipeTitle, gridMode && styles.recipeTitleGrid]} numberOfLines={gridMode ? 2 : 3}>
-                          {recipe.title}
-                        </Text>
-                        {shortDescription ? (
-                          <Text style={[styles.recipeDescription, gridMode && styles.recipeDescriptionGrid]} numberOfLines={gridMode ? 2 : 2}>
-                            {shortDescription}
+                    <View style={listRow ? styles.recipeCardBodyListRow : undefined}>
+                      <View style={styles.recipeCardTop}>
+                        <View style={styles.recipeMetaWrap}>
+                          <Text style={[styles.recipeTitle, gridMode && styles.recipeTitleGrid]} numberOfLines={gridMode ? 2 : 3}>
+                            {recipe.title}
                           </Text>
-                        ) : null}
+                          {shortDescription ? (
+                            <Text style={[styles.recipeDescription, gridMode && styles.recipeDescriptionGrid]} numberOfLines={2}>
+                              {shortDescription}
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
-                      <Pressable style={[styles.openBtn, gridMode && styles.openBtnGrid]} onPress={() => setSelectedRecipeId(recipe.id)}>
-                        <Text style={[styles.openBtnText, gridMode && styles.openBtnTextGrid]}>Open</Text>
-                      </Pressable>
-                    </View>
-                    <View style={[styles.recipeStatsRow, gridMode && styles.recipeStatsRowGrid]}>
-                      <Text style={styles.recipeStat}>{recipe.cookTimeMinutes} min</Text>
-                      <Text style={styles.recipeStat}>{recipe.servings} servings</Text>
-                      <Text style={styles.recipeStat}>{recipe.nutritionPerServing.calories} kcal</Text>
-                    </View>
-                    {displayTags.length ? (
-                      <View style={[styles.tagRow, gridMode && styles.tagRowGrid]}>
-                        {displayTags.map((tag) => (
-                          <View key={`${recipe.id}-${tag}`} style={[styles.tagChip, gridMode && styles.tagChipGrid]}>
-                            <Text style={styles.tagChipText}>{formatTagLabel(tag)}</Text>
-                          </View>
-                        ))}
+                      <View style={[styles.recipeStatsRow, gridMode && styles.recipeStatsRowGrid]}>
+                        <Text style={styles.recipeStat}>{recipe.cookTimeMinutes} min</Text>
+                        <Text style={styles.recipeStat}>{recipe.servings} servings</Text>
+                        <Text style={styles.recipeStat}>{recipe.nutritionPerServing.calories} kcal</Text>
                       </View>
-                    ) : null}
+                      {displayTags.length ? (
+                        <View style={[styles.tagRow, gridMode && styles.tagRowGrid]}>
+                          {displayTags.map((tag) => (
+                            <View key={`${recipe.id}-${tag}`} style={[styles.tagChip, gridMode && styles.tagChipGrid]}>
+                              <Text style={styles.tagChipText}>{formatTagLabel(tag)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -711,6 +719,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 </Pressable>
               </View>
 
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
               {RECIPE_IMAGES[selectedRecipe.id] || selectedRecipe.photoUri ? (
                 <Image
                   source={RECIPE_IMAGES[selectedRecipe.id] || { uri: selectedRecipe.photoUri }}
@@ -769,7 +778,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 </View>
               </View>
 
-              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
                 {ownedRecipeIds.has(selectedRecipe.id) ? (
                   <View style={styles.recipeOwnerActions}>
                     <Pressable style={styles.builderSecondaryBtn} onPress={() => openBuilderForEdit(selectedRecipe)}>
@@ -810,18 +818,12 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 ) : null}
 
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailHint}>Nutrition values are shown per serving.</Text>
-                </View>
-
-                <View style={styles.detailSection}>
                   <Text style={styles.detailSectionTitle}>Ingredients</Text>
+                  <Text style={styles.detailHint}>Per serving · {selectedRecipe.servings} servings total</Text>
                   {(recipeView?.ingredients ?? selectedRecipe.ingredients).map((ingredient) => (
                     <View key={ingredient.id} style={styles.detailRow}>
                       <Text style={styles.detailBullet}>•</Text>
-                      <Text style={styles.detailText}>
-                        {ingredient.amount} {ingredient.name}
-                        {ingredient.optional ? ' (optional)' : ''}
-                      </Text>
+                      <Text style={styles.detailText}>{formatIngredientLine(ingredient)}</Text>
                     </View>
                   ))}
                 </View>
@@ -1397,8 +1399,10 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: 0,
       flexShrink: 0,
     },
-    recipeCardTopListRow: {
+    recipeCardBodyListRow: {
       flex: 1,
+      gap: 8,
+      justifyContent: 'center',
     },
     recipeCardGridMobile: {
       width: '48.2%',
@@ -1533,24 +1537,6 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 11,
       lineHeight: 15,
     },
-    openBtn: {
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    openBtnGrid: {
-      paddingHorizontal: 8,
-      paddingVertical: 6,
-    },
-    openBtnText: {
-      color: '#ffffff',
-      fontSize: 13,
-      fontWeight: '700',
-    },
-    openBtnTextGrid: {
-      fontSize: 11,
-    },
     recipeStatsRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1614,6 +1600,7 @@ const createStyles = (colors: ThemeColors) =>
     modalRoot: {
       flex: 1,
       justifyContent: 'flex-end',
+      alignItems: 'center',
       padding: 12,
     },
     modalBackdrop: {
@@ -1622,6 +1609,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     modalCard: {
       maxHeight: '88%',
+      width: '100%',
+      maxWidth: 760,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       borderBottomLeftRadius: 22,

@@ -132,6 +132,19 @@ export type HomeProvider = {
   notes?: string;
 };
 
+export type ChoreRecurrence = 'daily' | 'weekly' | 'once';
+export type ChoreStatus = 'todo' | 'done';
+
+export type Chore = {
+  id: string;
+  title: string;
+  childId?: string;
+  recurrence: ChoreRecurrence;
+  requiresApproval: boolean;
+  points: number;
+  status: ChoreStatus;
+};
+
 export type HabitEntry = {
   id: string;
   title: string;

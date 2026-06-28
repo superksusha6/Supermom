@@ -837,7 +837,9 @@ export function MealPlannerScreen({
                   ) : null}
                   <Text style={styles.detailSectionTitle}>Ingredients</Text>
                   {resolveRecipeIngredients(recipe.ingredients, recipe.choices, entry?.recipeSelection).map((ingredient) => (
-                    <Text key={ingredient.id} style={styles.detailText}>• {ingredient.amount} {ingredient.name}</Text>
+                    <Text key={ingredient.id} style={styles.detailText}>
+                      • {ingredient.amount.toLowerCase().includes(ingredient.name.toLowerCase()) ? ingredient.amount : `${ingredient.amount} ${ingredient.name}`}
+                    </Text>
                   ))}
                   <Text style={styles.detailSectionTitle}>Steps</Text>
                   {recipe.steps.map((step, index) => (
