@@ -69,7 +69,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
   const [title, setTitle] = useState('');
   const [childId, setChildId] = useState<string | undefined>(undefined);
   const [recurrence, setRecurrence] = useState<ChoreRecurrence>('weekly');
-  const [verifier, setVerifier] = useState<ChoreVerifier>('none');
+  const [verifier, setVerifier] = useState<ChoreVerifier>('self');
 
   const groups = useMemo(() => {
     const out: { id: string | undefined; name: string; list: Chore[] }[] = [];
