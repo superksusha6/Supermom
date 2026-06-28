@@ -7,14 +7,17 @@ create table if not exists public.chores (
   title text not null,
   child_profile_id uuid references public.child_profiles(id) on delete set null,
   recurrence text not null default 'weekly',   -- 'daily' | 'weekly' | 'once'
-  requires_approval boolean not null default true,
+  verifier text not null default 'none',         -- 'none' | 'parent' | 'nanny'
   points int not null default 0,
-  status text not null default 'todo',           -- 'todo' | 'done'
+  status text not null default 'todo',           -- 'todo' | 'done' | 'verified'
   sort_order int not null default 0,
   created_by uuid not null references auth.users(id) on delete restrict,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+-- Migration for installs created before the verifier column existed.
+alter table public.chores add column if not exists verifier text not null default 'none';
 
 create index if not exists chores_family_idx on public.chores (family_id);
 

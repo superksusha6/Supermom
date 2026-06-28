@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Chore, ChoreRecurrence, ChildProfile } from '@/types/app';
+import { Chore, ChoreRecurrence, ChoreVerifier, ChildProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -14,6 +14,15 @@ const RECURRENCE: { key: ChoreRecurrence; label: string }[] = [
   { key: 'weekly', label: 'Weekly' },
   { key: 'once', label: 'One-off' },
 ];
+
+const VERIFIERS: { key: ChoreVerifier; label: string }[] = [
+  { key: 'none', label: 'No one' },
+  { key: 'parent', label: 'Me' },
+  { key: 'nanny', label: 'Nanny' },
+];
+function verifierLabel(v: ChoreVerifier) {
+  return v === 'parent' ? 'checked by me' : v === 'nanny' ? 'checked by nanny' : '';
+}
 
 function newId() {
   const c = globalThis.crypto as Crypto | undefined;
@@ -34,7 +43,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
   const [title, setTitle] = useState('');
   const [childId, setChildId] = useState<string | undefined>(undefined);
   const [recurrence, setRecurrence] = useState<ChoreRecurrence>('weekly');
-  const [requiresApproval, setRequiresApproval] = useState(true);
+  const [verifier, setVerifier] = useState<ChoreVerifier>('none');
 
   const groups = useMemo(() => {
     const out: { id: string | undefined; name: string; list: Chore[] }[] = [];
@@ -52,7 +61,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
     setTitle('');
     setChildId(children[0]?.id);
     setRecurrence('weekly');
-    setRequiresApproval(true);
+    setVerifier('none');
     setFormOpen(true);
   }
   function openEdit(chore: Chore) {
@@ -60,7 +69,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
     setTitle(chore.title);
     setChildId(chore.childId);
     setRecurrence(chore.recurrence);
-    setRequiresApproval(chore.requiresApproval);
+    setVerifier(chore.verifier);
     setFormOpen(true);
   }
   function save() {
@@ -70,7 +79,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
       title: title.trim(),
       childId,
       recurrence,
-      requiresApproval,
+      verifier,
       points: editing?.points || 0,
       status: editing?.status || 'todo',
     };
@@ -81,8 +90,12 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
     onChoresChange((prev) => prev.filter((c) => c.id !== id));
     setFormOpen(false);
   }
+  function setChoreStatus(id: string, status: Chore['status']) {
+    onChoresChange((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+  }
+  // Circle: todo -> done (mark done). done/verified -> todo (reset, e.g. next day).
   function toggle(chore: Chore) {
-    onChoresChange((prev) => prev.map((c) => (c.id === chore.id ? { ...c, status: c.status === 'done' ? 'todo' : 'done' } : c)));
+    setChoreStatus(chore.id, chore.status === 'todo' ? 'done' : 'todo');
   }
 
   return (
@@ -105,21 +118,36 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
         </View>
       ) : (
         groups.map((g) => {
-          const done = g.list.filter((c) => c.status === 'done').length;
+          const done = g.list.filter((c) => c.status !== 'todo').length;
           return (
             <View key={g.id || 'anyone'} style={styles.group}>
               <Text style={styles.groupLabel}>{g.name} · {done}/{g.list.length}</Text>
-              {g.list.map((chore) => (
-                <View key={chore.id} style={styles.choreCard}>
-                  <Pressable style={[styles.check, chore.status === 'done' && styles.checkOn]} onPress={() => toggle(chore)}>
-                    {chore.status === 'done' ? <Text style={styles.checkMark}>✓</Text> : null}
-                  </Pressable>
-                  <Pressable style={{ flex: 1 }} onPress={() => openEdit(chore)}>
-                    <Text style={[styles.choreTitle, chore.status === 'done' && styles.choreTitleDone]} numberOfLines={1}>{chore.title}</Text>
-                    <Text style={styles.choreMeta}>{RECURRENCE.find((r) => r.key === chore.recurrence)?.label}{chore.requiresApproval ? ' · needs approval' : ''}</Text>
-                  </Pressable>
-                </View>
-              ))}
+              {g.list.map((chore) => {
+                const completed = chore.status !== 'todo';
+                const awaitingCheck = chore.status === 'done' && chore.verifier !== 'none';
+                const checkBy = chore.verifier === 'nanny' ? 'Nanny' : 'Me';
+                return (
+                  <View key={chore.id} style={styles.choreCard}>
+                    <Pressable style={[styles.check, completed && styles.checkOn]} onPress={() => toggle(chore)}>
+                      {completed ? <Text style={styles.checkMark}>✓</Text> : null}
+                    </Pressable>
+                    <Pressable style={{ flex: 1 }} onPress={() => openEdit(chore)}>
+                      <Text style={[styles.choreTitle, completed && styles.choreTitleDone]} numberOfLines={1}>{chore.title}</Text>
+                      <Text style={styles.choreMeta}>
+                        {RECURRENCE.find((r) => r.key === chore.recurrence)?.label}
+                        {chore.status === 'verified' ? ` · ✓ ${verifierLabel(chore.verifier)}` : chore.verifier !== 'none' ? ` · ${verifierLabel(chore.verifier)}` : ''}
+                      </Text>
+                    </Pressable>
+                    {awaitingCheck ? (
+                      <Pressable style={styles.verifyPill} onPress={() => setChoreStatus(chore.id, 'verified')}>
+                        <Text style={styles.verifyPillText}>Verify ({checkBy})</Text>
+                      </Pressable>
+                    ) : chore.status === 'verified' ? (
+                      <Text style={styles.verifiedTag}>✓ checked</Text>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           );
         })
@@ -156,10 +184,15 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
                 ))}
               </View>
 
-              <Pressable style={styles.toggleRow} onPress={() => setRequiresApproval((v) => !v)}>
-                <View style={[styles.toggleBox, requiresApproval && styles.toggleBoxOn]}>{requiresApproval ? <Text style={styles.toggleMark}>✓</Text> : null}</View>
-                <Text style={styles.toggleText}>Needs my approval when marked done</Text>
-              </Pressable>
+              <Text style={styles.fieldLabel}>Who checks it’s done?</Text>
+              <View style={styles.chipsWrap}>
+                {VERIFIERS.map((v) => (
+                  <Pressable key={v.key} style={[styles.chip, verifier === v.key && styles.chipActive]} onPress={() => setVerifier(v.key)}>
+                    <Text style={[styles.chipText, verifier === v.key && styles.chipTextActive]}>{v.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.hintText}>If a nanny checks, they confirm after the child marks it done.</Text>
             </ScrollView>
             <View style={styles.modalActions}>
               {editing ? (
@@ -203,6 +236,10 @@ const createStyles = (colors: ThemeColors) =>
     choreTitle: { color: '#14233b', fontSize: 15, fontWeight: '800' },
     choreTitleDone: { color: '#94a3b8', textDecorationLine: 'line-through' },
     choreMeta: { color: '#52627d', fontSize: 12, marginTop: 2 },
+    verifyPill: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+    verifyPillText: { color: '#ffffff', fontWeight: '800', fontSize: 12 },
+    verifiedTag: { color: '#16a34a', fontWeight: '800', fontSize: 12 },
+    hintText: { color: colors.subtext, fontSize: 12, marginTop: 8, lineHeight: 17 },
     scrim: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 16 },
     modalCard: { maxHeight: '90%', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.96)', backgroundColor: 'rgba(248,250,252,0.98)', overflow: 'hidden' },
     modalContent: { padding: 18, gap: 4 },

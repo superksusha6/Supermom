@@ -2306,7 +2306,7 @@ export async function listChores(session: AppSession): Promise<Chore[]> {
   const client = requireClient();
   const { data, error } = await client
     .from('chores')
-    .select('id, title, child_profile_id, recurrence, requires_approval, points, status, sort_order')
+    .select('id, title, child_profile_id, recurrence, verifier, points, status, sort_order')
     .eq('family_id', session.familyId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
@@ -2317,7 +2317,7 @@ export async function listChores(session: AppSession): Promise<Chore[]> {
     title: row.title,
     childId: row.child_profile_id || undefined,
     recurrence: (row.recurrence as Chore['recurrence']) || 'weekly',
-    requiresApproval: !!row.requires_approval,
+    verifier: (row.verifier as Chore['verifier']) || 'none',
     points: Number(row.points) || 0,
     status: (row.status as Chore['status']) || 'todo',
   }));
@@ -2334,7 +2334,7 @@ export async function replaceChores(session: AppSession, chores: Chore[]) {
         title: chore.title,
         child_profile_id: chore.childId || null,
         recurrence: chore.recurrence,
-        requires_approval: chore.requiresApproval,
+        verifier: chore.verifier,
         points: chore.points || 0,
         status: chore.status,
         sort_order: index,

@@ -133,14 +133,15 @@ export type HomeProvider = {
 };
 
 export type ChoreRecurrence = 'daily' | 'weekly' | 'once';
-export type ChoreStatus = 'todo' | 'done';
+export type ChoreStatus = 'todo' | 'done' | 'verified';
+export type ChoreVerifier = 'none' | 'parent' | 'nanny';
 
 export type Chore = {
   id: string;
   title: string;
   childId?: string;
   recurrence: ChoreRecurrence;
-  requiresApproval: boolean;
+  verifier: ChoreVerifier;
   points: number;
   status: ChoreStatus;
 };
