@@ -2317,7 +2317,7 @@ export async function listChores(session: AppSession): Promise<Chore[]> {
     title: row.title,
     childId: row.child_profile_id || undefined,
     recurrence: (row.recurrence as Chore['recurrence']) || 'weekly',
-    verifier: (row.verifier as Chore['verifier']) || 'none',
+    verifier: (row.verifier === 'parent' || row.verifier === 'nanny' ? row.verifier : 'self') as Chore['verifier'],
     points: Number(row.points) || 0,
     lastDoneDate: row.last_done_date || undefined,
     lastVerifiedDate: row.last_verified_date || undefined,

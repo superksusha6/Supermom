@@ -16,12 +16,12 @@ const RECURRENCE: { key: ChoreRecurrence; label: string }[] = [
 ];
 
 const VERIFIERS: { key: ChoreVerifier; label: string }[] = [
-  { key: 'none', label: 'No one' },
-  { key: 'parent', label: 'Me' },
+  { key: 'self', label: 'By themselves' },
   { key: 'nanny', label: 'Nanny' },
+  { key: 'parent', label: 'Parent' },
 ];
 function verifierLabel(v: ChoreVerifier) {
-  return v === 'parent' ? 'checked by me' : v === 'nanny' ? 'checked by nanny' : '';
+  return v === 'parent' ? 'checked by parent' : v === 'nanny' ? 'checked by nanny' : 'self-marked';
 }
 
 function todayKey() {
@@ -87,7 +87,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
     setTitle('');
     setChildId(children[0]?.id);
     setRecurrence('weekly');
-    setVerifier('none');
+    setVerifier('self');
     setFormOpen(true);
   }
   function openEdit(chore: Chore) {
@@ -156,8 +156,8 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
               {g.list.map((chore) => {
                 const status = derivedStatus(chore);
                 const completed = status !== 'todo';
-                const awaitingCheck = status === 'done' && chore.verifier !== 'none';
-                const checkBy = chore.verifier === 'nanny' ? 'Nanny' : 'Me';
+                const awaitingCheck = status === 'done' && chore.verifier !== 'self';
+                const checkBy = chore.verifier === 'nanny' ? 'Nanny' : 'Parent';
                 return (
                   <View key={chore.id} style={styles.choreCard}>
                     <Pressable style={[styles.check, completed && styles.checkOn]} onPress={() => toggle(chore)}>
@@ -167,7 +167,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
                       <Text style={[styles.choreTitle, completed && styles.choreTitleDone]} numberOfLines={1}>{chore.title}</Text>
                       <Text style={styles.choreMeta}>
                         {RECURRENCE.find((r) => r.key === chore.recurrence)?.label}
-                        {status === 'verified' ? ` · ✓ ${verifierLabel(chore.verifier)}` : chore.verifier !== 'none' ? ` · ${verifierLabel(chore.verifier)}` : ''}
+                        {status === 'verified' ? ` · ✓ ${verifierLabel(chore.verifier)}` : chore.verifier !== 'self' ? ` · ${verifierLabel(chore.verifier)}` : ''}
                       </Text>
                     </Pressable>
                     {awaitingCheck ? (
@@ -216,7 +216,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Who checks it’s done?</Text>
+              <Text style={styles.fieldLabel}>Who confirms it’s done?</Text>
               <View style={styles.chipsWrap}>
                 {VERIFIERS.map((v) => (
                   <Pressable key={v.key} style={[styles.chip, verifier === v.key && styles.chipActive]} onPress={() => setVerifier(v.key)}>
@@ -224,7 +224,7 @@ export function ChoresScreen({ chores, onChoresChange, children }: Props) {
                   </Pressable>
                 ))}
               </View>
-              <Text style={styles.hintText}>If a nanny checks, they confirm after the child marks it done.</Text>
+              <Text style={styles.hintText}>By themselves — the child just marks it (tracked in their profile). Nanny or Parent confirm after the child marks it done.</Text>
             </ScrollView>
             <View style={styles.modalActions}>
               {editing ? (

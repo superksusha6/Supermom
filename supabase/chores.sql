@@ -7,7 +7,7 @@ create table if not exists public.chores (
   title text not null,
   child_profile_id uuid references public.child_profiles(id) on delete set null,
   recurrence text not null default 'weekly',   -- 'daily' | 'weekly' | 'once'
-  verifier text not null default 'none',         -- 'none' | 'parent' | 'nanny'
+  verifier text not null default 'self',         -- 'self' | 'parent' | 'nanny'
   points int not null default 0,
   last_done_date date,
   last_verified_date date,
@@ -18,7 +18,7 @@ create table if not exists public.chores (
 );
 
 -- Migrations for installs created before these columns existed.
-alter table public.chores add column if not exists verifier text not null default 'none';
+alter table public.chores add column if not exists verifier text not null default 'self';
 alter table public.chores add column if not exists last_done_date date;
 alter table public.chores add column if not exists last_verified_date date;
 

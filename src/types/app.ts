@@ -134,7 +134,7 @@ export type HomeProvider = {
 
 export type ChoreRecurrence = 'daily' | 'weekly' | 'once';
 export type ChoreStatus = 'todo' | 'done' | 'verified';
-export type ChoreVerifier = 'none' | 'parent' | 'nanny';
+export type ChoreVerifier = 'self' | 'parent' | 'nanny';
 
 export type Chore = {
   id: string;
