@@ -76,6 +76,8 @@ import {
   updateRecipe,
   updateTaskStatus,
 } from '@/lib/tasks';
+import { getNutritionPlan } from '@/lib/nutrition';
+import { choreStatus } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
 import { FixItScreen } from '@/screens/FixItScreen';
@@ -1349,6 +1351,37 @@ function AppShell() {
     if (daysUntil === 1) return 'Expected tomorrow';
     return `Expected in ${daysUntil} days`;
   }, [nextExpectedPeriodStart, periodRemindersEnabled, todayDateKey]);
+
+  // --- Today summary (Home) ---
+  const dailyCalorieTarget = useMemo(() => {
+    const plan = getNutritionPlan({
+      dateOfBirth: personalProfile.dateOfBirth,
+      heightCm: personalProfile.heightCm,
+      weightKg: personalProfile.weightKg,
+      goal: nutritionGoal,
+      activityLevel,
+      sex: nutritionSex,
+      calorieOverride,
+      desiredWeightKg: desiredWeight,
+      pace: nutritionPace,
+    });
+    return plan?.calories || 0;
+  }, [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace]);
+  const eventsTodayCount = useMemo(
+    () => events.filter((event) => event.date === todayDateKey).length,
+    [events, todayDateKey],
+  );
+  const choresToday = useMemo(() => {
+    const total = chores.length;
+    const done = chores.filter((c) => choreStatus(c) !== 'todo').length;
+    return { total, done };
+  }, [chores]);
+  const needsYouCount = useMemo(() => {
+    const awaitingVerify = chores.filter((c) => c.verifier !== 'self' && choreStatus(c) === 'done').length;
+    const urgentIssues = homeIssues.filter((i) => i.urgency === 'urgent' && i.status !== 'done').length;
+    const pendingRequests = purchaseRequests.filter((r) => r.status === 'new').length;
+    return awaitingVerify + urgentIssues + pendingRequests;
+  }, [chores, homeIssues, purchaseRequests]);
 
   async function refreshLiveTasks(current: AppSession | null = session) {
     if (!current) return;
@@ -4289,6 +4322,45 @@ function AppShell() {
       ) : null}
         {screen === 'calendar' ? (
           <>
+            <View style={styles.summaryWrap}>
+              <Pressable
+                style={[styles.summaryCard, needsYouCount > 0 ? styles.summaryCardWarn : styles.summaryCardOk]}
+                onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
+              >
+                <Text style={styles.summaryLabel}>⚠️ Needs you</Text>
+                <Text style={[styles.summaryValue, needsYouCount > 0 ? styles.summaryValueWarn : styles.summaryValueOk]}>
+                  {needsYouCount > 0 ? needsYouCount : 'All clear'}
+                </Text>
+                <Text style={styles.summarySub}>{needsYouCount > 0 ? 'to review' : 'nothing pending'}</Text>
+              </Pressable>
+
+              <Pressable style={styles.summaryCard} onPress={() => setScreen('calendar')}>
+                <Text style={styles.summaryLabel}>📅 Today</Text>
+                <Text style={styles.summaryValue}>{eventsTodayCount}</Text>
+                <Text style={styles.summarySub} numberOfLines={1}>
+                  {nextUpcomingEvent ? `next: ${nextUpcomingEvent.title}` : eventsTodayCount ? 'events' : 'nothing planned'}
+                </Text>
+              </Pressable>
+
+              {choresToday.total > 0 ? (
+                <Pressable style={styles.summaryCard} onPress={() => { setScreen('family'); setFamilyTab('chores'); }}>
+                  <Text style={styles.summaryLabel}>🧹 Chores</Text>
+                  <Text style={styles.summaryValue}>{choresToday.done}/{choresToday.total}</Text>
+                  <Text style={styles.summarySub}>done today</Text>
+                </Pressable>
+              ) : null}
+
+              <Pressable style={styles.summaryCard} onPress={() => setScreen('wellness')}>
+                <Text style={styles.summaryLabel}>🍎 You today</Text>
+                <Text style={styles.summaryValue}>
+                  {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : todayNutritionCalories || '—'}
+                </Text>
+                <Text style={styles.summarySub}>
+                  {dailyCalorieTarget > 0 ? 'kcal' : 'kcal · set goal'}
+                  {activeHabitsCount > 0 ? ` · habits ${completedHabitsTodayCount}/${activeHabitsCount}` : ''}
+                </Text>
+              </Pressable>
+            </View>
             <View style={styles.dashboardGrid}>
               <Pressable style={[styles.dashboardQuickCard, styles.dashboardQuickCardMeal]} onPress={handleDashboardAddMeal}>
                 <View style={styles.dashboardQuickCardImage}>
@@ -8528,6 +8600,36 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexWrap: isMobile ? 'nowrap' : 'wrap',
     gap: isMobile ? 10 : 12,
   },
+  summaryWrap: {
+    marginHorizontal: isMobile ? 10 : 16,
+    marginTop: isMobile ? 8 : 12,
+    marginBottom: isMobile ? 10 : 14,
+    width: '100%',
+    maxWidth: isMobile ? undefined : 940,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  summaryCard: {
+    flexGrow: 1,
+    flexBasis: isMobile ? '46%' : 180,
+    minWidth: isMobile ? '46%' : 160,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e1e8f2',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 2,
+  },
+  summaryCardWarn: { borderColor: '#fed7aa', backgroundColor: '#fff7ed' },
+  summaryCardOk: { borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' },
+  summaryLabel: { color: colors.subtext, fontSize: 12, fontWeight: '700' },
+  summaryValue: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 2 },
+  summaryValueWarn: { color: '#ea580c' },
+  summaryValueOk: { color: '#16a34a' },
+  summarySub: { color: colors.subtext, fontSize: 11, fontWeight: '600' },
   dashboardQuickCard: {
     flex: 1,
     aspectRatio: 768 / 486,

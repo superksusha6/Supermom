@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Chore, ChoreRecurrence, ChoreVerifier, ChildProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
+import { choreStatus as derivedStatus, choreTodayKey as todayKey } from '@/lib/chores';
 
 type Props = {
   chores: Chore[];
@@ -22,32 +23,6 @@ const VERIFIERS: { key: ChoreVerifier; label: string }[] = [
 ];
 function verifierLabel(v: ChoreVerifier) {
   return v === 'parent' ? 'checked by parent' : v === 'nanny' ? 'checked by nanny' : 'self-marked';
-}
-
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function weekKey(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / 86400000 / 7);
-  return `${date.getUTCFullYear()}-W${week}`;
-}
-// Is a stored completion date "in the current period" for this recurrence?
-function inCurrentPeriod(dateStr: string | undefined, recurrence: ChoreRecurrence) {
-  if (!dateStr) return false;
-  if (recurrence === 'once') return true;
-  if (recurrence === 'weekly') return weekKey(dateStr) === weekKey(todayKey());
-  return dateStr === todayKey();
-}
-function derivedStatus(chore: Chore): 'todo' | 'done' | 'verified' {
-  if (inCurrentPeriod(chore.lastVerifiedDate, chore.recurrence)) return 'verified';
-  if (inCurrentPeriod(chore.lastDoneDate, chore.recurrence)) return 'done';
-  return 'todo';
 }
 
 function newId() {
