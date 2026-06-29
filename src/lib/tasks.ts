@@ -2302,49 +2302,89 @@ export async function replaceHomeProviders(session: AppSession, providers: HomeP
 const CHORES_MIGRATION_HINT =
   'Supabase "chores" table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/chores.sql in the Supabase SQL Editor, then refresh.';
 
+// Columns added after the first chores.sql — tolerate them being un-migrated so
+// chores still save (without those fields) instead of failing the whole write.
+const CHORE_OPTIONAL_COLS = ['verifier', 'last_done_date', 'last_verified_date', 'points', 'sort_order'];
+function choreMissingColumn(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  for (const col of CHORE_OPTIONAL_COLS) {
+    if (message.includes(`'${col}'`) || message.includes(`"${col}"`) || message.includes(`column ${col} `) || message.includes(`.${col}`)) {
+      return col;
+    }
+  }
+  return null;
+}
+
 export async function listChores(session: AppSession): Promise<Chore[]> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('chores')
-    .select('id, title, child_profile_id, recurrence, verifier, points, last_done_date, last_verified_date, sort_order')
-    .eq('family_id', session.familyId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true });
-  if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    title: row.title,
-    childId: row.child_profile_id || undefined,
-    recurrence: (row.recurrence as Chore['recurrence']) || 'weekly',
+  const allCols = ['id', 'title', 'child_profile_id', 'recurrence', 'verifier', 'points', 'last_done_date', 'last_verified_date', 'sort_order'];
+  const omit = new Set<string>();
+  let data: Record<string, unknown>[] = [];
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await client
+      .from('chores')
+      .select(allCols.filter((c) => !omit.has(c)).join(', '))
+      .eq('family_id', session.familyId)
+      .order('created_at', { ascending: true });
+    if (!result.error) {
+      data = result.data as unknown as Record<string, unknown>[];
+      break;
+    }
+    if (isMissingHomeTableError(result.error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+    const mc = choreMissingColumn(result.error);
+    if (mc && CHORE_OPTIONAL_COLS.includes(mc) && !omit.has(mc)) {
+      omit.add(mc);
+      continue;
+    }
+    throw result.error;
+  }
+  return data.map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    childId: (row.child_profile_id as string) || undefined,
+    recurrence: ((row.recurrence as Chore['recurrence']) || 'weekly'),
     verifier: (row.verifier === 'parent' || row.verifier === 'nanny' ? row.verifier : 'self') as Chore['verifier'],
     points: Number(row.points) || 0,
-    lastDoneDate: row.last_done_date || undefined,
-    lastVerifiedDate: row.last_verified_date || undefined,
+    lastDoneDate: (row.last_done_date as string) || undefined,
+    lastVerifiedDate: (row.last_verified_date as string) || undefined,
   }));
 }
 
 export async function replaceChores(session: AppSession, chores: Chore[]) {
   const client = requireClient();
+  const buildRow = (chore: Chore, index: number, omit: Set<string>) => {
+    const row: Record<string, unknown> = {
+      id: chore.id,
+      family_id: session.familyId,
+      created_by: session.userId,
+      title: chore.title,
+      child_profile_id: chore.childId || null,
+      recurrence: chore.recurrence,
+      updated_at: new Date().toISOString(),
+    };
+    if (!omit.has('verifier')) row.verifier = chore.verifier;
+    if (!omit.has('points')) row.points = chore.points || 0;
+    if (!omit.has('last_done_date')) row.last_done_date = chore.lastDoneDate || null;
+    if (!omit.has('last_verified_date')) row.last_verified_date = chore.lastVerifiedDate || null;
+    if (!omit.has('sort_order')) row.sort_order = index;
+    return row;
+  };
   if (chores.length > 0) {
-    const { error } = await client.from('chores').upsert(
-      chores.map((chore, index) => ({
-        id: chore.id,
-        family_id: session.familyId,
-        created_by: session.userId,
-        title: chore.title,
-        child_profile_id: chore.childId || null,
-        recurrence: chore.recurrence,
-        verifier: chore.verifier,
-        points: chore.points || 0,
-        last_done_date: chore.lastDoneDate || null,
-        last_verified_date: chore.lastVerifiedDate || null,
-        sort_order: index,
-        updated_at: new Date().toISOString(),
-      })),
-      { onConflict: 'id' },
-    );
-    if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+    const omit = new Set<string>();
+    let error: unknown = null;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const result = await client.from('chores').upsert(chores.map((c, i) => buildRow(c, i, omit)), { onConflict: 'id' });
+      error = result.error;
+      if (!error) break;
+      if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+      const mc = choreMissingColumn(error);
+      if (mc && !omit.has(mc)) {
+        omit.add(mc);
+        continue;
+      }
+      break;
+    }
     if (error) throw error;
   }
   const keepIds = chores.map((chore) => chore.id);
