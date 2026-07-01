@@ -8594,11 +8594,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     gap: isMobile ? 10 : 12,
   },
   summaryWrap: {
-    marginHorizontal: isMobile ? 10 : 16,
     marginTop: isMobile ? 8 : 12,
     marginBottom: isMobile ? 10 : 14,
     width: '100%',
-    maxWidth: isMobile ? undefined : 940,
     alignSelf: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -8624,10 +8622,8 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   summaryValueOk: { color: '#16a34a' },
   summarySub: { color: colors.subtext, fontSize: 11, fontWeight: '600' },
   quickWrap: {
-    marginHorizontal: isMobile ? 10 : 16,
     marginBottom: isMobile ? 10 : 14,
     width: '100%',
-    maxWidth: isMobile ? undefined : 940,
     alignSelf: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
