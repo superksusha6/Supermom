@@ -889,8 +889,10 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
         </View>
       </Modal>
 
-      <Modal visible={builderOpen} animationType="slide" onRequestClose={() => setBuilderOpen(false)}>
-        <View style={styles.builderScreen}>
+      <Modal visible={builderOpen} transparent animationType="fade" onRequestClose={() => setBuilderOpen(false)}>
+        <View style={styles.builderScrim}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBuilderOpen(false)} />
+          <View style={styles.builderScreen}>
           <View style={[styles.builderScreenHeader, isMobile && styles.builderScreenHeaderMobile]}>
             <View style={styles.builderScreenTitleWrap}>
               <Text style={styles.modalMealType}>Custom recipe</Text>
@@ -1099,7 +1101,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
               >
                 <Text style={styles.builderSecondaryBtnText}>{editingRecipe ? 'Reset' : 'Clear'}</Text>
               </Pressable>
-              <Pressable style={styles.addRecipeBtn} onPress={saveDraftRecipe}>
+              <Pressable style={[styles.addRecipeBtn, styles.builderPrimaryBtn]} onPress={saveDraftRecipe}>
                 <Text style={styles.addRecipeBtnText}>
                   {builderSaving ? 'Saving...' : editingRecipeId ? 'Save changes' : 'Save recipe'}
                 </Text>
@@ -1108,6 +1110,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
             {builderError ? <Text style={styles.builderErrorText}>{builderError}</Text> : null}
           </ScrollView>
           </View>
+        </View>
       </Modal>
     </>
   );
@@ -1781,10 +1784,23 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: 120,
       textAlignVertical: 'top',
     },
-    builderScreen: {
+    builderScrim: {
       flex: 1,
+      backgroundColor: 'rgba(15,23,42,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    builderScreen: {
+      width: '100%',
+      maxWidth: 640,
+      maxHeight: '92%',
       backgroundColor: colors.bg,
-      paddingTop: 56,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      paddingTop: 18,
     },
     builderScreenHeader: {
       flexDirection: 'row',
@@ -1984,7 +2000,13 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       backgroundColor: 'rgba(255,255,255,0.62)',
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    builderPrimaryBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
       alignItems: 'center',
     },
     builderSecondaryBtnText: {
