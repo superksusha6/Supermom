@@ -412,14 +412,15 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
       ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient))
       : [createDraftIngredientRow()];
     setDraftIngredientRows(rows);
-    // If the saved nutrition can't be reproduced from the ingredients (they weren't
-    // recognized), keep it as manual values so editing doesn't zero it out.
+    // If the saved nutrition differs from what the ingredients produce, it was
+    // entered manually — keep it as manual so editing doesn't overwrite it.
     const autoCalories = rows.reduce((sum, row) => {
       const values = row.preset ? getIngredientNutrition(row) : null;
       return sum + (values ? Number(values.calories) || 0 : 0);
     }, 0);
     const servings = recipe.servings || 1;
-    if (autoCalories <= 0 && recipe.nutritionPerServing.calories > 0) {
+    const savedTotalCalories = recipe.nutritionPerServing.calories * servings;
+    if (savedTotalCalories > 0 && Math.abs(savedTotalCalories - autoCalories) > 1.5) {
       setManualNutritionOn(true);
       setManualNutrition({
         calories: String(Math.round(recipe.nutritionPerServing.calories * servings)),
@@ -553,8 +554,14 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
 
   const recipeView = useMemo(() => {
     if (!selectedRecipe) return null;
+    // Recompute from ingredients only when the recipe has variant choices to apply.
+    // Otherwise trust the saved per-serving nutrition — this preserves manually
+    // entered values that the ingredients can't reproduce.
+    const hasChoices = (selectedRecipe.choices?.length ?? 0) > 0;
     return {
-      nutrition: computeRecipeNutritionForSelection(selectedRecipe, recipeSelection).nutrition,
+      nutrition: hasChoices
+        ? computeRecipeNutritionForSelection(selectedRecipe, recipeSelection).nutrition
+        : selectedRecipe.nutritionPerServing,
       ingredients: resolveRecipeIngredients(selectedRecipe.ingredients, selectedRecipe.choices, recipeSelection),
     };
   }, [selectedRecipe, recipeSelection]);
@@ -2194,7 +2201,8 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 16,
       fontWeight: '800',
       textAlign: 'center',
-      minWidth: 44,
+      alignSelf: 'stretch',
+      width: '100%',
       paddingVertical: 2,
     },
     nutritionLabel: {
