@@ -169,6 +169,32 @@ function getRecipePlaceholderTone(mealType: RecipeMealType) {
   }
 }
 
+// Pick a dish-specific emoji from the recipe name; fall back to the meal type.
+const RECIPE_EMOJI_KEYWORDS: [string, string][] = [
+  ['pancake', '🥞'], ['guacamole', '🥑'], ['avocado', '🥑'], ['oat', '🥣'], ['porridge', '🥣'],
+  ['hummus', '🧆'], ['falafel', '🧆'], ['omelet', '🍳'], ['egg', '🍳'], ['salad', '🥗'],
+  ['soup', '🍲'], ['borsch', '🍲'], ['stew', '🍲'], ['pasta', '🍝'], ['spaghetti', '🍝'],
+  ['noodle', '🍜'], ['ramen', '🍜'], ['pizza', '🍕'], ['rice', '🍚'], ['risotto', '🍚'],
+  ['sushi', '🍣'], ['curry', '🍛'], ['taco', '🌮'], ['burrito', '🌯'], ['burger', '🍔'],
+  ['sandwich', '🥪'], ['toast', '🍞'], ['bread', '🍞'], ['chicken', '🍗'], ['turkey', '🍗'],
+  ['steak', '🥩'], ['beef', '🥩'], ['pork', '🥩'], ['bacon', '🥓'], ['shrimp', '🦐'],
+  ['prawn', '🦐'], ['salmon', '🐟'], ['tuna', '🐟'], ['cod', '🐟'], ['fish', '🐟'],
+  ['smoothie', '🥤'], ['shake', '🥤'], ['juice', '🧃'], ['coffee', '☕'], ['latte', '☕'],
+  ['cappuccino', '☕'], ['tea', '🍵'], ['cheese', '🧀'], ['yogurt', '🥛'], ['milk', '🥛'],
+  ['potato', '🥔'], ['mash', '🥔'], ['fries', '🍟'], ['corn', '🌽'], ['mushroom', '🍄'],
+  ['broccoli', '🥦'], ['tomato', '🍅'], ['carrot', '🥕'], ['pepper', '🫑'], ['dumpling', '🥟'],
+  ['pie', '🥧'], ['cake', '🍰'], ['muffin', '🧁'], ['cookie', '🍪'], ['pancakes', '🥞'],
+  ['banana', '🍌'], ['apple', '🍎'], ['berry', '🍓'], ['strawberry', '🍓'], ['kiwi', '🥝'],
+  ['pretzel', '🥨'], ['waffle', '🧇'], ['donut', '🍩'], ['ice cream', '🍨'], ['honey', '🍯'],
+];
+function getRecipeEmoji(recipe: { title: string; mealType: RecipeMealType }) {
+  const name = recipe.title.toLowerCase();
+  for (const [word, emoji] of RECIPE_EMOJI_KEYWORDS) {
+    if (name.includes(word)) return emoji;
+  }
+  return getRecipePlaceholderEmoji(recipe.mealType);
+}
+
 function getRecipePlaceholderEmoji(mealType: RecipeMealType) {
   switch (mealType) {
     case 'breakfast':
@@ -710,7 +736,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                         />
                         <View style={styles.recipeCardPhotoEmojiWrap} pointerEvents="none">
                           <Text style={[styles.recipeCardPhotoEmoji, gridMode && styles.recipeCardPhotoEmojiGrid]}>
-                            {getRecipePlaceholderEmoji(recipe.mealType)}
+                            {getRecipeEmoji(recipe)}
                           </Text>
                         </View>
                         <Text style={[styles.recipeCardPhotoLabel, gridMode && styles.recipeCardPhotoLabelGrid, { color: placeholderTone.accent }]}>
@@ -787,7 +813,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                     { backgroundColor: getRecipePlaceholderTone(selectedRecipe.mealType).bg },
                   ]}
                 >
-                  <Text style={styles.modalPhotoPlaceholderEmoji}>{getRecipePlaceholderEmoji(selectedRecipe.mealType)}</Text>
+                  <Text style={styles.modalPhotoPlaceholderEmoji}>{getRecipeEmoji(selectedRecipe)}</Text>
                 </View>
               )}
               {!RECIPE_IMAGES[selectedRecipe.id] && selectedRecipe.photoUri && selectedRecipe.photoCredit ? (
@@ -1599,7 +1625,7 @@ const createStyles = (colors: ThemeColors) =>
       opacity: 0.9,
     },
     recipeCardPhotoEmojiGrid: {
-      fontSize: 40,
+      fontSize: 52,
     },
     modalPhotoPlaceholder: {
       alignItems: 'center',
