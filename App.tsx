@@ -4361,29 +4361,22 @@ function AppShell() {
                 </Text>
               </Pressable>
             </View>
-            <View style={styles.dashboardGrid}>
-              <Pressable style={[styles.dashboardQuickCard, styles.dashboardQuickCardMeal]} onPress={handleDashboardAddMeal}>
-                <View style={styles.dashboardQuickCardImage}>
-                  <View style={styles.dashboardQuickCardPhotoFrame}>
-                    <Image source={HOME_TODAYS_MEALS_COVER} resizeMode="contain" style={styles.dashboardQuickCardPhoto} />
-                  </View>
-                  <View style={[styles.dashboardQuickCardOverlay, styles.dashboardQuickCardOverlayWarm]} />
-                  <View style={styles.dashboardQuickCardContent}>
-                    <Text style={styles.dashboardQuickCardTitle}>Today&apos;s Meals</Text>
-                  </View>
-                </View>
+            <View style={styles.quickWrap}>
+              <Pressable style={styles.quickBtn} onPress={handleDashboardAddMeal}>
+                <Text style={styles.quickBtnIcon}>🍽️</Text>
+                <Text style={styles.quickBtnText}>Add meal</Text>
               </Pressable>
-
-              <Pressable style={[styles.dashboardQuickCard, styles.dashboardQuickCardShopping]} onPress={handleDashboardOpenShoppingList}>
-                <View style={styles.dashboardQuickCardImage}>
-                  <View style={styles.dashboardQuickCardPhotoFrame}>
-                    <Image source={HOME_SHOPPING_LIST_COVER} resizeMode="contain" style={styles.dashboardQuickCardPhoto} />
-                  </View>
-                  <View style={[styles.dashboardQuickCardOverlay, styles.dashboardQuickCardOverlayCool]} />
-                  <View style={styles.dashboardQuickCardContent}>
-                    <Text style={styles.dashboardQuickCardTitle}>Shopping List</Text>
-                  </View>
-                </View>
+              <Pressable style={styles.quickBtn} onPress={handleDashboardOpenShoppingList}>
+                <Text style={styles.quickBtnIcon}>🛒</Text>
+                <Text style={styles.quickBtnText}>Shopping</Text>
+              </Pressable>
+              <Pressable style={styles.quickBtn} onPress={() => { setScreen('family'); setFamilyTab('chores'); }}>
+                <Text style={styles.quickBtnIcon}>🧹</Text>
+                <Text style={styles.quickBtnText}>Chores</Text>
+              </Pressable>
+              <Pressable style={styles.quickBtn} onPress={() => setScreen('fixit')}>
+                <Text style={styles.quickBtnIcon}>🛠️</Text>
+                <Text style={styles.quickBtnText}>Fix it</Text>
               </Pressable>
             </View>
             <CalendarScreen
@@ -8630,6 +8623,31 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   summaryValueWarn: { color: '#ea580c' },
   summaryValueOk: { color: '#16a34a' },
   summarySub: { color: colors.subtext, fontSize: 11, fontWeight: '600' },
+  quickWrap: {
+    marginHorizontal: isMobile ? 10 : 16,
+    marginBottom: isMobile ? 10 : 14,
+    width: '100%',
+    maxWidth: isMobile ? undefined : 940,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickBtn: {
+    flexGrow: 1,
+    flexBasis: isMobile ? '46%' : 120,
+    minWidth: isMobile ? '46%' : 110,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e1e8f2',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickBtnIcon: { fontSize: 22 },
+  quickBtnText: { color: colors.text, fontSize: 13, fontWeight: '800' },
   dashboardQuickCard: {
     flex: 1,
     aspectRatio: 768 / 486,
