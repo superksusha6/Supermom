@@ -1,6 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
 import { NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
@@ -376,32 +375,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   function removeDraftIngredientRow(rowId: string) {
     setDraftIngredientRows((prev) => (prev.length <= 1 ? prev : prev.filter((row) => row.id !== rowId)));
     setUnitPickerOpenFor((current) => (current === rowId ? null : current));
-  }
-
-  async function pickDraftPhoto() {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission needed', 'Allow photo library access to add recipe photos.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.55,
-        base64: true,
-      });
-      if (result.canceled) return;
-
-      const asset = result.assets[0];
-      if (!asset?.uri) return;
-      const mimeType = asset.mimeType || 'image/jpeg';
-      setDraftPhotoUri(asset.base64 ? `data:${mimeType};base64,${asset.base64}` : asset.uri);
-    } catch {
-      Alert.alert('Photo failed', 'Could not open the photo picker right now.');
-    }
   }
 
   function resetBuilder() {
@@ -987,16 +960,13 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
           <ScrollView style={styles.builderScreenScroll} contentContainerStyle={styles.builderScreenScrollContent}>
             <View style={styles.builderSectionCard}>
               <TextInput placeholder="Recipe title" placeholderTextColor={colors.subtext} style={styles.builderInput} value={draftTitle} onChangeText={setDraftTitle} />
-              {draftPhotoUri ? <Image source={{ uri: draftPhotoUri }} style={styles.photoPreview} resizeMode="cover" /> : null}
-              <View style={[styles.photoActionRow, isMobile && styles.photoActionRowMobile]}>
-                <Pressable style={styles.builderSecondaryBtn} onPress={pickDraftPhoto}>
-                  <Text style={styles.builderSecondaryBtnText}>{draftPhotoUri ? 'Change photo' : 'Add photo'}</Text>
-                </Pressable>
-                {draftPhotoUri ? (
-                  <Pressable style={styles.builderSecondaryBtn} onPress={() => setDraftPhotoUri('')}>
-                    <Text style={styles.builderSecondaryBtnText}>Remove photo</Text>
-                  </Pressable>
-                ) : null}
+              <View style={styles.autoCoverRow}>
+                <View style={[styles.autoCoverPreview, { backgroundColor: getRecipePlaceholderTone(draftMealType).bg }]}>
+                  <Text style={styles.autoCoverEmoji}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+                </View>
+                <Text style={styles.autoCoverHint}>
+                  A clean cover is picked automatically from the name and meal type — no photo uploads, so every recipe looks tidy.
+                </Text>
               </View>
             </View>
 
@@ -1911,6 +1881,28 @@ const createStyles = (colors: ThemeColors) =>
     },
     photoActionRowMobile: {
       flexDirection: 'column',
+    },
+    autoCoverRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 12,
+    },
+    autoCoverPreview: {
+      width: 64,
+      height: 64,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    autoCoverEmoji: {
+      fontSize: 34,
+    },
+    autoCoverHint: {
+      flex: 1,
+      fontSize: 12.5,
+      lineHeight: 17,
+      color: colors.subtext,
     },
     builderTextarea: {
       minHeight: 88,
