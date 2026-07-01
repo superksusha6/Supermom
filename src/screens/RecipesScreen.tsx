@@ -305,6 +305,12 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftPhotoUri, setDraftPhotoUri] = useState('');
+  const [draftPhotoCredit, setDraftPhotoCredit] = useState<{ name: string; url: string; source: string } | undefined>(undefined);
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [photoQuery, setPhotoQuery] = useState('');
+  const [photoResults, setPhotoResults] = useState<{ uri: string; credit: { name: string; url: string; source: string } }[]>([]);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
   const [draftMealType, setDraftMealType] = useState<RecipeMealType>('breakfast');
   const [draftCookTime, setDraftCookTime] = useState('');
   const [draftServings, setDraftServings] = useState('');
@@ -377,10 +383,62 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setUnitPickerOpenFor((current) => (current === rowId ? null : current));
   }
 
+  async function fetchPhotoSuggestions(query: string) {
+    const key = process.env.EXPO_PUBLIC_PEXELS_API_KEY;
+    const q = query.trim() || `${draftMealType} food`;
+    if (!key) {
+      setPhotoError('Photo suggestions are not set up yet.');
+      return;
+    }
+    setPhotoLoading(true);
+    setPhotoError('');
+    try {
+      const res = await fetch(
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(q + ' food')}&per_page=12&orientation=landscape`,
+        { headers: { Authorization: key } },
+      );
+      const data = await res.json();
+      const results = (data.photos || []).map((p: any) => ({
+        uri: p.src?.landscape || p.src?.large || p.src?.medium,
+        credit: { name: p.photographer || 'Pexels', url: p.url || '', source: 'Pexels' },
+      })).filter((r: any) => r.uri);
+      setPhotoResults(results);
+      if (results.length === 0) setPhotoError('No photos found — try a simpler word.');
+    } catch {
+      setPhotoError('Could not load photos right now.');
+    } finally {
+      setPhotoLoading(false);
+    }
+  }
+
+  function openPhotoPicker() {
+    const q = draftTitle.trim() || `${draftMealType} food`;
+    setPhotoQuery(q);
+    setPhotoPickerOpen(true);
+    setPhotoResults([]);
+    fetchPhotoSuggestions(q);
+  }
+
+  function selectSuggestedPhoto(r: { uri: string; credit: { name: string; url: string; source: string } }) {
+    setDraftPhotoUri(r.uri);
+    setDraftPhotoCredit(r.credit);
+    setPhotoPickerOpen(false);
+  }
+
+  function clearDraftPhoto() {
+    setDraftPhotoUri('');
+    setDraftPhotoCredit(undefined);
+    setPhotoPickerOpen(false);
+  }
+
   function resetBuilder() {
     setEditingRecipeId(null);
     setDraftTitle('');
     setDraftPhotoUri('');
+    setDraftPhotoCredit(undefined);
+    setPhotoPickerOpen(false);
+    setPhotoResults([]);
+    setPhotoError('');
     setDraftMealType('breakfast');
     setDraftCookTime('');
     setDraftServings('');
@@ -402,6 +460,10 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setEditingRecipeId(recipe.id);
     setDraftTitle(recipe.title);
     setDraftPhotoUri(recipe.photoUri || '');
+    setDraftPhotoCredit(recipe.photoCredit);
+    setPhotoPickerOpen(false);
+    setPhotoResults([]);
+    setPhotoError('');
     setDraftMealType(recipe.mealType);
     setDraftCookTime(recipe.cookTimeMinutes ? String(recipe.cookTimeMinutes) : '');
     setDraftServings(recipe.servings ? String(recipe.servings) : '1');
@@ -476,6 +538,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
       tags: [],
       classifiers: draftClassifiers,
       photoUri: draftPhotoUri || undefined,
+      photoCredit: draftPhotoUri ? draftPhotoCredit : undefined,
       nutritionPerServing: {
         calories: Math.round(effectiveNutrition.calories / (Number.parseInt(draftServings.trim() || '1', 10) || 1)),
         protein: Math.round((effectiveNutrition.protein / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
@@ -960,13 +1023,57 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
           <ScrollView style={styles.builderScreenScroll} contentContainerStyle={styles.builderScreenScrollContent}>
             <View style={styles.builderSectionCard}>
               <TextInput placeholder="Recipe title" placeholderTextColor={colors.subtext} style={styles.builderInput} value={draftTitle} onChangeText={setDraftTitle} />
-              <View style={styles.autoCoverRow}>
-                <View style={[styles.autoCoverPreview, { backgroundColor: getRecipePlaceholderTone(draftMealType).bg }]}>
-                  <Text style={styles.autoCoverEmoji}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+              <View style={styles.coverSection}>
+                {draftPhotoUri ? (
+                  <Image source={{ uri: draftPhotoUri }} style={styles.coverPreviewImg} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.coverPreviewImg, styles.coverPreviewEmoji, { backgroundColor: getRecipePlaceholderTone(draftMealType).bg }]}>
+                    <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+                  </View>
+                )}
+                <View style={[styles.photoActionRow, isMobile && styles.photoActionRowMobile]}>
+                  <Pressable style={styles.builderSecondaryBtn} onPress={openPhotoPicker}>
+                    <Text style={styles.builderSecondaryBtnText}>{draftPhotoUri ? 'Change photo' : 'Suggest a photo'}</Text>
+                  </Pressable>
+                  {draftPhotoUri ? (
+                    <Pressable style={styles.builderSecondaryBtn} onPress={clearDraftPhoto}>
+                      <Text style={styles.builderSecondaryBtnText}>Use auto cover</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
-                <Text style={styles.autoCoverHint}>
-                  A clean cover is picked automatically from the name and meal type — no photo uploads, so every recipe looks tidy.
-                </Text>
+
+                {photoPickerOpen ? (
+                  <View style={styles.photoPickerPanel}>
+                    <View style={styles.photoSearchRow}>
+                      <TextInput
+                        placeholder="Search dish photos"
+                        placeholderTextColor={colors.subtext}
+                        style={[styles.builderInput, styles.photoSearchInput]}
+                        value={photoQuery}
+                        onChangeText={setPhotoQuery}
+                        onSubmitEditing={() => fetchPhotoSuggestions(photoQuery)}
+                        returnKeyType="search"
+                      />
+                      <Pressable style={styles.builderSecondaryBtn} onPress={() => fetchPhotoSuggestions(photoQuery)}>
+                        <Text style={styles.builderSecondaryBtnText}>Search</Text>
+                      </Pressable>
+                    </View>
+                    {photoLoading ? <Text style={styles.photoPickerHint}>Finding beautiful photos…</Text> : null}
+                    {photoError ? <Text style={styles.photoPickerHint}>{photoError}</Text> : null}
+                    <View style={styles.photoGrid}>
+                      {photoResults.map((r, i) => (
+                        <Pressable key={`${r.uri}-${i}`} style={styles.photoThumbWrap} onPress={() => selectSuggestedPhoto(r)}>
+                          <Image source={{ uri: r.uri }} style={styles.photoThumb} resizeMode="cover" />
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={styles.photoPickerHint}>Tap a photo to use it as the cover. Photos from Pexels.</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.autoCoverHint}>
+                    Tap “Suggest a photo” for beautiful shots matching your dish, or keep the clean auto cover.
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -1882,26 +1989,62 @@ const createStyles = (colors: ThemeColors) =>
     photoActionRowMobile: {
       flexDirection: 'column',
     },
-    autoCoverRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
+    coverSection: {
       marginTop: 12,
+      gap: 10,
     },
-    autoCoverPreview: {
-      width: 64,
-      height: 64,
+    coverPreviewImg: {
+      width: '100%',
+      height: 170,
       borderRadius: 16,
+      backgroundColor: '#e8eef7',
+    },
+    coverPreviewEmoji: {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    autoCoverEmoji: {
-      fontSize: 34,
+    coverPreviewEmojiText: {
+      fontSize: 60,
     },
     autoCoverHint: {
-      flex: 1,
       fontSize: 12.5,
       lineHeight: 17,
+      color: colors.subtext,
+    },
+    photoPickerPanel: {
+      gap: 10,
+      backgroundColor: '#f4f6fb',
+      borderRadius: 14,
+      padding: 10,
+    },
+    photoSearchRow: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+    },
+    photoSearchInput: {
+      flex: 1,
+      marginBottom: 0,
+    },
+    photoGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    photoThumbWrap: {
+      width: '31.5%',
+      aspectRatio: 1.4,
+      borderRadius: 10,
+      overflow: 'hidden',
+      backgroundColor: '#e8eef7',
+    },
+    photoThumb: {
+      width: '100%',
+      height: '100%',
+    },
+    photoPickerHint: {
+      fontSize: 12,
+      lineHeight: 16,
       color: colors.subtext,
     },
     builderTextarea: {
