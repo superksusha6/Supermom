@@ -286,6 +286,8 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const [draftSteps, setDraftSteps] = useState('');
   const [draftClassifiers, setDraftClassifiers] = useState<RecipeClassifier[]>([]);
   const [draftIngredientRows, setDraftIngredientRows] = useState<DraftIngredientRow[]>([createDraftIngredientRow()]);
+  const [manualNutritionOn, setManualNutritionOn] = useState(false);
+  const [manualNutrition, setManualNutrition] = useState({ calories: '', protein: '', fat: '', carbs: '' });
   const [unitPickerOpenFor, setUnitPickerOpenFor] = useState<string | null>(null);
 
   const starterRecipes = useMemo(
@@ -311,6 +313,27 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
       { calories: 0, protein: 0, fat: 0, carbs: 0 },
     );
   }, [draftIngredientRows]);
+
+  // When manual entry is on, the typed totals win over the auto-calculated ones.
+  const effectiveNutrition = manualNutritionOn
+    ? {
+        calories: Number(manualNutrition.calories) || 0,
+        protein: Number(manualNutrition.protein.replace(',', '.')) || 0,
+        fat: Number(manualNutrition.fat.replace(',', '.')) || 0,
+        carbs: Number(manualNutrition.carbs.replace(',', '.')) || 0,
+      }
+    : draftNutrition;
+
+  function enableManualNutrition() {
+    // Prefill with the current auto values so the user edits from there.
+    setManualNutrition({
+      calories: String(Math.round(draftNutrition.calories) || ''),
+      protein: String(Math.round(draftNutrition.protein * 10) / 10 || ''),
+      fat: String(Math.round(draftNutrition.fat * 10) / 10 || ''),
+      carbs: String(Math.round(draftNutrition.carbs * 10) / 10 || ''),
+    });
+    setManualNutritionOn(true);
+  }
 
   function toggleDraftClassifier(value: RecipeClassifier) {
     setDraftClassifiers((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
@@ -365,6 +388,8 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setDraftSteps('');
     setDraftClassifiers([]);
     setDraftIngredientRows([createDraftIngredientRow()]);
+    setManualNutritionOn(false);
+    setManualNutrition({ calories: '', protein: '', fat: '', carbs: '' });
     setUnitPickerOpenFor(null);
   }
 
@@ -383,9 +408,29 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setDraftServings(recipe.servings ? String(recipe.servings) : '1');
     setDraftSteps(recipe.steps.map((step) => step.text).join('\n'));
     setDraftClassifiers(recipe.classifiers);
-    setDraftIngredientRows(
-      recipe.ingredients.length ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient)) : [createDraftIngredientRow()],
-    );
+    const rows = recipe.ingredients.length
+      ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient))
+      : [createDraftIngredientRow()];
+    setDraftIngredientRows(rows);
+    // If the saved nutrition can't be reproduced from the ingredients (they weren't
+    // recognized), keep it as manual values so editing doesn't zero it out.
+    const autoCalories = rows.reduce((sum, row) => {
+      const values = row.preset ? getIngredientNutrition(row) : null;
+      return sum + (values ? Number(values.calories) || 0 : 0);
+    }, 0);
+    const servings = recipe.servings || 1;
+    if (autoCalories <= 0 && recipe.nutritionPerServing.calories > 0) {
+      setManualNutritionOn(true);
+      setManualNutrition({
+        calories: String(Math.round(recipe.nutritionPerServing.calories * servings)),
+        protein: String(Math.round(recipe.nutritionPerServing.protein * servings * 10) / 10),
+        fat: String(Math.round(recipe.nutritionPerServing.fat * servings * 10) / 10),
+        carbs: String(Math.round(recipe.nutritionPerServing.carbs * servings * 10) / 10),
+      });
+    } else {
+      setManualNutritionOn(false);
+      setManualNutrition({ calories: '', protein: '', fat: '', carbs: '' });
+    }
     setUnitPickerOpenFor(null);
     setBuilderError(null);
     setSelectedRecipeId(null);
@@ -432,10 +477,10 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
       classifiers: draftClassifiers,
       photoUri: draftPhotoUri || undefined,
       nutritionPerServing: {
-        calories: Math.round(draftNutrition.calories / (Number.parseInt(draftServings.trim() || '1', 10) || 1)),
-        protein: Math.round((draftNutrition.protein / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
-        fat: Math.round((draftNutrition.fat / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
-        carbs: Math.round((draftNutrition.carbs / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
+        calories: Math.round(effectiveNutrition.calories / (Number.parseInt(draftServings.trim() || '1', 10) || 1)),
+        protein: Math.round((effectiveNutrition.protein / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
+        fat: Math.round((effectiveNutrition.fat / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
+        carbs: Math.round((effectiveNutrition.carbs / (Number.parseInt(draftServings.trim() || '1', 10) || 1)) * 10) / 10,
       },
       ingredients: draftIngredientRows
         .filter((row) => row.preset || row.query.trim())
@@ -1024,25 +1069,83 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 );
               })}
 
-              <Text style={styles.builderInlineHint}>Nutrition is calculated automatically from selected products and units. Pieces and spoons use estimated grams.</Text>
-              <View style={styles.nutritionRow}>
-                <View style={styles.nutritionCard}>
-                  <Text style={styles.nutritionValue}>{Math.round(draftNutrition.calories)}</Text>
-                  <Text style={styles.nutritionLabel}>total kcal</Text>
-                </View>
-                <View style={styles.nutritionCard}>
-                  <Text style={styles.nutritionValue}>{Math.round(draftNutrition.protein * 10) / 10} g</Text>
-                  <Text style={styles.nutritionLabel}>protein</Text>
-                </View>
-                <View style={styles.nutritionCard}>
-                  <Text style={styles.nutritionValue}>{Math.round(draftNutrition.fat * 10) / 10} g</Text>
-                  <Text style={styles.nutritionLabel}>fat</Text>
-                </View>
-                <View style={styles.nutritionCard}>
-                  <Text style={styles.nutritionValue}>{Math.round(draftNutrition.carbs * 10) / 10} g</Text>
-                  <Text style={styles.nutritionLabel}>carbs</Text>
-                </View>
+              <View style={styles.nutritionHintRow}>
+                <Text style={[styles.builderInlineHint, { flex: 1 }]}>
+                  {manualNutritionOn
+                    ? 'Manual totals for the whole recipe. They’re divided by servings on save.'
+                    : 'Nutrition is calculated automatically from selected products and units. Pieces and spoons use estimated grams.'}
+                </Text>
+                <Pressable onPress={() => (manualNutritionOn ? setManualNutritionOn(false) : enableManualNutrition())}>
+                  <Text style={styles.nutritionToggleLink}>{manualNutritionOn ? 'Use auto' : 'Enter manually'}</Text>
+                </Pressable>
               </View>
+              {manualNutritionOn ? (
+                <View style={styles.nutritionRow}>
+                  <View style={styles.nutritionCard}>
+                    <TextInput
+                      style={styles.nutritionInput}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.subtext}
+                      value={manualNutrition.calories}
+                      onChangeText={(t) => setManualNutrition((p) => ({ ...p, calories: t.replace(/[^\d]/g, '').slice(0, 5) }))}
+                    />
+                    <Text style={styles.nutritionLabel}>total kcal</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <TextInput
+                      style={styles.nutritionInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.subtext}
+                      value={manualNutrition.protein}
+                      onChangeText={(t) => setManualNutrition((p) => ({ ...p, protein: t.replace(/[^\d.,]/g, '') }))}
+                    />
+                    <Text style={styles.nutritionLabel}>protein (g)</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <TextInput
+                      style={styles.nutritionInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.subtext}
+                      value={manualNutrition.fat}
+                      onChangeText={(t) => setManualNutrition((p) => ({ ...p, fat: t.replace(/[^\d.,]/g, '') }))}
+                    />
+                    <Text style={styles.nutritionLabel}>fat (g)</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <TextInput
+                      style={styles.nutritionInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.subtext}
+                      value={manualNutrition.carbs}
+                      onChangeText={(t) => setManualNutrition((p) => ({ ...p, carbs: t.replace(/[^\d.,]/g, '') }))}
+                    />
+                    <Text style={styles.nutritionLabel}>carbs (g)</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.nutritionRow}>
+                  <View style={styles.nutritionCard}>
+                    <Text style={styles.nutritionValue}>{Math.round(draftNutrition.calories)}</Text>
+                    <Text style={styles.nutritionLabel}>total kcal</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <Text style={styles.nutritionValue}>{Math.round(draftNutrition.protein * 10) / 10} g</Text>
+                    <Text style={styles.nutritionLabel}>protein</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <Text style={styles.nutritionValue}>{Math.round(draftNutrition.fat * 10) / 10} g</Text>
+                    <Text style={styles.nutritionLabel}>fat</Text>
+                  </View>
+                  <View style={styles.nutritionCard}>
+                    <Text style={styles.nutritionValue}>{Math.round(draftNutrition.carbs * 10) / 10} g</Text>
+                    <Text style={styles.nutritionLabel}>carbs</Text>
+                  </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.builderSectionCard}>
@@ -2073,6 +2176,26 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.text,
       fontSize: 15,
       fontWeight: '800',
+    },
+    nutritionHintRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      marginBottom: 10,
+    },
+    nutritionToggleLink: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    nutritionInput: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '800',
+      textAlign: 'center',
+      minWidth: 44,
+      paddingVertical: 2,
     },
     nutritionLabel: {
       color: colors.subtext,
