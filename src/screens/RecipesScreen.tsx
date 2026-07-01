@@ -1629,7 +1629,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     recipeCardPhotoFrame: {
       width: '100%',
-      height: 190,
+      aspectRatio: 1.7,
+      maxHeight: 220,
       borderRadius: 16,
       marginBottom: 12,
       backgroundColor: 'transparent',
@@ -1653,7 +1654,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     recipeCardPhotoFallback: {
       width: '100%',
-      height: 190,
+      aspectRatio: 1.7,
+      maxHeight: 220,
       borderRadius: 16,
       marginBottom: 12,
       overflow: 'hidden',
@@ -1888,13 +1890,15 @@ const createStyles = (colors: ThemeColors) =>
     },
     modalRecipePhoto: {
       width: '100%',
-      height: 210,
+      aspectRatio: 1.7,
+      maxHeight: 360,
       borderRadius: 22,
       marginBottom: 14,
       backgroundColor: '#e8eef7',
     },
     modalRecipePhotoMobile: {
-      height: 170,
+      aspectRatio: 1.55,
+      maxHeight: 260,
       borderRadius: 18,
     },
     closeBtn: {
@@ -1995,7 +1999,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     coverPreviewImg: {
       width: '100%',
-      height: 170,
+      aspectRatio: 1.7,
+      maxHeight: 260,
       borderRadius: 16,
       backgroundColor: '#e8eef7',
     },
