@@ -1116,14 +1116,12 @@ export function CalendarScreen({
             returnKeyType="done"
             selectTextOnFocus
           />
-          {isEnd ? (
-            <Pressable
-              style={styles.timeChevronBtn}
-              onPress={() => setOpenTimeField((prev) => (prev === target ? null : target))}
-            >
-              <Text style={styles.timeChevronText}>⌄</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            style={styles.timeChevronBtn}
+            onPress={() => setOpenTimeField((prev) => (prev === target ? null : target))}
+          >
+            <Text style={styles.timeChevronText}>⌄</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -1153,6 +1151,33 @@ export function CalendarScreen({
           );
         })}
         <Text style={styles.timeDropdownHint}>Need longer? Type the end time directly in the field.</Text>
+      </View>
+    );
+  }
+
+  function renderStartDropdown(target: 'create_start' | 'edit_start') {
+    if (openTimeField !== target) return null;
+    const currentValue = currentTimeFieldValue(target);
+    return (
+      <View style={styles.timeDropdown}>
+        <ScrollView style={styles.timeDropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          {START_TIME_OPTIONS.map((option) => {
+            const selected = option === currentValue;
+            return (
+              <Pressable
+                key={option}
+                style={[styles.timeOptionRow, selected && styles.timeOptionRowActive]}
+                onPress={() => applyTimeSelection(target, option)}
+              >
+                <Text style={[styles.timeOptionText, selected && styles.timeOptionTextActive]}>
+                  {selected ? '✓  ' : ''}
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Text style={styles.timeDropdownHint}>Pick a start time, or type it directly (e.g. 9 PM).</Text>
       </View>
     );
   }
@@ -2114,6 +2139,7 @@ export function CalendarScreen({
                       </View>
                     ) : null}
                   </View>
+                  {renderStartDropdown('create_start')}
                   {renderEndDropdown('create_end')}
                 </>
               )}
@@ -2300,6 +2326,7 @@ export function CalendarScreen({
                   </View>
                 ) : null}
               </View>
+              {renderStartDropdown('edit_start')}
               {renderEndDropdown('edit_end')}
               <View style={styles.row}>
                 <Chip
@@ -3159,6 +3186,14 @@ function parseTimeValue(value: string) {
     return { hour, minute, period } as const;
   }
 
+  // Hour only, with AM/PM — e.g. "9 PM", "9pm".
+  const hourWithPeriod = text.match(/^(\d{1,2})\s*(AM|PM)$/i);
+  if (hourWithPeriod) {
+    const hour = clampNumber(parseInt(hourWithPeriod[1], 10), 1, 12);
+    const period = hourWithPeriod[2].toUpperCase() === 'PM' ? 'PM' : 'AM';
+    return { hour, minute: 0, period } as const;
+  }
+
   const twentyFour = text.match(/^(\d{1,2}):(\d{2})$/);
   if (twentyFour) {
     const rawHour = clampNumber(parseInt(twentyFour[1], 10), 0, 23);
@@ -3166,6 +3201,15 @@ function parseTimeValue(value: string) {
     const period = rawHour >= 12 ? 'PM' : 'AM';
     const hour = rawHour % 12 === 0 ? 12 : rawHour % 12;
     return { hour, minute, period } as const;
+  }
+
+  // Bare hour — treat as 24-hour ("21" -> 9 PM, "9" -> 9 AM).
+  const bareHour = text.match(/^(\d{1,2})$/);
+  if (bareHour) {
+    const rawHour = clampNumber(parseInt(bareHour[1], 10), 0, 23);
+    const period = rawHour >= 12 ? 'PM' : 'AM';
+    const hour = rawHour % 12 === 0 ? 12 : rawHour % 12;
+    return { hour, minute: 0, period } as const;
   }
 
   return { hour: 10, minute: 0, period: 'AM' as const };
@@ -3195,6 +3239,9 @@ function addMinutesToTime(time: string, deltaMinutes: number) {
   return minutesToClockText(convertTimeToMinutes(time) + deltaMinutes);
 }
 
+// Every 30 minutes across the day, as 12-hour labels, for the start-time picker.
+const START_TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => minutesToClockText(i * 30));
+
 function formatDurationLabel(startTime: string, endTime: string) {
   const minutes = convertTimeToMinutes(endTime) - convertTimeToMinutes(startTime);
   if (minutes <= 0) return '';
@@ -3209,7 +3256,11 @@ const END_DURATION_STEP_MINUTES = 30;
 const END_DURATION_MAX_MINUTES = 180;
 
 function isValidTimeText(value: string) {
-  return /^\s*\d{1,2}:\d{2}(\s*(am|pm))?\s*$/i.test(value) || /^\s*\d{1,2}\s*(am|pm)\s*$/i.test(value);
+  return (
+    /^\s*\d{1,2}:\d{2}(\s*(am|pm))?\s*$/i.test(value) ||
+    /^\s*\d{1,2}\s*(am|pm)\s*$/i.test(value) ||
+    /^\s*\d{1,2}\s*$/.test(value)
+  );
 }
 
 function buildEndDurationOptions(startTime: string) {
