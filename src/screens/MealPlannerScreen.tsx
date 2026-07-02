@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
 import { computeRecipeNutritionForSelection, resolveRecipeIngredients } from '@/lib/recipeNutrition';
@@ -399,6 +399,27 @@ export function MealPlannerScreen({
 
   const staffPlanText = useMemo(() => buildStaffMealPlanText(activeWeeklyPlan, recipesById, activeProfile.label), [activeProfile.label, activeWeeklyPlan, recipesById]);
 
+  const [exportMenu, setExportMenu] = useState<'send' | 'save' | null>(null);
+
+  function copyPlanText() {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(staffPlanText).catch(() => {});
+    } else {
+      Share.share({ title: 'Weekly Meal Plan', message: staffPlanText });
+    }
+  }
+
+  const sendOptions = [
+    { key: 'share', label: 'Share…', action: () => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText }) },
+    { key: 'whatsapp', label: 'WhatsApp', action: () => Linking.openURL(`https://wa.me/?text=${encodeURIComponent(staffPlanText)}`) },
+    { key: 'email', label: 'Email', action: () => Linking.openURL(`mailto:?subject=${encodeURIComponent('Weekly Meal Plan')}&body=${encodeURIComponent(staffPlanText)}`) },
+  ];
+  const saveOptions = [
+    { key: 'pdf', label: 'PDF', action: () => printStaffMealPlan(activeWeeklyPlan, recipesById, activeProfile.label) },
+    { key: 'print', label: 'Print', action: () => printStaffMealPlan(activeWeeklyPlan, recipesById, activeProfile.label) },
+    { key: 'copy', label: 'Copy text', action: copyPlanText },
+  ];
+
   const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false) => {
     const entry = activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
     const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
@@ -482,18 +503,34 @@ export function MealPlannerScreen({
             </View>
             <View style={[styles.staffExportActions, isMobile && styles.staffExportActionsMobile]}>
               <Pressable
-                style={[styles.staffExportBtn, styles.staffExportBtnSend, isMobile && styles.staffExportBtnMobile]}
-                onPress={() => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText })}
+                style={[styles.staffExportBtn, styles.staffExportBtnSend, exportMenu === 'send' && styles.staffExportBtnActive, isMobile && styles.staffExportBtnMobile]}
+                onPress={() => setExportMenu((prev) => (prev === 'send' ? null : 'send'))}
               >
-                <Text style={[styles.staffExportBtnText, styles.staffExportBtnTextSend]}>Send</Text>
+                <Text style={[styles.staffExportBtnText, styles.staffExportBtnTextSend]}>Send  ▾</Text>
               </Pressable>
               <Pressable
-                style={[styles.staffExportBtn, isMobile && styles.staffExportBtnMobile]}
-                onPress={() => printStaffMealPlan(activeWeeklyPlan, recipesById, activeProfile.label)}
+                style={[styles.staffExportBtn, exportMenu === 'save' && styles.staffExportBtnActive, isMobile && styles.staffExportBtnMobile]}
+                onPress={() => setExportMenu((prev) => (prev === 'save' ? null : 'save'))}
               >
-                <Text style={styles.staffExportBtnText}>PDF</Text>
+                <Text style={styles.staffExportBtnText}>Save  ▾</Text>
               </Pressable>
             </View>
+            {exportMenu ? (
+              <View style={styles.exportMenu}>
+                {(exportMenu === 'send' ? sendOptions : saveOptions).map((option) => (
+                  <Pressable
+                    key={option.key}
+                    style={styles.exportMenuItem}
+                    onPress={() => {
+                      option.action();
+                      setExportMenu(null);
+                    }}
+                  >
+                    <Text style={styles.exportMenuItemText}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
         </SectionCard>
 
@@ -1289,6 +1326,29 @@ const createStyles = (colors: ThemeColors) =>
     staffExportBtnSend: {
       borderColor: colors.primary,
       backgroundColor: colors.primary,
+    },
+    staffExportBtnActive: {
+      opacity: 0.9,
+    },
+    exportMenu: {
+      width: '100%',
+      marginTop: 4,
+      borderWidth: 1,
+      borderColor: '#e6ecf5',
+      borderRadius: 12,
+      backgroundColor: '#ffffff',
+      overflow: 'hidden',
+    },
+    exportMenuItem: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#f0f3f8',
+    },
+    exportMenuItemText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '700',
     },
     staffExportBtnMobile: {
       flex: 1,
