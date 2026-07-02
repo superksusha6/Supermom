@@ -183,7 +183,6 @@ export function CalendarScreen({
   const [sleepHours, setSleepHours] = useState(0);
   const [sleepMinutes, setSleepMinutes] = useState(0);
   const [markAsPeriodStart, setMarkAsPeriodStart] = useState(false);
-  const [periodMarkMode, setPeriodMarkMode] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [tonePickerOpen, setTonePickerOpen] = useState(false);
@@ -1426,10 +1425,6 @@ export function CalendarScreen({
                     onPress={(event) => {
                     if (!cell.dateKey) return;
                     setSelectedDateKey(cell.dateKey);
-                    if (periodMarkMode) {
-                      togglePeriodDay(cell.dateKey);
-                      return;
-                    }
                     setDayTimelineOpen(true);
                     if (birthdayDates.has(cell.dateKey)) {
                       triggerBirthdayCelebration({
@@ -1611,6 +1606,17 @@ export function CalendarScreen({
 
             <Text style={styles.dayTimelineHint}>Tap a time to add a plan</Text>
 
+            {isMomProfile ? (
+              <Pressable
+                style={[styles.periodDayToggle, cyclePeriodEntryDates.has(selectedDateKey) && styles.periodDayToggleActive]}
+                onPress={() => togglePeriodDay(selectedDateKey)}
+              >
+                <Text style={[styles.periodDayToggleText, cyclePeriodEntryDates.has(selectedDateKey) && styles.periodDayToggleTextActive]}>
+                  {cyclePeriodEntryDates.has(selectedDateKey) ? '🩸  Period day ✓  ·  tap to remove' : '🩸  Mark as period day'}
+                </Text>
+              </Pressable>
+            ) : null}
+
             <ScrollView
               style={styles.dayTimelineScroll}
               contentContainerStyle={styles.dayTimelineScrollContent}
@@ -1716,21 +1722,8 @@ export function CalendarScreen({
         {isMomProfile ? (
           <View style={styles.calendarCloverWrap}>
             <View style={styles.calendarTopActions}>
-              <Pressable onPress={() => setPeriodMarkMode((prev) => !prev)} style={[styles.calendarPeriodBtn, periodMarkMode && styles.calendarPeriodBtnActive]}>
-                <PeriodDropIcon styles={styles} active={periodMarkMode} />
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-        {isMomProfile && periodMarkMode ? (
-          <View style={styles.periodMarkBanner}>
-            <Text style={styles.periodMarkBannerText}>🩸 Tap the days you had your period to mark them red.</Text>
-            <View style={styles.periodMarkBannerActions}>
-              <Pressable onPress={() => setCycleModalOpen(true)} style={styles.periodMarkDetailsBtn}>
-                <Text style={styles.periodMarkDetailsText}>Details</Text>
-              </Pressable>
-              <Pressable onPress={() => setPeriodMarkMode(false)} style={styles.periodMarkDoneBtn}>
-                <Text style={styles.periodMarkDoneText}>Done</Text>
+              <Pressable onPress={() => setCycleModalOpen(true)} style={[styles.calendarPeriodBtn, cycleModalOpen && styles.calendarPeriodBtnActive]}>
+                <PeriodDropIcon styles={styles} active={cycleModalOpen} />
               </Pressable>
             </View>
           </View>
@@ -3708,54 +3701,27 @@ const createStyles = (colors: ThemeColors) =>
     lineHeight: 18,
     fontWeight: '700',
   },
-  periodMarkBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
-    borderRadius: 14,
+  periodDayToggle: {
+    marginBottom: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(225,29,72,0.35)',
-    backgroundColor: 'rgba(255,228,230,0.96)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255,241,242,0.9)',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    alignItems: 'center',
   },
-  periodMarkBannerText: {
-    flex: 1,
+  periodDayToggleActive: {
+    backgroundColor: '#e11d48',
+    borderColor: '#e11d48',
+  },
+  periodDayToggleText: {
     color: '#9f1239',
     fontSize: 13,
-    lineHeight: 18,
     fontWeight: '800',
   },
-  periodMarkBannerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  periodMarkDetailsBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(225,29,72,0.4)',
-    backgroundColor: 'transparent',
-  },
-  periodMarkDetailsText: {
-    color: '#9f1239',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  periodMarkDoneBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#e11d48',
-  },
-  periodMarkDoneText: {
+  periodDayToggleTextActive: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
   },
   calendarTopActions: {
     flexDirection: 'row',
