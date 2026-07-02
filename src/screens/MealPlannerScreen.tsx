@@ -511,10 +511,6 @@ export function MealPlannerScreen({
           </View>
 
           <View style={[styles.staffExportCard, isMobile && styles.staffExportCardMobile]}>
-            <View style={styles.staffExportCopy}>
-              <Text style={styles.staffExportTitle}>Staff meal plan</Text>
-              <Text style={styles.staffExportText}>Prepare a clean weekly menu for {activeProfile.label} with recipes and ingredients for staff.</Text>
-            </View>
             <View style={[styles.staffExportActions, isMobile && styles.staffExportActionsMobile]}>
               <Pressable
                 style={[styles.staffExportBtn, styles.staffExportBtnSend, exportMenu === 'send' && styles.staffExportBtnActive, isMobile && styles.staffExportBtnMobile]}
@@ -1282,16 +1278,9 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
     },
     staffExportCard: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: 14,
-      borderWidth: 1,
-      borderColor: '#e6ecf5',
-      borderRadius: 14,
-      backgroundColor: '#ffffff',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: 4,
     },
     staffExportCardMobile: {
       flexDirection: 'column',
@@ -1339,9 +1328,9 @@ const createStyles = (colors: ThemeColors) =>
       opacity: 0.9,
     },
     exportMenu: {
-      width: '100%',
-      maxWidth: 320,
-      alignSelf: 'flex-end',
+      width: 260,
+      maxWidth: '100%',
+      alignSelf: 'flex-start',
       marginTop: 4,
       borderWidth: 1,
       borderColor: '#e6ecf5',
