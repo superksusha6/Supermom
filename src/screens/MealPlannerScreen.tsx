@@ -429,7 +429,9 @@ export function MealPlannerScreen({
             <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
           </>
         ) : (
-          <Text style={[styles.weekGridEmptyText, compact && styles.weekGridEmptyTextCompact]}>+</Text>
+          <View style={[styles.weekGridAddChip, compact && styles.weekGridAddChipCompact]}>
+            <Text style={styles.weekGridAddChipText}>{compact ? '+ Add' : '+'}</Text>
+          </View>
         )}
       </Pressable>
     );
@@ -552,7 +554,9 @@ export function MealPlannerScreen({
                               <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
                             </>
                           ) : (
-                            <Text style={styles.weekGridEmptyText}>+</Text>
+                            <View style={styles.weekGridAddChip}>
+                              <Text style={styles.weekGridAddChipText}>+</Text>
+                            </View>
                           )}
                         </Pressable>
                       );
@@ -1350,7 +1354,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     weekGridRow: {
       flexDirection: 'row',
-      minHeight: 104,
+      minHeight: 66,
     },
     weekGridDayCell: {
       width: 130,
@@ -1413,6 +1417,26 @@ const createStyles = (colors: ThemeColors) =>
     },
     weekGridRecipeTitleCompact: {
       marginBottom: 2,
+    },
+    weekGridAddChip: {
+      alignSelf: 'center',
+      minWidth: 40,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: 'rgba(37,99,235,0.28)',
+      backgroundColor: 'rgba(37,99,235,0.07)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    weekGridAddChipCompact: {
+      alignSelf: 'flex-start',
+    },
+    weekGridAddChipText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '900',
     },
     weekGridEmptyText: {
       color: colors.primary,
