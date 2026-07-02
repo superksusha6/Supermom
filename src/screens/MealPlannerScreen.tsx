@@ -482,10 +482,10 @@ export function MealPlannerScreen({
             </View>
             <View style={[styles.staffExportActions, isMobile && styles.staffExportActionsMobile]}>
               <Pressable
-                style={[styles.staffExportBtn, isMobile && styles.staffExportBtnMobile]}
+                style={[styles.staffExportBtn, styles.staffExportBtnSend, isMobile && styles.staffExportBtnMobile]}
                 onPress={() => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText })}
               >
-                <Text style={styles.staffExportBtnText}>Send</Text>
+                <Text style={[styles.staffExportBtnText, styles.staffExportBtnTextSend]}>Send</Text>
               </Pressable>
               <Pressable
                 style={[styles.staffExportBtn, isMobile && styles.staffExportBtnMobile]}
@@ -1203,24 +1203,26 @@ const createStyles = (colors: ThemeColors) =>
     profileInput: {
       flex: 1,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.7)',
+      borderColor: '#dbe3ee',
+      borderRadius: 12,
+      backgroundColor: '#ffffff',
       color: colors.text,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      fontSize: 13,
-      fontWeight: '600',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      fontWeight: '500',
+      minHeight: 46,
     },
     profileInputMobile: {
       width: '100%',
     },
     addProfileBtn: {
-      borderRadius: 999,
+      borderRadius: 12,
       backgroundColor: colors.primary,
-      paddingHorizontal: 22,
-      paddingVertical: 10,
+      paddingHorizontal: 24,
+      minHeight: 46,
       justifyContent: 'center',
+      alignItems: 'center',
     },
     addProfileBtnMobile: {
       alignItems: 'center',
@@ -1235,13 +1237,13 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
-      gap: 12,
+      gap: 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255,255,255,0.55)',
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderColor: '#e6ecf5',
+      borderRadius: 14,
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
       maxWidth: 640,
       alignSelf: 'flex-start',
       width: '100%',
@@ -1275,23 +1277,30 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: 18,
     },
     staffExportBtn: {
-      borderRadius: 999,
+      borderRadius: 10,
       borderWidth: 1,
-      borderColor: 'rgba(37,99,235,0.28)',
-      backgroundColor: 'rgba(37,99,235,0.08)',
+      borderColor: '#d7e0ee',
+      backgroundColor: '#ffffff',
       paddingHorizontal: 18,
-      paddingVertical: 9,
+      paddingVertical: 10,
       alignItems: 'center',
-      minWidth: 76,
+      minWidth: 84,
+    },
+    staffExportBtnSend: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
     },
     staffExportBtnMobile: {
       flex: 1,
       minWidth: 92,
     },
     staffExportBtnText: {
-      color: colors.primary,
+      color: colors.text,
       fontSize: 13,
       fontWeight: '800',
+    },
+    staffExportBtnTextSend: {
+      color: '#ffffff',
     },
     staffExportBtnPrimary: {
       borderRadius: 12,
