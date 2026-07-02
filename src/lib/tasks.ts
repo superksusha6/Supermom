@@ -881,18 +881,22 @@ export async function listRecipes(familyId: string): Promise<Recipe[]> {
     'id, title, description, meal_type, cuisine, cook_time_minutes, servings, tags_json, classifiers_json, nutrition_per_serving_json, ingredients_json, steps_json, suitable_for_children, suitable_for_family';
   // Include photo_url so saved photos survive a reload. If the column hasn't
   // been added yet, retry without it instead of failing the whole list.
-  let { data, error } = await client
+  const withPhoto = await client
     .from('recipes')
     .select(`${baseColumns}, photo_url`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
 
+  let data: any[] | null = withPhoto.data;
+  let error = withPhoto.error;
   if (isMissingRecipePhotoColumnError(error)) {
-    ({ data, error } = await client
+    const fallback = await client
       .from('recipes')
       .select(baseColumns)
       .eq('family_id', familyId)
-      .order('created_at', { ascending: false }));
+      .order('created_at', { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
   }
 
   if (error) throw error;
