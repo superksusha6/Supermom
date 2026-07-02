@@ -410,10 +410,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   async function generateAiPhoto() {
     const title = draftTitle.trim();
     if (!title || photoLoading) return;
-    const description = draftSteps
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)[0] || '';
     setPhotoLoading(true);
     setPhotoError('');
     try {
@@ -423,7 +419,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
       const res = await fetch(`${base}/api/recipe-photo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title, mealType: draftMealType }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.image) {

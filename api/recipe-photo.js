@@ -25,10 +25,18 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
     const title = String(body.title || '').slice(0, 120).trim();
     const description = String(body.description || '').slice(0, 220).trim();
+    const mealType = String(body.mealType || '').slice(0, 40).trim().replace(/_/g, ' ');
     if (!title) return res.status(400).json({ error: 'A recipe title is required.' });
 
-    const subject = description ? `${title}. ${description}` : title;
-    const prompt = `${subject}. ${STYLE}`;
+    // Describe the FINISHED, plated dish. We deliberately avoid passing cooking
+    // steps as context — they describe batter/prep and make the model draw raw
+    // mixtures instead of the ready-to-eat dish.
+    const context = mealType ? ` (a ${mealType} dish)` : '';
+    const detail = description ? ` ${description}.` : '';
+    const prompt =
+      `A finished, plated, ready-to-eat serving of ${title}${context}, as it looks when cooked and served.${detail} ` +
+      `Show the completed cooked dish plated on a plate or in a bowl — not raw batter, not a mixing bowl, not uncooked ingredients. ` +
+      STYLE;
 
     const r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
