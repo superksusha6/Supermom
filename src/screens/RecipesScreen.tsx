@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
 import { NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
@@ -306,9 +306,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const [draftTitle, setDraftTitle] = useState('');
   const [draftPhotoUri, setDraftPhotoUri] = useState('');
   const [draftPhotoCredit, setDraftPhotoCredit] = useState<{ name: string; url: string; source: string } | undefined>(undefined);
-  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
-  const [photoQuery, setPhotoQuery] = useState('');
-  const [photoResults, setPhotoResults] = useState<{ uri: string; credit: { name: string; url: string; source: string } }[]>([]);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [draftMealType, setDraftMealType] = useState<RecipeMealType>('breakfast');
@@ -383,52 +380,70 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setUnitPickerOpenFor((current) => (current === rowId ? null : current));
   }
 
-  async function fetchPhotoSuggestions(query: string) {
-    const key = process.env.EXPO_PUBLIC_PEXELS_API_KEY;
-    const q = query.trim() || `${draftMealType} food`;
-    if (!key) {
-      setPhotoError('Photo suggestions are not set up yet.');
-      return;
-    }
+  // Downscale/compress a big AI PNG data URL to a light JPEG (web only) so we
+  // don't store multi-MB base64 in the recipe row.
+  async function shrinkDataUrl(dataUrl: string, maxWidth = 1000, quality = 0.82): Promise<string> {
+    if (typeof document === 'undefined') return dataUrl;
+    return new Promise((resolve) => {
+      const img = new (window as any).Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(dataUrl);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
+  async function generateAiPhoto() {
+    const title = draftTitle.trim();
+    if (!title || photoLoading) return;
+    const description = draftSteps
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)[0] || '';
     setPhotoLoading(true);
     setPhotoError('');
     try {
-      const res = await fetch(
-        `https://api.pexels.com/v1/search?query=${encodeURIComponent(q + ' food')}&per_page=12&orientation=landscape`,
-        { headers: { Authorization: key } },
-      );
-      const data = await res.json();
-      const results = (data.photos || []).map((p: any) => ({
-        uri: p.src?.landscape || p.src?.large || p.src?.medium,
-        credit: { name: p.photographer || 'Pexels', url: p.url || '', source: 'Pexels' },
-      })).filter((r: any) => r.uri);
-      setPhotoResults(results);
-      if (results.length === 0) setPhotoError('No photos found — try a simpler word.');
+      const onLocalhost =
+        typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+      const base = onLocalhost ? 'https://supermom-rose.vercel.app' : '';
+      const res = await fetch(`${base}/api/recipe-photo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.image) {
+        setPhotoError(data.error || 'Could not generate the photo right now.');
+        return;
+      }
+      const compact = await shrinkDataUrl(data.image);
+      setDraftPhotoUri(compact);
+      setDraftPhotoCredit(undefined);
     } catch {
-      setPhotoError('Could not load photos right now.');
+      setPhotoError('Could not reach the photo service. Please try again.');
     } finally {
       setPhotoLoading(false);
     }
   }
 
-  function openPhotoPicker() {
-    const q = draftTitle.trim() || `${draftMealType} food`;
-    setPhotoQuery(q);
-    setPhotoPickerOpen(true);
-    setPhotoResults([]);
-    fetchPhotoSuggestions(q);
-  }
-
-  function selectSuggestedPhoto(r: { uri: string; credit: { name: string; url: string; source: string } }) {
-    setDraftPhotoUri(r.uri);
-    setDraftPhotoCredit(r.credit);
-    setPhotoPickerOpen(false);
-  }
-
   function clearDraftPhoto() {
     setDraftPhotoUri('');
     setDraftPhotoCredit(undefined);
-    setPhotoPickerOpen(false);
+    setPhotoError('');
   }
 
   function resetBuilder() {
@@ -436,8 +451,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setDraftTitle('');
     setDraftPhotoUri('');
     setDraftPhotoCredit(undefined);
-    setPhotoPickerOpen(false);
-    setPhotoResults([]);
+    setPhotoLoading(false);
     setPhotoError('');
     setDraftMealType('breakfast');
     setDraftCookTime('');
@@ -461,8 +475,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     setDraftTitle(recipe.title);
     setDraftPhotoUri(recipe.photoUri || '');
     setDraftPhotoCredit(recipe.photoCredit);
-    setPhotoPickerOpen(false);
-    setPhotoResults([]);
+    setPhotoLoading(false);
     setPhotoError('');
     setDraftMealType(recipe.mealType);
     setDraftCookTime(recipe.cookTimeMinutes ? String(recipe.cookTimeMinutes) : '');
@@ -1028,52 +1041,38 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                   <Image source={{ uri: draftPhotoUri }} style={styles.coverPreviewImg} resizeMode="cover" />
                 ) : (
                   <View style={[styles.coverPreviewImg, styles.coverPreviewEmoji, { backgroundColor: getRecipePlaceholderTone(draftMealType).bg }]}>
-                    <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+                    {photoLoading ? (
+                      <>
+                        <ActivityIndicator color={colors.primary} />
+                        <Text style={styles.coverLoadingText}>Creating a photo…</Text>
+                      </>
+                    ) : (
+                      <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+                    )}
                   </View>
                 )}
                 <View style={[styles.photoActionRow, isMobile && styles.photoActionRowMobile]}>
-                  <Pressable style={styles.builderSecondaryBtn} onPress={openPhotoPicker}>
-                    <Text style={styles.builderSecondaryBtnText}>{draftPhotoUri ? 'Change photo' : 'Suggest a photo'}</Text>
+                  <Pressable
+                    style={[styles.builderSecondaryBtn, (photoLoading || !draftTitle.trim()) && styles.builderSecondaryBtnDisabled]}
+                    onPress={generateAiPhoto}
+                    disabled={photoLoading || !draftTitle.trim()}
+                  >
+                    <Text style={styles.builderSecondaryBtnText}>
+                      {photoLoading ? 'Generating…' : draftPhotoUri ? 'Regenerate photo' : 'Generate a photo'}
+                    </Text>
                   </Pressable>
-                  {draftPhotoUri ? (
+                  {draftPhotoUri && !photoLoading ? (
                     <Pressable style={styles.builderSecondaryBtn} onPress={clearDraftPhoto}>
                       <Text style={styles.builderSecondaryBtnText}>Use auto cover</Text>
                     </Pressable>
                   ) : null}
                 </View>
-
-                {photoPickerOpen ? (
-                  <View style={styles.photoPickerPanel}>
-                    <View style={styles.photoSearchRow}>
-                      <TextInput
-                        placeholder="Search dish photos"
-                        placeholderTextColor={colors.subtext}
-                        style={[styles.builderInput, styles.photoSearchInput]}
-                        value={photoQuery}
-                        onChangeText={setPhotoQuery}
-                        onSubmitEditing={() => fetchPhotoSuggestions(photoQuery)}
-                        returnKeyType="search"
-                      />
-                      <Pressable style={styles.builderSecondaryBtn} onPress={() => fetchPhotoSuggestions(photoQuery)}>
-                        <Text style={styles.builderSecondaryBtnText}>Search</Text>
-                      </Pressable>
-                    </View>
-                    {photoLoading ? <Text style={styles.photoPickerHint}>Finding beautiful photos…</Text> : null}
-                    {photoError ? <Text style={styles.photoPickerHint}>{photoError}</Text> : null}
-                    <View style={styles.photoGrid}>
-                      {photoResults.map((r, i) => (
-                        <Pressable key={`${r.uri}-${i}`} style={styles.photoThumbWrap} onPress={() => selectSuggestedPhoto(r)}>
-                          <Image source={{ uri: r.uri }} style={styles.photoThumb} resizeMode="cover" />
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Text style={styles.photoPickerHint}>Tap a photo to use it as the cover. Photos from Pexels.</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.autoCoverHint}>
-                    Tap “Suggest a photo” for beautiful shots matching your dish, or keep the clean auto cover.
-                  </Text>
-                )}
+                {photoError ? <Text style={styles.photoPickerHint}>{photoError}</Text> : null}
+                <Text style={styles.autoCoverHint}>
+                  {!draftTitle.trim()
+                    ? 'Add a recipe title first, then generate a photo in the app’s clean, light style.'
+                    : 'The photo is created by AI in the app’s clean, light style to match the other recipes.'}
+                </Text>
               </View>
             </View>
 
@@ -2011,6 +2010,12 @@ const createStyles = (colors: ThemeColors) =>
     coverPreviewEmojiText: {
       fontSize: 60,
     },
+    coverLoadingText: {
+      marginTop: 8,
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.subtext,
+    },
     autoCoverHint: {
       fontSize: 12.5,
       lineHeight: 17,
@@ -2278,6 +2283,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 12,
       alignItems: 'center',
+    },
+    builderSecondaryBtnDisabled: {
+      opacity: 0.5,
     },
     builderPrimaryBtn: {
       flex: 1,
