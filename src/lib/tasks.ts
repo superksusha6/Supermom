@@ -2142,7 +2142,9 @@ function composeStartsAt(date: string, time: string) {
   const hour24 = parsed.period === 'PM' ? (parsed.hour % 12) + 12 : parsed.hour % 12;
   const hh = String(hour24).padStart(2, '0');
   const mm = String(parsed.minute).padStart(2, '0');
-  return `${date}T${hh}:${mm}:00`;
+  // Store the entered wall-clock time explicitly as UTC and read it back as UTC
+  // (see formatTime12) so the time can't drift by the viewer's timezone offset.
+  return `${date}T${hh}:${mm}:00.000Z`;
 }
 
 function parseTimeValue(value: string) {
@@ -2171,8 +2173,9 @@ function parseTimeValue(value: string) {
 }
 
 function formatTime12(value: Date) {
-  let hours = value.getHours();
-  const minutes = value.getMinutes();
+  // Read back in UTC to match how composeStartsAt stored the wall-clock time.
+  let hours = value.getUTCHours();
+  const minutes = value.getUTCMinutes();
   const period = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12;
   if (hours === 0) hours = 12;
