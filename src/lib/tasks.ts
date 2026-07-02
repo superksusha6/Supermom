@@ -877,11 +877,23 @@ export async function upsertStaffProfileRecord(
 
 export async function listRecipes(familyId: string): Promise<Recipe[]> {
   const client = requireClient();
-  const { data, error } = await client
+  const baseColumns =
+    'id, title, description, meal_type, cuisine, cook_time_minutes, servings, tags_json, classifiers_json, nutrition_per_serving_json, ingredients_json, steps_json, suitable_for_children, suitable_for_family';
+  // Include photo_url so saved photos survive a reload. If the column hasn't
+  // been added yet, retry without it instead of failing the whole list.
+  let { data, error } = await client
     .from('recipes')
-    .select('id, title, description, meal_type, cuisine, cook_time_minutes, servings, tags_json, classifiers_json, nutrition_per_serving_json, ingredients_json, steps_json, suitable_for_children, suitable_for_family')
+    .select(`${baseColumns}, photo_url`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
+
+  if (isMissingRecipePhotoColumnError(error)) {
+    ({ data, error } = await client
+      .from('recipes')
+      .select(baseColumns)
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: false }));
+  }
 
   if (error) throw error;
 
@@ -1003,7 +1015,7 @@ export async function deleteRecipe(session: AppSession, recipeId: string) {
 function isMissingRecipePhotoColumnError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
   const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
-  return message.includes("Could not find the 'photo_url' column of 'recipes'") || message.includes("column 'photo_url' of relation 'recipes' does not exist");
+  return message.includes('photo_url') && (message.includes('does not exist') || message.includes('Could not find') || message.includes('schema cache'));
 }
 
 export async function getWeeklyMealPlanRecord(familyId: string): Promise<WeeklyMealPlanRecord> {
