@@ -906,18 +906,20 @@ export function CalendarScreen({
     }
   }
 
-  // Period-mark mode: tapping a day toggles it as a period day (adds/clears the
-  // flow so it shows red), keeping any other logged details for that day.
-  async function togglePeriodDay(dateKey: string) {
-    if (!onSaveCycleEntry) return;
-    const existing = (cycleEntries || []).find((item) => item.date === dateKey);
-    const isOn = cyclePeriodEntryDates.has(dateKey);
-    const entry: CycleDayEntry = {
-      ...(existing || {}),
-      date: dateKey,
-      flowLevel: isOn ? undefined : existing?.flowLevel || 'medium',
-    };
-    await onSaveCycleEntry(entry);
+  // Open the detailed cycle panel for the selected day (flow colour/intensity,
+  // spotting, feelings…), prefilled from anything already logged for that day.
+  function openCyclePanelForSelectedDay() {
+    const existing = (cycleEntries || []).find((item) => item.date === selectedDateKey);
+    setSelectedFlowLevel(existing?.flowLevel || 'moderate');
+    setSelectedDischargeType(existing?.dischargeType || 'red');
+    setSelectedFeelings(existing?.feelings?.length ? existing.feelings : ['normal']);
+    setSelectedPains(existing?.pains?.length ? existing.pains : ['light']);
+    setSelectedSleepQuality(existing?.sleepQuality || 'tired');
+    setSleepHours(existing?.sleepHours ?? 0);
+    setSleepMinutes(existing?.sleepMinutes ?? 0);
+    setMarkAsPeriodStart(!!existing?.isPeriodStart || cyclePeriodStartDates.has(selectedDateKey));
+    setDayTimelineOpen(false);
+    setCycleModalOpen(true);
   }
 
   async function handleSaveCyclePanel() {
@@ -1609,10 +1611,10 @@ export function CalendarScreen({
             {isMomProfile ? (
               <Pressable
                 style={[styles.periodDayToggle, cyclePeriodEntryDates.has(selectedDateKey) && styles.periodDayToggleActive]}
-                onPress={() => togglePeriodDay(selectedDateKey)}
+                onPress={openCyclePanelForSelectedDay}
               >
                 <Text style={[styles.periodDayToggleText, cyclePeriodEntryDates.has(selectedDateKey) && styles.periodDayToggleTextActive]}>
-                  {cyclePeriodEntryDates.has(selectedDateKey) ? '🩸  Period day ✓  ·  tap to remove' : '🩸  Mark as period day'}
+                  {cyclePeriodEntryDates.has(selectedDateKey) ? '🩸  Period day  ·  edit flow' : '🩸  Mark as period day'}
                 </Text>
               </Pressable>
             ) : null}
