@@ -1188,6 +1188,8 @@ export function CalendarScreen({
     if (isBirthdayEvent(event)) return;
     setOpenTimeField(null);
     setEditingTimeField(null);
+    // Close the day-view overlay so the editor isn't hidden behind it.
+    setDayTimelineOpen(false);
     setEditingEventId(event.id);
     const mirrorChildId = event.owner === 'mother' && event.category === 'Child Plan' ? event.ownerChildProfileId : undefined;
     const linkedChildId = event.owner === 'child' ? event.ownerChildProfileId : mirrorChildId;
