@@ -4762,6 +4762,7 @@ function AppShell() {
             onPlanProfilesChange={handleMealPlanProfilesChange}
             activeProfileKey={activeMealPlanProfileKey}
             onActiveProfileKeyChange={handleActiveMealPlanProfileKeyChange}
+            staffRecipients={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name }))}
           />
         ) : null}
 

@@ -14,6 +14,7 @@ type Props = {
   onPlanProfilesChange: Dispatch<SetStateAction<MealPlanProfile[]>>;
   activeProfileKey: string;
   onActiveProfileKeyChange: Dispatch<SetStateAction<string>>;
+  staffRecipients?: { id: string; name: string; phone?: string }[];
 };
 
 const DAYS: Array<{ key: string; label: string }> = [
@@ -152,6 +153,7 @@ export function MealPlannerScreen({
   onPlanProfilesChange,
   activeProfileKey,
   onActiveProfileKeyChange,
+  staffRecipients = [],
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -409,10 +411,22 @@ export function MealPlannerScreen({
     }
   }
 
+  function sendToRecipient(recipient: { name: string; phone?: string }) {
+    const digits = (recipient.phone || '').replace(/[^\d]/g, '');
+    const url = digits
+      ? `https://wa.me/${digits}?text=${encodeURIComponent(staffPlanText)}`
+      : `https://wa.me/?text=${encodeURIComponent(staffPlanText)}`;
+    Linking.openURL(url);
+  }
+
   const sendOptions = [
-    { key: 'share', label: 'Share…', action: () => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText }) },
-    { key: 'whatsapp', label: 'WhatsApp', action: () => Linking.openURL(`https://wa.me/?text=${encodeURIComponent(staffPlanText)}`) },
-    { key: 'email', label: 'Email', action: () => Linking.openURL(`mailto:?subject=${encodeURIComponent('Weekly Meal Plan')}&body=${encodeURIComponent(staffPlanText)}`) },
+    ...staffRecipients.map((recipient) => ({
+      key: `staff-${recipient.id}`,
+      label: recipient.name,
+      action: () => sendToRecipient(recipient),
+    })),
+    { key: 'whatsapp', label: 'WhatsApp — choose contact', action: () => Linking.openURL(`https://wa.me/?text=${encodeURIComponent(staffPlanText)}`) },
+    { key: 'share', label: 'Other app…', action: () => Share.share({ title: 'Weekly Meal Plan', message: staffPlanText }) },
   ];
   const saveOptions = [
     { key: 'pdf', label: 'PDF', action: () => printStaffMealPlan(activeWeeklyPlan, recipesById, activeProfile.label) },
@@ -1229,9 +1243,6 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       gap: 10,
       marginBottom: 14,
-      maxWidth: 640,
-      alignSelf: 'flex-start',
-      width: '100%',
     },
     addProfileRowMobile: {
       flexDirection: 'column',
@@ -1281,9 +1292,6 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: '#ffffff',
       paddingHorizontal: 16,
       paddingVertical: 14,
-      maxWidth: 640,
-      alignSelf: 'flex-start',
-      width: '100%',
     },
     staffExportCardMobile: {
       flexDirection: 'column',
@@ -1332,6 +1340,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     exportMenu: {
       width: '100%',
+      maxWidth: 320,
+      alignSelf: 'flex-end',
       marginTop: 4,
       borderWidth: 1,
       borderColor: '#e6ecf5',
