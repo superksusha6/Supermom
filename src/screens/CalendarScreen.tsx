@@ -1719,15 +1719,6 @@ export function CalendarScreen({
             <Chip active={scope === 'family'} label="Family" onPress={() => onScopeChange('family')} styles={styles} />
           </View>
         ) : null}
-        {isMomProfile ? (
-          <View style={styles.calendarCloverWrap}>
-            <View style={styles.calendarTopActions}>
-              <Pressable onPress={() => setCycleModalOpen(true)} style={[styles.calendarPeriodBtn, cycleModalOpen && styles.calendarPeriodBtnActive]}>
-                <PeriodDropIcon styles={styles} active={cycleModalOpen} />
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
         {periodReminderMessage ? (
           <View style={styles.periodReminderBanner}>
             <View style={styles.periodReminderDot} />
