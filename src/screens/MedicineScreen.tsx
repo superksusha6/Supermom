@@ -497,7 +497,7 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
 
     modalBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(15,23,42,0.45)',
+      backgroundColor: 'rgba(15,23,42,0.6)',
       alignItems: 'center',
       justifyContent: 'center',
       padding: 16,
@@ -507,7 +507,7 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
       maxWidth: 560,
       maxHeight: '92%',
       borderRadius: 22,
-      backgroundColor: colors.card,
+      backgroundColor: '#ffffff',
       borderWidth: 1,
       borderColor: colors.border,
       overflow: 'hidden',
