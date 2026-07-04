@@ -772,6 +772,7 @@ function AppShell() {
   const [selectedDailyCardId, setSelectedDailyCardId] = useState<string | null>(() => initialDailyCardStateRef.current.selectedCardId);
   const [dailyCardsModalOpen, setDailyCardsModalOpen] = useState(false);
   const [dailyCardsReady, setDailyCardsReady] = useState(false);
+  const [dailyCardsPrefsReady, setDailyCardsPrefsReady] = useState(false);
   const [dailyCardPromptShown, setDailyCardPromptShown] = useState(() => initialDailyCardStateRef.current.promptShown);
   const [revealingDailyCardId, setRevealingDailyCardId] = useState<string | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
@@ -1741,6 +1742,7 @@ function AppShell() {
     } finally {
       preferencesLoadedRef.current = true;
       setDailyCardsReady(true);
+      setDailyCardsPrefsReady(true);
     }
   }
 
@@ -1948,13 +1950,16 @@ function AppShell() {
 
   useEffect(() => {
     if (screen !== 'calendar') return;
+    // For a signed-in user, wait until preferences have loaded — otherwise the
+    // modal opens, then refreshUserPreferences closes it (cards flash & vanish).
+    if (session && !dailyCardsPrefsReady) return;
     if (!dailyCardsReady) return;
     if (selectedDailyCardId || revealingDailyCardId) return;
     if (dailyCardsModalOpen) return;
     if (dailyCardPromptShown) return;
     setDailyCardPromptShown(true);
     setDailyCardsModalOpen(true);
-  }, [screen, dailyCardsReady, selectedDailyCardId, revealingDailyCardId, dailyCardsModalOpen, dailyCardPromptShown]);
+  }, [screen, session, dailyCardsPrefsReady, dailyCardsReady, selectedDailyCardId, revealingDailyCardId, dailyCardsModalOpen, dailyCardPromptShown]);
 
   useEffect(() => {
     latestFridgeItemsRef.current = fridgeItems;
@@ -2214,6 +2219,7 @@ function AppShell() {
     setPersonalProfileStatus(null);
     setPersonalProfileError(null);
     preferencesLoadedRef.current = false;
+    setDailyCardsPrefsReady(false);
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;
     homeFixitLoadedRef.current = false;
