@@ -32,6 +32,33 @@ function newId() {
 
 const FOR_WHOM_OPTIONS = ['Adults', 'Kids', 'Everyone'];
 
+// Downscale a big camera photo to a small JPEG (web) so the request stays well
+// under Vercel's ~4.5MB body limit. Keeps text readable at ~1400px.
+async function shrinkDataUrl(dataUrl: string, maxSize = 1400, quality = 0.6): Promise<string> {
+  if (typeof document === 'undefined') return dataUrl;
+  return new Promise((resolve) => {
+    const img = new (window as any).Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
@@ -95,13 +122,17 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
     setScanning(true);
     setScanError(null);
     try {
+      const [nameSmall, expirySmall] = await Promise.all([
+        shrinkDataUrl(scanNameImg),
+        shrinkDataUrl(scanExpiryImg),
+      ]);
       const onLocalhost =
         typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
       const base = onLocalhost ? 'https://supermom-rose.vercel.app' : '';
       const res = await fetch(`${base}/api/scan-medicine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'pair', images: [scanNameImg, scanExpiryImg] }),
+        body: JSON.stringify({ mode: 'pair', images: [nameSmall, expirySmall] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
