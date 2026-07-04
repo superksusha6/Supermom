@@ -1885,6 +1885,22 @@ function AppShell() {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
+    // IMPORTANT: never make Supabase auth calls (getUser/rpc) directly inside
+    // this callback — it runs while the auth library holds an internal lock, so
+    // doing so can stall token auto-refresh and trigger spurious sign-outs.
+    // Defer any such work to a microtask/macrotask with setTimeout(…, 0).
+    const restoreSessionDeferred = () => {
+      setTimeout(() => {
+        Promise.resolve()
+          .then(() => getOrCreateSessionContext())
+          .then((ctx) => {
+            if (!ctx) return;
+            return hydrateSessionContext(ctx);
+          })
+          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not restore live session.'));
+      }, 0);
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
@@ -1895,14 +1911,7 @@ function AppShell() {
         setAuthPasswordConfirm('');
         setAuthMode('recover');
         setSignInModalOpen(true);
-
-        Promise.resolve()
-          .then(() => getOrCreateSessionContext())
-          .then((ctx) => {
-            if (!ctx) return;
-            return hydrateSessionContext(ctx);
-          })
-          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not restore live session.'));
+        restoreSessionDeferred();
         return;
       }
       if (event === 'SIGNED_OUT') {
@@ -1911,14 +1920,7 @@ function AppShell() {
         return;
       }
       if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN' && event !== 'TOKEN_REFRESHED' && event !== 'USER_UPDATED') return;
-
-      Promise.resolve()
-        .then(() => getOrCreateSessionContext())
-        .then((ctx) => {
-          if (!ctx) return;
-          return hydrateSessionContext(ctx);
-        })
-        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not restore live session.'));
+      restoreSessionDeferred();
     });
 
     return () => {

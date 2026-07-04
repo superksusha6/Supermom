@@ -439,12 +439,16 @@ function isMissingCycleEntriesTableError(error: unknown) {
 
 export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   const client = requireClient();
+  // Use getSession() (reads the persisted session and refreshes it if needed)
+  // rather than getUser() (a server round-trip that 401s on transient network
+  // hiccups and can make the app look logged out). RLS still enforces security.
   const {
-    data: { user },
-    error: userError,
-  } = await client.auth.getUser();
+    data: { session },
+    error: sessionError,
+  } = await client.auth.getSession();
 
-  if (userError) throw userError;
+  if (sessionError) throw sessionError;
+  const user = session?.user;
   if (!user) return null;
 
   const { data: familyId, error: bootstrapError } = await client.rpc('ensure_user_family');
