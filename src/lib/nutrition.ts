@@ -31,7 +31,7 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-ground-beef', name: 'Ground beef', baseAmount: 'per 100 g', caloriesPer100g: 270, proteinPer100g: 26, fatPer100g: 20, carbsPer100g: 0 },
   { id: 'preset-salmon', name: 'Salmon', baseAmount: 'per 100 g', caloriesPer100g: 208, proteinPer100g: 20, fatPer100g: 13, carbsPer100g: 0 },
   { id: 'preset-tuna-canned', name: 'Tuna, canned', baseAmount: 'per 100 g', caloriesPer100g: 130, proteinPer100g: 29, fatPer100g: 1, carbsPer100g: 0 },
-  { id: 'preset-egg', name: 'Egg', baseAmount: 'per 100 g', servingGrams: 50, pieceLabel: '1 egg', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1 },
+  { id: 'preset-egg', name: 'Egg', baseAmount: 'per 100 g', servingGrams: 50, pieceLabel: '1 egg', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1, aliases: ['chicken egg', 'eggs', 'raw egg'] },
   { id: 'preset-egg-white', name: 'Egg white', baseAmount: 'per 100 g', servingGrams: 33, pieceLabel: '1 white', caloriesPer100g: 52, proteinPer100g: 10.9, fatPer100g: 0.2, carbsPer100g: 0.7 },
   { id: 'preset-egg-yolk', name: 'Egg yolk', baseAmount: 'per 100 g', servingGrams: 17, pieceLabel: '1 yolk', caloriesPer100g: 322, proteinPer100g: 15.9, fatPer100g: 26.5, carbsPer100g: 3.6 },
   { id: 'preset-cottage-cheese-5', name: 'Cottage cheese 5%', baseAmount: 'per 100 g', caloriesPer100g: 120, proteinPer100g: 17, fatPer100g: 5, carbsPer100g: 3 },

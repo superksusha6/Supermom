@@ -53,12 +53,16 @@ const INGREDIENT_UNITS: Array<{ key: IngredientUnit; label: string }> = [
   { key: 'tsp', label: 'tsp' },
 ];
 
+type CustomIngredientNutrition = { calories: string; protein: string; fat: string; carbs: string };
+
 type DraftIngredientRow = {
   id: string;
   query: string;
   grams: string;
   unit: IngredientUnit;
   preset: NutritionFoodPreset | null;
+  custom?: CustomIngredientNutrition; // per-100g values for a product not in the list
+  customOpen?: boolean;
 };
 
 function createDraftIngredientRow(): DraftIngredientRow {
@@ -69,6 +73,11 @@ function createDraftIngredientRow(): DraftIngredientRow {
     unit: 'g',
     preset: null,
   };
+}
+
+function customHasValues(custom?: CustomIngredientNutrition) {
+  if (!custom) return false;
+  return [custom.calories, custom.protein, custom.fat, custom.carbs].some((v) => (Number(String(v).replace(',', '.')) || 0) > 0);
 }
 
 function createDraftIngredientRowFromRecipe(ingredient: Recipe['ingredients'][number]): DraftIngredientRow {
@@ -128,8 +137,22 @@ function getIngredientCalculationGrams(row: DraftIngredientRow) {
 }
 
 function getIngredientNutrition(row: DraftIngredientRow) {
-  if (!row.preset) return null;
-  return getNutritionValuesForGrams(row.preset, String(getIngredientCalculationGrams(row)));
+  if (row.preset) {
+    return getNutritionValuesForGrams(row.preset, String(getIngredientCalculationGrams(row)));
+  }
+  if (customHasValues(row.custom) && row.custom) {
+    const synthetic: NutritionFoodPreset = {
+      id: 'custom-ingredient',
+      name: row.query || 'Custom',
+      baseAmount: 'per 100 g',
+      caloriesPer100g: Number(row.custom.calories.replace(',', '.')) || 0,
+      proteinPer100g: Number(row.custom.protein.replace(',', '.')) || 0,
+      fatPer100g: Number(row.custom.fat.replace(',', '.')) || 0,
+      carbsPer100g: Number(row.custom.carbs.replace(',', '.')) || 0,
+    };
+    return getNutritionValuesForGrams(synthetic, String(getIngredientCalculationGrams(row)));
+  }
+  return null;
 }
 
 function formatIngredientAmount(row: DraftIngredientRow) {
@@ -329,7 +352,6 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const draftNutrition = useMemo(() => {
     return draftIngredientRows.reduce(
       (acc, row) => {
-        if (!row.preset) return acc;
         const values = getIngredientNutrition(row);
         if (!values) return acc;
         acc.calories += Number(values.calories) || 0;
@@ -485,7 +507,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     // If the saved nutrition differs from what the ingredients produce, it was
     // entered manually — keep it as manual so editing doesn't overwrite it.
     const autoCalories = rows.reduce((sum, row) => {
-      const values = row.preset ? getIngredientNutrition(row) : null;
+      const values = getIngredientNutrition(row);
       return sum + (values ? Number(values.calories) || 0 : 0);
     }, 0);
     const servings = recipe.servings || 1;
@@ -1089,8 +1111,13 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
               </View>
               {draftIngredientRows.map((row) => {
                 const queryText = row.query.trim();
+                const q = queryText.toLowerCase();
                 const suggestions = queryText
-                  ? NUTRITION_FOOD_PRESETS.filter((item) => item.name.toLowerCase().includes(queryText.toLowerCase()) && item.name.toLowerCase() !== queryText.toLowerCase()).slice(0, 5)
+                  ? NUTRITION_FOOD_PRESETS.filter((item) => {
+                      if (item.name.toLowerCase() === q) return false;
+                      if (item.name.toLowerCase().includes(q)) return true;
+                      return (item.aliases || []).some((alias) => alias.toLowerCase().includes(q));
+                    }).slice(0, 6)
                   : [];
                 const ingredientNutrition = getIngredientNutrition(row);
                 const calculationGrams = getIngredientCalculationGrams(row);
@@ -1152,12 +1179,58 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                           <Pressable
                             key={`${row.id}-${item.id}`}
                             style={styles.productSuggestionItem}
-                            onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, query: item.name, preset: item }))}
+                            onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, query: item.name, preset: item, customOpen: false }))}
                           >
                             <Text style={styles.productSuggestionText}>{item.name}</Text>
                           </Pressable>
                         ))}
                       </View>
+                    ) : null}
+
+                    {queryText && !row.preset ? (
+                      row.customOpen || customHasValues(row.custom) ? (
+                        <View style={styles.customIngredientBlock}>
+                          <Text style={styles.customIngredientLabel}>Nutrition per 100 g (product not in list)</Text>
+                          <View style={styles.customIngredientRow}>
+                            {([
+                              { key: 'calories', label: 'kcal' },
+                              { key: 'protein', label: 'protein' },
+                              { key: 'fat', label: 'fat' },
+                              { key: 'carbs', label: 'carbs' },
+                            ] as const).map((field) => (
+                              <View key={field.key} style={styles.customIngredientCell}>
+                                <TextInput
+                                  style={styles.customIngredientInput}
+                                  keyboardType="decimal-pad"
+                                  placeholder="0"
+                                  placeholderTextColor={colors.subtext}
+                                  value={row.custom?.[field.key] || ''}
+                                  onChangeText={(text) =>
+                                    updateDraftIngredientRow(row.id, (current) => ({
+                                      ...current,
+                                      custom: {
+                                        calories: current.custom?.calories || '',
+                                        protein: current.custom?.protein || '',
+                                        fat: current.custom?.fat || '',
+                                        carbs: current.custom?.carbs || '',
+                                        [field.key]: cleanNutritionNumber(text),
+                                      },
+                                    }))
+                                  }
+                                />
+                                <Text style={styles.customIngredientCellLabel}>{field.label}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      ) : (
+                        <Pressable
+                          style={styles.customIngredientAddBtn}
+                          onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, customOpen: true }))}
+                        >
+                          <Text style={styles.customIngredientAddText}>+ Not in the list? Add its calories (KBJU)</Text>
+                        </Pressable>
+                      )
                     ) : null}
 
                     <View style={styles.ingredientBuilderFooter}>
@@ -2232,6 +2305,64 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: '#f8fafc',
       paddingHorizontal: 12,
       paddingVertical: 10,
+    },
+    customIngredientAddBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(37,99,235,0.28)',
+      backgroundColor: 'rgba(37,99,235,0.06)',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      alignSelf: 'flex-start',
+      marginTop: -4,
+      marginBottom: 12,
+    },
+    customIngredientAddText: {
+      color: colors.primary,
+      fontSize: 12.5,
+      fontWeight: '800',
+    },
+    customIngredientBlock: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#f8fafc',
+      padding: 10,
+      gap: 8,
+      marginTop: -4,
+      marginBottom: 12,
+    },
+    customIngredientLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    customIngredientRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    customIngredientCell: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 3,
+    },
+    customIngredientInput: {
+      width: '100%',
+      borderWidth: 1,
+      borderColor: '#dbe3ee',
+      borderRadius: 10,
+      backgroundColor: '#ffffff',
+      color: colors.text,
+      paddingHorizontal: 8,
+      paddingVertical: 9,
+      fontSize: 14,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    customIngredientCellLabel: {
+      color: colors.subtext,
+      fontSize: 10.5,
+      fontWeight: '700',
     },
     productSuggestionText: {
       color: colors.text,
