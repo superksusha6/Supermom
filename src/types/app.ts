@@ -449,3 +449,24 @@ export type WeeklyMealPlanEntry = {
   customHideCalories?: boolean;
   customNote?: string;
 };
+
+export type MedicineCategory =
+  | 'pain'
+  | 'cold'
+  | 'allergy'
+  | 'stomach'
+  | 'firstaid'
+  | 'kids'
+  | 'prescription'
+  | 'other';
+
+export type MedicineItem = {
+  id: string;
+  name: string;
+  category: MedicineCategory;
+  expiry?: string; // normalized 'YYYY-MM' (month precision)
+  quantity?: string; // free-text amount / level
+  location?: string; // where it is kept
+  forWhom?: string; // e.g. 'Adults', 'Kids', a name
+  note?: string;
+};

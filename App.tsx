@@ -27,6 +27,8 @@ import {
   listChildProfiles,
   listCompletedTaskNotifications,
   listChores,
+  listMedicines,
+  replaceMedicines,
   listCustomNutritionFoods,
   listFridgeItems,
   listHabitEntries,
@@ -85,16 +87,18 @@ import { ChildrenScreen } from '@/screens/ChildrenScreen';
 import { HabitsScreen } from '@/screens/HabitsScreen';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
+import { MedicineScreen } from '@/screens/MedicineScreen';
+import { medsNeedAttentionCount } from '@/lib/meds';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
 
-type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit';
+type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds';
 type FamilyTab = 'children' | 'chores';
 type FoodTab = 'recipes' | 'plan' | 'shopping';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
@@ -188,6 +192,8 @@ const LOCAL_PERIOD_REMINDERS_KEY = 'smartmom.periodRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDER_LEAD_DAYS_KEY = 'smartmom.periodReminderLeadDays.v1';
 const LOCAL_PERSONAL_PROFILE_KEY = 'smartmom.personalProfile.v1';
 const LOCAL_DAILY_CARD_STATE_KEY = 'smartmom.dailyCardState.v1';
+const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
+const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 
 const DEFAULT_MEAL_PLAN_PROFILES: MealPlanProfilePreference[] = [
   { key: 'family', label: 'Family' },
@@ -727,6 +733,8 @@ function AppShell() {
   const [calorieOverride, setCalorieOverride] = useState('');
   const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
+  const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
+  const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
   const [chores, setChores] = useState<Chore[]>([]);
@@ -1031,6 +1039,20 @@ function AppShell() {
     choresRef.current = nextValue;
     setChores(nextValue);
     void persistChores();
+  };
+
+  const handleMedicinesChange: Dispatch<SetStateAction<MedicineItem[]>> = (value) => {
+    setMedicines((prev) => {
+      const next = typeof value === 'function' ? (value as (p: MedicineItem[]) => MedicineItem[])(prev) : value;
+      persistLocalMedicines(next);
+      const activeSession = sessionRef.current;
+      if (activeSession && isSupabaseConfigured) {
+        replaceMedicines(activeSession, next).catch((error) =>
+          setTasksError(error instanceof Error ? error.message : 'Could not save medicines.'),
+        );
+      }
+      return next;
+    });
   };
 
   const handleMealPlanProfilesChange: Dispatch<SetStateAction<MealPlanProfilePreference[]>> = (value) => {
@@ -1804,6 +1826,16 @@ function AppShell() {
           setChores([]);
           choresLoadedRef.current = true;
         }),
+      listMedicines(ctx)
+        .then((rows) => {
+          if (rows.length > 0) {
+            setMedicines(rows);
+            persistLocalMedicines(rows);
+          }
+        })
+        .catch(() => {
+          // Table may not be migrated yet; keep whatever is in local storage.
+        }),
     ]);
   }
 
@@ -2002,6 +2034,10 @@ function AppShell() {
   useEffect(() => {
     persistLocalPeriodReminderLeadDays(periodReminderLeadDays);
   }, [periodReminderLeadDays]);
+
+  useEffect(() => {
+    persistLocalMedsEnabled(medsEnabled);
+  }, [medsEnabled]);
 
   useEffect(() => {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current) return;
@@ -3787,6 +3823,19 @@ function AppShell() {
                   </View>
                 </View>
 
+                <View style={styles.settingsUtilitySection}>
+                  <Text style={styles.settingsUtilityTitle}>Modules</Text>
+                  <Pressable style={styles.moduleToggleRow} onPress={() => setMedsEnabled((prev) => !prev)}>
+                    <View style={styles.moduleToggleCopy}>
+                      <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
+                      <Text style={styles.moduleToggleSub}>Track home medicines and expiry dates</Text>
+                    </View>
+                    <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
+                      <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
+                    </View>
+                  </Pressable>
+                </View>
+
                 {!session ? (
                   <View style={styles.settingsUtilityActionsRow}>
                     <Pressable
@@ -4306,6 +4355,9 @@ function AppShell() {
         <NavButton label="Family" active={screen === 'family'} onPress={() => setScreen('family')} />
         <NavButton label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} />
         <NavButton label="Fix it" active={screen === 'fixit'} onPress={() => setScreen('fixit')} />
+        {medsEnabled ? (
+          <NavButton label="Meds" active={screen === 'meds'} onPress={() => setScreen('meds')} />
+        ) : null}
       </View>
       {screen === 'food' ? (
         <View style={styles.subnav}>
@@ -4378,6 +4430,14 @@ function AppShell() {
                 <Text style={styles.quickBtnIcon}>🛠️</Text>
                 <Text style={styles.quickBtnText}>Fix it</Text>
               </Pressable>
+              {medsEnabled ? (
+                <Pressable style={styles.quickBtn} onPress={() => setScreen('meds')}>
+                  <Text style={styles.quickBtnIcon}>💊</Text>
+                  <Text style={styles.quickBtnText}>
+                    Meds{medsNeedAttentionCount(medicines) > 0 ? ` · ${medsNeedAttentionCount(medicines)}` : ''}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             <CalendarScreen
               isActive={screen === 'calendar'}
@@ -4783,6 +4843,10 @@ function AppShell() {
             providers={homeProviders}
             onProvidersChange={handleHomeProvidersChange}
           />
+        ) : null}
+
+        {screen === 'meds' && medsEnabled ? (
+          <MedicineScreen medicines={medicines} onMedicinesChange={handleMedicinesChange} />
         ) : null}
 
         {screen === 'food' && foodTab === 'shopping' ? (
@@ -7128,6 +7192,49 @@ function persistLocalHabits(habits: HabitEntry[]) {
   }
 }
 
+function loadLocalMedicines(): MedicineItem[] {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return [];
+  try {
+    const raw = globalThis.localStorage.getItem(LOCAL_MEDICINES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as MedicineItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistLocalMedicines(items: MedicineItem[]) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    if (items.length === 0) {
+      globalThis.localStorage.removeItem(LOCAL_MEDICINES_KEY);
+      return;
+    }
+    globalThis.localStorage.setItem(LOCAL_MEDICINES_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore local storage failures; medicines still work in memory.
+  }
+}
+
+function loadLocalMedsEnabled(): boolean {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return false;
+  try {
+    return globalThis.localStorage.getItem(LOCAL_MEDS_ENABLED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistLocalMedsEnabled(enabled: boolean) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_MEDS_ENABLED_KEY, enabled ? 'true' : 'false');
+  } catch {
+    // Ignore.
+  }
+}
+
 function mergeHabitsPreferLocal(serverHabits: HabitEntry[], localHabits: HabitEntry[]) {
   if (serverHabits.length === 0) return localHabits;
   if (localHabits.length === 0) return serverHabits;
@@ -7693,6 +7800,48 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '800',
     letterSpacing: 1.1,
     textTransform: 'uppercase',
+  },
+  moduleToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  moduleToggleCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  moduleToggleTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  moduleToggleSub: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  moduleToggle: {
+    width: 46,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: 'rgba(100,116,139,0.3)',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  moduleToggleOn: {
+    backgroundColor: colors.primary,
+  },
+  moduleToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: '#ffffff',
+    alignSelf: 'flex-start',
+  },
+  moduleToggleKnobOn: {
+    alignSelf: 'flex-end',
   },
   settingsUtilityActionsRow: {
     flexDirection: isMobile ? 'column' : 'row',

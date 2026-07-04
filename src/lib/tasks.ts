@@ -10,6 +10,7 @@ import {
   FridgeItemStatus,
   FridgeItemUnit,
   Chore,
+  MedicineItem,
   HabitEntry,
   HomeIssue,
   HomeProvider,
@@ -2411,4 +2412,59 @@ export async function replaceChores(session: AppSession, chores: Chore[]) {
   if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
   const { error: deleteError } = await removal;
   if (deleteError && !isMissingHomeTableError(deleteError, 'chores')) throw deleteError;
+}
+
+const MEDICINES_MIGRATION_HINT =
+  'Supabase medicines table is missing. Run smart-mom-app/supabase/medicines.sql in the Supabase SQL Editor, then try again.';
+
+export async function listMedicines(session: AppSession): Promise<MedicineItem[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('medicines')
+    .select('id, name, category, expiry, quantity, location, for_whom, note')
+    .eq('family_id', session.familyId)
+    .order('created_at', { ascending: true });
+  if (error) {
+    if (isMissingHomeTableError(error, 'medicines')) throw new Error(MEDICINES_MIGRATION_HINT);
+    throw error;
+  }
+  return (data as unknown as Record<string, unknown>[]).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string) || '',
+    category: (row.category as MedicineItem['category']) || 'other',
+    expiry: (row.expiry as string) || undefined,
+    quantity: (row.quantity as string) || undefined,
+    location: (row.location as string) || undefined,
+    forWhom: (row.for_whom as string) || undefined,
+    note: (row.note as string) || undefined,
+  }));
+}
+
+export async function replaceMedicines(session: AppSession, medicines: MedicineItem[]) {
+  const client = requireClient();
+  if (medicines.length > 0) {
+    const rows = medicines.map((item) => ({
+      id: item.id,
+      family_id: session.familyId,
+      created_by: session.userId,
+      name: item.name,
+      category: item.category,
+      expiry: item.expiry || null,
+      quantity: item.quantity || null,
+      location: item.location || null,
+      for_whom: item.forWhom || null,
+      note: item.note || null,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error } = await client.from('medicines').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      if (isMissingHomeTableError(error, 'medicines')) throw new Error(MEDICINES_MIGRATION_HINT);
+      throw error;
+    }
+  }
+  const keepIds = medicines.map((item) => item.id);
+  let removal = client.from('medicines').delete().eq('family_id', session.familyId);
+  if (keepIds.length > 0) removal = removal.not('id', 'in', `(${keepIds.join(',')})`);
+  const { error: deleteError } = await removal;
+  if (deleteError && !isMissingHomeTableError(deleteError, 'medicines')) throw deleteError;
 }
