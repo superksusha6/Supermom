@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { MedicineCategory, MedicineItem } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 import { SectionCard } from '@/components/SectionCard';
@@ -49,6 +50,89 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
   const [draftForWhom, setDraftForWhom] = useState('Adults');
   const [draftNote, setDraftNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanReviewOpen, setScanReviewOpen] = useState(false);
+  const [scanReview, setScanReview] = useState<
+    { id: string; name: string; expiry: string; category: MedicineCategory; include: boolean }[]
+  >([]);
+
+  async function scanPhotos() {
+    if (scanning) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Allow photo access to scan medicine packages.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: 8,
+        quality: 0.45,
+        base64: true,
+      });
+      if (result.canceled) return;
+      const images = (result.assets || [])
+        .map((asset) => (asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : ''))
+        .filter(Boolean);
+      if (images.length === 0) {
+        setScanError('Could not read those photos. Try again.');
+        return;
+      }
+      setScanning(true);
+      setScanError(null);
+      const onLocalhost =
+        typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+      const base = onLocalhost ? 'https://supermom-rose.vercel.app' : '';
+      const res = await fetch(`${base}/api/scan-medicine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setScanError(data.error || 'Recognition failed. Please try again.');
+        return;
+      }
+      const detected = (data.medicines || []) as { name: string; expiry: string; category: MedicineCategory }[];
+      if (detected.length === 0) {
+        setScanError('No medicines were recognized. Try clearer, closer photos.');
+        return;
+      }
+      setScanReview(
+        detected.map((item, index) => ({
+          id: `${Date.now()}-${index}`,
+          name: item.name,
+          expiry: item.expiry ? formatExpiryInput(item.expiry) : '',
+          category: item.category || 'other',
+          include: true,
+        })),
+      );
+      setScanReviewOpen(true);
+    } catch {
+      setScanError('Could not scan right now. Please try again.');
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function confirmScanReview() {
+    const toAdd = scanReview
+      .filter((row) => row.include && row.name.trim())
+      .map<MedicineItem>((row) => ({
+        id: newId(),
+        name: row.name.trim(),
+        category: row.category,
+        expiry: normalizeExpiryInput(row.expiry) || undefined,
+      }));
+    if (toAdd.length > 0) {
+      onMedicinesChange((prev) => [...toAdd, ...prev]);
+    }
+    setScanReviewOpen(false);
+    setScanReview([]);
+  }
 
   const attentionCount = medsNeedAttentionCount(medicines);
 
@@ -160,6 +244,19 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
         <Text style={styles.heroText}>
           Keep track of what medicine you have at home and when it expires. Inventory only — not medical advice.
         </Text>
+
+        <Pressable style={[styles.scanBtn, scanning && styles.scanBtnDisabled]} onPress={scanPhotos} disabled={scanning}>
+          {scanning ? (
+            <>
+              <ActivityIndicator color="#ffffff" />
+              <Text style={styles.scanBtnText}>Reading photos…</Text>
+            </>
+          ) : (
+            <Text style={styles.scanBtnText}>📷  Scan medicine photos</Text>
+          )}
+        </Pressable>
+        <Text style={styles.scanHint}>Photograph the packages (name + expiry). The app reads them and fills everything in — just confirm.</Text>
+        {scanError ? <Text style={styles.scanErrorText}>{scanError}</Text> : null}
 
         {attentionCount > 0 ? (
           <View style={styles.alertBanner}>
@@ -327,6 +424,90 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={scanReviewOpen} transparent animationType="fade" onRequestClose={() => setScanReviewOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setScanReviewOpen(false)} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Review scanned medicines</Text>
+              <Pressable style={styles.closeBtn} onPress={() => setScanReviewOpen(false)}>
+                <Text style={styles.closeBtnText}>×</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.reviewHint}>
+              {scanReview.length} found. Check and edit, untick anything you don’t want, then add.
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+              {scanReview.map((row) => (
+                <View key={row.id} style={[styles.reviewRow, !row.include && styles.reviewRowOff]}>
+                  <Pressable
+                    style={styles.reviewCheck}
+                    onPress={() =>
+                      setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, include: !r.include } : r)))
+                    }
+                  >
+                    <View style={[styles.checkBox, row.include && styles.checkBoxOn]}>
+                      {row.include ? <Text style={styles.checkMark}>✓</Text> : null}
+                    </View>
+                  </Pressable>
+                  <View style={styles.reviewBody}>
+                    <TextInput
+                      style={styles.reviewNameInput}
+                      value={row.name}
+                      placeholder="Name"
+                      placeholderTextColor={colors.subtext}
+                      onChangeText={(text) =>
+                        setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, name: text } : r)))
+                      }
+                    />
+                    <View style={styles.reviewMetaRow}>
+                      <TextInput
+                        style={styles.reviewExpiryInput}
+                        value={row.expiry}
+                        placeholder="Expiry 07/2026"
+                        placeholderTextColor={colors.subtext}
+                        autoCapitalize="none"
+                        onChangeText={(text) =>
+                          setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, expiry: text } : r)))
+                        }
+                      />
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewCats}>
+                      {MED_CATEGORIES.map((c) => {
+                        const active = row.category === c.key;
+                        return (
+                          <Pressable
+                            key={c.key}
+                            style={[styles.reviewCatChip, active && styles.optionChipActive]}
+                            onPress={() =>
+                              setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, category: c.key } : r)))
+                            }
+                          >
+                            <Text style={[styles.reviewCatText, active && styles.optionChipTextActive]}>{c.emoji} {c.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.deleteBtn} onPress={() => setScanReviewOpen(false)}>
+                <Text style={styles.deleteBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.saveBtn} onPress={confirmScanReview}>
+                <Text style={styles.saveBtnText}>
+                  Add {scanReview.filter((r) => r.include && r.name.trim()).length} to cabinet
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -379,6 +560,125 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
       color: '#ffffff',
       fontSize: 13,
       fontWeight: '800',
+    },
+    scanBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      marginBottom: 6,
+    },
+    scanBtnDisabled: {
+      opacity: 0.7,
+    },
+    scanBtnText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '900',
+    },
+    scanHint: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 16,
+      marginBottom: 12,
+    },
+    scanErrorText: {
+      color: '#be123c',
+      fontSize: 12.5,
+      fontWeight: '700',
+      marginBottom: 10,
+    },
+    reviewHint: {
+      color: colors.subtext,
+      fontSize: 12.5,
+      fontWeight: '600',
+      paddingHorizontal: 18,
+      paddingBottom: 4,
+    },
+    reviewRow: {
+      flexDirection: 'row',
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: 'rgba(248,251,255,0.7)',
+      padding: 10,
+      marginBottom: 8,
+    },
+    reviewRowOff: {
+      opacity: 0.5,
+    },
+    reviewCheck: {
+      paddingTop: 4,
+    },
+    checkBox: {
+      width: 24,
+      height: 24,
+      borderRadius: 7,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkBoxOn: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    checkMark: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '900',
+    },
+    reviewBody: {
+      flex: 1,
+      gap: 6,
+    },
+    reviewNameInput: {
+      borderWidth: 1,
+      borderColor: '#dbe3ee',
+      borderRadius: 10,
+      backgroundColor: '#ffffff',
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    reviewMetaRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    reviewExpiryInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: '#dbe3ee',
+      borderRadius: 10,
+      backgroundColor: '#ffffff',
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    reviewCats: {
+      gap: 6,
+      paddingVertical: 2,
+    },
+    reviewCatChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: 'rgba(255,255,255,0.7)',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    reviewCatText: {
+      color: colors.text,
+      fontSize: 11.5,
+      fontWeight: '700',
     },
     alertBanner: {
       borderRadius: 12,
