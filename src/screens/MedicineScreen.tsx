@@ -53,43 +53,55 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
 
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [scanReviewOpen, setScanReviewOpen] = useState(false);
-  const [scanReview, setScanReview] = useState<
-    { id: string; name: string; expiry: string; category: MedicineCategory; include: boolean }[]
-  >([]);
+  const [scanStepOpen, setScanStepOpen] = useState(false);
+  const [scanNameImg, setScanNameImg] = useState('');
+  const [scanExpiryImg, setScanExpiryImg] = useState('');
 
-  async function scanPhotos() {
-    if (scanning) return;
+  function openScan() {
+    setScanNameImg('');
+    setScanExpiryImg('');
+    setScanError(null);
+    setScanStepOpen(true);
+  }
+
+  async function captureImage(target: 'name' | 'expiry') {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission needed', 'Allow photo access to scan medicine packages.');
-        return;
+      const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+      const options = { quality: 0.5, base64: true } as const;
+      let result: ImagePicker.ImagePickerResult;
+      if (camPerm.granted) {
+        result = await ImagePicker.launchCameraAsync(options);
+      } else {
+        const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!libPerm.granted) {
+          Alert.alert('Permission needed', 'Allow camera or photo access to scan.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({ ...options, mediaTypes: ImagePicker.MediaTypeOptions.Images });
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        selectionLimit: 8,
-        quality: 0.45,
-        base64: true,
-      });
       if (result.canceled) return;
-      const images = (result.assets || [])
-        .map((asset) => (asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : ''))
-        .filter(Boolean);
-      if (images.length === 0) {
-        setScanError('Could not read those photos. Try again.');
-        return;
-      }
-      setScanning(true);
-      setScanError(null);
+      const asset = result.assets?.[0];
+      if (!asset?.base64) return;
+      const dataUrl = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+      if (target === 'name') setScanNameImg(dataUrl);
+      else setScanExpiryImg(dataUrl);
+    } catch {
+      Alert.alert('Photo failed', 'Could not open the camera right now.');
+    }
+  }
+
+  async function recognizePair() {
+    if (scanning || !scanNameImg || !scanExpiryImg) return;
+    setScanning(true);
+    setScanError(null);
+    try {
       const onLocalhost =
         typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
       const base = onLocalhost ? 'https://supermom-rose.vercel.app' : '';
       const res = await fetch(`${base}/api/scan-medicine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images }),
+        body: JSON.stringify({ mode: 'pair', images: [scanNameImg, scanExpiryImg] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -97,41 +109,28 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
         return;
       }
       const detected = (data.medicines || []) as { name: string; expiry: string; category: MedicineCategory }[];
-      if (detected.length === 0) {
-        setScanError('No medicines were recognized. Try clearer, closer photos.');
+      const first = detected[0];
+      if (!first || !first.name) {
+        setScanError('Could not read the package. Try clearer, closer photos.');
         return;
       }
-      setScanReview(
-        detected.map((item, index) => ({
-          id: `${Date.now()}-${index}`,
-          name: item.name,
-          expiry: item.expiry ? formatExpiryInput(item.expiry) : '',
-          category: item.category || 'other',
-          include: true,
-        })),
-      );
-      setScanReviewOpen(true);
+      // Prefill the normal editor so the user just confirms and saves.
+      setEditingId(null);
+      setDraftName(first.name);
+      setDraftCategory(first.category || 'other');
+      setDraftExpiry(first.expiry ? formatExpiryInput(first.expiry) : '');
+      setDraftQuantity('');
+      setDraftLocation('');
+      setDraftForWhom('Adults');
+      setDraftNote('');
+      setError(null);
+      setScanStepOpen(false);
+      setEditorOpen(true);
     } catch {
       setScanError('Could not scan right now. Please try again.');
     } finally {
       setScanning(false);
     }
-  }
-
-  function confirmScanReview() {
-    const toAdd = scanReview
-      .filter((row) => row.include && row.name.trim())
-      .map<MedicineItem>((row) => ({
-        id: newId(),
-        name: row.name.trim(),
-        category: row.category,
-        expiry: normalizeExpiryInput(row.expiry) || undefined,
-      }));
-    if (toAdd.length > 0) {
-      onMedicinesChange((prev) => [...toAdd, ...prev]);
-    }
-    setScanReviewOpen(false);
-    setScanReview([]);
   }
 
   const attentionCount = medsNeedAttentionCount(medicines);
@@ -245,18 +244,10 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
           Keep track of what medicine you have at home and when it expires. Inventory only — not medical advice.
         </Text>
 
-        <Pressable style={[styles.scanBtn, scanning && styles.scanBtnDisabled]} onPress={scanPhotos} disabled={scanning}>
-          {scanning ? (
-            <>
-              <ActivityIndicator color="#ffffff" />
-              <Text style={styles.scanBtnText}>Reading photos…</Text>
-            </>
-          ) : (
-            <Text style={styles.scanBtnText}>📷  Scan medicine photos</Text>
-          )}
+        <Pressable style={styles.scanBtn} onPress={openScan}>
+          <Text style={styles.scanBtnText}>📷  Scan a medicine (2 photos)</Text>
         </Pressable>
-        <Text style={styles.scanHint}>Photograph the packages (name + expiry). The app reads them and fills everything in — just confirm.</Text>
-        {scanError ? <Text style={styles.scanErrorText}>{scanError}</Text> : null}
+        <Text style={styles.scanHint}>Take 2 photos — 1) the name, 2) the expiry date. The app reads them and fills the form for you.</Text>
 
         {attentionCount > 0 ? (
           <View style={styles.alertBanner}>
@@ -425,84 +416,56 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
         </View>
       </Modal>
 
-      <Modal visible={scanReviewOpen} transparent animationType="fade" onRequestClose={() => setScanReviewOpen(false)}>
+      <Modal visible={scanStepOpen} transparent animationType="fade" onRequestClose={() => setScanStepOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setScanReviewOpen(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setScanStepOpen(false)} />
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Review scanned medicines</Text>
-              <Pressable style={styles.closeBtn} onPress={() => setScanReviewOpen(false)}>
+              <Text style={styles.modalTitle}>Scan a medicine</Text>
+              <Pressable style={styles.closeBtn} onPress={() => setScanStepOpen(false)}>
                 <Text style={styles.closeBtnText}>×</Text>
               </Pressable>
             </View>
-            <Text style={styles.reviewHint}>
-              {scanReview.length} found. Check and edit, untick anything you don’t want, then add.
-            </Text>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
-              {scanReview.map((row) => (
-                <View key={row.id} style={[styles.reviewRow, !row.include && styles.reviewRowOff]}>
-                  <Pressable
-                    style={styles.reviewCheck}
-                    onPress={() =>
-                      setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, include: !r.include } : r)))
-                    }
-                  >
-                    <View style={[styles.checkBox, row.include && styles.checkBoxOn]}>
-                      {row.include ? <Text style={styles.checkMark}>✓</Text> : null}
-                    </View>
-                  </Pressable>
-                  <View style={styles.reviewBody}>
-                    <TextInput
-                      style={styles.reviewNameInput}
-                      value={row.name}
-                      placeholder="Name"
-                      placeholderTextColor={colors.subtext}
-                      onChangeText={(text) =>
-                        setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, name: text } : r)))
-                      }
-                    />
-                    <View style={styles.reviewMetaRow}>
-                      <TextInput
-                        style={styles.reviewExpiryInput}
-                        value={row.expiry}
-                        placeholder="Expiry 07/2026"
-                        placeholderTextColor={colors.subtext}
-                        autoCapitalize="none"
-                        onChangeText={(text) =>
-                          setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, expiry: text } : r)))
-                        }
-                      />
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewCats}>
-                      {MED_CATEGORIES.map((c) => {
-                        const active = row.category === c.key;
-                        return (
-                          <Pressable
-                            key={c.key}
-                            style={[styles.reviewCatChip, active && styles.optionChipActive]}
-                            onPress={() =>
-                              setScanReview((prev) => prev.map((r) => (r.id === row.id ? { ...r, category: c.key } : r)))
-                            }
-                          >
-                            <Text style={[styles.reviewCatText, active && styles.optionChipTextActive]}>{c.emoji} {c.label}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+              <Text style={styles.reviewHint}>Take two photos. The app reads the name and the expiry date and fills the form.</Text>
+
+              <Pressable style={[styles.captureTile, scanNameImg && styles.captureTileDone]} onPress={() => captureImage('name')}>
+                <Text style={styles.captureStep}>1</Text>
+                <View style={styles.captureCopy}>
+                  <Text style={styles.captureTitle}>{scanNameImg ? '✓ Name photo taken' : 'Photo of the name'}</Text>
+                  <Text style={styles.captureSub}>{scanNameImg ? 'Tap to retake' : 'Front of the package'}</Text>
                 </View>
-              ))}
+              </Pressable>
+
+              <Pressable style={[styles.captureTile, scanExpiryImg && styles.captureTileDone]} onPress={() => captureImage('expiry')}>
+                <Text style={styles.captureStep}>2</Text>
+                <View style={styles.captureCopy}>
+                  <Text style={styles.captureTitle}>{scanExpiryImg ? '✓ Expiry photo taken' : 'Photo of the expiry date'}</Text>
+                  <Text style={styles.captureSub}>{scanExpiryImg ? 'Tap to retake' : 'The date on the box/blister'}</Text>
+                </View>
+              </Pressable>
+
+              {scanError ? <Text style={styles.scanErrorText}>{scanError}</Text> : null}
             </ScrollView>
 
             <View style={styles.modalActions}>
-              <Pressable style={styles.deleteBtn} onPress={() => setScanReviewOpen(false)}>
+              <Pressable style={styles.deleteBtn} onPress={() => setScanStepOpen(false)}>
                 <Text style={styles.deleteBtnText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.saveBtn} onPress={confirmScanReview}>
-                <Text style={styles.saveBtnText}>
-                  Add {scanReview.filter((r) => r.include && r.name.trim()).length} to cabinet
-                </Text>
+              <Pressable
+                style={[styles.saveBtn, (!scanNameImg || !scanExpiryImg || scanning) && styles.saveBtnDisabled]}
+                onPress={recognizePair}
+                disabled={!scanNameImg || !scanExpiryImg || scanning}
+              >
+                {scanning ? (
+                  <View style={styles.saveBtnRow}>
+                    <ActivityIndicator color="#ffffff" />
+                    <Text style={styles.saveBtnText}>Reading…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.saveBtnText}>Recognize</Text>
+                )}
               </Pressable>
             </View>
           </View>
@@ -593,10 +556,62 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
     },
     reviewHint: {
       color: colors.subtext,
-      fontSize: 12.5,
+      fontSize: 13,
+      lineHeight: 18,
       fontWeight: '600',
-      paddingHorizontal: 18,
-      paddingBottom: 4,
+      marginBottom: 12,
+    },
+    captureTile: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      borderWidth: 1.5,
+      borderColor: '#dbe3ee',
+      borderStyle: 'dashed',
+      borderRadius: 14,
+      backgroundColor: 'rgba(248,251,255,0.7)',
+      paddingHorizontal: 14,
+      paddingVertical: 16,
+      marginBottom: 10,
+    },
+    captureTileDone: {
+      borderStyle: 'solid',
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    captureStep: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.primary,
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '900',
+      textAlign: 'center',
+      lineHeight: 30,
+      overflow: 'hidden',
+    },
+    captureCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    captureTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    captureSub: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    saveBtnDisabled: {
+      opacity: 0.5,
+    },
+    saveBtnRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     reviewRow: {
       flexDirection: 'row',

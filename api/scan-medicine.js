@@ -30,8 +30,12 @@ module.exports = async function handler(req, res) {
     const images = Array.isArray(body.images) ? body.images.filter((s) => typeof s === 'string' && s.startsWith('data:')) : [];
     if (images.length === 0) return res.status(400).json({ error: 'Send at least one photo.' });
 
+    const paired = body.mode === 'pair' && images.length >= 2;
+    const userText = paired
+      ? 'Image 1 shows the medicine NAME (front of the package). Image 2 shows the EXPIRY DATE (often small print, "EXP", "Use by", "Годен до"). Return exactly one medicine: name from image 1, expiry from image 2.'
+      : 'Extract the medicines from these photos.';
     const content = [
-      { type: 'text', text: 'Extract the medicines from these photos.' },
+      { type: 'text', text: userText },
       ...images.slice(0, 8).map((url) => ({ type: 'image_url', image_url: { url, detail: 'high' } })),
     ];
 
