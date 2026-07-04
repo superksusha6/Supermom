@@ -1112,12 +1112,17 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
               {draftIngredientRows.map((row) => {
                 const queryText = row.query.trim();
                 const q = queryText.toLowerCase();
-                const suggestions = queryText
+                // Hide the list once a product is chosen; otherwise show matches
+                // (exact name first) including the plain product itself.
+                const presetChosen = !!row.preset && row.preset.name.toLowerCase() === q;
+                const rank = (name: string) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
+                const suggestions = queryText && !presetChosen
                   ? NUTRITION_FOOD_PRESETS.filter((item) => {
-                      if (item.name.toLowerCase() === q) return false;
                       if (item.name.toLowerCase().includes(q)) return true;
                       return (item.aliases || []).some((alias) => alias.toLowerCase().includes(q));
-                    }).slice(0, 6)
+                    })
+                      .sort((a, b) => rank(a.name.toLowerCase()) - rank(b.name.toLowerCase()))
+                      .slice(0, 6)
                   : [];
                 const ingredientNutrition = getIngredientNutrition(row);
                 const calculationGrams = getIngredientCalculationGrams(row);
@@ -1187,7 +1192,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                       </View>
                     ) : null}
 
-                    {queryText && !row.preset ? (
+                    {queryText && !row.preset && (suggestions.length === 0 || row.customOpen || customHasValues(row.custom)) ? (
                       row.customOpen || customHasValues(row.custom) ? (
                         <View style={styles.customIngredientBlock}>
                           <Text style={styles.customIngredientLabel}>Nutrition per 100 g (product not in list)</Text>
