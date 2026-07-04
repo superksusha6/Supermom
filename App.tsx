@@ -89,6 +89,7 @@ import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
 import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
+import { Icon } from '@/components/Icon';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
@@ -1405,6 +1406,13 @@ function AppShell() {
     const pendingRequests = purchaseRequests.filter((r) => r.status === 'new').length;
     return awaitingVerify + urgentIssues + pendingRequests;
   }, [chores, homeIssues, purchaseRequests]);
+  const dashboardGreeting = useMemo(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    const dateLabel = now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+    return `${greeting} · ${dateLabel}`;
+  }, [todayDateKey]);
 
   async function refreshLiveTasks(current: AppSession | null = session) {
     if (!current) return;
@@ -3782,7 +3790,7 @@ function AppShell() {
       <View style={styles.topBar}>
         <View style={styles.brandWrap}>
           <Text style={styles.brandTitle}>FamOs</Text>
-          <Text style={styles.brandSubtitle}>your family operating system</Text>
+          <Text style={styles.brandSubtitle}>{screen === 'calendar' ? dashboardGreeting : 'your family operating system'}</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable style={styles.menuButton} onPress={() => setSettingsPanelOpen(true)}>
@@ -4382,70 +4390,74 @@ function AppShell() {
       ) : null}
         {screen === 'calendar' ? (
           <>
-            <View style={styles.summaryWrap}>
+            <View style={styles.dashWrap}>
               <Pressable
-                style={[styles.summaryCard, needsYouCount > 0 ? styles.summaryCardWarn : styles.summaryCardOk]}
+                style={[styles.heroCard, needsYouCount > 0 && styles.heroCardWarn]}
                 onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
               >
-                <Text style={styles.summaryLabel}>⚠️ Needs you</Text>
-                <Text style={[styles.summaryValue, needsYouCount > 0 ? styles.summaryValueWarn : styles.summaryValueOk]}>
-                  {needsYouCount > 0 ? needsYouCount : 'All clear'}
-                </Text>
-                <Text style={styles.summarySub}>{needsYouCount > 0 ? 'to review' : 'nothing pending'}</Text>
-              </Pressable>
-
-              <Pressable style={styles.summaryCard} onPress={() => setScreen('calendar')}>
-                <Text style={styles.summaryLabel}>📅 Today</Text>
-                <Text style={styles.summaryValue}>{eventsTodayCount}</Text>
-                <Text style={styles.summarySub} numberOfLines={1}>
-                  {nextUpcomingEvent ? `next: ${nextUpcomingEvent.title}` : eventsTodayCount ? 'events' : 'nothing planned'}
+                <View style={styles.heroTopRow}>
+                  <View style={[styles.heroIconWrap, needsYouCount > 0 ? styles.heroIconWrapWarn : styles.heroIconWrapOk]}>
+                    <Icon name={needsYouCount > 0 ? 'alert' : 'check'} color={needsYouCount > 0 ? colors.urgent : colors.done} size={20} />
+                  </View>
+                  <Text style={styles.heroLabel}>{needsYouCount > 0 ? 'Needs you' : 'All clear'}</Text>
+                  <Icon name="chevron" color={colors.subtext} size={18} />
+                </View>
+                <Text style={styles.heroValue}>{needsYouCount > 0 ? `${needsYouCount} to review` : 'Nothing pending today'}</Text>
+                <Text style={styles.heroSub}>
+                  {needsYouCount > 0 ? 'chores, requests & home issues' : 'you haven’t missed anything'}
                 </Text>
               </Pressable>
 
-              {choresToday.total > 0 ? (
-                <Pressable style={styles.summaryCard} onPress={() => { setScreen('family'); setFamilyTab('chores'); }}>
-                  <Text style={styles.summaryLabel}>🧹 Chores</Text>
-                  <Text style={styles.summaryValue}>{choresToday.done}/{choresToday.total}</Text>
-                  <Text style={styles.summarySub}>done today</Text>
+              <View style={styles.statRow}>
+                <Pressable style={styles.statChip} onPress={() => setScreen('calendar')}>
+                  <Icon name="calendar" color={colors.primary} size={18} />
+                  <View style={styles.statCopy}>
+                    <Text style={styles.statValue} numberOfLines={1}>{eventsTodayCount}</Text>
+                    <Text style={styles.statLabel} numberOfLines={1}>{eventsTodayCount ? 'today' : 'nothing today'}</Text>
+                  </View>
                 </Pressable>
-              ) : null}
-
-              <Pressable style={styles.summaryCard} onPress={() => setScreen('wellness')}>
-                <Text style={styles.summaryLabel}>🍎 You today</Text>
-                <Text style={styles.summaryValue}>
-                  {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : todayNutritionCalories || '—'}
-                </Text>
-                <Text style={styles.summarySub}>
-                  {dailyCalorieTarget > 0 ? 'kcal' : 'kcal · set goal'}
-                  {activeHabitsCount > 0 ? ` · habits ${completedHabitsTodayCount}/${activeHabitsCount}` : ''}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={styles.quickWrap}>
-              <Pressable style={styles.quickBtn} onPress={handleDashboardAddMeal}>
-                <Text style={styles.quickBtnIcon}>🍽️</Text>
-                <Text style={styles.quickBtnText}>Add meal</Text>
-              </Pressable>
-              <Pressable style={styles.quickBtn} onPress={handleDashboardOpenShoppingList}>
-                <Text style={styles.quickBtnIcon}>🛒</Text>
-                <Text style={styles.quickBtnText}>Shopping</Text>
-              </Pressable>
-              <Pressable style={styles.quickBtn} onPress={() => { setScreen('family'); setFamilyTab('chores'); }}>
-                <Text style={styles.quickBtnIcon}>🧹</Text>
-                <Text style={styles.quickBtnText}>Chores</Text>
-              </Pressable>
-              <Pressable style={styles.quickBtn} onPress={() => setScreen('fixit')}>
-                <Text style={styles.quickBtnIcon}>🛠️</Text>
-                <Text style={styles.quickBtnText}>Fix it</Text>
-              </Pressable>
-              {medsEnabled ? (
-                <Pressable style={styles.quickBtn} onPress={() => setScreen('meds')}>
-                  <Text style={styles.quickBtnIcon}>💊</Text>
-                  <Text style={styles.quickBtnText}>
-                    Meds{medsNeedAttentionCount(medicines) > 0 ? ` · ${medsNeedAttentionCount(medicines)}` : ''}
-                  </Text>
+                {choresToday.total > 0 ? (
+                  <Pressable style={styles.statChip} onPress={() => { setScreen('family'); setFamilyTab('chores'); }}>
+                    <Icon name="chores" color={colors.primary} size={18} />
+                    <View style={styles.statCopy}>
+                      <Text style={styles.statValue} numberOfLines={1}>{choresToday.done}/{choresToday.total}</Text>
+                      <Text style={styles.statLabel} numberOfLines={1}>chores</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
+                <Pressable style={styles.statChip} onPress={() => setScreen('wellness')}>
+                  <Icon name="meal" color={colors.primary} size={18} />
+                  <View style={styles.statCopy}>
+                    <Text style={styles.statValue} numberOfLines={1}>
+                      {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : (todayNutritionCalories || '—')}
+                    </Text>
+                    <Text style={styles.statLabel} numberOfLines={1}>you · kcal</Text>
+                  </View>
                 </Pressable>
-              ) : null}
+              </View>
+
+              <View style={styles.quickRow}>
+                <Pressable style={styles.quickChip} onPress={handleDashboardAddMeal}>
+                  <Icon name="meal" color={colors.primary} size={18} />
+                  <Text style={styles.quickChipText}>Add meal</Text>
+                </Pressable>
+                <Pressable style={styles.quickChip} onPress={handleDashboardOpenShoppingList}>
+                  <Icon name="cart" color={colors.primary} size={18} />
+                  <Text style={styles.quickChipText}>Shopping</Text>
+                </Pressable>
+                <Pressable style={styles.quickChip} onPress={() => setScreen('fixit')}>
+                  <Icon name="wrench" color={colors.primary} size={18} />
+                  <Text style={styles.quickChipText}>Fix it</Text>
+                </Pressable>
+                {medsEnabled ? (
+                  <Pressable style={styles.quickChip} onPress={() => setScreen('meds')}>
+                    <Icon name="pill" color={colors.primary} size={18} />
+                    <Text style={styles.quickChipText} numberOfLines={1}>
+                      Meds{medsNeedAttentionCount(medicines) > 0 ? ` · ${medsNeedAttentionCount(medicines)}` : ''}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
             <CalendarScreen
               isActive={screen === 'calendar'}
@@ -7200,6 +7212,15 @@ function persistLocalHabits(habits: HabitEntry[]) {
   }
 }
 
+function hexToRgba(hex: string, alpha: number): string | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return null;
+  const r = parseInt(m[1], 16);
+  const g = parseInt(m[2], 16);
+  const b = parseInt(m[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function loadLocalMedicines(): MedicineItem[] {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return [];
   try {
@@ -8750,6 +8771,119 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexDirection: 'row',
     flexWrap: isMobile ? 'nowrap' : 'wrap',
     gap: isMobile ? 10 : 12,
+  },
+  dashWrap: {
+    marginTop: isMobile ? 8 : 12,
+    marginBottom: 20,
+    width: '100%',
+    gap: 12,
+  },
+  heroCard: {
+    borderRadius: 20,
+    backgroundColor: colors.glassStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 6,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  heroCardWarn: {
+    borderColor: hexToRgba(colors.urgent, 0.4) || colors.urgent,
+    backgroundColor: hexToRgba(colors.urgent, 0.06) || colors.glassStrong,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroIconWrapWarn: {
+    backgroundColor: hexToRgba(colors.urgent, 0.12) || colors.selection,
+  },
+  heroIconWrapOk: {
+    backgroundColor: hexToRgba(colors.done, 0.14) || colors.selection,
+  },
+  heroLabel: {
+    flex: 1,
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  heroValue: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  heroSub: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  statCopy: {
+    flex: 1,
+    gap: 1,
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  statLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  quickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickChip: {
+    flexGrow: 1,
+    flexBasis: isMobile ? '46%' : 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: colors.selection,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+  },
+  quickChipText: {
+    color: colors.text,
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   summaryWrap: {
     marginTop: isMobile ? 8 : 12,
