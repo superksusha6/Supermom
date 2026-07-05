@@ -454,9 +454,12 @@ export function NutritionScreen({
     return {
       id: 'custom-preview',
       name: draftMealName.trim(),
-      baseAmount: `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
+      baseAmount:
+        customServingType === 'serving'
+          ? 'per 1 serving'
+          : `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
       baseMode: customServingType,
-      baseQuantity: 100,
+      baseQuantity: customServingType === 'serving' ? 1 : 100,
       caloriesPer100g: Number(draftCalories.replace(',', '.')) || 0,
       proteinPer100g: Number(draftProtein.replace(',', '.')) || 0,
       fatPer100g: Number(draftFat.replace(',', '.')) || 0,
@@ -939,7 +942,8 @@ export function NutritionScreen({
         let baseF: number;
         let baseC: number;
         if (hasPer100) {
-          foodBaseMode = customServingType === 'serving' ? '100g' : customServingType;
+          // 'serving' base: the main fields hold per-serving values, used as-is.
+          foodBaseMode = customServingType;
           baseCal = per100Cal;
           baseP = per100P;
           baseF = per100F;
@@ -1687,11 +1691,16 @@ export function NutritionScreen({
                       {[
                         { key: '100g' as const, label: 'Per 100 g' },
                         { key: '100ml' as const, label: 'Per 100 ml' },
+                        { key: 'serving' as const, label: 'Per serving' },
                       ].map((option) => (
                         <Pressable
                           key={option.key}
                           style={[styles.pillBtn, customServingType === option.key && styles.pillBtnActive]}
-                          onPress={() => setCustomServingType(option.key)}
+                          onPress={() => {
+                            setCustomServingType(option.key);
+                            if (option.key === 'serving' && (!draftGrams || draftGrams === '100')) applyDraftGrams('1');
+                            else if (option.key !== 'serving' && draftGrams === '1') applyDraftGrams('100');
+                          }}
                         >
                           <Text style={[styles.pillBtnText, customServingType === option.key && styles.pillBtnTextActive]}>{option.label}</Text>
                         </Pressable>
@@ -1816,28 +1825,32 @@ export function NutritionScreen({
                         <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftCarbs} onChangeText={(text) => setDraftCarbs(cleanNutritionNumber(text))} />
                       </View>
                     </View>
-                    <Text style={styles.servingSectionLabel}>Per 1 serving (optional)</Text>
-                    <Text style={styles.servingSectionHint}>Fill this if 1 serving is logged as-is (e.g. 1 kiwi). Values are used directly, not converted.</Text>
-                    <View style={styles.row}>
-                      <View style={styles.half}>
-                        <Text style={styles.fieldLabel}>Calories / serving</Text>
-                        <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftServingCalories} onChangeText={(text) => setDraftServingCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
-                      </View>
-                      <View style={styles.half}>
-                        <Text style={styles.fieldLabel}>Protein / serving</Text>
-                        <TextInput placeholder="Protein" keyboardType="decimal-pad" style={styles.input} value={draftServingProtein} onChangeText={(text) => setDraftServingProtein(cleanNutritionNumber(text))} />
-                      </View>
-                    </View>
-                    <View style={styles.row}>
-                      <View style={styles.half}>
-                        <Text style={styles.fieldLabel}>Fat / serving</Text>
-                        <TextInput placeholder="Fat" keyboardType="decimal-pad" style={styles.input} value={draftServingFat} onChangeText={(text) => setDraftServingFat(cleanNutritionNumber(text))} />
-                      </View>
-                      <View style={styles.half}>
-                        <Text style={styles.fieldLabel}>Carbs / serving</Text>
-                        <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftServingCarbs} onChangeText={(text) => setDraftServingCarbs(cleanNutritionNumber(text))} />
-                      </View>
-                    </View>
+                    {customServingType !== 'serving' ? (
+                      <>
+                        <Text style={styles.servingSectionLabel}>Per 1 serving (optional)</Text>
+                        <Text style={styles.servingSectionHint}>Fill this if 1 serving is logged as-is (e.g. 1 kiwi). Values are used directly, not converted.</Text>
+                        <View style={styles.row}>
+                          <View style={styles.half}>
+                            <Text style={styles.fieldLabel}>Calories / serving</Text>
+                            <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftServingCalories} onChangeText={(text) => setDraftServingCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
+                          </View>
+                          <View style={styles.half}>
+                            <Text style={styles.fieldLabel}>Protein / serving</Text>
+                            <TextInput placeholder="Protein" keyboardType="decimal-pad" style={styles.input} value={draftServingProtein} onChangeText={(text) => setDraftServingProtein(cleanNutritionNumber(text))} />
+                          </View>
+                        </View>
+                        <View style={styles.row}>
+                          <View style={styles.half}>
+                            <Text style={styles.fieldLabel}>Fat / serving</Text>
+                            <TextInput placeholder="Fat" keyboardType="decimal-pad" style={styles.input} value={draftServingFat} onChangeText={(text) => setDraftServingFat(cleanNutritionNumber(text))} />
+                          </View>
+                          <View style={styles.half}>
+                            <Text style={styles.fieldLabel}>Carbs / serving</Text>
+                            <TextInput placeholder="Carbs" keyboardType="decimal-pad" style={styles.input} value={draftServingCarbs} onChangeText={(text) => setDraftServingCarbs(cleanNutritionNumber(text))} />
+                          </View>
+                        </View>
+                      </>
+                    ) : null}
                     <Text style={styles.fieldLabel}>1 serving weighs (optional) — shown as the unit label, e.g. "serving (100 g)"</Text>
                     <TextInput
                       placeholder="Grams per serving"
@@ -1848,7 +1861,7 @@ export function NutritionScreen({
                     />
                     {customFoodPreviewValues ? (
                       <>
-                        <Text style={styles.portionResultLabel}>For {draftGrams || '0'} {customServingType === '100ml' ? 'ml' : 'g'} you log:</Text>
+                        <Text style={styles.portionResultLabel}>For {draftGrams || '0'} {customServingType === 'serving' ? (Number(draftGrams) === 1 ? 'serving' : 'servings') : customServingType === '100ml' ? 'ml' : 'g'} you log:</Text>
                         <View style={styles.macroChipsRow}>
                           <View style={[styles.macroChip, styles.macroChipPrimary]}>
                             <Text style={styles.macroChipText}>{customFoodPreviewValues.calories || '0'} kcal</Text>
