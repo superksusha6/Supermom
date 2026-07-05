@@ -90,6 +90,7 @@ import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
 import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon } from '@/components/Icon';
+import { FamCard } from '@/components/FamCard';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
@@ -4483,8 +4484,7 @@ function AppShell() {
                 ) : null}
               </View>
 
-              <Text style={styles.dashSectionTitle}>Today</Text>
-              <View style={styles.agendaCard}>
+              <FamCard title="Today" padded={false}>
                 {todayAgenda.length > 0 ? (
                   todayAgenda.map((item, index) => (
                     <View key={item.id}>
@@ -4514,7 +4514,7 @@ function AppShell() {
                     )}
                   </View>
                 )}
-              </View>
+              </FamCard>
 
               <View style={styles.quickRow}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Add meal" style={styles.quickChip} onPress={handleDashboardAddMeal}>

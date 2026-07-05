@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MedicineCategory, MedicineItem } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 import { SectionCard } from '@/components/SectionCard';
+import { statusColor } from '@/theme/tokens';
 import {
   MED_CATEGORIES,
   medCategoryMeta,
@@ -31,6 +32,12 @@ function newId() {
 }
 
 const FOR_WHOM_OPTIONS = ['Adults', 'Kids', 'Everyone'];
+
+function badgeTint(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
 
 // Downscale a big camera photo to a small JPEG (web) so the request stays well
 // under Vercel's ~4.5MB body limit. Keeps text readable at ~1400px.
@@ -832,12 +839,12 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
       fontSize: 11,
       fontWeight: '800',
     },
-    badgeExpired: { backgroundColor: 'rgba(225,29,72,0.12)' },
-    badgeTextExpired: { color: '#be123c' },
-    badgeSoon: { backgroundColor: 'rgba(217,119,6,0.14)' },
-    badgeTextSoon: { color: '#b45309' },
-    badgeOk: { backgroundColor: 'rgba(22,163,74,0.12)' },
-    badgeTextOk: { color: '#15803d' },
+    badgeExpired: { backgroundColor: badgeTint(statusColor(colors, 'urgent'), 0.12) },
+    badgeTextExpired: { color: statusColor(colors, 'urgent') },
+    badgeSoon: { backgroundColor: badgeTint(statusColor(colors, 'soon'), 0.14) },
+    badgeTextSoon: { color: statusColor(colors, 'soon') },
+    badgeOk: { backgroundColor: badgeTint(statusColor(colors, 'done'), 0.12) },
+    badgeTextOk: { color: statusColor(colors, 'done') },
     badgeNone: { backgroundColor: 'rgba(100,116,139,0.12)' },
     badgeTextNone: { color: colors.subtext },
 
