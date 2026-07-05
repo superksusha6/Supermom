@@ -1679,6 +1679,12 @@ export function NutritionScreen({
                         <Text style={styles.customFoodCloseText}>Back</Text>
                       </Pressable>
                     </View>
+                    <TextInput
+                      placeholder="Product name"
+                      style={styles.input}
+                      value={draftMealName}
+                      onChangeText={setDraftMealName}
+                    />
                     <TextInput placeholder="Brand optional" style={styles.input} value={customBrand} onChangeText={setCustomBrand} />
                     <TextInput
                       placeholder="Barcode optional — saved so scanning finds this product"
