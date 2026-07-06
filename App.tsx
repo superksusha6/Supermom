@@ -1427,8 +1427,17 @@ function AppShell() {
   const todayAgenda = useMemo(() => {
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return events
+    // Collapse mirrored duplicates (same time + same normalized title). Prefer
+    // the child-owned copy so "who" shows the child, not the parent mirror.
+    const byKey = new Map<string, (typeof events)[number]>();
+    events
       .filter((e) => e.date === todayDateKey)
+      .forEach((e) => {
+        const key = `${dashTimeToMinutes(e.time)}|${normalizeEventKey(e.title)}`;
+        const existing = byKey.get(key);
+        if (!existing || (e.owner === 'child' && existing.owner !== 'child')) byKey.set(key, e);
+      });
+    return [...byKey.values()]
       .map((e) => {
         const mins = dashTimeToMinutes(e.time);
         return {
@@ -1444,6 +1453,20 @@ function AppShell() {
       })
       .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || a.mins - b.mins);
   }, [events, todayDateKey, colors.primary, doneEventIds]);
+  const upcomingEvents = useMemo(() => {
+    const seen = new Set<string>();
+    return events
+      .filter((e) => e.date > todayDateKey)
+      .sort((a, b) => a.date.localeCompare(b.date) || dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
+      .filter((e) => {
+        const key = `${e.date}|${dashTimeToMinutes(e.time)}|${normalizeEventKey(e.title)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 4)
+      .map((e) => ({ id: e.id, title: e.title, who: e.ownerName || 'Family', color: e.color || colors.primary, date: e.date }));
+  }, [events, todayDateKey, colors.primary]);
   const toggleEventDone = (id: string) => {
     setDoneEventIds((prev) => {
       const next = new Set(prev);
@@ -3984,11 +4007,35 @@ function AppShell() {
     </View>
   );
 
+  const focusUpcoming = upcomingEvents.length ? (
+    <FamCard title="Upcoming" padded={false}>
+      {upcomingEvents.map((it, i) => (
+        <View key={it.id}>
+          {i > 0 ? <View style={styles.agendaLine} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${formatShortDate(it.date)}, ${it.title}, ${it.who}`}
+            style={styles.agendaRow}
+            onPress={() => setScreen('calendar')}
+          >
+            <Text style={styles.agendaTime}>{formatShortDate(it.date)}</Text>
+            <View style={[styles.agendaDot, { backgroundColor: it.color }]} />
+            <View style={styles.agendaCopy}>
+              <Text style={styles.agendaTitle} numberOfLines={1}>{it.title}</Text>
+              <Text style={styles.agendaWho} numberOfLines={1}>{it.who}</Text>
+            </View>
+          </Pressable>
+        </View>
+      ))}
+    </FamCard>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusHero}
       {focusStats}
       {focusAgenda}
+      {focusUpcoming}
       {focusQuick}
     </View>
   ) : (
@@ -3999,6 +4046,7 @@ function AppShell() {
       </View>
       <View style={styles.dashRail}>
         {focusStats}
+        {focusUpcoming}
         {focusQuick}
       </View>
     </View>
@@ -4615,143 +4663,7 @@ function AppShell() {
       ) : null}
         {screen === 'calendar' ? (
           <>
-            <View style={styles.homeSwitcher}>
-              {([['focus', 'Focus'], ['zen', 'Zen'], ['bento', 'Bento']] as [HomeLayout, string][]).map(([key, label]) => (
-                <Pressable
-                  key={key}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${label} home layout`}
-                  style={[styles.homeSwitchPill, homeLayout === key && styles.homeSwitchPillActive]}
-                  onPress={() => setHomeLayout(key)}
-                >
-                  <Text style={[styles.homeSwitchText, homeLayout === key && styles.homeSwitchTextActive]}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {homeLayout === 'focus' ? (
-              focusHome
-            ) : homeLayout === 'zen' ? (
-              <View style={styles.zenWrap}>
-                <Text style={styles.zenDate}>{zenDate.weekday}</Text>
-                <Text style={styles.zenSub}>{zenDate.sub}</Text>
-                {needsYouCount > 0 ? (
-                  <>
-                    <Text style={styles.zenNeed}>{needsYouCount === 1 ? 'One thing needs you' : `${needsYouCount} things need you`}</Text>
-                    <View style={styles.zenList}>
-                      {needsYouItems.map((item, i) => (
-                        <Pressable
-                          key={`${item.label}-${i}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={item.label}
-                          style={[styles.zenRow, i > 0 && styles.zenRowBorder]}
-                          onPress={item.go}
-                        >
-                          <Text style={styles.zenRowText}>{item.label}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.zenNeed}>All clear</Text>
-                    <Text style={styles.zenCalm}>You haven’t missed anything today. Enjoy the quiet.</Text>
-                  </>
-                )}
-              </View>
-            ) : (
-              <View style={styles.bentoWrap}>
-                <View style={styles.bentoRow}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={needsYouCount > 0 ? `Needs you, ${needsYouCount} to review` : 'All clear'}
-                    style={[styles.bentoCell, styles.bentoBig, needsYouCount > 0 && styles.bentoWarn]}
-                    onPress={() => {
-                      if (needsYouCount === 1 && needsYouItems[0]) needsYouItems[0].go();
-                      else { setScreen('family'); setFamilyTab('chores'); }
-                    }}
-                  >
-                    <Text style={styles.bentoLabel}>Needs you</Text>
-                    <Text style={[styles.bentoBigNum, { color: needsYouCount > 0 ? colors.urgent : colors.done }]}>{needsYouCount || '0'}</Text>
-                    <Text style={styles.bentoSub}>{needsYouCount > 0 ? 'to review' : 'all clear'}</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Today's plans"
-                    style={[styles.bentoCell, styles.bentoBig]}
-                    onPress={() => setScreen('calendar')}
-                  >
-                    <Text style={styles.bentoLabel}>Today · {todayAgenda.length}</Text>
-                    <View style={styles.bentoTodayList}>
-                      {todayAgenda.slice(0, 3).map((it) => (
-                        <View key={it.id} style={styles.bentoTodayItem}>
-                          <View style={[styles.bentoDot, { backgroundColor: it.color }]} />
-                          <Text style={styles.bentoTodayText} numberOfLines={1}>{it.who} · {it.title}</Text>
-                        </View>
-                      ))}
-                      {todayAgenda.length === 0 ? <Text style={styles.bentoSub}>nothing today</Text> : null}
-                    </View>
-                  </Pressable>
-                </View>
-                <View style={styles.bentoRow}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Chores"
-                    style={styles.bentoCell}
-                    onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
-                  >
-                    <Text style={styles.bentoLabel}>Chores</Text>
-                    <Text style={styles.bentoMidNum}>{choresToday.total > 0 ? `${choresToday.done}/${choresToday.total}` : '—'}</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="You, calories today"
-                    style={styles.bentoCell}
-                    onPress={() => setScreen('wellness')}
-                  >
-                    <Text style={styles.bentoLabel}>You</Text>
-                    <Text style={styles.bentoMidNum}>
-                      {dailyCalorieTarget > 0 ? todayNutritionCalories : (todayNutritionCalories || '—')}
-                      <Text style={styles.bentoK}>{dailyCalorieTarget > 0 ? ' kcal' : ''}</Text>
-                    </Text>
-                  </Pressable>
-                </View>
-                {medsEnabled ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Meds"
-                    style={[styles.bentoCell, styles.bentoWide, medsNeedAttentionCount(medicines) > 0 && styles.bentoWarn]}
-                    onPress={() => setScreen('meds')}
-                  >
-                    <View style={styles.bentoWideCopy}>
-                      <Text style={styles.bentoLabel}>Meds</Text>
-                      <Text style={styles.bentoSub}>{medsNeedAttentionCount(medicines) > 0 ? `${medsNeedAttentionCount(medicines)} expire soon` : 'all good'}</Text>
-                    </View>
-                    {medsNeedAttentionCount(medicines) > 0 ? <Text style={styles.bentoBang}>!</Text> : null}
-                  </Pressable>
-                ) : null}
-                <View style={styles.quickRow}>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Add meal" style={styles.quickChip} onPress={handleDashboardAddMeal}>
-                    <Icon name="meal" color={colors.primary} size={18} />
-                    <Text style={styles.quickChipText}>Meal</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Shopping list" style={styles.quickChip} onPress={handleDashboardOpenShoppingList}>
-                    <Icon name="cart" color={colors.primary} size={18} />
-                    <Text style={styles.quickChipText}>Shop</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Fix it" style={styles.quickChip} onPress={() => setScreen('fixit')}>
-                    <Icon name="wrench" color={colors.primary} size={18} />
-                    <Text style={styles.quickChipText}>Fix</Text>
-                  </Pressable>
-                  {medsEnabled ? (
-                    <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => setScreen('meds')}>
-                      <Icon name="pill" color={colors.primary} size={18} />
-                      <Text style={styles.quickChipText}>Meds</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            )}
+            {focusHome}
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -7503,6 +7415,24 @@ function persistLocalHabits(habits: HabitEntry[]) {
   } catch {
     // Ignore local storage failures; habits still work in memory.
   }
+}
+
+function formatShortDate(dateKey: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey || '');
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+}
+
+// Normalize an event title so mirrored family/child copies collapse to one:
+// "Roman: boxing" and "boxing (Roman)" both -> "boxing".
+function normalizeEventKey(title: string): string {
+  return (title || '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/^[^:]+:\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function dashTimeToMinutes(value: string): number {
