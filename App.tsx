@@ -740,6 +740,7 @@ function AppShell() {
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(() => loadLocalHomeLayout());
+  const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
   const [chores, setChores] = useState<Chore[]>([]);
@@ -1424,12 +1425,34 @@ function AppShell() {
     return items;
   }, [chores, homeIssues, purchaseRequests]);
   const todayAgenda = useMemo(() => {
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
     return events
       .filter((e) => e.date === todayDateKey)
-      .slice()
-      .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
-      .map((e) => ({ id: e.id, title: e.title, time: e.time, who: e.ownerName || 'Family', color: e.color || colors.primary }));
-  }, [events, todayDateKey, colors.primary]);
+      .map((e) => {
+        const mins = dashTimeToMinutes(e.time);
+        return {
+          id: e.id,
+          title: e.title,
+          time: e.time,
+          who: e.ownerName || 'Family',
+          color: e.color || colors.primary,
+          mins,
+          done: doneEventIds.has(e.id),
+          past: mins < nowMinutes,
+        };
+      })
+      .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || a.mins - b.mins);
+  }, [events, todayDateKey, colors.primary, doneEventIds]);
+  const toggleEventDone = (id: string) => {
+    setDoneEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      persistLocalDoneEvents(todayDateKey, next);
+      return next;
+    });
+  };
   const dashboardGreeting = useMemo(() => {
     const now = new Date();
     const hour = now.getHours();
@@ -4520,19 +4543,29 @@ function AppShell() {
                   todayAgenda.map((item, index) => (
                     <View key={item.id}>
                       {index > 0 ? <View style={styles.agendaLine} /> : null}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${item.time}, ${item.title}, ${item.who}`}
-                        style={styles.agendaRow}
-                        onPress={() => setScreen('calendar')}
-                      >
+                      <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted]}>
                         <Text style={styles.agendaTime}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
                         <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
-                        <View style={styles.agendaCopy}>
-                          <Text style={styles.agendaTitle} numberOfLines={1}>{item.title}</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${item.time}, ${item.title}, ${item.who}`}
+                          style={styles.agendaCopy}
+                          onPress={() => setScreen('calendar')}
+                        >
+                          <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
                           <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
-                        </View>
-                      </Pressable>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: item.done }}
+                          accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
+                          hitSlop={8}
+                          style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
+                          onPress={() => toggleEventDone(item.id)}
+                        >
+                          {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
+                        </Pressable>
+                      </View>
                     </View>
                   ))
                 ) : (
@@ -7505,6 +7538,31 @@ function persistLocalMedsEnabled(enabled: boolean) {
   }
 }
 
+const LOCAL_DONE_EVENTS_KEY = 'smartmom.doneEvents.v1';
+
+function loadLocalDoneEvents(todayKey: string): Set<string> {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return new Set();
+  try {
+    const raw = globalThis.localStorage.getItem(LOCAL_DONE_EVENTS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    // Only keep marks for today so they reset each day.
+    if (parsed && parsed.date === todayKey && Array.isArray(parsed.ids)) return new Set(parsed.ids as string[]);
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function persistLocalDoneEvents(todayKey: string, ids: Set<string>) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_DONE_EVENTS_KEY, JSON.stringify({ date: todayKey, ids: [...ids] }));
+  } catch {
+    // Ignore.
+  }
+}
+
 function loadLocalHomeLayout(): HomeLayout {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return 'focus';
   try {
@@ -9316,6 +9374,28 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingHorizontal: 10,
     paddingVertical: 11,
   },
+  agendaRowMuted: {
+    opacity: 0.5,
+  },
+  agendaCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1.6,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agendaCheckDone: {
+    backgroundColor: colors.done,
+    borderColor: colors.done,
+  },
+  agendaCheckMark: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 17,
+  },
   agendaLine: {
     height: 1,
     backgroundColor: colors.border,
@@ -9340,6 +9420,10 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 14,
     fontWeight: '800',
+  },
+  agendaTitleDone: {
+    textDecorationLine: 'line-through',
+    color: colors.subtext,
   },
   agendaWho: {
     color: colors.subtext,
