@@ -91,6 +91,7 @@ import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
+import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
@@ -1492,6 +1493,13 @@ function AppShell() {
       return next;
     });
   };
+  // Red is reserved for a genuinely urgent home issue; soft nudges (verify a
+  // chore, approve a purchase) get a calmer amber instead of the alarm crimson.
+  const needsYouSevere = useMemo(
+    () => homeIssues.some((i) => i.urgency === 'urgent' && i.status !== 'done'),
+    [homeIssues],
+  );
+  const heroAccent = needsYouCount > 0 ? (needsYouSevere ? colors.urgent : statusColor(colors, 'soon')) : colors.done;
   const dashboardGreeting = useMemo(() => {
     const now = new Date();
     const hour = now.getHours();
@@ -3888,15 +3896,21 @@ function AppShell() {
           ? `Needs you, ${needsYouCount} to review. ${needsYouItems.slice(0, 2).map((i) => i.label).join('. ')}`
           : 'All clear, nothing pending today'
       }
-      style={[styles.heroCard, needsYouCount > 0 && styles.heroCardWarn]}
+      style={[
+        styles.heroCard,
+        needsYouCount > 0 && {
+          borderColor: hexToRgba(heroAccent, 0.38) || colors.border,
+          backgroundColor: hexToRgba(heroAccent, 0.06) || colors.glassStrong,
+        },
+      ]}
       onPress={() => {
         if (needsYouCount === 1 && needsYouItems[0]) needsYouItems[0].go();
         else { setScreen('family'); setFamilyTab('chores'); }
       }}
     >
       <View style={styles.heroTopRow}>
-        <View style={[styles.heroIconWrap, needsYouCount > 0 ? styles.heroIconWrapWarn : styles.heroIconWrapOk]}>
-          <Icon name={needsYouCount > 0 ? 'alert' : 'check'} color={needsYouCount > 0 ? colors.urgent : colors.done} size={20} />
+        <View style={[styles.heroIconWrap, { backgroundColor: hexToRgba(heroAccent, 0.13) || colors.selection }]}>
+          <Icon name={needsYouCount > 0 ? 'alert' : 'check'} color={heroAccent} size={20} />
         </View>
         <Text style={styles.heroLabel}>{needsYouCount > 0 ? 'Needs you' : 'All clear'}</Text>
       </View>
@@ -3946,7 +3960,7 @@ function AppShell() {
           style={[styles.statChip, !isMobile && styles.statChipGrid]}
           onPress={() => setScreen('meds')}
         >
-          <Icon name="pill" color={colors.urgent} size={18} />
+          <Icon name="pill" color={statusColor(colors, 'soon')} size={18} />
           <View style={styles.statCopy}>
             <Text style={styles.statValue}>{medsNeedAttentionCount(medicines)}</Text>
             <Text style={styles.statLabel}>meds ·  soon</Text>
@@ -9532,14 +9546,17 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   quickChip: {
     flexGrow: 1,
     flexBasis: isMobile ? '46%' : 150,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    gap: 10,
     borderRadius: 14,
-    backgroundColor: colors.selection,
-    paddingVertical: 13,
-    paddingHorizontal: 12,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   quickChipText: {
     color: colors.text,
