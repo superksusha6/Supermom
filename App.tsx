@@ -103,7 +103,7 @@ const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.j
 
 type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds';
 type FamilyTab = 'children' | 'chores';
-type FoodTab = 'recipes' | 'plan' | 'shopping';
+type FoodTab = 'recipes' | 'plan' | 'shopping' | 'diary';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
 type ParentLabel = 'Mom' | 'Dad';
 type UiRole = Exclude<Role, 'admin'>;
@@ -741,6 +741,7 @@ function AppShell() {
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(() => loadLocalHomeLayout());
+  const [homeTab, setHomeTab] = useState<'today' | 'calendar'>('today');
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
@@ -3876,7 +3877,8 @@ function AppShell() {
 
   function handleDashboardMealTypePick(mealType: NutritionMealType) {
     setDashboardMealPickerOpen(false);
-    setScreen('calendar');
+    setScreen('food');
+    setFoodTab('diary');
     setDashboardNutritionQuickAction({ type: 'add-meal', mealType, token: Date.now() });
   }
 
@@ -3923,7 +3925,8 @@ function AppShell() {
     </Pressable>
   );
 
-  const focusStats = (
+  const hasFocusStats = choresToday.total > 0 || (medsEnabled && medsNeedAttentionCount(medicines) > 0);
+  const focusStats = !hasFocusStats ? null : (
     <View style={[styles.statRow, !isMobile && styles.statGrid]}>
       {choresToday.total > 0 ? (
         <Pressable
@@ -3939,20 +3942,6 @@ function AppShell() {
           </View>
         </Pressable>
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={dailyCalorieTarget > 0 ? `You, ${todayNutritionCalories} of ${dailyCalorieTarget} kilocalories today` : 'Your nutrition today'}
-        style={[styles.statChip, !isMobile && styles.statChipGrid]}
-        onPress={() => setScreen('wellness')}
-      >
-        <Icon name="meal" color={colors.primary} size={18} />
-        <View style={styles.statCopy}>
-          <Text style={styles.statValue}>
-            {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : (todayNutritionCalories || '—')}
-          </Text>
-          <Text style={styles.statLabel}>you · kcal</Text>
-        </View>
-      </Pressable>
       {medsEnabled && medsNeedAttentionCount(medicines) > 0 ? (
         <Pressable
           accessibilityRole="button"
@@ -4716,6 +4705,7 @@ function AppShell() {
       </View>
       {screen === 'food' ? (
         <View style={styles.subnav}>
+          <NavButton label="Diary" active={foodTab === 'diary'} onPress={() => setFoodTab('diary')} />
           <NavButton label="Recipes" active={foodTab === 'recipes'} onPress={() => setFoodTab('recipes')} />
           <NavButton label="Plan" active={foodTab === 'plan'} onPress={() => setFoodTab('plan')} />
           <NavButton label="Shopping" active={foodTab === 'shopping'} onPress={() => setFoodTab('shopping')} />
@@ -4727,9 +4717,14 @@ function AppShell() {
           <NavButton label="Chores" active={familyTab === 'chores'} onPress={() => setFamilyTab('chores')} />
         </View>
       ) : null}
-        {screen === 'calendar' ? (
-          <>
-            {focusHome}
+      {screen === 'calendar' ? (
+        <View style={styles.subnav}>
+          <NavButton label="Today" active={homeTab === 'today'} onPress={() => setHomeTab('today')} />
+          <NavButton label="Calendar" active={homeTab === 'calendar'} onPress={() => setHomeTab('calendar')} />
+        </View>
+      ) : null}
+        {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
+        {screen === 'calendar' && homeTab === 'calendar' ? (
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -5030,6 +5025,9 @@ function AppShell() {
                 setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
               }}
             />
+        ) : null}
+
+        {screen === 'food' && foodTab === 'diary' ? (
             <NutritionScreen
               personalProfile={personalProfile}
               nutritionGoal={nutritionGoal}
@@ -5049,7 +5047,6 @@ function AppShell() {
               customFoodPresets={customNutritionFoods}
               onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
             />
-          </>
         ) : null}
 
         {screen === 'family' && familyTab === 'children' ? (
