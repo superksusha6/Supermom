@@ -1437,7 +1437,7 @@ function AppShell() {
         const existing = byKey.get(key);
         if (!existing || (e.owner === 'child' && existing.owner !== 'child')) byKey.set(key, e);
       });
-    return [...byKey.values()]
+    const sorted = [...byKey.values()]
       .map((e) => {
         const mins = dashTimeToMinutes(e.time);
         return {
@@ -1452,6 +1452,8 @@ function AppShell() {
         };
       })
       .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || a.mins - b.mins);
+    const nextIdx = sorted.findIndex((x) => !x.done && !x.past);
+    return sorted.map((x, i) => ({ ...x, isNext: i === nextIdx }));
   }, [events, todayDateKey, colors.primary, doneEventIds]);
   const upcomingEvents = useMemo(() => {
     const seen = new Set<string>();
@@ -1467,6 +1469,20 @@ function AppShell() {
       .slice(0, 4)
       .map((e) => ({ id: e.id, title: e.title, who: e.ownerName || 'Family', color: e.color || colors.primary, date: e.date }));
   }, [events, todayDateKey, colors.primary]);
+  const todayDinner = useMemo(() => {
+    const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
+    const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
+    const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+    if (!entry) return null;
+    if (entry.recipeId) return recipes.find((r) => r.id === entry.recipeId)?.title || entry.customTitle || 'Dinner planned';
+    return entry.customTitle || null;
+  }, [weeklyMealPlan, recipes, todayDateKey]);
+  const todayChoreList = useMemo(() => {
+    return chores
+      .filter((c) => c.childId && choreStatus(c) === 'todo')
+      .map((c) => ({ id: c.id, title: c.title, child: children.find((ch) => ch.id === c.childId)?.name || 'Kid' }))
+      .slice(0, 3);
+  }, [chores, children]);
   const toggleEventDone = (id: string) => {
     setDoneEventIds((prev) => {
       const next = new Set(prev);
@@ -3946,16 +3962,19 @@ function AppShell() {
         todayAgenda.map((item, index) => (
           <View key={item.id}>
             {index > 0 ? <View style={styles.agendaLine} /> : null}
-            <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted]}>
-              <Text style={styles.agendaTime}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
+            <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted, item.isNext && styles.agendaRowNext]}>
+              <Text style={[styles.agendaTime, item.isNext && styles.agendaTimeNext]}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
               <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}`}
+                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}`}
                 style={styles.agendaCopy}
                 onPress={() => setScreen('calendar')}
               >
-                <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
+                <View style={styles.agendaTitleRow}>
+                  <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
+                  {item.isNext ? <Text style={styles.agendaNextChip}>NEXT</Text> : null}
+                </View>
                 <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
               </Pressable>
               <Pressable
@@ -4030,11 +4049,43 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  const focusTonight = (todayDinner || todayChoreList.length > 0) ? (
+    <FamCard title="Tonight">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={todayDinner ? `Dinner, ${todayDinner}` : 'Plan dinner'}
+        style={styles.tonightRow}
+        onPress={() => { setScreen('food'); setFoodTab('plan'); }}
+      >
+        <Icon name="meal" color={colors.primary} size={18} />
+        <Text style={styles.tonightText} numberOfLines={1}>
+          <Text style={styles.tonightLabel}>Dinner: </Text>
+          {todayDinner || 'not planned — tap to plan'}
+        </Text>
+      </Pressable>
+      {todayChoreList.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Chores due today"
+          style={styles.tonightRow}
+          onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
+        >
+          <Icon name="chores" color={colors.primary} size={18} />
+          <Text style={styles.tonightText} numberOfLines={2}>
+            <Text style={styles.tonightLabel}>Chores: </Text>
+            {todayChoreList.map((c) => `${c.child} — ${c.title}`).join(' · ')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </FamCard>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusHero}
       {focusStats}
       {focusAgenda}
+      {focusTonight}
       {focusUpcoming}
       {focusQuick}
     </View>
@@ -4046,6 +4097,7 @@ function AppShell() {
       </View>
       <View style={styles.dashRail}>
         {focusStats}
+        {focusTonight}
         {focusUpcoming}
         {focusQuick}
       </View>
@@ -9359,6 +9411,49 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   agendaRowMuted: {
     opacity: 0.5,
+  },
+  agendaRowNext: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    marginLeft: -3,
+  },
+  agendaTimeNext: {
+    color: colors.primary,
+  },
+  agendaTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  agendaNextChip: {
+    color: colors.primary,
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    backgroundColor: hexToRgba(colors.primary, 0.12) || colors.selection,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  tonightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  tonightText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  tonightLabel: {
+    color: colors.subtext,
+    fontWeight: '800',
   },
   agendaCheck: {
     width: 26,
