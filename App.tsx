@@ -196,6 +196,8 @@ const LOCAL_PERSONAL_PROFILE_KEY = 'smartmom.personalProfile.v1';
 const LOCAL_DAILY_CARD_STATE_KEY = 'smartmom.dailyCardState.v1';
 const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
+const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
+type HomeLayout = 'focus' | 'zen' | 'bento';
 
 const DEFAULT_MEAL_PLAN_PROFILES: MealPlanProfilePreference[] = [
   { key: 'family', label: 'Family' },
@@ -737,6 +739,7 @@ function AppShell() {
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
+  const [homeLayout, setHomeLayout] = useState<HomeLayout>(() => loadLocalHomeLayout());
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
   const [chores, setChores] = useState<Chore[]>([]);
@@ -2074,6 +2077,19 @@ function AppShell() {
   useEffect(() => {
     persistLocalMedsEnabled(medsEnabled);
   }, [medsEnabled]);
+
+  useEffect(() => {
+    persistLocalHomeLayout(homeLayout);
+  }, [homeLayout]);
+
+  const zenDate = useMemo(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const dayMonth = now.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
+    return { weekday, sub: `${dayMonth} · ${greeting}` };
+  }, [todayDateKey]);
 
   useEffect(() => {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current) return;
@@ -4411,6 +4427,21 @@ function AppShell() {
       ) : null}
         {screen === 'calendar' ? (
           <>
+            <View style={styles.homeSwitcher}>
+              {([['focus', 'Focus'], ['zen', 'Zen'], ['bento', 'Bento']] as [HomeLayout, string][]).map(([key, label]) => (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} home layout`}
+                  style={[styles.homeSwitchPill, homeLayout === key && styles.homeSwitchPillActive]}
+                  onPress={() => setHomeLayout(key)}
+                >
+                  <Text style={[styles.homeSwitchText, homeLayout === key && styles.homeSwitchTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {homeLayout === 'focus' ? (
             <View style={styles.dashWrap}>
               <Pressable
                 accessibilityRole="button"
@@ -4537,6 +4568,127 @@ function AppShell() {
                 ) : null}
               </View>
             </View>
+            ) : homeLayout === 'zen' ? (
+              <View style={styles.zenWrap}>
+                <Text style={styles.zenDate}>{zenDate.weekday}</Text>
+                <Text style={styles.zenSub}>{zenDate.sub}</Text>
+                {needsYouCount > 0 ? (
+                  <>
+                    <Text style={styles.zenNeed}>{needsYouCount === 1 ? 'One thing needs you' : `${needsYouCount} things need you`}</Text>
+                    <View style={styles.zenList}>
+                      {needsYouItems.map((item, i) => (
+                        <Pressable
+                          key={`${item.label}-${i}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={item.label}
+                          style={[styles.zenRow, i > 0 && styles.zenRowBorder]}
+                          onPress={item.go}
+                        >
+                          <Text style={styles.zenRowText}>{item.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.zenNeed}>All clear</Text>
+                    <Text style={styles.zenCalm}>You haven’t missed anything today. Enjoy the quiet.</Text>
+                  </>
+                )}
+              </View>
+            ) : (
+              <View style={styles.bentoWrap}>
+                <View style={styles.bentoRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={needsYouCount > 0 ? `Needs you, ${needsYouCount} to review` : 'All clear'}
+                    style={[styles.bentoCell, styles.bentoBig, needsYouCount > 0 && styles.bentoWarn]}
+                    onPress={() => {
+                      if (needsYouCount === 1 && needsYouItems[0]) needsYouItems[0].go();
+                      else { setScreen('family'); setFamilyTab('chores'); }
+                    }}
+                  >
+                    <Text style={styles.bentoLabel}>Needs you</Text>
+                    <Text style={[styles.bentoBigNum, { color: needsYouCount > 0 ? colors.urgent : colors.done }]}>{needsYouCount || '0'}</Text>
+                    <Text style={styles.bentoSub}>{needsYouCount > 0 ? 'to review' : 'all clear'}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Today's plans"
+                    style={[styles.bentoCell, styles.bentoBig]}
+                    onPress={() => setScreen('calendar')}
+                  >
+                    <Text style={styles.bentoLabel}>Today · {todayAgenda.length}</Text>
+                    <View style={styles.bentoTodayList}>
+                      {todayAgenda.slice(0, 3).map((it) => (
+                        <View key={it.id} style={styles.bentoTodayItem}>
+                          <View style={[styles.bentoDot, { backgroundColor: it.color }]} />
+                          <Text style={styles.bentoTodayText} numberOfLines={1}>{it.who} · {it.title}</Text>
+                        </View>
+                      ))}
+                      {todayAgenda.length === 0 ? <Text style={styles.bentoSub}>nothing today</Text> : null}
+                    </View>
+                  </Pressable>
+                </View>
+                <View style={styles.bentoRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Chores"
+                    style={styles.bentoCell}
+                    onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
+                  >
+                    <Text style={styles.bentoLabel}>Chores</Text>
+                    <Text style={styles.bentoMidNum}>{choresToday.total > 0 ? `${choresToday.done}/${choresToday.total}` : '—'}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="You, calories today"
+                    style={styles.bentoCell}
+                    onPress={() => setScreen('wellness')}
+                  >
+                    <Text style={styles.bentoLabel}>You</Text>
+                    <Text style={styles.bentoMidNum}>
+                      {dailyCalorieTarget > 0 ? todayNutritionCalories : (todayNutritionCalories || '—')}
+                      <Text style={styles.bentoK}>{dailyCalorieTarget > 0 ? ' kcal' : ''}</Text>
+                    </Text>
+                  </Pressable>
+                </View>
+                {medsEnabled ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Meds"
+                    style={[styles.bentoCell, styles.bentoWide, medsNeedAttentionCount(medicines) > 0 && styles.bentoWarn]}
+                    onPress={() => setScreen('meds')}
+                  >
+                    <View style={styles.bentoWideCopy}>
+                      <Text style={styles.bentoLabel}>Meds</Text>
+                      <Text style={styles.bentoSub}>{medsNeedAttentionCount(medicines) > 0 ? `${medsNeedAttentionCount(medicines)} expire soon` : 'all good'}</Text>
+                    </View>
+                    {medsNeedAttentionCount(medicines) > 0 ? <Text style={styles.bentoBang}>!</Text> : null}
+                  </Pressable>
+                ) : null}
+                <View style={styles.quickRow}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Add meal" style={styles.quickChip} onPress={handleDashboardAddMeal}>
+                    <Icon name="meal" color={colors.primary} size={18} />
+                    <Text style={styles.quickChipText}>Meal</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Shopping list" style={styles.quickChip} onPress={handleDashboardOpenShoppingList}>
+                    <Icon name="cart" color={colors.primary} size={18} />
+                    <Text style={styles.quickChipText}>Shop</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Fix it" style={styles.quickChip} onPress={() => setScreen('fixit')}>
+                    <Icon name="wrench" color={colors.primary} size={18} />
+                    <Text style={styles.quickChipText}>Fix</Text>
+                  </Pressable>
+                  {medsEnabled ? (
+                    <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => setScreen('meds')}>
+                      <Icon name="pill" color={colors.primary} size={18} />
+                      <Text style={styles.quickChipText}>Meds</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            )}
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -7353,6 +7505,25 @@ function persistLocalMedsEnabled(enabled: boolean) {
   }
 }
 
+function loadLocalHomeLayout(): HomeLayout {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return 'focus';
+  try {
+    const raw = globalThis.localStorage.getItem(LOCAL_HOME_LAYOUT_KEY);
+    return raw === 'zen' || raw === 'bento' ? raw : 'focus';
+  } catch {
+    return 'focus';
+  }
+}
+
+function persistLocalHomeLayout(layout: HomeLayout) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_HOME_LAYOUT_KEY, layout);
+  } catch {
+    // Ignore.
+  }
+}
+
 function mergeHabitsPreferLocal(serverHabits: HabitEntry[], localHabits: HabitEntry[]) {
   if (serverHabits.length === 0) return localHabits;
   if (localHabits.length === 0) return serverHabits;
@@ -8866,6 +9037,172 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     marginBottom: 20,
     width: '100%',
     gap: 12,
+  },
+  homeSwitcher: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: 6,
+    padding: 4,
+    borderRadius: 999,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  homeSwitchPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  homeSwitchPillActive: {
+    backgroundColor: colors.primary,
+  },
+  homeSwitchText: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  homeSwitchTextActive: {
+    color: '#ffffff',
+  },
+  // Zen layout
+  zenWrap: {
+    marginTop: 24,
+    marginBottom: 24,
+    paddingHorizontal: 6,
+    gap: 6,
+    minHeight: 360,
+  },
+  zenDate: {
+    color: colors.text,
+    fontSize: 44,
+    fontWeight: '300',
+    letterSpacing: -1.5,
+  },
+  zenSub: {
+    color: colors.subtext,
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 28,
+  },
+  zenNeed: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  zenCalm: {
+    color: colors.subtext,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 8,
+  },
+  zenList: {
+    marginTop: 12,
+  },
+  zenRow: {
+    paddingVertical: 13,
+  },
+  zenRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  zenRowText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  // Bento layout
+  bentoWrap: {
+    marginTop: 8,
+    marginBottom: 20,
+    gap: 10,
+  },
+  bentoRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bentoCell: {
+    flex: 1,
+    minHeight: 92,
+    borderRadius: 18,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  bentoBig: {
+    minHeight: 128,
+    justifyContent: 'flex-start',
+  },
+  bentoWarn: {
+    borderColor: hexToRgba(colors.urgent, 0.35) || colors.urgent,
+    backgroundColor: hexToRgba(colors.urgent, 0.06) || colors.glassSoft,
+  },
+  bentoLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  bentoBigNum: {
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: 6,
+  },
+  bentoMidNum: {
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  bentoK: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bentoSub: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bentoTodayList: {
+    marginTop: 8,
+    gap: 6,
+  },
+  bentoTodayItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bentoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  bentoTodayText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bentoWide: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bentoWideCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  bentoBang: {
+    color: '#b45309',
+    fontSize: 30,
+    fontWeight: '900',
   },
   heroCard: {
     borderRadius: 20,
