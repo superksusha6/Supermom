@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FamOs · Mobile preview</title>
+<style>
+  :root{ --ink:#0f172a; --sub:#64748b; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,Segoe UI,Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(60% 40% at 10% 6%, #dfe7fb 0%, rgba(223,231,251,0) 60%),
+      radial-gradient(50% 40% at 92% 4%, #f3e6fb 0%, rgba(243,230,251,0) 55%),
+      radial-gradient(60% 50% at 82% 100%, #e2f5ef 0%, rgba(226,245,239,0) 55%),
+      #eaf0fb;
+    display:flex;flex-direction:column;align-items:center;padding:26px 16px 48px}
+  h1{font-size:20px;font-weight:800;margin:0 0 4px;letter-spacing:-.3px}
+  p.sub{margin:0 0 20px;color:var(--sub);font-size:13px;text-align:center}
+  .sizes{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;justify-content:center}
+  .sizes button{border:1px solid rgba(148,163,184,.4);background:rgba(255,255,255,.7);color:#334155;
+    font-weight:700;font-size:13px;padding:8px 16px;border-radius:999px;cursor:pointer}
+  .sizes button.on{background:#3b5bdb;border-color:#3b5bdb;color:#fff}
+
+  /* phone frame */
+  .phone{
+    width:var(--w,390px);height:var(--h,844px);max-width:94vw;
+    border-radius:52px;background:#0b1020;padding:14px;
+    box-shadow:0 40px 90px -34px rgba(30,41,90,.55), 0 6px 20px -8px rgba(30,41,90,.3);
+    position:relative;transition:width .25s ease, height .25s ease}
+  .phone::before{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    width:120px;height:26px;background:#0b1020;border-radius:0 0 16px 16px;z-index:3;pointer-events:none}
+  .screen{width:100%;height:100%;border-radius:40px;overflow:hidden;background:#eef2fb;position:relative}
+  iframe{width:100%;height:100%;border:0;display:block}
+  .reload{margin-top:18px;color:#3b5bdb;font-weight:700;font-size:13px;text-decoration:none;background:none;border:none;cursor:pointer}
+  .hint{margin-top:8px;color:var(--sub);font-size:12px;text-align:center;max-width:340px;line-height:1.5}
+</style>
+</head>
+<body>
+  <h1>FamOs — mobile preview</h1>
+  <p class="sub">The real app in a phone frame. Everything works — log in, tap around.</p>
+
+  <div class="sizes">
+    <button data-w="360" data-h="780">Small</button>
+    <button data-w="390" data-h="844" class="on">iPhone</button>
+    <button data-w="430" data-h="932">Max</button>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="screen">
+      <iframe id="app" title="FamOs mobile" src="/"></iframe>
+    </div>
+  </div>
+
+  <button class="reload" onclick="document.getElementById('app').src='/?v='+Date.now()">↻ Reload the app</button>
+  <p class="hint">Tip: this shows the phone layout without needing your phone. To use it on your real phone, just open the app link directly.</p>
+
+  <script>
+    var phone = document.getElementById('phone');
+    document.querySelectorAll('.sizes button').forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll('.sizes button').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on');
+        phone.style.setProperty('--w', b.dataset.w + 'px');
+        phone.style.setProperty('--h', b.dataset.h + 'px');
+      });
+    });
+  </script>
+</body>
+</html>
