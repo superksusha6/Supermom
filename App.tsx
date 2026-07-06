@@ -3839,6 +3839,171 @@ function AppShell() {
     setDashboardShoppingQuickAction({ type: 'add-item', token: Date.now() });
   }
 
+  // Focus-home building blocks, reused for the phone stack and the desktop
+  // two-column layout (hero + agenda in the main column; stats + quick in the rail).
+  const focusHero = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        needsYouCount > 0
+          ? `Needs you, ${needsYouCount} to review. ${needsYouItems.slice(0, 2).map((i) => i.label).join('. ')}`
+          : 'All clear, nothing pending today'
+      }
+      style={[styles.heroCard, needsYouCount > 0 && styles.heroCardWarn]}
+      onPress={() => {
+        if (needsYouCount === 1 && needsYouItems[0]) needsYouItems[0].go();
+        else { setScreen('family'); setFamilyTab('chores'); }
+      }}
+    >
+      <View style={styles.heroTopRow}>
+        <View style={[styles.heroIconWrap, needsYouCount > 0 ? styles.heroIconWrapWarn : styles.heroIconWrapOk]}>
+          <Icon name={needsYouCount > 0 ? 'alert' : 'check'} color={needsYouCount > 0 ? colors.urgent : colors.done} size={20} />
+        </View>
+        <Text style={styles.heroLabel}>{needsYouCount > 0 ? 'Needs you' : 'All clear'}</Text>
+      </View>
+      <Text style={styles.heroValue}>{needsYouCount > 0 ? `${needsYouCount} to review` : 'Nothing pending today'}</Text>
+      <Text style={styles.heroSub} numberOfLines={2}>
+        {needsYouCount > 0
+          ? needsYouItems.slice(0, 2).map((i) => i.label).join('  ·  ')
+          : 'You haven’t missed anything today.'}
+      </Text>
+    </Pressable>
+  );
+
+  const focusStats = (
+    <View style={[styles.statRow, !isMobile && styles.statGrid]}>
+      {choresToday.total > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Chores, ${choresToday.done} of ${choresToday.total} done today`}
+          style={[styles.statChip, !isMobile && styles.statChipGrid]}
+          onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
+        >
+          <Icon name="chores" color={colors.primary} size={18} />
+          <View style={styles.statCopy}>
+            <Text style={styles.statValue}>{choresToday.done}/{choresToday.total}</Text>
+            <Text style={styles.statLabel}>chores</Text>
+          </View>
+        </Pressable>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={dailyCalorieTarget > 0 ? `You, ${todayNutritionCalories} of ${dailyCalorieTarget} kilocalories today` : 'Your nutrition today'}
+        style={[styles.statChip, !isMobile && styles.statChipGrid]}
+        onPress={() => setScreen('wellness')}
+      >
+        <Icon name="meal" color={colors.primary} size={18} />
+        <View style={styles.statCopy}>
+          <Text style={styles.statValue}>
+            {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : (todayNutritionCalories || '—')}
+          </Text>
+          <Text style={styles.statLabel}>you · kcal</Text>
+        </View>
+      </Pressable>
+      {medsEnabled && medsNeedAttentionCount(medicines) > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Meds, ${medsNeedAttentionCount(medicines)} need attention`}
+          style={[styles.statChip, !isMobile && styles.statChipGrid]}
+          onPress={() => setScreen('meds')}
+        >
+          <Icon name="pill" color={colors.urgent} size={18} />
+          <View style={styles.statCopy}>
+            <Text style={styles.statValue}>{medsNeedAttentionCount(medicines)}</Text>
+            <Text style={styles.statLabel}>meds ·  soon</Text>
+          </View>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const focusAgenda = (
+    <FamCard title="Today" padded={false}>
+      {todayAgenda.length > 0 ? (
+        todayAgenda.map((item, index) => (
+          <View key={item.id}>
+            {index > 0 ? <View style={styles.agendaLine} /> : null}
+            <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted]}>
+              <Text style={styles.agendaTime}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
+              <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}`}
+                style={styles.agendaCopy}
+                onPress={() => setScreen('calendar')}
+              >
+                <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: item.done }}
+                accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
+                hitSlop={8}
+                style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
+                onPress={() => toggleEventDone(item.id)}
+              >
+                {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
+              </Pressable>
+            </View>
+          </View>
+        ))
+      ) : (
+        <View style={styles.agendaEmpty}>
+          <Text style={styles.agendaEmptyText}>No events scheduled today.</Text>
+          {nextUpcomingEvent ? (
+            <Text style={styles.agendaEmptySub}>Next up: {nextUpcomingEvent.title}</Text>
+          ) : (
+            <Text style={styles.agendaEmptySub}>Tap a day below to add a plan.</Text>
+          )}
+        </View>
+      )}
+    </FamCard>
+  );
+
+  const focusQuick = (
+    <View style={styles.quickRow}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Add meal" style={styles.quickChip} onPress={handleDashboardAddMeal}>
+        <Icon name="meal" color={colors.primary} size={18} />
+        <Text style={styles.quickChipText}>Add meal</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Shopping list" style={styles.quickChip} onPress={handleDashboardOpenShoppingList}>
+        <Icon name="cart" color={colors.primary} size={18} />
+        <Text style={styles.quickChipText}>Shopping</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.quickChip} onPress={() => setScreen('fixit')}>
+        <Icon name="wrench" color={colors.primary} size={18} />
+        <Text style={styles.quickChipText}>Fix it</Text>
+      </Pressable>
+      {medsEnabled ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => setScreen('meds')}>
+          <Icon name="pill" color={colors.primary} size={18} />
+          <Text style={styles.quickChipText} numberOfLines={1}>Meds</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const focusHome = isMobile ? (
+    <View style={styles.dashWrap}>
+      {focusHero}
+      {focusStats}
+      {focusAgenda}
+      {focusQuick}
+    </View>
+  ) : (
+    <View style={styles.dashDesktop}>
+      <View style={styles.dashMain}>
+        {focusHero}
+        {focusAgenda}
+      </View>
+      <View style={styles.dashRail}>
+        {focusStats}
+        {focusQuick}
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -4465,142 +4630,7 @@ function AppShell() {
             </View>
 
             {homeLayout === 'focus' ? (
-            <View style={styles.dashWrap}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  needsYouCount > 0
-                    ? `Needs you, ${needsYouCount} to review. ${needsYouItems.slice(0, 2).map((i) => i.label).join('. ')}`
-                    : 'All clear, nothing pending today'
-                }
-                style={[styles.heroCard, needsYouCount > 0 && styles.heroCardWarn]}
-                onPress={() => {
-                  if (needsYouCount === 1 && needsYouItems[0]) needsYouItems[0].go();
-                  else { setScreen('family'); setFamilyTab('chores'); }
-                }}
-              >
-                <View style={styles.heroTopRow}>
-                  <View style={[styles.heroIconWrap, needsYouCount > 0 ? styles.heroIconWrapWarn : styles.heroIconWrapOk]}>
-                    <Icon name={needsYouCount > 0 ? 'alert' : 'check'} color={needsYouCount > 0 ? colors.urgent : colors.done} size={20} />
-                  </View>
-                  <Text style={styles.heroLabel}>{needsYouCount > 0 ? 'Needs you' : 'All clear'}</Text>
-                </View>
-                <Text style={styles.heroValue}>{needsYouCount > 0 ? `${needsYouCount} to review` : 'Nothing pending today'}</Text>
-                <Text style={styles.heroSub} numberOfLines={2}>
-                  {needsYouCount > 0
-                    ? needsYouItems.slice(0, 2).map((i) => i.label).join('  ·  ')
-                    : 'You haven’t missed anything today.'}
-                </Text>
-              </Pressable>
-
-              <View style={styles.statRow}>
-                {choresToday.total > 0 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Chores, ${choresToday.done} of ${choresToday.total} done today`}
-                    style={styles.statChip}
-                    onPress={() => { setScreen('family'); setFamilyTab('chores'); }}
-                  >
-                    <Icon name="chores" color={colors.primary} size={18} />
-                    <View style={styles.statCopy}>
-                      <Text style={styles.statValue}>{choresToday.done}/{choresToday.total}</Text>
-                      <Text style={styles.statLabel}>chores</Text>
-                    </View>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={dailyCalorieTarget > 0 ? `You, ${todayNutritionCalories} of ${dailyCalorieTarget} kilocalories today` : 'Your nutrition today'}
-                  style={styles.statChip}
-                  onPress={() => setScreen('wellness')}
-                >
-                  <Icon name="meal" color={colors.primary} size={18} />
-                  <View style={styles.statCopy}>
-                    <Text style={styles.statValue}>
-                      {dailyCalorieTarget > 0 ? `${todayNutritionCalories}/${dailyCalorieTarget}` : (todayNutritionCalories || '—')}
-                    </Text>
-                    <Text style={styles.statLabel}>you · kcal</Text>
-                  </View>
-                </Pressable>
-                {medsEnabled && medsNeedAttentionCount(medicines) > 0 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Meds, ${medsNeedAttentionCount(medicines)} need attention`}
-                    style={styles.statChip}
-                    onPress={() => setScreen('meds')}
-                  >
-                    <Icon name="pill" color={colors.urgent} size={18} />
-                    <View style={styles.statCopy}>
-                      <Text style={styles.statValue}>{medsNeedAttentionCount(medicines)}</Text>
-                      <Text style={styles.statLabel}>meds ·  soon</Text>
-                    </View>
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <FamCard title="Today" padded={false}>
-                {todayAgenda.length > 0 ? (
-                  todayAgenda.map((item, index) => (
-                    <View key={item.id}>
-                      {index > 0 ? <View style={styles.agendaLine} /> : null}
-                      <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted]}>
-                        <Text style={styles.agendaTime}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
-                        <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`${item.time}, ${item.title}, ${item.who}`}
-                          style={styles.agendaCopy}
-                          onPress={() => setScreen('calendar')}
-                        >
-                          <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
-                          <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: item.done }}
-                          accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
-                          hitSlop={8}
-                          style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
-                          onPress={() => toggleEventDone(item.id)}
-                        >
-                          {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                ) : (
-                  <View style={styles.agendaEmpty}>
-                    <Text style={styles.agendaEmptyText}>No events scheduled today.</Text>
-                    {nextUpcomingEvent ? (
-                      <Text style={styles.agendaEmptySub}>Next up: {nextUpcomingEvent.title}</Text>
-                    ) : (
-                      <Text style={styles.agendaEmptySub}>Tap a day below to add a plan.</Text>
-                    )}
-                  </View>
-                )}
-              </FamCard>
-
-              <View style={styles.quickRow}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Add meal" style={styles.quickChip} onPress={handleDashboardAddMeal}>
-                  <Icon name="meal" color={colors.primary} size={18} />
-                  <Text style={styles.quickChipText}>Add meal</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Shopping list" style={styles.quickChip} onPress={handleDashboardOpenShoppingList}>
-                  <Icon name="cart" color={colors.primary} size={18} />
-                  <Text style={styles.quickChipText}>Shopping</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.quickChip} onPress={() => setScreen('fixit')}>
-                  <Icon name="wrench" color={colors.primary} size={18} />
-                  <Text style={styles.quickChipText}>Fix it</Text>
-                </Pressable>
-                {medsEnabled ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => setScreen('meds')}>
-                    <Icon name="pill" color={colors.primary} size={18} />
-                    <Text style={styles.quickChipText} numberOfLines={1}>Meds</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
+              focusHome
             ) : homeLayout === 'zen' ? (
               <View style={styles.zenWrap}>
                 <Text style={styles.zenDate}>{zenDate.weekday}</Text>
@@ -9095,6 +9125,29 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     marginBottom: 20,
     width: '100%',
     gap: 12,
+  },
+  dashDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 18,
+    marginTop: 12,
+    marginBottom: 20,
+    width: '100%',
+  },
+  dashMain: {
+    flex: 1.7,
+    gap: 14,
+  },
+  dashRail: {
+    flex: 1,
+    gap: 14,
+  },
+  statGrid: {
+    flexWrap: 'wrap',
+  },
+  statChipGrid: {
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   homeSwitcher: {
     flexDirection: 'row',
