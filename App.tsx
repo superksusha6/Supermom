@@ -91,6 +91,7 @@ import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
+import { MiniCalendar } from '@/components/MiniCalendar';
 import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -1485,6 +1486,7 @@ function AppShell() {
       .map((c) => ({ id: c.id, title: c.title, child: children.find((ch) => ch.id === c.childId)?.name || 'Kid' }))
       .slice(0, 3);
   }, [chores, children]);
+  const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
   const toggleEventDone = (id: string) => {
     setDoneEventIds((prev) => {
       const next = new Set(prev);
@@ -4088,6 +4090,10 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  const focusMiniCal = (
+    <MiniCalendar eventDates={eventDates} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
+  );
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusHero}
@@ -4095,6 +4101,7 @@ function AppShell() {
       {focusAgenda}
       {focusTonight}
       {focusUpcoming}
+      {focusMiniCal}
       {focusQuick}
     </View>
   ) : (
@@ -4107,6 +4114,7 @@ function AppShell() {
         {focusStats}
         {focusTonight}
         {focusUpcoming}
+        {focusMiniCal}
         {focusQuick}
       </View>
     </View>
