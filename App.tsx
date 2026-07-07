@@ -4771,14 +4771,7 @@ function AppShell() {
           <NavButton label="Chores" active={familyTab === 'chores'} onPress={() => setFamilyTab('chores')} />
         </View>
       ) : null}
-      {screen === 'calendar' ? (
-        <View style={styles.subnav}>
-          <NavButton label="Today" active={homeTab === 'today'} onPress={() => setHomeTab('today')} />
-          <NavButton label="Calendar" active={homeTab === 'calendar'} onPress={() => setHomeTab('calendar')} />
-        </View>
-      ) : null}
-        {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
-        {screen === 'calendar' && homeTab === 'calendar' ? (
+        {screen === 'calendar' ? (
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -5078,6 +5071,28 @@ function AppShell() {
 
                 setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
               }}
+            />
+        ) : null}
+
+        {screen === 'calendar' ? (
+            <NutritionScreen
+              personalProfile={personalProfile}
+              nutritionGoal={nutritionGoal}
+              onNutritionGoalChange={setNutritionGoal}
+              activityLevel={activityLevel}
+              onActivityLevelChange={setActivityLevel}
+              nutritionSex={nutritionSex}
+              onNutritionSexChange={setNutritionSex}
+              desiredWeight={desiredWeight}
+              onDesiredWeightChange={setDesiredWeight}
+              nutritionPace={nutritionPace}
+              onNutritionPaceChange={setNutritionPace}
+              calorieOverride={calorieOverride}
+              onCalorieOverrideChange={setCalorieOverride}
+              nutritionEntries={nutritionEntries}
+              onNutritionEntriesChange={handleNutritionEntriesChange}
+              customFoodPresets={customNutritionFoods}
+              onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
             />
         ) : null}
 
