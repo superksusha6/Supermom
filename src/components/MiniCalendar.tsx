@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 
-// A compact Week/Month peek calendar for Home. Event dots only (no cycle data —
-// privacy stays on the Calendar tab's "My" scope). Tapping a day calls onOpenDay
-// so Home can jump to the full calendar.
+// A compact month calendar for Home — a shrunk version of the real Calendar tab:
+// full month grid, today filled, colored event dots per day (per-event colors,
+// matching the Calendar screen). No cycle data (privacy stays on Calendar → My).
+// Tapping a day calls onOpenDay so Home can jump to the full calendar.
 type Props = {
-  eventDates: Set<string>; // 'YYYY-MM-DD' that have at least one event
+  eventColors: Map<string, string[]>; // 'YYYY-MM-DD' -> event colors for that day
   today: string; // 'YYYY-MM-DD'
   onOpenDay: (dateKey: string) => void;
 };
@@ -33,27 +34,13 @@ function mondayOf(d: Date) {
   return addDays(d, -((d.getDay() + 6) % 7));
 }
 
-export function MiniCalendar({ eventDates, today, onOpenDay }: Props) {
+export function MiniCalendar({ eventColors, today, onOpenDay }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [view, setView] = useState<'week' | 'month'>('week');
-  const [offset, setOffset] = useState(0); // weeks (week view) or months (month view) from now
+  const [offset, setOffset] = useState(0); // months from the current one
 
   const { cells, title } = useMemo(() => {
     const base = parseKey(today);
-    if (view === 'week') {
-      const start = mondayOf(addDays(base, offset * 7));
-      const days = Array.from({ length: 7 }, (_, i) => {
-        const d = addDays(start, i);
-        return { key: toKey(d), day: d.getDate(), inMonth: true };
-      });
-      const end = addDays(start, 6);
-      const label =
-        start.getMonth() === end.getMonth()
-          ? `${start.toLocaleDateString('en-US', { month: 'short' })} ${start.getDate()}–${end.getDate()}`
-          : `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-      return { cells: days, title: label };
-    }
     const first = new Date(base.getFullYear(), base.getMonth() + offset, 1);
     const gridStart = mondayOf(first);
     let days = Array.from({ length: 42 }, (_, i) => {
@@ -63,35 +50,22 @@ export function MiniCalendar({ eventDates, today, onOpenDay }: Props) {
     // Trim a trailing week that is entirely in the next month.
     if (days.slice(35).every((c) => !c.inMonth)) days = days.slice(0, 35);
     return { cells: days, title: first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
-  }, [view, offset, today]);
-
-  const switchView = (next: 'week' | 'month') => {
-    setView(next);
-    setOffset(0);
-  };
+  }, [offset, today]);
 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <View style={styles.toggle}>
-          {(['week', 'month'] as const).map((v) => (
-            <Pressable
-              key={v}
-              accessibilityRole="button"
-              accessibilityLabel={`${v} view`}
-              style={[styles.togglePill, view === v && styles.togglePillActive]}
-              onPress={() => switchView(v)}
-            >
-              <Text style={[styles.toggleText, view === v && styles.toggleTextActive]}>{v === 'week' ? 'Week' : 'Month'}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={styles.monthTitle}>{title}</Text>
         <View style={styles.nav}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Previous" hitSlop={8} style={styles.navBtn} onPress={() => setOffset((o) => o - 1)}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Previous month" hitSlop={8} style={styles.navBtn} onPress={() => setOffset((o) => o - 1)}>
             <Text style={styles.navChevron}>‹</Text>
           </Pressable>
-          <Text style={styles.navTitle}>{title}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Next" hitSlop={8} style={styles.navBtn} onPress={() => setOffset((o) => o + 1)}>
+          {offset !== 0 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="This month" hitSlop={8} style={styles.todayBtn} onPress={() => setOffset(0)}>
+              <Text style={styles.todayBtnText}>Today</Text>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Next month" hitSlop={8} style={styles.navBtn} onPress={() => setOffset((o) => o + 1)}>
             <Text style={styles.navChevron}>›</Text>
           </Pressable>
         </View>
@@ -106,19 +80,23 @@ export function MiniCalendar({ eventDates, today, onOpenDay }: Props) {
       <View style={styles.grid}>
         {cells.map((c) => {
           const isToday = c.key === today;
-          const hasEvent = eventDates.has(c.key);
+          const dots = eventColors.get(c.key) || [];
           return (
             <Pressable
               key={c.key}
               accessibilityRole="button"
-              accessibilityLabel={c.key + (hasEvent ? ', has events' : '')}
+              accessibilityLabel={c.key + (dots.length ? ', has events' : '')}
               style={styles.cell}
               onPress={() => onOpenDay(c.key)}
             >
               <View style={[styles.dayWrap, isToday && styles.dayWrapToday]}>
                 <Text style={[styles.dayText, !c.inMonth && styles.dayTextMuted, isToday && styles.dayTextToday]}>{c.day}</Text>
               </View>
-              <View style={[styles.dot, hasEvent && !isToday && styles.dotOn]} />
+              <View style={styles.dotsRow}>
+                {dots.slice(0, 3).map((color, i) => (
+                  <View key={i} style={[styles.dot, { backgroundColor: color }]} />
+                ))}
+              </View>
             </Pressable>
           );
         })}
@@ -144,52 +122,38 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
       gap: space.sm,
     },
-    toggle: {
-      flexDirection: 'row',
-      gap: 4,
-      padding: 3,
-      borderRadius: radius.pill,
-      backgroundColor: 'rgba(148,163,184,0.14)',
-    },
-    togglePill: {
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: radius.pill,
-    },
-    togglePillActive: {
-      backgroundColor: colors.primary,
-    },
-    toggleText: {
-      color: colors.subtext,
-      fontSize: 12,
+    monthTitle: {
+      color: colors.text,
+      fontSize: 15,
       fontWeight: '800',
-    },
-    toggleTextActive: {
-      color: '#ffffff',
     },
     nav: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 4,
     },
     navBtn: {
-      width: 22,
-      height: 22,
+      width: 24,
+      height: 24,
       alignItems: 'center',
       justifyContent: 'center',
     },
     navChevron: {
       color: colors.subtext,
-      fontSize: 18,
+      fontSize: 19,
       fontWeight: '800',
-      lineHeight: 20,
+      lineHeight: 21,
     },
-    navTitle: {
-      color: colors.text,
-      fontSize: 12.5,
+    todayBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: radius.pill,
+      backgroundColor: 'rgba(148,163,184,0.16)',
+    },
+    todayBtnText: {
+      color: colors.subtext,
+      fontSize: 11,
       fontWeight: '800',
-      minWidth: 92,
-      textAlign: 'center',
     },
     weekdays: {
       flexDirection: 'row',
@@ -227,20 +191,22 @@ const createStyles = (colors: ThemeColors) =>
     },
     dayTextMuted: {
       color: colors.subtext,
-      opacity: 0.5,
+      opacity: 0.45,
     },
     dayTextToday: {
       color: '#ffffff',
       fontWeight: '800',
     },
+    dotsRow: {
+      flexDirection: 'row',
+      gap: 2,
+      height: 6,
+      marginTop: 2,
+      alignItems: 'center',
+    },
     dot: {
       width: 5,
       height: 5,
       borderRadius: 3,
-      marginTop: 2,
-      backgroundColor: 'transparent',
-    },
-    dotOn: {
-      backgroundColor: colors.primary,
     },
   });

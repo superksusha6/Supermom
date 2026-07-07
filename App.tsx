@@ -1487,6 +1487,16 @@ function AppShell() {
       .slice(0, 3);
   }, [chores, children]);
   const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
+  const eventColorsByDate = useMemo(() => {
+    const map = new Map<string, string[]>();
+    events.forEach((e) => {
+      if (!e.date) return;
+      const existing = map.get(e.date) || [];
+      existing.push(e.color || colors.primary);
+      map.set(e.date, existing);
+    });
+    return map;
+  }, [events, colors.primary]);
   const toggleEventDone = (id: string) => {
     setDoneEventIds((prev) => {
       const next = new Set(prev);
@@ -3966,6 +3976,35 @@ function AppShell() {
     </View>
   );
 
+  const calGoal = dailyCalorieTarget || 0;
+  const calEaten = todayNutritionCalories;
+  const calPct = calGoal > 0 ? Math.min(1, calEaten / calGoal) : 0;
+  const calOver = calGoal > 0 && calEaten > calGoal;
+  const calRemaining = Math.max(0, calGoal - calEaten);
+  const focusCalories = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Calories today"
+      style={styles.calCard}
+      onPress={() => { setScreen('food'); setFoodTab('diary'); }}
+    >
+      <View style={styles.calHeader}>
+        <Icon name="meal" color={colors.primary} size={18} />
+        <Text style={styles.calTitle}>Calories today</Text>
+      </View>
+      <View style={styles.calNumbers}>
+        <Text style={styles.calEaten}>{calEaten}</Text>
+        <Text style={styles.calGoal}>{calGoal > 0 ? `  /  ${calGoal} kcal` : '  kcal'}</Text>
+      </View>
+      <View style={styles.calBarTrack}>
+        <View style={[styles.calBarFill, { width: `${Math.round(calPct * 100)}%` }, calOver && styles.calBarOver]} />
+      </View>
+      <Text style={styles.calFoot}>
+        {calGoal > 0 ? (calOver ? `${calEaten - calGoal} kcal over goal` : `${calRemaining} kcal left`) : 'Tap to log meals'}
+      </Text>
+    </Pressable>
+  );
+
   const focusAgenda = (
     <FamCard title="Today" padded={false}>
       {todayAgenda.length > 0 ? (
@@ -4091,13 +4130,14 @@ function AppShell() {
   ) : null;
 
   const focusMiniCal = (
-    <MiniCalendar eventDates={eventDates} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
+    <MiniCalendar eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
   );
 
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusHero}
       {focusStats}
+      {focusCalories}
       {focusAgenda}
       {focusTonight}
       {focusUpcoming}
@@ -4114,6 +4154,7 @@ function AppShell() {
       </View>
       <View style={styles.dashRail}>
         {focusStats}
+        {focusCalories}
         {focusMiniCal}
         {focusQuick}
       </View>
@@ -9154,6 +9195,61 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   statChipGrid: {
     flexBasis: '47%',
     flexGrow: 1,
+  },
+  calCard: {
+    borderRadius: 18,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calTitle: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  calNumbers: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  calEaten: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  calGoal: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  calBarTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(148,163,184,0.22)',
+    overflow: 'hidden',
+  },
+  calBarFill: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  calBarOver: {
+    backgroundColor: '#e08a2b',
+  },
+  calFoot: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   homeSwitcher: {
     flexDirection: 'row',
