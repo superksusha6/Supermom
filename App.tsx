@@ -4109,11 +4109,11 @@ function AppShell() {
       <View style={styles.dashMain}>
         {focusHero}
         {focusAgenda}
+        {focusTonight}
+        {focusUpcoming}
       </View>
       <View style={styles.dashRail}>
         {focusStats}
-        {focusTonight}
-        {focusUpcoming}
         {focusMiniCal}
         {focusQuick}
       </View>
