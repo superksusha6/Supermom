@@ -139,7 +139,7 @@ export function CalendarScreen({
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Cycle/period data is private: only ever shown in the personal "My" scope,
   // never on the shared Family view (a glance at the laptop shouldn't reveal it).
-  const isMomProfile = currentRole === 'mother' && parentLabel === 'Mom' && activeOwnerFilter === 'mother' && scope === 'my';
+  const isMomProfile = currentRole === 'mother' && parentLabel === 'Mom' && activeOwnerFilter === 'mother';
   const taskInputWrapRef = useRef<View | null>(null);
   const wasActiveRef = useRef(false);
   const selectedDateKeyRef = useRef(toDateKey(new Date()));
