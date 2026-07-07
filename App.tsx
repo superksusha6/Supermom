@@ -1830,15 +1830,20 @@ function AppShell() {
         activeMealPlanProfileKeyRef.current = 'family';
         setActiveMealPlanProfileKey('family');
       }
-      setDailyCardDateKey(todayKey);
-      setRevealingDailyCardId(null);
-      dailyCardRevealAnim.setValue(0);
-      const preferredDailyCardId =
-        localDailyCardState.selectedCardId ||
-        (preferences?.dailyCardDate === todayKey && preferences.dailyCardId ? preferences.dailyCardId : null);
-      setSelectedDailyCardId(preferredDailyCardId);
-      setDailyCardPromptShown(localDailyCardState.promptShown || !!preferredDailyCardId);
-      setDailyCardsModalOpen(false);
+      // Initialise the daily-card state from prefs ONCE (first load). Re-running
+      // this on later refreshes (token refresh, user update) would slam the
+      // just-opened "Card of the day" modal shut before the user can pick.
+      if (!preferencesLoadedRef.current) {
+        setDailyCardDateKey(todayKey);
+        setRevealingDailyCardId(null);
+        dailyCardRevealAnim.setValue(0);
+        const preferredDailyCardId =
+          localDailyCardState.selectedCardId ||
+          (preferences?.dailyCardDate === todayKey && preferences.dailyCardId ? preferences.dailyCardId : null);
+        setSelectedDailyCardId(preferredDailyCardId);
+        setDailyCardPromptShown(localDailyCardState.promptShown || !!preferredDailyCardId);
+        setDailyCardsModalOpen(false);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync preferences.';
       setTasksError(message);
