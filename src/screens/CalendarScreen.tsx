@@ -185,6 +185,23 @@ export function CalendarScreen({
   const [sleepHours, setSleepHours] = useState(0);
   const [sleepMinutes, setSleepMinutes] = useState(0);
   const [markAsPeriodStart, setMarkAsPeriodStart] = useState(false);
+  // Private cycle PIN lock. Stored locally — the threat model is a family laptop
+  // left open on the counter, not a determined attacker. Session-unlocked; the
+  // cycle re-locks on reload so a glance never exposes it.
+  const [cyclePin, setCyclePin] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.localStorage.getItem('famos_cycle_pin');
+    } catch {
+      return null;
+    }
+  });
+  const [cycleUnlocked, setCycleUnlocked] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState<null | 'unlock' | 'set' | 'remove'>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const showCycle = isMomProfile && (!cyclePin || cycleUnlocked);
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [tonePickerOpen, setTonePickerOpen] = useState(false);
@@ -401,15 +418,15 @@ export function CalendarScreen({
       .filter((section) => section.entries.length > 0);
   }, [selectedNutritionEntries]);
   const inferredCyclePeriodStartDateKeys = useMemo(() => {
-    if (!isMomProfile) return [] as string[];
+    if (!showCycle) return [] as string[];
     const flowDates = [...new Set((cycleEntries || []).filter((entry) => !!entry.flowLevel && !!entry.date).map((entry) => entry.date))].sort();
     return flowDates.filter((dateKey) => {
       const previousDateKey = toDateKey(addDays(parseDateKeyToDate(dateKey), -1));
       return !flowDates.includes(previousDateKey);
     });
-  }, [cycleEntries, isMomProfile]);
+  }, [cycleEntries, showCycle]);
   const latestCyclePeriodStartDateKey = useMemo(() => {
-    if (!isMomProfile) return null;
+    if (!showCycle) return null;
     return (
       [...(cycleEntries || [])]
         .filter((entry) => !!entry.isPeriodStart && !!entry.date)
@@ -418,15 +435,15 @@ export function CalendarScreen({
       [...inferredCyclePeriodStartDateKeys].sort((a, b) => b.localeCompare(a))[0] ||
       null
     );
-  }, [cycleEntries, inferredCyclePeriodStartDateKeys, isMomProfile]);
+  }, [cycleEntries, inferredCyclePeriodStartDateKeys, showCycle]);
   const effectiveCycleLastPeriodStart = useMemo(() => {
-    if (!isMomProfile) return undefined;
+    if (!showCycle) return undefined;
     if (localCycleLastPeriodStart && isValidBirthDateInput(localCycleLastPeriodStart)) return localCycleLastPeriodStart;
     if (cycleLastPeriodStart && isValidBirthDateInput(cycleLastPeriodStart)) return cycleLastPeriodStart;
     return latestCyclePeriodStartDateKey ? formatDateForCycleAction(latestCyclePeriodStartDateKey) : undefined;
-  }, [cycleLastPeriodStart, isMomProfile, latestCyclePeriodStartDateKey, localCycleLastPeriodStart]);
+  }, [cycleLastPeriodStart, showCycle, latestCyclePeriodStartDateKey, localCycleLastPeriodStart]);
   const effectiveCycleTrackingEnabled =
-    isMomProfile && (!!cycleTrackingEnabled || !!effectiveCycleLastPeriodStart || !!latestCyclePeriodStartDateKey);
+    showCycle && (!!cycleTrackingEnabled || !!effectiveCycleLastPeriodStart || !!latestCyclePeriodStartDateKey);
   const cycleInfoByDate = useMemo(() => {
     const map = new Map<string, { phase: 'period' | 'fertile' | 'ovulation' | 'pms'; color: string; label: string }>();
     if (!effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart || !isValidBirthDateInput(effectiveCycleLastPeriodStart)) return map;
@@ -472,20 +489,20 @@ export function CalendarScreen({
   }, [effectiveCycleTrackingEnabled, effectiveCycleLastPeriodStart, cycleLengthDays, cyclePeriodLengthDays, currentMonth]);
   const selectedCycleInfo = useMemo(() => cycleInfoByDate.get(selectedDateKey) || null, [cycleInfoByDate, selectedDateKey]);
   const selectedCycleEntry = useMemo(
-    () => (isMomProfile ? (cycleEntries || []).find((entry) => entry.date === selectedDateKey) || null : null),
-    [cycleEntries, isMomProfile, selectedDateKey],
+    () => (showCycle ? (cycleEntries || []).find((entry) => entry.date === selectedDateKey) || null : null),
+    [cycleEntries, showCycle, selectedDateKey],
   );
   const cyclePeriodEntryDates = useMemo(() => {
     const set = new Set<string>();
-    if (!isMomProfile) return set;
+    if (!showCycle) return set;
     (cycleEntries || []).forEach((entry) => {
       if (entry.flowLevel && entry.date) set.add(entry.date);
     });
     return set;
-  }, [cycleEntries, isMomProfile]);
+  }, [cycleEntries, showCycle]);
   const cyclePeriodStartDates = useMemo(() => {
     const set = new Set<string>();
-    if (!isMomProfile) return set;
+    if (!showCycle) return set;
     (cycleEntries || []).forEach((entry) => {
       if (entry.isPeriodStart && entry.date) set.add(entry.date);
     });
@@ -495,13 +512,13 @@ export function CalendarScreen({
       if (parsed) set.add(toDateKey(parsed));
     }
     return set;
-  }, [cycleEntries, effectiveCycleLastPeriodStart, inferredCyclePeriodStartDateKeys, isMomProfile]);
+  }, [cycleEntries, effectiveCycleLastPeriodStart, inferredCyclePeriodStartDateKeys, showCycle]);
   const selectedDateLabel = useMemo(() => formatDateForCycleAction(selectedDateKey), [selectedDateKey]);
   const selectedDayPlanTitle = useMemo(() => formatDayPlanTitle(selectedDateKey), [selectedDateKey]);
   const selectedDateReadableLabel = useMemo(() => formatReadableDayHeading(selectedDateKey), [selectedDateKey]);
   const isSelectedDateCurrentPeriodStart = effectiveCycleLastPeriodStart === selectedDateLabel;
   const periodReminderMessage = useMemo(() => {
-    if (!isMomProfile || !periodRemindersEnabled || !effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart) return null;
+    if (!showCycle || !periodRemindersEnabled || !effectiveCycleTrackingEnabled || !effectiveCycleLastPeriodStart) return null;
     const leadDays = Math.max(1, Math.min(3, Number(periodReminderLeadDays) || 2));
     const lastStart = parseBirthDateToDate(effectiveCycleLastPeriodStart);
     if (!lastStart) return null;
@@ -520,7 +537,7 @@ export function CalendarScreen({
     cycleLengthDays,
     effectiveCycleLastPeriodStart,
     effectiveCycleTrackingEnabled,
-    isMomProfile,
+    showCycle,
     periodReminderLeadDays,
     periodRemindersEnabled,
   ]);
@@ -1016,8 +1033,69 @@ export function CalendarScreen({
     setMarkAsPeriodStart(!!selectedCycleEntry?.isPeriodStart || isSelectedDateCurrentPeriodStart);
   }, [isSelectedDateCurrentPeriodStart, selectedCycleEntry]);
   useEffect(() => {
-    if (!isMomProfile) setCycleModalOpen(false);
-  }, [isMomProfile]);
+    if (!showCycle) setCycleModalOpen(false);
+  }, [showCycle]);
+
+  function openPinModal(mode: 'unlock' | 'set' | 'remove') {
+    setPinInput('');
+    setPinConfirm('');
+    setPinError(null);
+    setPinModalMode(mode);
+  }
+  function closePinModal() {
+    setPinModalMode(null);
+    setPinInput('');
+    setPinConfirm('');
+    setPinError(null);
+  }
+  function persistCyclePin(next: string | null) {
+    if (typeof window !== 'undefined') {
+      try {
+        if (next) window.localStorage.setItem('famos_cycle_pin', next);
+        else window.localStorage.removeItem('famos_cycle_pin');
+      } catch {
+        // ignore storage failures — lock degrades gracefully
+      }
+    }
+    setCyclePin(next);
+  }
+  function submitPin() {
+    const digits = pinInput.replace(/\D/g, '');
+    if (pinModalMode === 'unlock') {
+      if (digits === cyclePin) {
+        setCycleUnlocked(true);
+        closePinModal();
+      } else {
+        setPinError('Wrong PIN. Try again.');
+        setPinInput('');
+      }
+      return;
+    }
+    if (pinModalMode === 'set') {
+      if (digits.length < 4) {
+        setPinError('Choose a 4-digit PIN.');
+        return;
+      }
+      if (digits !== pinConfirm.replace(/\D/g, '')) {
+        setPinError('The two PINs do not match.');
+        return;
+      }
+      persistCyclePin(digits);
+      setCycleUnlocked(true);
+      closePinModal();
+      return;
+    }
+    if (pinModalMode === 'remove') {
+      if (digits === cyclePin) {
+        persistCyclePin(null);
+        setCycleUnlocked(true);
+        closePinModal();
+      } else {
+        setPinError('Wrong PIN. Try again.');
+        setPinInput('');
+      }
+    }
+  }
 
   function pickMonthYear(monthIndex: number, year: number) {
     const next = new Date(year, monthIndex, 1);
@@ -1412,7 +1490,7 @@ export function CalendarScreen({
               const cellCyclePhase = cell.dateKey ? cycleInfoByDate.get(cell.dateKey)?.phase : null;
               const isPeriodDay = !!(cell.dateKey && cyclePeriodEntryDates.has(cell.dateKey));
               const isPeriodStart = !!(cell.dateKey && cyclePeriodStartDates.has(cell.dateKey));
-              const canShowCyclePhase = isMomProfile && !isPeriodDay && !isPeriodStart;
+              const canShowCyclePhase = showCycle && !isPeriodDay && !isPeriodStart;
               const isSelected = isVisibleMonthPage && cell.dateKey === selectedDateKey;
               const isToday = cell.dateKey === todayKey;
 
@@ -1466,13 +1544,13 @@ export function CalendarScreen({
                       >
                         {cell.label}
                       </Text>
-                      {isMomProfile && cell.dateKey && cellCyclePhase === 'fertile' ? (
+                      {showCycle && cell.dateKey && cellCyclePhase === 'fertile' ? (
                         <Text style={[styles.cycleStarMarker, styles.cycleStarMarkerFertile]}>✦</Text>
                       ) : null}
-                      {isMomProfile && cell.dateKey && cellCyclePhase === 'pms' ? (
+                      {showCycle && cell.dateKey && cellCyclePhase === 'pms' ? (
                         <Text style={[styles.cycleStarMarker, styles.cycleStarMarkerPms]}>✦</Text>
                       ) : null}
-                      {isMomProfile && cell.dateKey && cellCyclePhase === 'ovulation' ? <View style={styles.cycleOvulationMarker} /> : null}
+                      {showCycle && cell.dateKey && cellCyclePhase === 'ovulation' ? <View style={styles.cycleOvulationMarker} /> : null}
                     </View>
                   </View>
                   {cell.dateKey && dayDotColorsByDate.has(cell.dateKey) ? (
@@ -1610,7 +1688,7 @@ export function CalendarScreen({
 
             <Text style={styles.dayTimelineHint}>Tap a time to add a plan</Text>
 
-            {isMomProfile ? (
+            {showCycle ? (
               <Pressable
                 style={[styles.periodDayToggle, cyclePeriodEntryDates.has(selectedDateKey) && styles.periodDayToggleActive]}
                 onPress={openCyclePanelForSelectedDay}
@@ -1830,7 +1908,7 @@ export function CalendarScreen({
             </View>
           </View>
         ) : null}
-        {isMomProfile ? (
+        {showCycle ? (
           <Pressable style={styles.cycleEntryCard} onPress={() => setCycleModalOpen(true)}>
             <View style={styles.cycleEntryHeader}>
               <Text style={styles.cycleEntryTitle}>Period tracker</Text>
@@ -1844,7 +1922,90 @@ export function CalendarScreen({
             {effectiveCycleLastPeriodStart ? <Text style={styles.cycleEntryMeta}>{`Current start: ${effectiveCycleLastPeriodStart}`}</Text> : null}
           </Pressable>
         ) : null}
+        {showCycle ? (
+          <View style={styles.cycleLockRow}>
+            {cyclePin ? (
+              <>
+                <Pressable style={styles.cycleLockChip} onPress={() => setCycleUnlocked(false)}>
+                  <Text style={styles.cycleLockChipText}>🔒  Lock now</Text>
+                </Pressable>
+                <Pressable style={styles.cycleLockChip} onPress={() => openPinModal('remove')}>
+                  <Text style={styles.cycleLockChipText}>Remove PIN</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable style={styles.cycleLockChip} onPress={() => openPinModal('set')}>
+                <Text style={styles.cycleLockChipText}>🔒  Set a PIN to hide this</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+        {isMomProfile && !showCycle ? (
+          <View style={styles.cycleLockedCard}>
+            <Text style={styles.cycleLockedIcon}>🔒</Text>
+            <Text style={styles.cycleLockedTitle}>Cycle is private</Text>
+            <Text style={styles.cycleLockedText}>Enter your PIN to view period and cycle tracking.</Text>
+            <Pressable style={styles.cycleLockedBtn} onPress={() => openPinModal('unlock')}>
+              <Text style={styles.cycleLockedBtnText}>Unlock</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </SectionCard>
+
+      <Modal visible={pinModalMode !== null} transparent animationType="fade" onRequestClose={closePinModal}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.pinModalCard]}>
+            <Text style={styles.pinModalTitle}>
+              {pinModalMode === 'unlock' ? 'Enter PIN' : pinModalMode === 'remove' ? 'Confirm PIN to remove' : 'Set a PIN'}
+            </Text>
+            <Text style={styles.pinModalHint}>
+              {pinModalMode === 'set'
+                ? 'Pick a 4-digit PIN. Your cycle stays hidden until it is entered, and re-locks each time the app reloads.'
+                : 'Your cycle data is private to this profile.'}
+            </Text>
+            <TextInput
+              style={styles.pinInput}
+              value={pinInput}
+              onChangeText={(t) => {
+                setPinError(null);
+                setPinInput(t.replace(/\D/g, '').slice(0, 4));
+              }}
+              placeholder="••••"
+              placeholderTextColor={colors.subtext}
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={4}
+              autoFocus
+            />
+            {pinModalMode === 'set' ? (
+              <TextInput
+                style={styles.pinInput}
+                value={pinConfirm}
+                onChangeText={(t) => {
+                  setPinError(null);
+                  setPinConfirm(t.replace(/\D/g, '').slice(0, 4));
+                }}
+                placeholder="Confirm PIN"
+                placeholderTextColor={colors.subtext}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+              />
+            ) : null}
+            {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
+            <View style={styles.pinModalActions}>
+              <Pressable style={styles.pinModalCancel} onPress={closePinModal}>
+                <Text style={styles.pinModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.pinModalSubmit} onPress={submitPin}>
+                <Text style={styles.pinModalSubmitText}>
+                  {pinModalMode === 'unlock' ? 'Unlock' : pinModalMode === 'remove' ? 'Remove PIN' : 'Save PIN'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={cycleModalOpen} transparent animationType="fade" onRequestClose={() => setCycleModalOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -4914,6 +5075,126 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.primary,
     fontSize: 11,
     fontWeight: '700',
+  },
+  cycleLockRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  cycleLockChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+  },
+  cycleLockChipText: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cycleLockedCard: {
+    marginTop: 12,
+    padding: 22,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+    alignItems: 'center',
+    gap: 6,
+  },
+  cycleLockedIcon: {
+    fontSize: 26,
+  },
+  cycleLockedTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  cycleLockedText: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  cycleLockedBtn: {
+    marginTop: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  cycleLockedBtnText: {
+    color: '#ffffff',
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  pinModalCard: {
+    gap: 12,
+    maxWidth: 340,
+    alignSelf: 'center',
+  },
+  pinModalTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  pinModalHint: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  pinInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 22,
+    letterSpacing: 8,
+    textAlign: 'center',
+    color: colors.text,
+    backgroundColor: colors.glassSoft,
+  },
+  pinError: {
+    color: '#e11d48',
+    fontSize: 12.5,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  pinModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  pinModalCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  pinModalCancelText: {
+    color: colors.subtext,
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  pinModalSubmit: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  pinModalSubmitText: {
+    color: '#ffffff',
+    fontSize: 13.5,
+    fontWeight: '800',
   },
   guidanceCard: {
     marginTop: 12,
