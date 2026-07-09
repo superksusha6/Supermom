@@ -4,10 +4,10 @@ import { useCameraPermissions } from 'expo-camera';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
-import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
+import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, recipeToPreset, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { lookupNutritionBarcode, normalizeNutritionSearchText, searchNutritionCatalog } from '@/lib/nutritionCatalog';
 import { analyzeMealPhoto, estimateMealByText } from '@/lib/mealVision';
-import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, Recipe } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -28,6 +28,7 @@ type Props = {
   onNutritionEntriesChange: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
   customFoodPresets: CustomNutritionFood[];
   onCustomFoodPresetsChange: Dispatch<SetStateAction<CustomNutritionFood[]>>;
+  recipes?: Recipe[];
   quickActionRequest?: { type: 'add-meal'; mealType: NutritionMealType; token: number } | null;
   renderInlineContent?: boolean;
 };
@@ -86,6 +87,7 @@ export function NutritionScreen({
   onNutritionEntriesChange,
   customFoodPresets,
   onCustomFoodPresetsChange,
+  recipes,
   quickActionRequest,
   renderInlineContent = true,
 }: Props) {
@@ -101,7 +103,7 @@ export function NutritionScreen({
   const [activeMealType, setActiveMealType] = useState<NutritionMealType | null>(null);
   const [expandedMeal, setExpandedMeal] = useState<NutritionMealType | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [addTab, setAddTab] = useState<'search' | 'recent' | 'frequent' | 'saved'>('recent');
+  const [addTab, setAddTab] = useState<'search' | 'recent' | 'frequent' | 'saved' | 'recipes'>('recent');
   const [sessionAddedCount, setSessionAddedCount] = useState(0);
   const [sessionAddedName, setSessionAddedName] = useState('');
   const [quickAddedIds, setQuickAddedIds] = useState<string[]>([]);
@@ -179,9 +181,10 @@ export function NutritionScreen({
       totals: getNutritionTotals(entries),
     };
   });
+  const recipePresets = useMemo(() => (recipes || []).map(recipeToPreset), [recipes]);
   const allFoodPresets = useMemo(
-    () => [...customFoodPresets.map(customNutritionFoodToPreset), ...NUTRITION_FOOD_PRESETS],
-    [customFoodPresets],
+    () => [...customFoodPresets.map(customNutritionFoodToPreset), ...recipePresets, ...NUTRITION_FOOD_PRESETS],
+    [customFoodPresets, recipePresets],
   );
   const mealTypeUsageCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -827,12 +830,15 @@ export function NutritionScreen({
 
   function renderPresetRow(item: NutritionFoodPreset, nameOnly = false) {
     const isLiquid = (item.baseMode || '100g') === '100ml';
+    const isServing = (item.baseMode || '100g') === 'serving';
     const usePiece = !!item.pieceLabel && !!item.servingGrams;
-    const portionLabel = usePiece
-      ? `${item.pieceLabel} (${item.servingGrams} ${isLiquid ? 'ml' : 'g'})`
-      : isLiquid
-        ? '100 ml'
-        : '100 g';
+    const portionLabel = isServing
+      ? '1 serving'
+      : usePiece
+        ? `${item.pieceLabel} (${item.servingGrams} ${isLiquid ? 'ml' : 'g'})`
+        : isLiquid
+          ? '100 ml'
+          : '100 g';
     const rowKcal = usePiece
       ? Math.round((item.caloriesPer100g * (item.servingGrams as number)) / 100)
       : Math.round(item.caloriesPer100g);
@@ -1525,6 +1531,7 @@ export function NutritionScreen({
                       {([
                         { key: 'recent', label: 'Recent' },
                         { key: 'saved', label: 'Saved' },
+                        ...(recipePresets.length ? [{ key: 'recipes' as const, label: 'Recipes' }] : []),
                       ] as const).map((tab) => (
                         <Pressable
                           key={tab.key}
@@ -1597,6 +1604,15 @@ export function NutritionScreen({
                           savedPresets.map((p) => renderPresetRow(p, false))
                         ) : (
                           <Text style={styles.catalogEmpty}>No saved foods yet — scanned and custom foods are saved here.</Text>
+                        )}
+                      </View>
+                    ) : null}
+                    {!foodSearch.trim() && addTab === 'recipes' ? (
+                      <View style={styles.presetListWrap}>
+                        {recipePresets.length ? (
+                          recipePresets.map((p) => renderPresetRow(p, false))
+                        ) : (
+                          <Text style={styles.catalogEmpty}>No recipes yet — dishes from Food → Recipes show up here to log as one serving.</Text>
                         )}
                       </View>
                     ) : null}

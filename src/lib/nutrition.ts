@@ -1,4 +1,4 @@
-import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMacros, NutritionPace, NutritionSex } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMacros, NutritionPace, NutritionSex, Recipe } from '@/types/app';
 
 export type NutritionFoodPreset = {
   id: string;
@@ -336,6 +336,27 @@ export function getNutritionValuesForGrams(preset: NutritionFoodPreset, gramsVal
     protein: String(Math.round(preset.proteinPer100g * multiplier * 10) / 10),
     fat: String(Math.round(preset.fatPer100g * multiplier * 10) / 10),
     carbs: String(Math.round(preset.carbsPer100g * multiplier * 10) / 10),
+  };
+}
+
+// A recipe from the app's own catalog, logged as "1 serving" using its
+// pre-computed per-serving macros. baseMode 'serving' means the logged amount
+// is the number of servings (default 1), so 1 serving = nutritionPerServing.
+export function recipeToPreset(recipe: Recipe): NutritionFoodPreset {
+  const n = recipe.nutritionPerServing;
+  return {
+    id: `recipe-${recipe.id}`,
+    name: recipe.title,
+    brand: 'Recipe',
+    baseAmount: 'per 1 serving',
+    baseMode: 'serving',
+    baseQuantity: 1,
+    sourceLabel: 'Recipe',
+    aliases: [recipe.cuisine, recipe.subtype, ...(recipe.tags || [])].filter(Boolean) as string[],
+    caloriesPer100g: Math.round(n.calories),
+    proteinPer100g: Math.round(n.protein * 10) / 10,
+    fatPer100g: Math.round(n.fat * 10) / 10,
+    carbsPer100g: Math.round(n.carbs * 10) / 10,
   };
 }
 

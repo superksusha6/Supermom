@@ -4508,6 +4508,7 @@ function AppShell() {
         onNutritionEntriesChange={handleNutritionEntriesChange}
         customFoodPresets={customNutritionFoods}
         onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
+        recipes={recipes}
         quickActionRequest={dashboardNutritionQuickAction}
         renderInlineContent={false}
       />
@@ -5093,6 +5094,7 @@ function AppShell() {
               onNutritionEntriesChange={handleNutritionEntriesChange}
               customFoodPresets={customNutritionFoods}
               onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
+              recipes={recipes}
             />
         ) : null}
 
@@ -5115,6 +5117,7 @@ function AppShell() {
               onNutritionEntriesChange={handleNutritionEntriesChange}
               customFoodPresets={customNutritionFoods}
               onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
+              recipes={recipes}
             />
         ) : null}
 
