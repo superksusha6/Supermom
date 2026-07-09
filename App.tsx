@@ -78,7 +78,7 @@ import {
   updateRecipe,
   updateTaskStatus,
 } from '@/lib/tasks';
-import { getNutritionPlan } from '@/lib/nutrition';
+import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
 import { choreStatus } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
@@ -3976,33 +3976,175 @@ function AppShell() {
     </View>
   );
 
+  const cycleDay = useMemo(() => {
+    if (!personalProfile.cycleTrackingEnabled || !personalProfile.cycleLastPeriodStart) return null;
+    const start = parseBirthDate(personalProfile.cycleLastPeriodStart);
+    if (Number.isNaN(start.getTime())) return null;
+    const today = parseDateKey(todayDateKey);
+    const daysSince = Math.floor((today.getTime() - start.getTime()) / 86400000);
+    if (daysSince < 0) return null;
+    const len = Math.max(20, Math.min(45, Number(personalProfile.cycleLengthDays) || 28));
+    return (daysSince % len) + 1;
+  }, [personalProfile.cycleTrackingEnabled, personalProfile.cycleLastPeriodStart, personalProfile.cycleLengthDays, todayDateKey]);
+  const macroTargets = useMemo(
+    () =>
+      getNutritionPlan({
+        dateOfBirth: personalProfile.dateOfBirth,
+        heightCm: personalProfile.heightCm,
+        weightKg: personalProfile.weightKg,
+        goal: nutritionGoal,
+        activityLevel,
+        sex: nutritionSex,
+        calorieOverride,
+        desiredWeightKg: desiredWeight,
+        pace: nutritionPace,
+      }),
+    [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace],
+  );
+  const eatenTodayMacros = useMemo(
+    () => getNutritionTotals(nutritionEntries.filter((e) => e.date === todayDateKey)),
+    [nutritionEntries, todayDateKey],
+  );
   const calGoal = dailyCalorieTarget || 0;
   const calEaten = todayNutritionCalories;
   const calPct = calGoal > 0 ? Math.min(1, calEaten / calGoal) : 0;
   const calOver = calGoal > 0 && calEaten > calGoal;
   const calRemaining = Math.max(0, calGoal - calEaten);
+  const proteinLeft = Math.max(0, Math.round((macroTargets?.protein || 0) - eatenTodayMacros.protein));
+  const carbsLeft = Math.max(0, Math.round((macroTargets?.carbs || 0) - eatenTodayMacros.carbs));
+  const fatLeft = Math.max(0, Math.round((macroTargets?.fat || 0) - eatenTodayMacros.fat));
   const focusCalories = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Calories today"
+      accessibilityLabel={calGoal > 0 ? `Calories, ${calRemaining} left. Tap to log food.` : 'Log food'}
       style={styles.calCard}
       onPress={() => { setScreen('food'); setFoodTab('diary'); }}
     >
       <View style={styles.calHeader}>
-        <Icon name="meal" color={colors.primary} size={18} />
-        <Text style={styles.calTitle}>Calories today</Text>
+        <View style={styles.calHeaderLeft}>
+          <Icon name="meal" color={colors.primary} size={18} />
+          <Text style={styles.calTitle}>Calories</Text>
+        </View>
+        <Text style={styles.calLogLink}>Log food</Text>
       </View>
       <View style={styles.calNumbers}>
-        <Text style={styles.calEaten}>{calEaten}</Text>
-        <Text style={styles.calGoal}>{calGoal > 0 ? `  /  ${calGoal} kcal` : '  kcal'}</Text>
+        <Text style={styles.calEaten}>{calGoal > 0 ? calRemaining : calEaten}</Text>
+        <Text style={styles.calGoal}>{calGoal > 0 ? (calOver ? ' kcal over' : ' kcal left') : ' kcal'}</Text>
       </View>
       <View style={styles.calBarTrack}>
         <View style={[styles.calBarFill, { width: `${Math.round(calPct * 100)}%` }, calOver && styles.calBarOver]} />
       </View>
-      <Text style={styles.calFoot}>
-        {calGoal > 0 ? (calOver ? `${calEaten - calGoal} kcal over goal` : `${calRemaining} kcal left`) : 'Tap to log meals'}
-      </Text>
+      {calGoal > 0 && (proteinLeft + carbsLeft + fatLeft > 0) ? (
+        <Text style={styles.calFoot}>
+          <Text style={styles.calFootLabel}>Left to goal   </Text>
+          {`P ${proteinLeft}g · C ${carbsLeft}g · F ${fatLeft}g`}
+        </Text>
+      ) : (
+        <Text style={styles.calFoot}>{calGoal > 0 ? 'Goal reached 🎉' : 'Tap to log meals'}</Text>
+      )}
     </Pressable>
+  );
+
+  const nowLabel = (() => {
+    const d = new Date();
+    return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  })();
+  const focusPlanner = (
+    <View style={styles.plannerCard}>
+      <View style={styles.plannerHead}>
+        <Text style={styles.plannerTitle}>Today</Text>
+        <View style={[styles.trackChip, needsYouCount === 0 ? styles.trackChipOk : styles.trackChipWarn]}>
+          <Text style={[styles.trackChipText, needsYouCount === 0 ? styles.trackChipTextOk : styles.trackChipTextWarn]}>
+            {needsYouCount === 0 ? '✓ On track' : `${needsYouCount} needs you`}
+          </Text>
+        </View>
+      </View>
+      {cycleDay ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Cycle day ${cycleDay}. Open calendar.`}
+          style={styles.cycleChip}
+          onPress={() => setHomeTab('calendar')}
+        >
+          <View style={styles.cycleDot} />
+          <Text style={styles.cycleChipText}>Cycle · Day {cycleDay}</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.nowLine}>
+        <Text style={styles.nowText}>now · {nowLabel}</Text>
+        <View style={styles.nowRule} />
+      </View>
+      {todayAgenda.length > 0 ? (
+        todayAgenda.map((item, index) => (
+          <View key={item.id}>
+            {index > 0 ? <View style={styles.agendaLine} /> : null}
+            <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted, item.isNext && styles.agendaRowNext]}>
+              <Text style={[styles.agendaTime, item.isNext && styles.agendaTimeNext]}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
+              <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}`}
+                style={styles.agendaCopy}
+                onPress={() => setHomeTab('calendar')}
+              >
+                <View style={styles.agendaTitleRow}>
+                  <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
+                  {item.isNext ? <Text style={styles.agendaNextChip}>NEXT</Text> : null}
+                </View>
+                <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: item.done }}
+                accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
+                hitSlop={8}
+                style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
+                onPress={() => toggleEventDone(item.id)}
+              >
+                {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
+              </Pressable>
+            </View>
+          </View>
+        ))
+      ) : (
+        <Pressable style={styles.agendaEmpty} onPress={() => setHomeTab('calendar')}>
+          <Text style={styles.agendaEmptyText}>No events scheduled today.</Text>
+          {nextUpcomingEvent ? (
+            <Text style={styles.agendaEmptySub}>Next up: {nextUpcomingEvent.title}</Text>
+          ) : (
+            <Text style={styles.agendaEmptySub}>Tap to open the calendar and add a plan.</Text>
+          )}
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const focusNeeds = (
+    <FamCard title={needsYouCount === 0 ? 'Needs you' : `Needs you · ${needsYouCount}`} padded={false}>
+      {needsYouItems.length > 0 ? (
+        needsYouItems.slice(0, 5).map((item, i) => (
+          <View key={`${item.label}-${i}`}>
+            {i > 0 ? <View style={styles.agendaLine} /> : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              style={styles.needsRow}
+              onPress={item.go}
+            >
+              <View style={styles.needsBadge}>
+                <Icon name="alert" color={statusColor(colors, 'soon')} size={15} />
+              </View>
+              <Text style={styles.needsText} numberOfLines={2}>{item.label}</Text>
+              <Icon name="chevron" color={colors.subtext} size={16} />
+            </Pressable>
+          </View>
+        ))
+      ) : (
+        <View style={styles.needsEmpty}>
+          <Text style={styles.needsEmptyText}>All clear — nothing needs you right now.</Text>
+        </View>
+      )}
+    </FamCard>
   );
 
   const focusAgenda = (
@@ -4135,28 +4277,20 @@ function AppShell() {
 
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
-      {focusHero}
-      {focusStats}
+      {focusPlanner}
       {focusCalories}
-      {focusAgenda}
-      {focusTonight}
-      {focusUpcoming}
+      {focusNeeds}
       {focusMiniCal}
-      {focusQuick}
     </View>
   ) : (
     <View style={styles.dashDesktop}>
       <View style={styles.dashMain}>
-        {focusHero}
-        {focusAgenda}
-        {focusTonight}
-        {focusUpcoming}
+        {focusPlanner}
+        {focusCalories}
       </View>
       <View style={styles.dashRail}>
-        {focusStats}
-        {focusCalories}
         {focusMiniCal}
-        {focusQuick}
+        {focusNeeds}
       </View>
     </View>
   );
@@ -4772,7 +4906,14 @@ function AppShell() {
           <NavButton label="Chores" active={familyTab === 'chores'} onPress={() => setFamilyTab('chores')} />
         </View>
       ) : null}
-        {screen === 'calendar' ? (
+        {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
+        {screen === 'calendar' && homeTab === 'calendar' ? (
+          <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
+            <Icon name="chevron" color={colors.primary} size={16} />
+            <Text style={styles.calBackText}>Back to home</Text>
+          </Pressable>
+        ) : null}
+        {screen === 'calendar' && homeTab === 'calendar' ? (
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -5072,29 +5213,6 @@ function AppShell() {
 
                 setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
               }}
-            />
-        ) : null}
-
-        {screen === 'calendar' ? (
-            <NutritionScreen
-              personalProfile={personalProfile}
-              nutritionGoal={nutritionGoal}
-              onNutritionGoalChange={setNutritionGoal}
-              activityLevel={activityLevel}
-              onActivityLevelChange={setActivityLevel}
-              nutritionSex={nutritionSex}
-              onNutritionSexChange={setNutritionSex}
-              desiredWeight={desiredWeight}
-              onDesiredWeightChange={setDesiredWeight}
-              nutritionPace={nutritionPace}
-              onNutritionPaceChange={setNutritionPace}
-              calorieOverride={calorieOverride}
-              onCalorieOverrideChange={setCalorieOverride}
-              nutritionEntries={nutritionEntries}
-              onNutritionEntriesChange={handleNutritionEntriesChange}
-              customFoodPresets={customNutritionFoods}
-              onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
-              recipes={recipes}
             />
         ) : null}
 
@@ -9226,7 +9344,17 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   calHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  calLogLink: {
+    color: colors.primary,
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   calTitle: {
     color: colors.subtext,
@@ -9235,6 +9363,95 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
+  calFootLabel: {
+    color: colors.subtext,
+    fontWeight: '800',
+  },
+  plannerCard: {
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  plannerHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  plannerTitle: {
+    color: colors.text,
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  trackChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  trackChipOk: { backgroundColor: '#e9f8ef' },
+  trackChipWarn: { backgroundColor: '#fdf2e3' },
+  trackChipText: { fontSize: 11.5, fontWeight: '800' },
+  trackChipTextOk: { color: '#16a34a' },
+  trackChipTextWarn: { color: '#e08a2b' },
+  cycleChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#fdeef4',
+  },
+  cycleDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#be2f5e' },
+  cycleChipText: { color: '#be2f5e', fontSize: 12, fontWeight: '800' },
+  nowLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  nowText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
+  nowRule: { flex: 1, height: 2, borderRadius: 2, backgroundColor: hexToRgba(colors.primary, 0.25) || colors.border },
+  needsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  needsBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fdf2e3',
+  },
+  needsText: { flex: 1, color: colors.text, fontSize: 13.5, fontWeight: '700' },
+  needsEmpty: { paddingHorizontal: 16, paddingVertical: 16 },
+  needsEmptyText: { color: colors.subtext, fontSize: 13, fontWeight: '600' },
+  calBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+    borderRadius: 999,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  calBackText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   calNumbers: {
     flexDirection: 'row',
     alignItems: 'baseline',
