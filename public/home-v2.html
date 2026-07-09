@@ -212,8 +212,8 @@
 </style>
 </head>
 <body>
-  <div class="page-title">FamOs — new home (concept v2, refined)</div>
-  <div class="page-sub">Hybrid nav · “Today” hero with cycle + on-track line · quick-add · state-aware calories · split “Needs you”. Static mockup.</div>
+  <div class="page-title">FamOs — new home (concept v3, decluttered)</div>
+  <div class="page-sub">Ruthless text edit: date shown once, summary line gone, cycle shortened, weather/next reduced to marks. Macros + missing items stay in this solo view (auto-hide once staff is added). Static mockup.</div>
 
   <!-- ================= DESKTOP ================= -->
   <div class="section-label">Web · desktop</div>
@@ -249,7 +249,7 @@
         <div class="topbar">
           <div>
             <div class="greet">Good afternoon, Elena</div>
-            <div class="datenav"><span class="arw">‹</span> Today · Tue, Jul 7 <span class="arw">›</span></div>
+            <div class="datenav"><span class="arw">‹</span> Tue, Jul 7 <span class="arw">›</span></div>
           </div>
           <div class="topbar-tools">
             <div class="search tap"><svg class="ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.6-3.6"/></svg>Search everything<span class="kbd">⌘K</span></div>
@@ -274,29 +274,28 @@
           <section class="col-main">
             <div class="card hero">
               <div class="hero-h">
-                <b>Today</b><span>Tuesday, Jul 7</span>
+                <b>Today</b>
                 <div class="ontrack"><svg class="ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M5 13l4 4L19 7"/></svg>On track</div>
               </div>
-              <div class="summary">1 dinner to prep · 2 events · 620 kcal left — you’re on track.</div>
 
               <div class="chips">
-                <div class="chip cycle"><span class="d"></span>Cycle · Day 18 · fertile window in 3 days</div>
-                <div class="chip"><svg viewBox="0 0 24 24" class="ic-sm" style="width:14px;height:14px;color:#64748b"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>18°, rain from 16:00</div>
+                <div class="chip cycle"><svg viewBox="0 0 24 24" class="ic-sm" style="width:13px;height:13px;color:#be2f5e"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>Cycle · Day 18</div>
+                <div class="chip"><svg viewBox="0 0 24 24" class="ic-sm" style="width:14px;height:14px;color:#64748b"><path d="M17 17a4 4 0 000-8 6 6 0 10-11.7 2"/><path d="M3 17h14"/></svg>18°</div>
               </div>
 
               <div class="dinner">
                 <div class="dinner-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3v8a2 2 0 002 2v8"/><path d="M9 3v6"/><path d="M13 3c0 3 2 4 2 7v11"/></svg></div>
                 <div>
                   <div class="t">Dinner: meat balls & buckwheat</div>
-                  <div class="m">Missing: <b>eggs, onion, buckwheat</b></div>
+                  <div class="m">eggs · onion · buckwheat</div>
                 </div>
-                <div class="addlist tap">+ Add to list</div>
+                <div class="addlist tap" style="font-size:16px;padding:7px 14px">+</div>
               </div>
 
               <div class="nowline"><span>now · 14:20</span><span class="ln"></span></div>
               <div class="ev">
                 <div class="time num-t">16:00</div>
-                <div class="body"><div class="ttl">Boxing <span class="next-chip">NEXT · in 1h 40m</span></div><div class="who">Roman &nbsp;·&nbsp; <span class="wx">☂ take a coat</span></div></div>
+                <div class="body"><div class="ttl">Boxing <span class="next-chip">in 1h 40m</span></div><div class="who">Roman &nbsp;·&nbsp; <span class="wx">☂</span></div></div>
                 <div class="pin" style="color:#e11d48"></div>
               </div>
               <div class="ev">
@@ -311,9 +310,8 @@
                   <div class="cal-log tap"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Log food</div>
                 </div>
                 <div class="cal-num num-t">620 <small>kcal left</small></div>
-                <span class="cal-flip tap">Show eaten →</span>
                 <div class="bar"><i></i><span class="tick"></span></div>
-                <div class="macro"><span>Left of <b>2,000</b></span><span>P <b>78</b></span><span>C <b>140</b></span><span>F <b>45</b></span></div>
+                <div class="macro"><span>P <b>78</b></span><span>C <b>140</b></span><span>F <b>45</b></span></div>
               </div>
             </div>
           </section>
@@ -358,7 +356,7 @@
       </main>
     </div>
   </div>
-  <div class="cap"><b>Web refinements:</b> ≡ removed (its items now live in the sidebar “Manage” group + account footer); “Add” is a quick-capture menu top-right; a notifications bell mirrors the “Needs you” count. Hero gains an on-track summary + a persistent cycle chip and weather; missing dinner items are spelled out; the calorie gauge shows a goal tick + macros; “Needs you” is split Urgent/Later with hover actions; hover/motion, a live “now” line, and tabular numbers throughout.</div>
+  <div class="cap"><b>Declutter pass (v3):</b> the summary sentence is gone, the date shows once (in the nav, not repeated in the card), “on track” is a single quiet chip, the cycle chip is just “Day 18” + a phase mark (no “fertile window”), weather collapses to “18°” with only a ☂ where it’s actionable, and the “NEXT” label drops to just “in 1h 40m”. Macros (P·C·F) and the missing dinner items stay visible in this <b>solo</b> view because you cook & track yourself — they auto-collapse once household staff is added (delegation buttons come later with roles). ~50% less text, same information.</div>
 
   <!-- ================= PHONE ================= -->
   <div class="section-label">Phone</div>
@@ -375,8 +373,8 @@
           </div>
 
           <div class="p-chips">
-            <div class="chip cycle"><span class="d"></span>Cycle · Day 18</div>
-            <div class="chip">18°, rain 16:00</div>
+            <div class="chip cycle"><svg viewBox="0 0 24 24" class="ic-sm" style="width:12px;height:12px;color:#be2f5e"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>Cycle · Day 18</div>
+            <div class="chip">18°</div>
           </div>
 
           <div class="p-cal">
@@ -385,16 +383,16 @@
               <div class="flip">Log food +</div>
             </div>
             <div class="bar"><i></i><span class="tick"></span></div>
-            <div class="macro"><span>of <b>2,000</b></span><span>P <b>78</b></span><span>C <b>140</b></span><span>F <b>45</b></span></div>
+            <div class="macro"><span>P <b>78</b></span><span>C <b>140</b></span><span>F <b>45</b></span></div>
           </div>
 
           <div class="p-hero">
             <div class="hh">Today <span class="ot">On track</span></div>
             <div class="p-dinner">
               <div class="dinner-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3v8a2 2 0 002 2v8"/><path d="M9 3v6"/><path d="M13 3c0 3 2 4 2 7v11"/></svg></div>
-              <div><div class="t">Dinner: meat balls & buckwheat</div><div class="m">Missing: eggs, onion, buckwheat</div></div>
+              <div><div class="t">Dinner: meat balls & buckwheat</div><div class="m">eggs · onion · buckwheat</div></div>
             </div>
-            <div class="p-ev"><div class="tm num-t">16:00</div><div style="flex:1"><div class="tt">Boxing · <span style="color:#3b5bdb;font-size:11px;font-weight:800">NEXT</span></div><div class="wh">Roman · ☂ coat</div></div><div class="pin" style="color:#e11d48"></div></div>
+            <div class="p-ev"><div class="tm num-t">16:00</div><div style="flex:1"><div class="tt">Boxing · <span style="color:#3b5bdb;font-size:11px;font-weight:800">in 1h 40m</span></div><div class="wh">Roman · ☂</div></div><div class="pin" style="color:#e11d48"></div></div>
             <div class="p-ev"><div class="tm num-t">18:30</div><div style="flex:1"><div class="tt">Dance</div><div class="wh">Oliviia</div></div><div class="pin" style="color:#8b5cf6"></div></div>
           </div>
 
