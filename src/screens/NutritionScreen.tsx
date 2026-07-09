@@ -1450,6 +1450,10 @@ export function NutritionScreen({
                     <View style={styles.searchInputWrap}>
                       <TextInput
                         placeholder="Search foods"
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        autoComplete="off"
                         style={[styles.input, styles.searchInput]}
                         value={foodSearch}
                         onChangeText={(text) => {

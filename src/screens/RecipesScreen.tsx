@@ -1132,6 +1132,10 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                       <TextInput
                         placeholder="Product"
                         placeholderTextColor={colors.subtext}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        autoComplete="off"
                         style={[styles.builderInput, styles.builderInputWide, isMobile && styles.builderInputWideMobile]}
                         value={row.query}
                         onChangeText={(text) =>
