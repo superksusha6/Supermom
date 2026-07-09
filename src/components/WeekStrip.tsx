@@ -77,29 +77,10 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
     if (d) setLabel(d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
   };
 
-  const lastOffset = useRef(0);
-  const step = (dir: number) => {
-    // Move by a week from the current leftmost cell.
-    if (cell <= 0) return;
-    const leftIndex = Math.round(lastOffset.current / cell);
-    scrollToIndex(leftIndex + dir * 7, true);
-  };
-
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>{label}</Text>
-        <View style={styles.nav}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Previous week" hitSlop={8} style={styles.navBtn} onPress={() => step(-1)}>
-            <Text style={styles.chevron}>‹</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="This week" hitSlop={8} style={styles.todayBtn} onPress={() => scrollToIndex(Math.max(0, todayIndex - 1), true)}>
-            <Text style={styles.todayText}>Today</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Next week" hitSlop={8} style={styles.navBtn} onPress={() => step(1)}>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        </View>
       </View>
 
       <View style={styles.stripWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -110,10 +91,7 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
             scrollEventThrottle={16}
-            onScroll={(e) => {
-              lastOffset.current = e.nativeEvent.contentOffset.x;
-              onScroll(e);
-            }}
+            onScroll={onScroll}
           >
             {days.map((d) => {
               const isToday = d.key === today;
