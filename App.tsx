@@ -92,6 +92,7 @@ import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
 import { MiniCalendar } from '@/components/MiniCalendar';
+import { WeekStrip } from '@/components/WeekStrip';
 import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -4272,7 +4273,7 @@ function AppShell() {
   ) : null;
 
   const focusMiniCal = (
-    <MiniCalendar eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
+    <WeekStrip eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
   );
 
   const focusHome = isMobile ? (
