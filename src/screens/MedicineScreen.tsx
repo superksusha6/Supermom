@@ -69,7 +69,7 @@ async function shrinkDataUrl(dataUrl: string, maxSize = 1400, quality = 0.6): Pr
 export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useMemo(() => createStyles(colors, isMobile), [colors, isMobile]);
 
   const [filter, setFilter] = useState<FilterKey>('all');

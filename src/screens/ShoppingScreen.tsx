@@ -597,7 +597,7 @@ export function ShoppingScreen({
   const { themeName } = useTheme();
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useReactMemo(() => createStyles(colors, themeName), [colors, themeName]);
   const [filter, setFilter] = useState<Filter>('active');
   const [shoppingView, setShoppingView] = useState<ShoppingView>('list');

@@ -97,7 +97,7 @@ export function NutritionScreen({
   const usdaApiKey = process.env.EXPO_PUBLIC_USDA_API_KEY || 'DEMO_KEY';
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useMemo(() => createStyles(colors, isMobile), [colors, isMobile]);
   const hasProfileInputs = Boolean(personalProfile.dateOfBirth && personalProfile.heightCm && personalProfile.weightKg);
   const [activeMealType, setActiveMealType] = useState<NutritionMealType | null>(null);

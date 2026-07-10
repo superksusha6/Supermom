@@ -705,7 +705,7 @@ export default function App() {
 function AppShell() {
   const { colors, themeName, setThemeName } = useTheme();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useMemo(() => createStyles(colors, themeName, isMobile), [colors, themeName, isMobile]);
   const initialDailyCardStateRef = useRef<DailyCardLocalState>(loadLocalDailyCardState());
   const initialChildDraft = useMemo(
@@ -4299,6 +4299,7 @@ function AppShell() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
+      <View style={styles.appFrame}>
       <View pointerEvents="none" style={styles.bgDecor}>
         <View style={styles.bgOrbA} />
         <View style={styles.bgOrbB} />
@@ -6603,6 +6604,7 @@ function AppShell() {
           </View>
         </View>
       </Modal>
+      </View>
     </SafeAreaView>
   );
 }
@@ -6791,7 +6793,7 @@ function buildMonthCells(monthDate: Date) {
 function NavButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const { colors, themeName } = useTheme();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useMemo(() => createStyles(colors, themeName, isMobile), [colors, themeName, isMobile]);
   return (
     <Pressable onPress={onPress} style={[styles.navBtn, active && styles.navBtnActive]}>
@@ -8169,7 +8171,19 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   return StyleSheet.create({
   safe: {
     flex: 1,
+    backgroundColor: '#e7ecf6',
+    alignItems: 'center',
+  },
+  appFrame: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
     backgroundColor: colors.bg,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 24px 70px -30px rgba(15,23,42,0.45)' } as any)
+      : null),
   },
   bgDecor: {
     ...StyleSheet.absoluteFillObject,

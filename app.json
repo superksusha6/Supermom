@@ -1,11 +1,19 @@
 {
   "expo": {
-    "name": "Smart Mom App",
+    "name": "FamOs",
     "slug": "smart-mom-app",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": ["**/*"],
+    "web": {
+      "display": "standalone",
+      "name": "FamOs",
+      "shortName": "FamOs",
+      "themeColor": "#3b5bdb",
+      "backgroundColor": "#eef2fb",
+      "orientation": "portrait"
+    },
     "ios": {
       "supportsTablet": true
     },

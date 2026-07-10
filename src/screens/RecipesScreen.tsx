@@ -314,7 +314,7 @@ function formatIngredientLine(ingredient: { amount: string; name: string; option
 export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [search, setSearch] = useState('');
   const [mealFilter, setMealFilter] = useState<RecipeMealType | 'all'>('all');

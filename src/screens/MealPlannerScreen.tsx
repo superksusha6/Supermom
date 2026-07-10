@@ -158,7 +158,7 @@ export function MealPlannerScreen({
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
-  const isMobile = width < 760;
+  const isMobile = true; // mobile-only app
   const simpleMealScrollRef = useRef<ScrollView | null>(null);
   const simpleMealInputRefs = useRef<Record<string, TextInput | null>>({});
   const [pickerTarget, setPickerTarget] = useState<{ dayKey: string; slot: MealPlanSlot } | null>(null);
