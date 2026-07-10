@@ -139,7 +139,9 @@ export function CalendarScreen({
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Cycle/period data is private: only ever shown in the personal "My" scope,
   // never on the shared Family view (a glance at the laptop shouldn't reveal it).
-  const isMomProfile = currentRole === 'mother' && parentLabel === 'Mom' && activeOwnerFilter === 'mother';
+  // Cycle/period tracking only makes sense for a female profile — hide it all
+  // (markers, legend, tracker, day badge) when the sex is set to male.
+  const isMomProfile = currentRole === 'mother' && parentLabel === 'Mom' && activeOwnerFilter === 'mother' && nutritionSex !== 'male';
   const taskInputWrapRef = useRef<View | null>(null);
   const wasActiveRef = useRef(false);
   const selectedDateKeyRef = useRef(toDateKey(new Date()));
@@ -1607,6 +1609,23 @@ export function CalendarScreen({
                 <Text style={styles.pickerModalCloseText}>×</Text>
               </Pressable>
             </View>
+
+            {isMomProfile ? (() => {
+              const phase = selectedCycleInfo?.phase || (cyclePeriodEntryDates.has(selectedDateKey) ? 'period' : null);
+              if (!phase) return null;
+              const meta = {
+                period: { color: '#e11d48', text: '🩸  Period day' },
+                fertile: { color: '#16a34a', text: '🌱  Fertile day · higher chance of conception' },
+                ovulation: { color: '#eab308', text: '🥚  Ovulation day' },
+                pms: { color: '#8b5cf6', text: '🌙  PMS · before your next period' },
+              }[phase];
+              if (!meta) return null;
+              return (
+                <View style={[styles.cyclePhaseBadge, { backgroundColor: hexToRgba(meta.color, 0.12) || undefined, borderColor: hexToRgba(meta.color, 0.35) || undefined }]}>
+                  <Text style={[styles.cyclePhaseBadgeText, { color: meta.color }]}>{meta.text}</Text>
+                </View>
+              );
+            })() : null}
 
             <Text style={styles.dayTimelineHint}>Tap a time to add a plan</Text>
 
@@ -3695,6 +3714,17 @@ const createStyles = (colors: ThemeColors) =>
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  cyclePhaseBadge: {
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  cyclePhaseBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   periodDayToggle: {
     marginBottom: 10,
