@@ -706,6 +706,10 @@ function AppShell() {
   const { colors, themeName, setThemeName } = useTheme();
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
+  // Phone-only app: cap the whole UI to a phone width and center it, so on a
+  // laptop it renders as a device rather than stretching across the screen.
+  const frameWidth = Math.min(width, 440);
+  const wideScreen = width > 480;
   const styles = useMemo(() => createStyles(colors, themeName, isMobile), [colors, themeName, isMobile]);
   const initialDailyCardStateRef = useRef<DailyCardLocalState>(loadLocalDailyCardState());
   const initialChildDraft = useMemo(
@@ -4300,7 +4304,7 @@ function AppShell() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <View style={styles.appFrame}>
+      <View style={[styles.appFrame, { width: frameWidth }, wideScreen && styles.appFrameFloat]}>
       <View pointerEvents="none" style={styles.bgDecor}>
         <View style={styles.bgOrbA} />
         <View style={styles.bgOrbB} />
@@ -8225,14 +8229,18 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   appFrame: {
     flex: 1,
-    width: '100%',
-    maxWidth: 460,
     alignSelf: 'center',
     backgroundColor: colors.bg,
     overflow: 'hidden',
     ...(Platform.OS === 'web'
       ? ({ boxShadow: '0 24px 70px -30px rgba(15,23,42,0.45)' } as any)
       : null),
+  },
+  appFrameFloat: {
+    marginVertical: 18,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
   },
   bgDecor: {
     ...StyleSheet.absoluteFillObject,
