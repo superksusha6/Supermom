@@ -64,9 +64,11 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
     scrollRef.current.scrollTo({ x: Math.max(0, index * cell), animated });
   };
 
-  // Center today (place it as the 2nd visible day) once we know the width.
+  // Snap to the Monday of the current week once we know the width. Since the
+  // strip starts on a Monday, week starts are exact multiples of 7 cells.
+  const weekStartIndex = todayIndex >= 0 ? todayIndex - (todayIndex % 7) : 0;
   useEffect(() => {
-    if (width > 0 && todayIndex >= 0) scrollToIndex(Math.max(0, todayIndex - 1), false);
+    if (width > 0) scrollToIndex(weekStartIndex, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width]);
 
@@ -90,6 +92,9 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
             horizontal
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
+            snapToInterval={cell * 7}
+            snapToAlignment="start"
+            disableIntervalMomentum
             scrollEventThrottle={16}
             onScroll={onScroll}
           >
