@@ -89,7 +89,7 @@ import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
 import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
-import { Icon } from '@/components/Icon';
+import { Icon, IconName } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
 import { MiniCalendar } from '@/components/MiniCalendar';
 import { WeekStrip } from '@/components/WeekStrip';
@@ -768,6 +768,7 @@ function AppShell() {
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
@@ -4884,16 +4885,6 @@ function AppShell() {
         </>
       ) : null}
 
-      <View style={styles.nav}>
-        <NavButton label="Home" active={screen === 'calendar'} onPress={() => setScreen('calendar')} />
-        <NavButton label="Food" active={screen === 'food'} onPress={() => setScreen('food')} />
-        <NavButton label="Family" active={screen === 'family'} onPress={() => setScreen('family')} />
-        <NavButton label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} />
-        <NavButton label="Fix it" active={screen === 'fixit'} onPress={() => setScreen('fixit')} />
-        {medsEnabled ? (
-          <NavButton label="Meds" active={screen === 'meds'} onPress={() => setScreen('meds')} />
-        ) : null}
-      </View>
       {screen === 'food' ? (
         <View style={styles.subnav}>
           <NavButton label="Diary" active={foodTab === 'diary'} onPress={() => setFoodTab('diary')} />
@@ -6225,6 +6216,41 @@ function AppShell() {
         ) : null}
       </ScrollView>
 
+      <View style={styles.tabBar}>
+        <TabButton icon="home" label="Home" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
+        <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => setScreen('food')} styles={styles} colors={colors} />
+        <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
+        <TabButton icon="heart" label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} styles={styles} colors={colors} />
+        <TabButton icon="more" label="More" active={screen === 'fixit' || screen === 'meds'} onPress={() => setMoreMenuOpen(true)} styles={styles} colors={colors} />
+      </View>
+
+      <Modal visible={moreMenuOpen} transparent animationType="fade" onRequestClose={() => setMoreMenuOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setMoreMenuOpen(false)}>
+          <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>More</Text>
+            <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('fixit'); }}>
+              <Icon name="wrench" color={colors.primary} size={20} />
+              <Text style={styles.sheetRowText}>Fix it</Text>
+              <Icon name="chevron" color={colors.subtext} size={16} />
+            </Pressable>
+            {medsEnabled ? (
+              <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('meds'); }}>
+                <Icon name="pill" color={colors.primary} size={20} />
+                <Text style={styles.sheetRowText}>Meds</Text>
+                <Icon name="chevron" color={colors.subtext} size={16} />
+              </Pressable>
+            ) : null}
+            <View style={styles.sheetDivider} />
+            <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setSettingsPanelOpen(true); }}>
+              <Icon name="more" color={colors.primary} size={20} />
+              <Text style={styles.sheetRowText}>Settings</Text>
+              <Icon name="chevron" color={colors.subtext} size={16} />
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={completedTasksOpen} transparent animationType="fade" onRequestClose={() => setCompletedTasksOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.childEditorModalCard}>
@@ -6798,6 +6824,29 @@ function NavButton({ label, active, onPress }: { label: string; active: boolean;
   return (
     <Pressable onPress={onPress} style={[styles.navBtn, active && styles.navBtnActive]}>
       <Text style={[styles.navText, active && styles.navTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TabButton({
+  icon,
+  label,
+  active,
+  onPress,
+  styles,
+  colors,
+}: {
+  icon: IconName;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  colors: ThemeColors;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.tabItem} onPress={onPress}>
+      <Icon name={icon} color={active ? colors.primary : colors.subtext} size={23} strokeWidth={active ? 2.3 : 2} />
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -9157,6 +9206,79 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     alignItems: 'center',
     marginBottom: isMobile ? 8 : 10,
     zIndex: 1,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 6,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 2,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.subtext,
+  },
+  tabLabelActive: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.35)',
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 28,
+    gap: 4,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  sheetRowText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  sheetDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
   },
   subnav: {
     position: 'relative',

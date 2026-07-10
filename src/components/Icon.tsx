@@ -12,7 +12,11 @@ export type IconName =
   | 'wrench'
   | 'pill'
   | 'plus'
-  | 'chevron';
+  | 'chevron'
+  | 'home'
+  | 'family'
+  | 'heart'
+  | 'more';
 
 type Props = {
   name: IconName;
@@ -84,6 +88,30 @@ export function Icon({ name, size = 22, color = '#0f172a', strokeWidth = 2 }: Pr
       ) : null}
       {name === 'plus' ? <Path d="M5 12h14 M12 5v14" {...common} /> : null}
       {name === 'chevron' ? <Path d="m9 18 6-6-6-6" {...common} /> : null}
+      {name === 'home' ? (
+        <>
+          <Path d="M3 10.5 12 3l9 7.5" {...common} />
+          <Path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" {...common} />
+        </>
+      ) : null}
+      {name === 'family' ? (
+        <>
+          <Circle cx={9} cy={8} r={3} {...common} />
+          <Circle cx={17} cy={9} r={2.2} {...common} />
+          <Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...common} />
+          <Path d="M15 15a5 5 0 0 1 5.5 5" {...common} />
+        </>
+      ) : null}
+      {name === 'heart' ? (
+        <Path d="M20.8 5.6a5.5 5.5 0 0 0-8.8 1 5.5 5.5 0 0 0-8.8-1c-2 2-2 5.4 0 7.4L12 21l8.8-8a5.2 5.2 0 0 0 0-7.4Z" {...common} />
+      ) : null}
+      {name === 'more' ? (
+        <>
+          <Circle cx={5} cy={12} r={1.1} fill={color} stroke="none" />
+          <Circle cx={12} cy={12} r={1.1} fill={color} stroke="none" />
+          <Circle cx={19} cy={12} r={1.1} fill={color} stroke="none" />
+        </>
+      ) : null}
     </Svg>
   );
 }
