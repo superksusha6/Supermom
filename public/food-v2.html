@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FamOs · Food tab (concept)</title>
+<style>
+  :root{
+    --ink:#0f172a; --sub:#64748b; --accent:#3b5bdb; --accent-soft:#eaeefc;
+    --card:#ffffff; --line:#e8ecf6; --glass:rgba(255,255,255,.72);
+    --urgent:#e11d48; --soon:#e08a2b; --ok:#16a34a; --r:20px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,Segoe UI,Roboto,sans-serif;
+    background:
+      radial-gradient(60% 40% at 8% 4%, #dfe7fb 0%, rgba(223,231,251,0) 60%),
+      radial-gradient(50% 40% at 94% 2%, #f3e6fb 0%, rgba(243,230,251,0) 55%),
+      radial-gradient(60% 50% at 85% 100%, #e2f5ef 0%, rgba(226,245,239,0) 55%),
+      #eef2fb;
+    padding:32px 16px 70px;
+  }
+  .h1{max-width:1000px;margin:0 auto 4px;font-size:21px;font-weight:800;letter-spacing:-.4px}
+  .hs{max-width:1000px;margin:0 auto 26px;color:var(--sub);font-size:13.5px}
+  .row{display:flex;gap:36px;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .label{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--sub)}
+  svg{display:block}
+  .ic{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .ic-sm{width:16px;height:16px;stroke-width:1.9}
+
+  .phone{width:390px;height:820px;background:#0b1020;border-radius:50px;padding:12px;position:relative;
+    box-shadow:0 40px 90px -34px rgba(30,41,90,.55),0 6px 20px -8px rgba(30,41,90,.3)}
+  .phone::before{content:"";position:absolute;top:17px;left:50%;transform:translateX(-50%);width:116px;height:25px;background:#0b1020;border-radius:0 0 15px 15px;z-index:5}
+  .screen{width:100%;height:100%;border-radius:38px;overflow:hidden;background:linear-gradient(180deg,#f2f5fd,#e9eefb);display:flex;flex-direction:column;position:relative}
+  .scroll{flex:1;overflow:hidden;padding:48px 14px 10px;display:flex;flex-direction:column;gap:12px}
+
+  .apptop{display:flex;align-items:center;gap:10px}
+  .apptitle{font-size:20px;font-weight:800;letter-spacing:-.3px}
+  .apptop .s{margin-left:auto;width:36px;height:36px;border-radius:11px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:#475569}
+
+  .subtabs{display:flex;gap:6px;overflow:hidden}
+  .subtab{font-size:12.5px;font-weight:800;padding:7px 12px;border-radius:999px;color:#64748b;background:#fff;border:1px solid var(--line);white-space:nowrap}
+  .subtab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .subtab.muted{opacity:.7}
+
+  /* Today hub */
+  .tonight{background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden}
+  .tonight .ph{height:130px;background:linear-gradient(135deg,#f6d9c0,#f0b892);display:flex;align-items:center;justify-content:center;font-size:52px}
+  .tonight .bd{padding:14px 15px}
+  .tonight .lab{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--accent)}
+  .tonight .nm{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-top:3px}
+  .tonight .meta{color:var(--sub);font-size:12.5px;font-weight:700;margin-top:3px}
+  .miss{display:flex;align-items:center;gap:9px;margin-top:12px;background:#fdf2e3;border-radius:12px;padding:10px 12px}
+  .miss .t{flex:1;font-size:12.5px;font-weight:700;color:#9a6415}
+  .miss .add{font-size:11.5px;font-weight:800;color:#fff;background:var(--soon);border-radius:999px;padding:6px 11px;white-space:nowrap}
+  .cook{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;border-radius:14px;padding:13px;font-weight:800;font-size:14.5px}
+
+  .quickadd{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 15px}
+  .quickadd .plus{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+  .quickadd .t{flex:1;font-weight:800;font-size:14px}
+  .quickadd .cnt{font-size:12px;font-weight:800;color:#94a3b8;background:#f1f4fb;border-radius:999px;padding:2px 9px}
+
+  .week{background:#fff;border:1px solid var(--line);border-radius:18px;padding:13px 14px}
+  .week .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .week .hd b{font-size:13.5px;font-weight:800}
+  .week .hd a{font-size:12px;font-weight:800;color:var(--accent)}
+  .wrow{display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .wrow:last-child{border-bottom:0}
+  .wrow .d{width:38px;font-size:12px;font-weight:800;color:#334155}
+  .wrow .m{flex:1;font-size:13px;font-weight:700}
+  .wrow .m.empty{color:#b6c0d4;font-weight:600}
+  .wrow .go{font-size:11px;font-weight:800;color:var(--accent)}
+
+  .logline{display:flex;align-items:center;gap:9px;justify-content:center;color:var(--sub);font-size:12.5px;font-weight:700;padding:4px}
+
+  /* Recipes */
+  .rsearch{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 13px;color:var(--sub);font-size:13.5px}
+  .chips{display:flex;gap:6px;overflow:hidden}
+  .chip{font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#475569;white-space:nowrap}
+  .chip.on{background:var(--accent-soft);border-color:#c9d4fb;color:var(--accent)}
+  .seclabel{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);margin-top:2px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .rc{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .rc .ph{height:96px;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative}
+  .rc .heart{position:absolute;top:7px;right:7px;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;color:#e11d48;font-size:13px}
+  .rc .bd{padding:9px 10px 10px}
+  .rc .nm{font-size:13px;font-weight:800;line-height:1.25;height:33px;overflow:hidden}
+  .rc .meta{margin-top:5px;color:var(--sub);font-size:11.5px;font-weight:700;display:flex;gap:8px}
+  .rc .acts{display:flex;gap:6px;margin-top:9px}
+  .rc .act{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:10.5px;font-weight:800;padding:6px 0;border-radius:8px;background:#f4f7ff;color:var(--accent)}
+  .fab{position:absolute;right:16px;bottom:84px;width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 14px 26px -8px rgba(59,91,219,.75);z-index:4}
+
+  .tabbar{height:62px;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding-bottom:5px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:#94a3b8;font-size:10px;font-weight:700}
+  .tab.on{color:var(--accent)}
+  .cap{max-width:1000px;margin:16px auto 0;color:var(--sub);font-size:12.5px;line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="h1">FamOs — Food tab, new arrangement (concept)</div>
+  <div class="hs">Lands on a “Today” hub (dinner tonight + do I have it + one-tap add-to-list). Order: Today · Shopping · Plan · Recipes · Diary. Recipes demoted to a clean library. Static mockup.</div>
+
+  <div class="row">
+    <!-- ===== TODAY HUB ===== -->
+    <div class="col">
+      <div class="label">Food · Today (new landing)</div>
+      <div class="phone"><div class="screen">
+        <div class="scroll">
+          <div class="apptop">
+            <div class="apptitle">Food</div>
+            <div class="s"><svg class="ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.6-3.6"/></svg></div>
+          </div>
+          <div class="subtabs">
+            <div class="subtab on">Today</div>
+            <div class="subtab">Shopping</div>
+            <div class="subtab">Plan</div>
+            <div class="subtab muted">Recipes</div>
+            <div class="subtab muted">Diary</div>
+          </div>
+
+          <div class="tonight">
+            <div class="ph">🍝</div>
+            <div class="bd">
+              <div class="lab">Tonight · Sat</div>
+              <div class="nm">Meatballs &amp; buckwheat</div>
+              <div class="meta">4 servings · 25 min</div>
+              <div class="miss">
+                <svg class="ic-sm" viewBox="0 0 24 24" style="color:#e08a2b"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+                <div class="t">Missing: onion, parmesan</div>
+                <div class="add">+ Add to list</div>
+              </div>
+              <div class="cook"><svg class="ic-sm" viewBox="0 0 24 24" style="stroke:#fff"><path d="M6 3v18M18 3v18M6 12h12"/></svg>Start cooking</div>
+            </div>
+          </div>
+
+          <div class="quickadd">
+            <div class="plus"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+            <div class="t">Add to shopping list</div>
+            <div class="cnt">7</div>
+          </div>
+
+          <div class="week">
+            <div class="hd"><b>This week</b><a>Plan →</a></div>
+            <div class="wrow"><div class="d">Sun</div><div class="m">Chicken traybake</div><div class="go"></div></div>
+            <div class="wrow"><div class="d">Mon</div><div class="m empty">Tap to plan</div><div class="go">+</div></div>
+            <div class="wrow"><div class="d">Tue</div><div class="m">Pasta bake</div><div class="go"></div></div>
+          </div>
+
+          <div class="logline"><svg class="ic-sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Log what I ate → Diary</div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</div>
+          <div class="tab on"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3v8a2 2 0 002 2v8"/><path d="M13 3c0 3 2 4 2 7v11"/></svg>Food</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M4 19a5 5 0 0110 0"/></svg>Family</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M20.8 5.6a5.5 5.5 0 00-8.8 1 5.5 5.5 0 00-8.8-1c-2 2-2 5.4 0 7.4L12 21l8.8-8a5.2 5.2 0 000-7.4z"/></svg>Wellness</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg>More</div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ===== RECIPES REDESIGN ===== -->
+    <div class="col">
+      <div class="label">Food · Recipes (redesigned)</div>
+      <div class="phone"><div class="screen">
+        <div class="scroll">
+          <div class="apptop">
+            <div class="apptitle">Recipes</div>
+            <div class="s"><svg class="ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.6-3.6"/></svg></div>
+          </div>
+          <div class="subtabs">
+            <div class="subtab muted">Today</div>
+            <div class="subtab">Shopping</div>
+            <div class="subtab">Plan</div>
+            <div class="subtab on">Recipes</div>
+            <div class="subtab muted">Diary</div>
+          </div>
+
+          <div class="rsearch"><svg class="ic-sm" viewBox="0 0 24 24" style="color:#94a3b8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.6-3.6"/></svg>Search recipes</div>
+          <div class="chips">
+            <div class="chip on">Dinner</div>
+            <div class="chip">Under 30m</div>
+            <div class="chip">Kids</div>
+            <div class="chip">Have ingredients</div>
+          </div>
+
+          <div class="seclabel">Dinner</div>
+          <div class="grid">
+            <div class="rc">
+              <div class="ph" style="background:linear-gradient(135deg,#f6d9c0,#eaa978)">🍝<div class="heart">♥</div></div>
+              <div class="bd">
+                <div class="nm">Meatballs &amp; buckwheat</div>
+                <div class="meta"><span>⏱ 25m</span><span>🔥 420</span></div>
+                <div class="acts"><div class="act">+ Plan</div><div class="act">+ List</div></div>
+              </div>
+            </div>
+            <div class="rc">
+              <div class="ph" style="background:linear-gradient(135deg,#cfe9d6,#9ed3ad)">🥗<div class="heart">♡</div></div>
+              <div class="bd">
+                <div class="nm">Chicken traybake</div>
+                <div class="meta"><span>⏱ 35m</span><span>🔥 380</span></div>
+                <div class="acts"><div class="act">+ Plan</div><div class="act">+ List</div></div>
+              </div>
+            </div>
+            <div class="rc">
+              <div class="ph" style="background:linear-gradient(135deg,#d9def6,#a9b6ee)">🍲<div class="heart">♡</div></div>
+              <div class="bd">
+                <div class="nm">Pasta bake</div>
+                <div class="meta"><span>⏱ 30m</span><span>🔥 460</span></div>
+                <div class="acts"><div class="act">+ Plan</div><div class="act">+ List</div></div>
+              </div>
+            </div>
+            <div class="rc">
+              <div class="ph" style="background:linear-gradient(135deg,#f6e0c0,#efc37e)">🥘<div class="heart">♥</div></div>
+              <div class="bd">
+                <div class="nm">Veg curry &amp; rice</div>
+                <div class="meta"><span>⏱ 20m</span><span>🔥 340</span></div>
+                <div class="acts"><div class="act">+ Plan</div><div class="act">+ List</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fab"><svg class="ic" viewBox="0 0 24 24" style="stroke:#fff"><path d="M12 5v14M5 12h14"/></svg></div>
+
+        <div class="tabbar">
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</div>
+          <div class="tab on"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3v8a2 2 0 002 2v8"/><path d="M13 3c0 3 2 4 2 7v11"/></svg>Food</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M4 19a5 5 0 0110 0"/></svg>Family</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M20.8 5.6a5.5 5.5 0 00-8.8 1 5.5 5.5 0 00-8.8-1c-2 2-2 5.4 0 7.4L12 21l8.8-8a5.2 5.2 0 000-7.4z"/></svg>Wellness</div>
+          <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg>More</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="cap"><b>Left — Today (new landing):</b> tonight’s dinner + “missing: onion, parmesan” with one-tap add-to-list, a big always-there “Add to shopping”, this-week peek, and a quiet “log what I ate”. <b>Right — Recipes (redesigned):</b> demoted to 4th tab; uniform cards (fixed photo + 2-line name + one ⏱·🔥 meta line + ♥), meal-type section + filter chips (incl. “Have ingredients”), on-card “+ Plan / + List”, and a “+” FAB to add a recipe.</div>
+</body>
+</html>
