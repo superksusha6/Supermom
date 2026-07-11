@@ -105,7 +105,7 @@ const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.j
 
 type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds';
 type FamilyTab = 'children' | 'chores';
-type FoodTab = 'recipes' | 'plan' | 'shopping' | 'diary';
+type FoodTab = 'today' | 'shopping' | 'recipes' | 'plan' | 'diary';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
 type ParentLabel = 'Mom' | 'Dad';
 type UiRole = Exclude<Role, 'admin'>;
@@ -777,7 +777,7 @@ function AppShell() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
   const [tasksLoading, setTasksLoading] = useState(false);
-  const [foodTab, setFoodTab] = useState<FoodTab>('recipes');
+  const [foodTab, setFoodTab] = useState<FoodTab>('today');
   const [dashboardCalendarQuickAction, setDashboardCalendarQuickAction] = useState<DashboardCalendarQuickAction>(null);
   const [dashboardNutritionQuickAction, setDashboardNutritionQuickAction] = useState<DashboardNutritionQuickAction>(null);
   const [dashboardShoppingQuickAction, setDashboardShoppingQuickAction] = useState<DashboardShoppingQuickAction>(null);
@@ -1485,6 +1485,28 @@ function AppShell() {
     if (!entry) return null;
     if (entry.recipeId) return recipes.find((r) => r.id === entry.recipeId)?.title || entry.customTitle || 'Dinner planned';
     return entry.customTitle || null;
+  }, [weeklyMealPlan, recipes, todayDateKey]);
+  const tonightMeal = useMemo(() => {
+    const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
+    const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
+    const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+    if (!entry) return null;
+    const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
+    const title = recipe?.title || entry.customTitle || 'Dinner planned';
+    return { title, recipe, servings: recipe?.servings || null, cookTime: recipe?.cookTimeMinutes || null };
+  }, [weeklyMealPlan, recipes, todayDateKey]);
+  const weekAhead = useMemo(() => {
+    const codes = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const todayIdx = new Date().getDay();
+    return Array.from({ length: 3 }, (_, i) => {
+      const idx = (todayIdx + i) % 7;
+      const code = codes[idx];
+      const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
+      const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+      const title = entry ? recipes.find((r) => r.id === entry.recipeId)?.title || entry.customTitle || 'Planned' : null;
+      return { label: i === 0 ? 'Today' : labels[idx], title };
+    });
   }, [weeklyMealPlan, recipes, todayDateKey]);
   const todayChoreList = useMemo(() => {
     return chores
@@ -4891,11 +4913,16 @@ function AppShell() {
 
       {screen === 'food' ? (
         <View style={styles.subnav}>
-          <NavButton label="Diary" active={foodTab === 'diary'} onPress={() => setFoodTab('diary')} />
-          <NavButton label="Recipes" active={foodTab === 'recipes'} onPress={() => setFoodTab('recipes')} />
-          <NavButton label="Plan" active={foodTab === 'plan'} onPress={() => setFoodTab('plan')} />
+          <NavButton label="Today" active={foodTab === 'today'} onPress={() => setFoodTab('today')} />
           <NavButton label="Shopping" active={foodTab === 'shopping'} onPress={() => setFoodTab('shopping')} />
+          <NavButton label="Recipes" active={foodTab === 'recipes'} onPress={() => setFoodTab('recipes')} />
         </View>
+      ) : null}
+      {screen === 'food' && (foodTab === 'plan' || foodTab === 'diary') ? (
+        <Pressable style={styles.calBackBtn} onPress={() => setFoodTab('today')}>
+          <Icon name="chevron" color={colors.primary} size={16} />
+          <Text style={styles.calBackText}>Back to Food</Text>
+        </Pressable>
       ) : null}
       {screen === 'family' ? (
         <View style={styles.subnav}>
@@ -5211,6 +5238,68 @@ function AppShell() {
                 setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
               }}
             />
+        ) : null}
+
+        {screen === 'food' && foodTab === 'today' ? (
+          <View style={styles.dashWrap}>
+            <View style={styles.foodTonightCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={tonightMeal ? `Tonight, ${tonightMeal.title}` : 'Plan tonight'}
+                style={styles.foodTonightBody}
+                onPress={() => setFoodTab('plan')}
+              >
+                <Text style={styles.foodTonightLabel}>TONIGHT · {formatShortDate(todayDateKey)}</Text>
+                <Text style={styles.foodTonightName}>{tonightMeal?.title || 'No dinner planned yet'}</Text>
+                <Text style={styles.foodTonightMeta}>
+                  {tonightMeal
+                    ? [tonightMeal.servings ? `${tonightMeal.servings} servings` : null, tonightMeal.cookTime ? `${tonightMeal.cookTime} min` : null]
+                        .filter(Boolean)
+                        .join(' · ') || 'Planned for tonight'
+                    : 'Tap to plan tonight'}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.foodTonightBtn}
+                onPress={() => (tonightMeal ? setFoodTab('recipes') : setFoodTab('plan'))}
+              >
+                <Icon name="meal" color="#ffffff" size={17} />
+                <Text style={styles.foodTonightBtnText}>{tonightMeal ? 'Open recipe' : 'Plan tonight'}</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Shopping list"
+              style={styles.foodShopBtn}
+              onPress={() => setFoodTab('shopping')}
+            >
+              <View style={styles.foodShopIcon}><Icon name="cart" color={colors.primary} size={20} /></View>
+              <Text style={styles.foodShopText}>Shopping list</Text>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
+
+            <FamCard title="This week" padded={false}>
+              {weekAhead.map((row, i) => (
+                <View key={row.label}>
+                  {i > 0 ? <View style={styles.agendaLine} /> : null}
+                  <Pressable style={styles.foodWeekRow} onPress={() => setFoodTab('plan')}>
+                    <Text style={styles.foodWeekDay}>{row.label}</Text>
+                    <Text style={[styles.foodWeekMeal, !row.title && styles.foodWeekMealEmpty]} numberOfLines={1}>
+                      {row.title || 'Tap to plan'}
+                    </Text>
+                    <Icon name="chevron" color={colors.subtext} size={15} />
+                  </Pressable>
+                </View>
+              ))}
+            </FamCard>
+
+            <Pressable style={styles.foodDiaryLink} onPress={() => setFoodTab('diary')}>
+              <Icon name="plus" color={colors.subtext} size={15} />
+              <Text style={styles.foodDiaryLinkText}>Log what I ate → Diary</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {screen === 'food' && foodTab === 'diary' ? (
@@ -6222,7 +6311,7 @@ function AppShell() {
 
       <View style={styles.tabBar}>
         <TabButton icon="home" label="Home" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
-        <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => setScreen('food')} styles={styles} colors={colors} />
+        <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
         <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
         <TabButton icon="heart" label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} styles={styles} colors={colors} />
         <TabButton icon="more" label="More" active={screen === 'fixit' || screen === 'meds'} onPress={() => setMoreMenuOpen(true)} styles={styles} colors={colors} />
@@ -9600,6 +9689,109 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: colors.border,
   },
   calBackText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
+  foodTonightCard: {
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+  },
+  foodTonightBody: {
+    marginBottom: 12,
+  },
+  foodTonightLabel: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  foodTonightName: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginTop: 4,
+  },
+  foodTonightMeta: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  foodTonightBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 13,
+  },
+  foodTonightBtnText: {
+    color: '#ffffff',
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  foodShopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+  },
+  foodShopIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.selection,
+  },
+  foodShopText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  foodWeekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  foodWeekDay: {
+    width: 44,
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  foodWeekMeal: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  foodWeekMealEmpty: {
+    color: colors.subtext,
+    fontWeight: '600',
+  },
+  foodDiaryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 8,
+  },
+  foodDiaryLinkText: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
   calNumbers: {
     flexDirection: 'row',
     alignItems: 'baseline',
