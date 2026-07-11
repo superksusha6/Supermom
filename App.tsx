@@ -9245,8 +9245,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.35)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   sheetCard: {
+    width: '100%',
+    maxWidth: 412,
     backgroundColor: colors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
