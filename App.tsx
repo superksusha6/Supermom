@@ -6609,40 +6609,49 @@ function AppShell() {
 
       <Modal visible={childTimePickerOpen} transparent animationType="fade" onRequestClose={() => setChildTimePickerOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.clockModalCard}>
-            <Text style={styles.authTitle}>Pick Time</Text>
-            <Text style={styles.modalSub}>{childDialStep === 'hour' ? 'Step 1: Select hour' : 'Step 2: Select minute'}</Text>
-            <View style={styles.clockDial}>
-              {childDialDots.map((dot) => (
-                <Pressable
-                  key={`${childDialStep}-${dot.value}`}
-                  style={[
-                    styles.clockNumber,
-                    { left: dot.left, top: dot.top },
-                    (childDialStep === 'hour' ? childDialHour === dot.value : childDialMinute === dot.value) && styles.clockNumberActive,
-                  ]}
-                  onPress={() => chooseChildDialValue(dot.value)}
-                >
-                  <Text style={styles.clockNumberText}>{childDialStep === 'minute' ? String(dot.value).padStart(2, '0') : dot.value}</Text>
+          <View style={styles.timePickCard}>
+            <Text style={styles.timePickTitle}>Pick time</Text>
+            <Text style={styles.timePickPreview}>{formatClockTime(childDialHour, childDialMinute, childDialPeriod)}</Text>
+
+            <Text style={styles.timePickLabel}>Hour</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timePickRow}>
+              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => (
+                <Pressable key={`h-${h}`} style={[styles.timePill, childDialHour === h && styles.timePillActive]} onPress={() => setChildDialHour(h)}>
+                  <Text style={[styles.timePillText, childDialHour === h && styles.timePillTextActive]}>{h}</Text>
                 </Pressable>
               ))}
-              <Pressable
-                style={styles.ampmToggle}
-                onPress={() => {
-                  const nextPeriod: 'AM' | 'PM' = childDialPeriodRef.current === 'AM' ? 'PM' : 'AM';
-                  childDialPeriodRef.current = nextPeriod;
-                  setChildDialPeriod(nextPeriod);
-                }}
-              >
-                <Text style={styles.ampmText}>{childDialPeriod}</Text>
-              </Pressable>
+            </ScrollView>
+
+            <Text style={styles.timePickLabel}>Minute</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timePickRow}>
+              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
+                <Pressable key={`m-${m}`} style={[styles.timePill, childDialMinute === m && styles.timePillActive]} onPress={() => setChildDialMinute(m)}>
+                  <Text style={[styles.timePillText, childDialMinute === m && styles.timePillTextActive]}>{String(m).padStart(2, '0')}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.ampmSeg}>
+              {(['AM', 'PM'] as const).map((p) => (
+                <Pressable
+                  key={p}
+                  style={[styles.ampmSegBtn, childDialPeriod === p && styles.ampmSegBtnActive]}
+                  onPress={() => {
+                    childDialPeriodRef.current = p;
+                    setChildDialPeriod(p);
+                  }}
+                >
+                  <Text style={[styles.ampmSegText, childDialPeriod === p && styles.ampmSegTextActive]}>{p}</Text>
+                </Pressable>
+              ))}
             </View>
-            <Text style={styles.timePreview}>{formatClockTime(childDialHour, childDialMinute, childDialPeriod)}</Text>
-            <View style={styles.authActions}>
-              <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={confirmChildTimePicker}>
-                <Text style={[styles.authBtnText, styles.authSecondaryText, styles.timeDoneText]}>✓ Done</Text>
-              </Pressable>
-            </View>
+
+            <Pressable style={styles.timeDoneBtn} onPress={confirmChildTimePicker}>
+              <Text style={styles.timeDoneBtnText}>Done</Text>
+            </Pressable>
+            <Pressable style={styles.timeCancelBtn} onPress={() => setChildTimePickerOpen(false)}>
+              <Text style={styles.timeCancelText}>Cancel</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -10758,6 +10767,117 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     padding: 14,
     alignItems: 'center',
     gap: 10,
+  },
+  timePickCard: {
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  timePickTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  timePickPreview: {
+    color: colors.primary,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  timePickLabel: {
+    color: colors.subtext,
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  timePickRow: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  timePill: {
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timePillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timePillText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  timePillTextActive: {
+    color: '#ffffff',
+  },
+  ampmSeg: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 16,
+    padding: 4,
+    borderRadius: 14,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ampmSegBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 11,
+    alignItems: 'center',
+  },
+  ampmSegBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  ampmSegText: {
+    color: colors.subtext,
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  ampmSegTextActive: {
+    color: '#ffffff',
+  },
+  timeDoneBtn: {
+    marginTop: 18,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  timeDoneBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  timeCancelBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  timeCancelText: {
+    color: colors.subtext,
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   childEditorModalCard: {
     backgroundColor: 'rgba(248,250,252,0.97)',
