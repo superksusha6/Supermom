@@ -3,9 +3,10 @@ import { NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSh
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 
-// A horizontal, side-scrolling week strip for Home. Shows ~7 days at a time and
-// swipes left/right through weeks. Today is highlighted; days with events get a
-// dot. Tapping a day calls onOpenDay so Home can open the full calendar.
+// A horizontal, side-scrolling week strip for Home. The scroll content is built
+// as full-width WEEK PAGES (each exactly Mon–Sun), so paging snaps one whole week
+// at a time, always landing on a Monday. Today is highlighted; days with events
+// get a dot. Tapping a day calls onOpenDay to open the full calendar.
 type Props = {
   eventColors: Map<string, string[]>; // 'YYYY-MM-DD' -> event colors
   today: string; // 'YYYY-MM-DD'
@@ -13,8 +14,8 @@ type Props = {
 };
 
 const WD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const BACK_DAYS = 21; // how far back the strip starts
-const FWD_DAYS = 63; // how far forward it runs
+const WEEKS_BACK = 3;
+const WEEKS_FWD = 9;
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -42,16 +43,18 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
   const [width, setWidth] = useState(0);
   const cell = width > 0 ? width / 7 : 48;
 
-  // Start the strip on a Monday so weekday columns stay tidy.
-  const start = useMemo(() => mondayOf(addDays(parseKey(today), -BACK_DAYS)), [today]);
-  const days = useMemo(() => {
-    const total = BACK_DAYS + FWD_DAYS;
-    return Array.from({ length: total }, (_, i) => {
-      const d = addDays(start, i);
-      return { key: toKey(d), day: d.getDate(), wd: WD[(d.getDay() + 6) % 7], date: d };
+  const weeks = useMemo(() => {
+    const firstMonday = mondayOf(addDays(parseKey(today), -WEEKS_BACK * 7));
+    return Array.from({ length: WEEKS_BACK + WEEKS_FWD }, (_, w) => {
+      const monday = addDays(firstMonday, w * 7);
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const d = addDays(monday, i);
+        return { key: toKey(d), day: d.getDate(), wd: WD[i], date: d };
+      });
+      return { key: toKey(monday), monday, days };
     });
-  }, [start]);
-  const todayIndex = useMemo(() => days.findIndex((d) => d.key === today), [days, today]);
+  }, [today]);
+  const currentWeek = WEEKS_BACK; // by construction, today is in this page
 
   const [label, setLabel] = useState('');
   useEffect(() => {
@@ -59,24 +62,18 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
     setLabel(d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
   }, [today]);
 
-  const scrollToIndex = (index: number, animated: boolean) => {
-    if (!scrollRef.current || cell <= 0) return;
-    scrollRef.current.scrollTo({ x: Math.max(0, index * cell), animated });
-  };
-
-  // Snap to the Monday of the current week once we know the width. Since the
-  // strip starts on a Monday, week starts are exact multiples of 7 cells.
-  const weekStartIndex = todayIndex >= 0 ? todayIndex - (todayIndex % 7) : 0;
+  // Land on the current week once we know the width.
   useEffect(() => {
-    if (width > 0) scrollToIndex(weekStartIndex, false);
+    if (width > 0 && scrollRef.current) scrollRef.current.scrollTo({ x: currentWeek * width, animated: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width]);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (cell <= 0) return;
-    const leftIndex = Math.round(e.nativeEvent.contentOffset.x / cell);
-    const d = days[Math.min(days.length - 1, Math.max(0, leftIndex))]?.date;
-    if (d) setLabel(d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+    if (width <= 0) return;
+    const page = Math.round(e.nativeEvent.contentOffset.x / width);
+    const wk = weeks[Math.min(weeks.length - 1, Math.max(0, page))];
+    // Label from the Thursday of the visible week so it reads the dominant month.
+    if (wk) setLabel(addDays(wk.monday, 3).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
   };
 
   return (
@@ -90,37 +87,42 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
           <ScrollView
             ref={scrollRef}
             horizontal
+            pagingEnabled
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
-            snapToInterval={cell * 7}
+            snapToInterval={width}
             snapToAlignment="start"
             disableIntervalMomentum
             scrollEventThrottle={16}
             onScroll={onScroll}
           >
-            {days.map((d) => {
-              const isToday = d.key === today;
-              const dots = eventColors.get(d.key) || [];
-              return (
-                <Pressable
-                  key={d.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={d.key + (dots.length ? ', has events' : '')}
-                  style={[styles.cell, { width: cell }]}
-                  onPress={() => onOpenDay(d.key)}
-                >
-                  <Text style={styles.wd}>{d.wd}</Text>
-                  <View style={[styles.dayWrap, isToday && styles.dayWrapToday]}>
-                    <Text style={[styles.dayText, isToday && styles.dayTextToday]}>{d.day}</Text>
-                  </View>
-                  <View style={styles.dotsRow}>
-                    {dots.slice(0, 3).map((c, i) => (
-                      <View key={i} style={[styles.dot, { backgroundColor: c }, isToday && styles.dotToday]} />
-                    ))}
-                  </View>
-                </Pressable>
-              );
-            })}
+            {weeks.map((wk) => (
+              <View key={wk.key} style={[styles.weekPage, { width }]}>
+                {wk.days.map((d) => {
+                  const isToday = d.key === today;
+                  const dots = eventColors.get(d.key) || [];
+                  return (
+                    <Pressable
+                      key={d.key}
+                      accessibilityRole="button"
+                      accessibilityLabel={d.key + (dots.length ? ', has events' : '')}
+                      style={[styles.cell, { width: cell }]}
+                      onPress={() => onOpenDay(d.key)}
+                    >
+                      <Text style={styles.wd}>{d.wd}</Text>
+                      <View style={[styles.dayWrap, isToday && styles.dayWrapToday]}>
+                        <Text style={[styles.dayText, isToday && styles.dayTextToday]}>{d.day}</Text>
+                      </View>
+                      <View style={styles.dotsRow}>
+                        {dots.slice(0, 3).map((c, i) => (
+                          <View key={i} style={[styles.dot, { backgroundColor: c }, isToday && styles.dotToday]} />
+                        ))}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </ScrollView>
         ) : null}
       </View>
@@ -145,12 +147,8 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
     },
     title: { color: colors.text, fontSize: 14, fontWeight: '800' },
-    nav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    navBtn: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-    chevron: { color: colors.subtext, fontSize: 19, fontWeight: '800', lineHeight: 21 },
-    todayBtn: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: 'rgba(148,163,184,0.16)' },
-    todayText: { color: colors.subtext, fontSize: 11, fontWeight: '800' },
     stripWrap: { overflow: 'hidden' },
+    weekPage: { flexDirection: 'row' },
     cell: { alignItems: 'center', paddingVertical: 2, gap: 3 },
     wd: { fontSize: 10, fontWeight: '800', color: colors.subtext },
     dayWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
