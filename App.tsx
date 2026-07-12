@@ -103,7 +103,7 @@ import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProf
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
 
-type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds';
+type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds' | 'household';
 type FamilyTab = 'children' | 'chores';
 type FoodTab = 'today' | 'shopping' | 'recipes' | 'plan' | 'diary';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
@@ -199,6 +199,7 @@ const LOCAL_PERSONAL_PROFILE_KEY = 'smartmom.personalProfile.v1';
 const LOCAL_DAILY_CARD_STATE_KEY = 'smartmom.dailyCardState.v1';
 const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
+const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
 const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
 type HomeLayout = 'focus' | 'zen' | 'bento';
 
@@ -746,6 +747,7 @@ function AppShell() {
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
+  const [habitsEnabled, setHabitsEnabled] = useState<boolean>(() => loadLocalHabitsEnabled());
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(() => loadLocalHomeLayout());
   const [homeTab, setHomeTab] = useState<'today' | 'calendar'>('today');
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
@@ -2193,6 +2195,10 @@ function AppShell() {
   useEffect(() => {
     persistLocalMedsEnabled(medsEnabled);
   }, [medsEnabled]);
+
+  useEffect(() => {
+    persistLocalHabitsEnabled(habitsEnabled);
+  }, [habitsEnabled]);
 
   useEffect(() => {
     persistLocalHomeLayout(homeLayout);
@@ -4389,10 +4395,19 @@ function AppShell() {
                   <Pressable style={styles.moduleToggleRow} onPress={() => setMedsEnabled((prev) => !prev)}>
                     <View style={styles.moduleToggleCopy}>
                       <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
-                      <Text style={styles.moduleToggleSub}>Track home medicines and expiry dates</Text>
+                      <Text style={styles.moduleToggleSub}>Track home medicines and expiry dates · in Home tab</Text>
                     </View>
                     <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
                       <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
+                    </View>
+                  </Pressable>
+                  <Pressable style={styles.moduleToggleRow} onPress={() => setHabitsEnabled((prev) => !prev)}>
+                    <View style={styles.moduleToggleCopy}>
+                      <Text style={styles.moduleToggleTitle}>💚  Habits &amp; wellness</Text>
+                      <Text style={styles.moduleToggleSub}>Personal habit tracking · opens from the More menu</Text>
+                    </View>
+                    <View style={[styles.moduleToggle, habitsEnabled && styles.moduleToggleOn]}>
+                      <View style={[styles.moduleToggleKnob, habitsEnabled && styles.moduleToggleKnobOn]} />
                     </View>
                   </Pressable>
                 </View>
@@ -5399,7 +5414,34 @@ function AppShell() {
           />
         ) : null}
 
-        {screen === 'wellness' ? (
+        {screen === 'household' ? (
+          <View style={styles.dashWrap}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.foodShopBtn} onPress={() => setScreen('fixit')}>
+              <View style={styles.foodShopIcon}><Icon name="wrench" color={colors.primary} size={20} /></View>
+              <Text style={styles.foodShopText}>Fix it</Text>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
+            {medsEnabled ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.foodShopBtn} onPress={() => setScreen('meds')}>
+                <View style={styles.foodShopIcon}><Icon name="pill" color={colors.primary} size={20} /></View>
+                <Text style={styles.foodShopText}>Meds</Text>
+                <Icon name="chevron" color={colors.subtext} size={18} />
+              </Pressable>
+            ) : null}
+            {!medsEnabled ? (
+              <Text style={styles.foodDiaryLinkText}>Enable more home tools (Meds, Habits) in Settings → Modules.</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {screen === 'fixit' || screen === 'meds' ? (
+          <Pressable style={styles.calBackBtn} onPress={() => setScreen('household')}>
+            <Icon name="chevron" color={colors.primary} size={16} />
+            <Text style={styles.calBackText}>Back to Home</Text>
+          </Pressable>
+        ) : null}
+
+        {screen === 'wellness' && habitsEnabled ? (
           <HabitsScreen
             habits={habits}
             onHabitsChange={setHabits}
@@ -6319,11 +6361,11 @@ function AppShell() {
       </ScrollView>
 
       <View style={styles.tabBar}>
-        <TabButton icon="home" label="Home" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
+        <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
         <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
-        <TabButton icon="heart" label="Wellness" active={screen === 'wellness'} onPress={() => setScreen('wellness')} styles={styles} colors={colors} />
-        <TabButton icon="more" label="More" active={screen === 'fixit' || screen === 'meds'} onPress={() => setMoreMenuOpen(true)} styles={styles} colors={colors} />
+        <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
+        <TabButton icon="more" label="More" active={screen === 'wellness'} onPress={() => setMoreMenuOpen(true)} styles={styles} colors={colors} />
       </View>
 
       <Modal visible={moreMenuOpen} transparent animationType="fade" onRequestClose={() => setMoreMenuOpen(false)}>
@@ -6331,19 +6373,14 @@ function AppShell() {
           <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation?.()}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>More</Text>
-            <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('fixit'); }}>
-              <Icon name="wrench" color={colors.primary} size={20} />
-              <Text style={styles.sheetRowText}>Fix it</Text>
-              <Icon name="chevron" color={colors.subtext} size={16} />
-            </Pressable>
-            {medsEnabled ? (
-              <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('meds'); }}>
-                <Icon name="pill" color={colors.primary} size={20} />
-                <Text style={styles.sheetRowText}>Meds</Text>
+            {habitsEnabled ? (
+              <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('wellness'); }}>
+                <Icon name="heart" color={colors.primary} size={20} />
+                <Text style={styles.sheetRowText}>Habits</Text>
                 <Icon name="chevron" color={colors.subtext} size={16} />
               </Pressable>
             ) : null}
-            <View style={styles.sheetDivider} />
+            {habitsEnabled ? <View style={styles.sheetDivider} /> : null}
             <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setSettingsPanelOpen(true); }}>
               <Icon name="more" color={colors.primary} size={20} />
               <Text style={styles.sheetRowText}>Settings</Text>
@@ -7909,6 +7946,24 @@ function persistLocalMedsEnabled(enabled: boolean) {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
   try {
     globalThis.localStorage.setItem(LOCAL_MEDS_ENABLED_KEY, enabled ? 'true' : 'false');
+  } catch {
+    // Ignore.
+  }
+}
+
+function loadLocalHabitsEnabled(): boolean {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return false;
+  try {
+    return globalThis.localStorage.getItem(LOCAL_HABITS_ENABLED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistLocalHabitsEnabled(enabled: boolean) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_HABITS_ENABLED_KEY, enabled ? 'true' : 'false');
   } catch {
     // Ignore.
   }
