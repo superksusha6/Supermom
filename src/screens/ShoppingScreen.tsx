@@ -5084,7 +5084,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     },
     modalCard: {
       width: '100%',
-      maxWidth: 760,
+      maxWidth: 440,
       maxHeight: '86%',
       borderRadius: 24,
       borderWidth: 1,

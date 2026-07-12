@@ -1901,11 +1901,14 @@ const createStyles = (colors: ThemeColors) =>
     modalBackdrop: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(15, 23, 42, 0.72)',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     modalCard: {
       maxHeight: '88%',
       width: '100%',
-      maxWidth: 760,
+      maxWidth: 440,
+      alignSelf: 'center',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       borderBottomLeftRadius: 22,

@@ -6142,7 +6142,7 @@ const createStyles = (colors: ThemeColors) =>
   },
   dayTimelineModalCard: {
     width: '100%',
-    maxWidth: 720,
+    maxWidth: 440,
     maxHeight: '88%',
     paddingBottom: 0,
   },

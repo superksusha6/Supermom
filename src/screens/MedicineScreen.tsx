@@ -857,7 +857,8 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
     },
     modalCard: {
       width: '100%',
-      maxWidth: 560,
+      maxWidth: 440,
+      alignSelf: 'center',
       maxHeight: '92%',
       borderRadius: 22,
       backgroundColor: '#ffffff',

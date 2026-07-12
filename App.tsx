@@ -8671,6 +8671,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '600',
   },
   authCard: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     marginHorizontal: 16,
     marginBottom: 10,
     padding: 14,
@@ -10446,6 +10449,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: isMobile ? 12 : 20,
   },
   dailyCardsModalRoot: {
@@ -10928,6 +10932,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '700',
   },
   childEditorModalCard: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     backgroundColor: 'rgba(248,250,252,0.97)',
     borderRadius: 20,
     borderWidth: 1,

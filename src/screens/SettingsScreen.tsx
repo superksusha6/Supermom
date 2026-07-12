@@ -873,6 +873,8 @@ const createStyles = (colors: ThemeColors) =>
     editorModalBackdrop: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(15, 23, 42, 0.72)',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     editorModalLayer: {
       flex: 1,
@@ -882,7 +884,7 @@ const createStyles = (colors: ThemeColors) =>
     editorModalCard: {
       alignSelf: 'center',
       width: '100%',
-      maxWidth: 880,
+      maxWidth: 440,
       maxHeight: '88%',
       minHeight: '62%',
       borderRadius: 22,
