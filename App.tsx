@@ -5360,6 +5360,15 @@ function AppShell() {
                 ),
               );
             }}
+            onDeleteActivity={(childId, activityId) => {
+              setChildren((prev) =>
+                prev.map((child) =>
+                  child.id === childId
+                    ? { ...child, activities: child.activities.filter((a) => a.id !== activityId) }
+                    : child,
+                ),
+              );
+            }}
           />
         ) : null}
 

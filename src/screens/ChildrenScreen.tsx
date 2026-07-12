@@ -7,13 +7,14 @@ import { ThemeColors, useThemeColors } from '@/theme/theme';
 type Props = {
   children: ChildProfile[];
   onAddActivity: (childId: string, activityName: string, timesPerWeek: number) => void;
+  onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
   onAddChild: () => void;
   quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
 
-export function ChildrenScreen({ children, onAddActivity, onDeleteChild, onEditChild, onAddChild, quickActionRequest }: Props) {
+export function ChildrenScreen({ children, onAddActivity, onDeleteActivity, onDeleteChild, onEditChild, onAddChild, quickActionRequest }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedChild, setSelectedChild] = useState(children[0]?.id ?? '');
@@ -81,9 +82,19 @@ export function ChildrenScreen({ children, onAddActivity, onDeleteChild, onEditC
           </Pressable>
         </View>
         {child?.activities.map((activity) => (
-          <View key={activity.id} style={styles.item}>
-            <Text style={styles.title}>{activity.name}</Text>
-            <Text style={styles.meta}>{activity.timesPerWeek} times per week</Text>
+          <View key={activity.id} style={[styles.item, styles.activityRow]}>
+            <View style={styles.activityCopy}>
+              <Text style={styles.title}>{activity.name}</Text>
+              <Text style={styles.meta}>{activity.timesPerWeek} times per week</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${activity.name}`}
+              style={styles.activityRemove}
+              onPress={() => child && onDeleteActivity(child.id, activity.id)}
+            >
+              <Text style={styles.activityRemoveText}>Remove</Text>
+            </Pressable>
           </View>
         ))}
         {addActivityOpen ? (
@@ -148,6 +159,27 @@ const createStyles = (colors: ThemeColors) =>
     borderTopWidth: 1,
     borderColor: colors.border,
     paddingVertical: 9,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  activityCopy: {
+    flex: 1,
+  },
+  activityRemove: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff1f2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  activityRemoveText: {
+    color: '#be123c',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   title: {
     color: colors.text,
