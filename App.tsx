@@ -774,7 +774,6 @@ function AppShell() {
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
@@ -5428,13 +5427,20 @@ function AppShell() {
                 <Icon name="chevron" color={colors.subtext} size={18} />
               </Pressable>
             ) : null}
-            {!medsEnabled ? (
+            {habitsEnabled ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Habits and wellness" style={styles.foodShopBtn} onPress={() => setScreen('wellness')}>
+                <View style={styles.foodShopIcon}><Icon name="heart" color={colors.primary} size={20} /></View>
+                <Text style={styles.foodShopText}>Habits</Text>
+                <Icon name="chevron" color={colors.subtext} size={18} />
+              </Pressable>
+            ) : null}
+            {!medsEnabled && !habitsEnabled ? (
               <Text style={styles.foodDiaryLinkText}>Enable more home tools (Meds, Habits) in Settings → Modules.</Text>
             ) : null}
           </View>
         ) : null}
 
-        {screen === 'fixit' || screen === 'meds' ? (
+        {screen === 'fixit' || screen === 'meds' || (screen === 'wellness' && habitsEnabled) ? (
           <Pressable style={styles.calBackBtn} onPress={() => setScreen('household')}>
             <Icon name="chevron" color={colors.primary} size={16} />
             <Text style={styles.calBackText}>Back to Home</Text>
@@ -6364,31 +6370,9 @@ function AppShell() {
         <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
         <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
-        <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
-        <TabButton icon="more" label="More" active={screen === 'wellness'} onPress={() => setMoreMenuOpen(true)} styles={styles} colors={colors} />
+        <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds' || screen === 'wellness'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
+        <TabButton icon="settings" label="Settings" active={settingsPanelOpen} onPress={() => setSettingsPanelOpen(true)} styles={styles} colors={colors} />
       </View>
-
-      <Modal visible={moreMenuOpen} transparent animationType="fade" onRequestClose={() => setMoreMenuOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setMoreMenuOpen(false)}>
-          <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation?.()}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>More</Text>
-            {habitsEnabled ? (
-              <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setScreen('wellness'); }}>
-                <Icon name="heart" color={colors.primary} size={20} />
-                <Text style={styles.sheetRowText}>Habits</Text>
-                <Icon name="chevron" color={colors.subtext} size={16} />
-              </Pressable>
-            ) : null}
-            {habitsEnabled ? <View style={styles.sheetDivider} /> : null}
-            <Pressable style={styles.sheetRow} onPress={() => { setMoreMenuOpen(false); setSettingsPanelOpen(true); }}>
-              <Icon name="more" color={colors.primary} size={20} />
-              <Text style={styles.sheetRowText}>Settings</Text>
-              <Icon name="chevron" color={colors.subtext} size={16} />
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <Modal visible={completedTasksOpen} transparent animationType="fade" onRequestClose={() => setCompletedTasksOpen(false)}>
         <View style={styles.modalBackdrop}>

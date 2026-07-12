@@ -16,7 +16,8 @@ export type IconName =
   | 'home'
   | 'family'
   | 'heart'
-  | 'more';
+  | 'more'
+  | 'settings';
 
 type Props = {
   name: IconName;
@@ -110,6 +111,12 @@ export function Icon({ name, size = 22, color = '#0f172a', strokeWidth = 2 }: Pr
           <Circle cx={5} cy={12} r={1.1} fill={color} stroke="none" />
           <Circle cx={12} cy={12} r={1.1} fill={color} stroke="none" />
           <Circle cx={19} cy={12} r={1.1} fill={color} stroke="none" />
+        </>
+      ) : null}
+      {name === 'settings' ? (
+        <>
+          <Circle cx={12} cy={12} r={3} {...common} />
+          <Path d="M19.4 13a7.6 7.6 0 000-2l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1l-.4-2.6h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4 2 1.5a7.6 7.6 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4z" {...common} />
         </>
       ) : null}
     </Svg>
