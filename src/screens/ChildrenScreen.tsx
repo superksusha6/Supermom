@@ -39,6 +39,7 @@ export function ChildrenScreen({
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
+  const [childMenuOpen, setChildMenuOpen] = useState(false);
   const [activityName, setActivityName] = useState('');
   const [timesPerWeek, setTimesPerWeek] = useState('1');
 
@@ -177,6 +178,9 @@ export function ChildrenScreen({
               <Text style={styles.photoLink}>{child.photoUri ? 'Change photo' : 'Add photo'}</Text>
             </Pressable>
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="More options" style={styles.moreBtn} onPress={() => setChildMenuOpen(true)}>
+            <Icon name="more" color={colors.subtext} size={20} />
+          </Pressable>
         </View>
 
         {plans.length ? (
@@ -187,28 +191,22 @@ export function ChildrenScreen({
             ))}
           </View>
         ) : null}
-
-        <View style={styles.childMetaActions}>
-          <Pressable style={styles.secondaryBtn} onPress={() => onEditChild(child.id)}>
-            <Text style={styles.secondaryBtnText}>Edit child</Text>
-          </Pressable>
-          <Pressable style={styles.deleteBtn} onPress={() => onDeleteChild(child.id)}>
-            <Text style={styles.deleteBtnText}>Delete child</Text>
-          </Pressable>
-        </View>
       </SectionCard>
 
       <SectionCard title="Activities / Sports / Clubs">
         <View style={styles.profileHeaderRow}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={addActivityOpen ? 'Close' : 'Add activity'}
-            style={[styles.addRoundBtn, addActivityOpen && styles.addRoundBtnOpen]}
-            onPress={() => setAddActivityOpen((prev) => !prev)}
+            accessibilityLabel="Add activity"
+            style={styles.addRoundBtn}
+            onPress={() => { setActivityName(''); setTimesPerWeek('1'); setAddActivityOpen(true); }}
           >
-            <Icon name={addActivityOpen ? 'chevron' : 'plus'} color={addActivityOpen ? colors.primary : '#ffffff'} size={20} />
+            <Icon name="plus" color="#ffffff" size={20} />
           </Pressable>
         </View>
+        {child.activities.length === 0 ? (
+          <Text style={styles.emptyText}>No activities yet — tap “+” to add one.</Text>
+        ) : null}
         {child.activities.map((activity) => (
           <View key={activity.id} style={[styles.item, styles.activityRow]}>
             <View style={styles.activityCopy}>
@@ -225,25 +223,48 @@ export function ChildrenScreen({
             </Pressable>
           </View>
         ))}
-        {addActivityOpen ? (
-          <View style={styles.addActivityForm}>
-            <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" style={styles.input} />
-            <TextInput value={timesPerWeek} onChangeText={setTimesPerWeek} placeholder="Times per week" keyboardType="number-pad" style={styles.input} />
-            <Pressable
-              style={styles.button}
-              onPress={() => {
-                if (!activityName.trim()) return;
-                onAddActivity(child.id, activityName.trim(), Number(timesPerWeek) || 1);
-                setActivityName('');
-                setTimesPerWeek('1');
-                setAddActivityOpen(false);
-              }}
-            >
-              <Text style={styles.buttonText}>Add Activity</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </SectionCard>
+
+      <Modal visible={childMenuOpen} transparent animationType="fade" onRequestClose={() => setChildMenuOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setChildMenuOpen(false)}>
+          <Pressable style={styles.menuCard} onPress={() => undefined}>
+            <Pressable style={styles.menuRow} onPress={() => { setChildMenuOpen(false); onEditChild(child.id); }}>
+              <Text style={styles.menuRowText}>Edit child</Text>
+            </Pressable>
+            <View style={styles.menuDivider} />
+            <Pressable style={styles.menuRow} onPress={() => { setChildMenuOpen(false); onDeleteChild(child.id); }}>
+              <Text style={[styles.menuRowText, styles.menuRowDanger]}>Delete child</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={addActivityOpen} transparent animationType="fade" onRequestClose={() => setAddActivityOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setAddActivityOpen(false)}>
+          <Pressable style={styles.formCard} onPress={() => undefined}>
+            <Text style={styles.formTitle}>New activity</Text>
+            <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
+            <TextInput value={timesPerWeek} onChangeText={setTimesPerWeek} placeholder="Times per week" placeholderTextColor={colors.subtext} keyboardType="number-pad" style={styles.input} />
+            <View style={styles.formActions}>
+              <Pressable style={styles.formCancel} onPress={() => setAddActivityOpen(false)}>
+                <Text style={styles.formCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.formSave}
+                onPress={() => {
+                  if (!activityName.trim()) return;
+                  onAddActivity(child.id, activityName.trim(), Number(timesPerWeek) || 1);
+                  setActivityName('');
+                  setTimesPerWeek('1');
+                  setAddActivityOpen(false);
+                }}
+              >
+                <Text style={styles.formSaveText}>Add</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       {cropModal}
     </>
   );
@@ -472,6 +493,91 @@ const createStyles = (colors: ThemeColors) =>
     backgroundColor: colors.glassSoft,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  moreBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+  },
+  menuCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+  },
+  menuRowText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  menuRowDanger: {
+    color: '#dc2626',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  formCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    gap: 10,
+  },
+  formTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  formActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  formCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  formCancelText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  formSave: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  formSaveText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   childCard: {
     flexDirection: 'row',
