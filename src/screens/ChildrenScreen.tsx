@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { ChildProfile } from '@/types/app';
@@ -35,6 +35,8 @@ export function ChildrenScreen({
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [openChildId, setOpenChildId] = useState<string | null>(null);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
   const [activityName, setActivityName] = useState('');
   const [timesPerWeek, setTimesPerWeek] = useState('1');
@@ -77,23 +79,42 @@ export function ChildrenScreen({
       if (!perm.granted) return;
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web', // native gives a crop UI; web uses our own cropper
         aspect: [1, 1],
-        quality: 0.5,
+        quality: 0.8,
         base64: true,
       });
       if (res.canceled || !res.assets?.length) return;
       const asset = res.assets[0];
       const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-      onSetChildPhoto(childId, uri);
+      if (Platform.OS === 'web') {
+        setCropChildId(childId);
+        setCropSrc(uri);
+      } else {
+        onSetChildPhoto(childId, uri);
+      }
     } catch {
       // ignore picker failures
     }
   }
 
+  const cropModal = cropSrc ? (
+    <PhotoCropper
+      src={cropSrc}
+      colors={colors}
+      onCancel={() => { setCropSrc(null); setCropChildId(null); }}
+      onDone={(dataUrl) => {
+        if (cropChildId) onSetChildPhoto(cropChildId, dataUrl);
+        setCropSrc(null);
+        setCropChildId(null);
+      }}
+    />
+  ) : null;
+
   // ---- LIST OF CHILD CARDS ----
   if (!child) {
     return (
+      <>
       <SectionCard title="Children">
         <View style={styles.profileHeaderRow}>
           <Pressable style={styles.secondaryBtn} onPress={onAddChild}>
@@ -127,6 +148,8 @@ export function ChildrenScreen({
           })
         )}
       </SectionCard>
+      {cropModal}
+      </>
     );
   }
 
@@ -215,7 +238,152 @@ export function ChildrenScreen({
           </View>
         ) : null}
       </SectionCard>
+      {cropModal}
     </>
+  );
+}
+
+const CROP_VIEWPORT = 280;
+const CROP_OUT = 512;
+
+function PhotoCropper({
+  src,
+  colors,
+  onCancel,
+  onDone,
+}: {
+  src: string;
+  colors: ThemeColors;
+  onCancel: () => void;
+  onDone: (dataUrl: string) => void;
+}) {
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [nat, setNat] = useState<{ nw: number; nh: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const posRef = useRef({ x: 0, y: 0 });
+  const startRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    Image.getSize(
+      src,
+      (w, h) => setNat({ nw: w, nh: h }),
+      () => setNat({ nw: 1, nh: 1 }),
+    );
+  }, [src]);
+
+  const baseScale = nat ? CROP_VIEWPORT / Math.min(nat.nw, nat.nh) : 1;
+  const dispW = nat ? nat.nw * baseScale * zoom : CROP_VIEWPORT;
+  const dispH = nat ? nat.nh * baseScale * zoom : CROP_VIEWPORT;
+
+  const clampPos = (x: number, y: number, w: number, h: number) => ({
+    x: Math.min(0, Math.max(CROP_VIEWPORT - w, x)),
+    y: Math.min(0, Math.max(CROP_VIEWPORT - h, y)),
+  });
+
+  useEffect(() => {
+    if (!nat) return;
+    const c = clampPos((CROP_VIEWPORT - dispW) / 2, (CROP_VIEWPORT - dispH) / 2, dispW, dispH);
+    posRef.current = c;
+    setPos(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nat]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startRef.current = { ...posRef.current };
+      },
+      onPanResponderMove: (_evt, g) => {
+        const w = dispWRef.current;
+        const h = dispHRef.current;
+        const c = clampPos(startRef.current.x + g.dx, startRef.current.y + g.dy, w, h);
+        posRef.current = c;
+        setPos(c);
+      },
+    }),
+  ).current;
+
+  // keep latest sizes for the pan handler closure
+  const dispWRef = useRef(dispW);
+  const dispHRef = useRef(dispH);
+  dispWRef.current = dispW;
+  dispHRef.current = dispH;
+
+  function applyZoom(next: number) {
+    const z = Math.max(1, Math.min(4, Math.round(next * 100) / 100));
+    if (!nat) {
+      setZoom(z);
+      return;
+    }
+    const w = nat.nw * baseScale * z;
+    const h = nat.nh * baseScale * z;
+    const c = clampPos(posRef.current.x, posRef.current.y, w, h);
+    posRef.current = c;
+    setPos(c);
+    setZoom(z);
+  }
+
+  function confirm() {
+    if (Platform.OS === 'web' && nat && typeof document !== 'undefined') {
+      const displayScale = baseScale * zoom;
+      const srcSize = CROP_VIEWPORT / displayScale;
+      const srcX = -pos.x / displayScale;
+      const srcY = -pos.y / displayScale;
+      const img = new (window as unknown as { Image: new () => HTMLImageElement }).Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = CROP_OUT;
+        canvas.height = CROP_OUT;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUT, CROP_OUT);
+          onDone(canvas.toDataURL('image/jpeg', 0.85));
+        } else {
+          onDone(src);
+        }
+      };
+      img.onerror = () => onDone(src);
+      img.src = src;
+    } else {
+      onDone(src);
+    }
+  }
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.cropBackdrop}>
+        <View style={styles.cropCard}>
+          <Text style={styles.cropTitle}>Adjust photo</Text>
+          <Text style={styles.cropHint}>Drag to move · use −/+ to zoom</Text>
+          <View style={styles.cropViewport} {...pan.panHandlers}>
+            {nat ? (
+              <Image source={{ uri: src }} style={{ position: 'absolute', left: pos.x, top: pos.y, width: dispW, height: dispH }} />
+            ) : null}
+            <View pointerEvents="none" style={styles.cropCircle} />
+          </View>
+          <View style={styles.cropZoomRow}>
+            <Pressable style={styles.cropZoomBtn} onPress={() => applyZoom(zoom - 0.3)}>
+              <Text style={styles.cropZoomBtnText}>−</Text>
+            </Pressable>
+            <Text style={styles.cropZoomLabel}>Zoom</Text>
+            <Pressable style={styles.cropZoomBtn} onPress={() => applyZoom(zoom + 0.3)}>
+              <Text style={styles.cropZoomBtnText}>+</Text>
+            </Pressable>
+          </View>
+          <View style={styles.cropActions}>
+            <Pressable style={styles.cropCancel} onPress={onCancel}>
+              <Text style={styles.cropCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable style={styles.cropDone} onPress={confirm}>
+              <Text style={styles.cropDoneText}>Use photo</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -390,6 +558,111 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.text,
     fontSize: 14,
     fontWeight: '700',
+  },
+  cropBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  cropCard: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    alignItems: 'center',
+    gap: 6,
+  },
+  cropTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  cropHint: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  cropViewport: {
+    width: CROP_VIEWPORT,
+    height: CROP_VIEWPORT,
+    maxWidth: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#0b1020',
+    position: 'relative',
+  },
+  cropCircle: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: CROP_VIEWPORT / 2,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  cropZoomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 12,
+  },
+  cropZoomBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cropZoomBtnText: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  cropZoomLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  cropActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    alignSelf: 'stretch',
+  },
+  cropCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  cropCancelText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  cropDone: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  cropDoneText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   title: {
     color: colors.text,
