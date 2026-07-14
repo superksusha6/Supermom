@@ -1515,6 +1515,24 @@ function AppShell() {
       .map((c) => ({ id: c.id, title: c.title, child: children.find((ch) => ch.id === c.childId)?.name || 'Kid' }))
       .slice(0, 3);
   }, [chores, children]);
+  const childTodayPlans = useMemo(() => {
+    const map: Record<string, { time: string; title: string }[]> = {};
+    const todayEvents = events.filter((e) => e.date === todayDateKey && e.owner === 'child');
+    for (const c of children) {
+      const seen = new Set<string>();
+      map[c.id] = todayEvents
+        .filter((e) => e.ownerChildProfileId === c.id || e.ownerName === c.name)
+        .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
+        .map((e) => ({ time: (e.time || '').replace(/\s?[AP]M/i, ''), title: e.title.replace(/\s*\(.*?\)\s*/g, ' ').trim() || e.title }))
+        .filter((p) => {
+          const k = `${p.time}|${p.title.toLowerCase()}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+    }
+    return map;
+  }, [events, children, todayDateKey]);
   const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
   const eventColorsByDate = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -5344,6 +5362,8 @@ function AppShell() {
             children={children}
             onDeleteChild={handleDeleteChildDirect}
             onEditChild={openChildActivitiesEditor}
+            todayPlansByChild={childTodayPlans}
+            onSetChildPhoto={(childId, photoUri) => setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)))}
             quickActionRequest={dashboardFamilyQuickAction}
             onAddChild={() => {
               setEditingChildId(null);
