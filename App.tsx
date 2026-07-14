@@ -4388,16 +4388,18 @@ function AppShell() {
         </View>
       </View>
       <Modal visible={sectionMenuOpen} transparent animationType="fade" onRequestClose={() => setSectionMenuOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setSectionMenuOpen(false)}>
-          <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation?.()}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
-            {sectionActions.map((action) => (
-              <Pressable key={action.label} style={styles.sheetRow} onPress={() => { setSectionMenuOpen(false); action.onPress(); }}>
-                <Icon name={action.icon} color={colors.primary} size={20} />
-                <Text style={styles.sheetRowText}>{action.label}</Text>
-                <Icon name="chevron" color={colors.subtext} size={16} />
-              </Pressable>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSectionMenuOpen(false)}>
+          <Pressable style={styles.sectionMenuCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.sectionMenuTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
+            {sectionActions.map((action, i) => (
+              <View key={action.label}>
+                {i > 0 ? <View style={styles.sectionMenuDivider} /> : null}
+                <Pressable style={styles.sectionMenuRow} onPress={() => { setSectionMenuOpen(false); action.onPress(); }}>
+                  <Icon name={action.icon} color={colors.primary} size={20} />
+                  <Text style={styles.sectionMenuRowText}>{action.label}</Text>
+                  <Icon name="chevron" color={colors.subtext} size={16} />
+                </Pressable>
+              </View>
             ))}
           </Pressable>
         </Pressable>
@@ -9445,6 +9447,44 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   tabLabelActive: {
     color: colors.primary,
     fontWeight: '800',
+  },
+  sectionMenuCard: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
+  sectionMenuTitle: {
+    color: colors.subtext,
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  sectionMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  sectionMenuRowText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  sectionMenuDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: 12,
   },
   sheetBackdrop: {
     flex: 1,
