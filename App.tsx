@@ -9598,7 +9598,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   daySheetCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: colors.card,
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
@@ -9730,7 +9730,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   sectionMenuCard: {
     minWidth: 180,
-    backgroundColor: colors.card,
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,

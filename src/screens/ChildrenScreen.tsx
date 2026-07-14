@@ -611,7 +611,7 @@ const createStyles = (colors: ThemeColors) =>
   menuCard: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: colors.card,
+    backgroundColor: '#ffffff',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
@@ -636,7 +636,7 @@ const createStyles = (colors: ThemeColors) =>
   formCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: colors.card,
+    backgroundColor: '#ffffff',
     borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.border,
@@ -795,7 +795,7 @@ const createStyles = (colors: ThemeColors) =>
     width: '100%',
     maxWidth: 360,
     alignSelf: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: '#ffffff',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: colors.border,
