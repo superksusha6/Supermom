@@ -5558,7 +5558,7 @@ function AppShell() {
               )
             }
             onDeleteChore={(choreId) => handleChoresChange((prev) => prev.filter((c) => c.id !== choreId))}
-            onAddActivity={(childId, activityName, timesPerWeek) => {
+            onAddActivity={(childId, activityName, timesPerWeek, weekDays) => {
               setChildren((prev) =>
                 prev.map((child) =>
                   child.id === childId
@@ -5570,6 +5570,7 @@ function AppShell() {
                             id: `a${Date.now()}`,
                             name: activityName,
                             timesPerWeek,
+                            weekDays: weekDays.length ? weekDays : undefined,
                           },
                         ],
                       }

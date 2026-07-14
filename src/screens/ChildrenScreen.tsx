@@ -3,17 +3,31 @@ import { Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, Text
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { Icon } from '@/components/Icon';
-import { ChildProfile, Chore } from '@/types/app';
+import { ChildProfile, Chore, WeekDayCode } from '@/types/app';
 import { choreStatus } from '@/lib/chores';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 const AVATAR_COLORS = ['#3b5bdb', '#7c3aed', '#0ea5e9', '#16a34a', '#e08a2b', '#e11d48', '#0891b2', '#db2777'];
+const WEEK_DAYS: { code: WeekDayCode; label: string }[] = [
+  { code: 'mon', label: 'M' },
+  { code: 'tue', label: 'T' },
+  { code: 'wed', label: 'W' },
+  { code: 'thu', label: 'T' },
+  { code: 'fri', label: 'F' },
+  { code: 'sat', label: 'S' },
+  { code: 'sun', label: 'S' },
+];
+function daysLabel(days?: WeekDayCode[]) {
+  if (!days || !days.length) return null;
+  const map: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  return WEEK_DAYS.filter((d) => days.includes(d.code)).map((d) => map[d.code]).join(' · ');
+}
 
 type TodayPlan = { time: string; title: string };
 
 type Props = {
   children: ChildProfile[];
-  onAddActivity: (childId: string, activityName: string, timesPerWeek: number) => void;
+  onAddActivity: (childId: string, activityName: string, timesPerWeek: number, weekDays: WeekDayCode[]) => void;
   onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
@@ -52,14 +66,14 @@ export function ChildrenScreen({
   const [addChoreOpen, setAddChoreOpen] = useState(false);
   const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
-  const [timesPerWeek, setTimesPerWeek] = useState('1');
+  const [activityDays, setActivityDays] = useState<WeekDayCode[]>([]);
 
   const child = children.find((item) => item.id === openChildId) || null;
 
   useEffect(() => {
     setAddActivityOpen(false);
     setActivityName('');
-    setTimesPerWeek('1');
+    setActivityDays([]);
   }, [openChildId]);
 
   // Drop back to the list if the open child was deleted.
@@ -205,7 +219,7 @@ export function ChildrenScreen({
             accessibilityRole="button"
             accessibilityLabel="Add activity"
             style={styles.addRoundBtn}
-            onPress={() => { setActivityName(''); setTimesPerWeek('1'); setAddActivityOpen(true); }}
+            onPress={() => { setActivityName(''); setActivityDays([]); setAddActivityOpen(true); }}
           >
             <Icon name="plus" color="#ffffff" size={20} />
           </Pressable>
@@ -217,7 +231,7 @@ export function ChildrenScreen({
           <View key={activity.id} style={[styles.item, styles.activityRow]}>
             <View style={styles.activityCopy}>
               <Text style={styles.title}>{activity.name}</Text>
-              <Text style={styles.meta}>{activity.timesPerWeek} times per week</Text>
+              <Text style={styles.meta}>{daysLabel(activity.weekDays) || `${activity.timesPerWeek} times per week`}</Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -321,7 +335,23 @@ export function ChildrenScreen({
           <Pressable style={styles.formCard} onPress={() => undefined}>
             <Text style={styles.formTitle}>New activity</Text>
             <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
-            <TextInput value={timesPerWeek} onChangeText={setTimesPerWeek} placeholder="Times per week" placeholderTextColor={colors.subtext} keyboardType="number-pad" style={styles.input} />
+            <Text style={styles.formSubLabel}>Which days?</Text>
+            <View style={styles.dayRow}>
+              {WEEK_DAYS.map((d) => {
+                const on = activityDays.includes(d.code);
+                return (
+                  <Pressable
+                    key={d.code}
+                    accessibilityRole="button"
+                    accessibilityLabel={d.code}
+                    style={[styles.dayToggle, on && styles.dayToggleOn]}
+                    onPress={() => setActivityDays((prev) => (on ? prev.filter((x) => x !== d.code) : [...prev, d.code]))}
+                  >
+                    <Text style={[styles.dayToggleText, on && styles.dayToggleTextOn]}>{d.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <View style={styles.formActions}>
               <Pressable style={styles.formCancel} onPress={() => setAddActivityOpen(false)}>
                 <Text style={styles.formCancelText}>Cancel</Text>
@@ -330,9 +360,10 @@ export function ChildrenScreen({
                 style={styles.formSave}
                 onPress={() => {
                   if (!activityName.trim()) return;
-                  onAddActivity(child.id, activityName.trim(), Number(timesPerWeek) || 1);
+                  const days = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
+                  onAddActivity(child.id, activityName.trim(), days.length || 1, days);
                   setActivityName('');
-                  setTimesPerWeek('1');
+                  setActivityDays([]);
                   setAddActivityOpen(false);
                 }}
               >
@@ -574,6 +605,39 @@ const createStyles = (colors: ThemeColors) =>
   choreTitleDone: {
     textDecorationLine: 'line-through',
     color: colors.subtext,
+  },
+  formSubLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  dayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 5,
+  },
+  dayToggle: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#f4f7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayToggleOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dayToggleText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dayToggleTextOn: {
+    color: '#ffffff',
   },
   emptyText: {
     color: colors.subtext,
