@@ -200,6 +200,7 @@ const LOCAL_DAILY_CARD_STATE_KEY = 'smartmom.dailyCardState.v1';
 const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
+const DAY_TIME_OPTIONS = ['7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
 type HomeLayout = 'focus' | 'zen' | 'bento';
 
@@ -775,6 +776,10 @@ function AppShell() {
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
+  const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
+  const [dayNewTitle, setDayNewTitle] = useState('');
+  const [dayNewTime, setDayNewTime] = useState('4:00 PM');
+  const [dayNewWho, setDayNewWho] = useState<string>('mother');
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
@@ -2762,6 +2767,181 @@ function AppShell() {
     setChildDialStep('hour');
   }
 
+  function addCalendarEvent({
+    title,
+    date,
+    time,
+    endTime,
+    owner,
+    ownerName,
+    ownerChildProfileId,
+    shareToParent,
+    category,
+    color,
+    taskPriority,
+    motherColor,
+    staffColor,
+    visibility,
+  }: {
+    title: string;
+    date: string;
+    time: string;
+    endTime?: string;
+    owner: Role;
+    ownerName: string;
+    ownerChildProfileId?: string;
+    shareToParent?: boolean;
+    category: string;
+    color: string;
+    taskPriority?: TaskPriority;
+    motherColor?: string;
+    staffColor?: string;
+    visibility?: 'shared' | 'staff_private';
+  }) {
+    const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
+    const deadlineAt = time ? `${date} ${time}` : date;
+    const childForMirror =
+      owner === 'child' && ownerChildProfileId
+        ? children.find(
+            (item) => item.id === ownerChildProfileId && (shareToParent ?? (item.includeInMotherCalendar ?? true)),
+          )
+        : null;
+    const mirrorEvent = childForMirror
+      ? buildParentMirrorEvent({
+          childId: childForMirror.id,
+          childName: childForMirror.name,
+          parentLabel,
+          title,
+          date,
+          time,
+          endTime,
+          color,
+        })
+      : null;
+    if (session) {
+      const tempId = `tmp-e-${Date.now()}`;
+      const optimisticEvent: CalendarEvent = {
+        id: tempId,
+        title,
+        date,
+        time,
+        endTime,
+        owner,
+        ownerName,
+        ownerChildProfileId,
+        category,
+        color,
+        motherColor,
+        staffColor,
+        visibility,
+      };
+      const optimisticMirrorEvent = mirrorEvent ? { ...mirrorEvent, id: `tmp-mirror-${Date.now()}` } : null;
+      setEvents((prev) => [optimisticEvent, ...(optimisticMirrorEvent ? [optimisticMirrorEvent] : []), ...prev]);
+      Promise.all([
+        createCalendarEvent(session, {
+          title,
+          date,
+          time,
+          endTime,
+          owner,
+          ownerName,
+          ownerChildProfileId: ownerChildProfileId || null,
+          category,
+          color,
+          motherColor,
+          staffColor,
+          visibility,
+        }),
+        mirrorEvent
+          ? createCalendarEvent(session, {
+              title: mirrorEvent.title,
+              date: mirrorEvent.date,
+              time: mirrorEvent.time,
+              endTime: mirrorEvent.endTime,
+              owner: mirrorEvent.owner,
+              ownerName: mirrorEvent.ownerName,
+              ownerChildProfileId: mirrorEvent.ownerChildProfileId || null,
+              category: mirrorEvent.category,
+              color: mirrorEvent.color,
+              motherColor: mirrorEvent.motherColor,
+              staffColor: mirrorEvent.staffColor,
+              visibility: mirrorEvent.visibility,
+            })
+          : Promise.resolve(),
+        isStaffTask
+          ? createTask(session, {
+              title,
+              assigneeRole: 'staff',
+              priority: taskPriority || 'non_urgent',
+              deadlineAt: toIsoDeadline(date, time),
+            })
+          : Promise.resolve(),
+      ])
+        .then(() => Promise.all([refreshLiveCalendar(), isStaffTask ? refreshLiveTasks() : Promise.resolve()]))
+        .catch((error) => {
+          setEvents((prev) => prev.filter((event) => event.id !== tempId && event.id !== optimisticMirrorEvent?.id));
+          setTasksError(error instanceof Error ? error.message : 'Create event failed.');
+        });
+      return;
+    }
+    const eventId = `e${Date.now()}`;
+    setEvents((prev) => {
+      const primaryEvent: CalendarEvent = {
+        id: eventId,
+        title,
+        date,
+        time,
+        endTime,
+        owner,
+        ownerName,
+        category,
+        color,
+        motherColor,
+        staffColor,
+        visibility,
+        ownerChildProfileId,
+      };
+      const localMirrorEvent = mirrorEvent ? { ...mirrorEvent, id: `e-mirror-${Date.now()}` } : null;
+      return [primaryEvent, ...(localMirrorEvent ? [localMirrorEvent] : []), ...prev];
+    });
+    if (isStaffTask) {
+      setTasks((prev) => [
+        {
+          id: eventId.replace(/^e/, 't'),
+          title,
+          assigneeRole: 'staff',
+          assigneeName: ownerName,
+          priority: taskPriority || 'non_urgent',
+          status: 'new',
+          deadline: deadlineAt,
+          needsParentApproval: false,
+        },
+        ...prev,
+      ]);
+    }
+  }
+
+  function openDaySheet(dateKey: string) {
+    setDaySheetDate(dateKey);
+    setDayNewTitle('');
+    setDayNewTime('4:00 PM');
+    setDayNewWho('mother');
+  }
+  const daySheetEvents = useMemo(() => {
+    if (!daySheetDate) return [] as { id: string; title: string; time: string; who: string; color: string }[];
+    const seen = new Set<string>();
+    return events
+      .filter((e) => e.date === daySheetDate)
+      .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
+      .filter((e) => {
+        const k = `${dashTimeToMinutes(e.time)}|${normalizeEventKey(e.title)}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .map((e) => ({ id: e.id, title: e.title, time: (e.time || '').replace(/\s?[AP]M/i, ''), who: e.ownerName || 'Family', color: e.color || colors.primary }));
+  }, [events, daySheetDate, colors.primary]);
+
   function openAddChild() {
     setEditingChildId(null);
     setChildDraftName('');
@@ -4148,7 +4328,7 @@ function AppShell() {
                 accessibilityRole="button"
                 accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}`}
                 style={styles.agendaCopy}
-                onPress={() => setHomeTab('calendar')}
+                onPress={() => openDaySheet(todayDateKey)}
               >
                 <View style={styles.agendaTitleRow}>
                   <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
@@ -4170,7 +4350,7 @@ function AppShell() {
           </View>
         ))
       ) : (
-        <Pressable style={styles.agendaEmpty} onPress={() => setHomeTab('calendar')}>
+        <Pressable style={styles.agendaEmpty} onPress={() => openDaySheet(todayDateKey)}>
           <Text style={styles.agendaEmptyText}>No events scheduled today.</Text>
           {nextUpcomingEvent ? (
             <Text style={styles.agendaEmptySub}>Next up: {nextUpcomingEvent.title}</Text>
@@ -4335,7 +4515,7 @@ function AppShell() {
   ) : null;
 
   const focusMiniCal = (
-    <WeekStrip eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={() => setHomeTab('calendar')} />
+    <WeekStrip eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={(dateKey) => openDaySheet(dateKey)} />
   );
 
   const focusHome = isMobile ? (
@@ -4362,7 +4542,12 @@ function AppShell() {
   const sectionActions: { label: string; icon: IconName; onPress: () => void }[] =
     screen === 'family' && familyTab === 'children'
       ? [{ label: 'Add child', icon: 'plus', onPress: openAddChild }]
-      : [];
+      : screen === 'calendar'
+        ? [
+            { label: 'Add event today', icon: 'plus', onPress: () => openDaySheet(todayDateKey) },
+            { label: 'Open full calendar', icon: 'calendar', onPress: () => setHomeTab('calendar') },
+          ]
+        : [];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -4405,6 +4590,86 @@ function AppShell() {
           </View>
         </>
       ) : null}
+
+      <Modal visible={daySheetDate !== null} transparent animationType="slide" onRequestClose={() => setDaySheetDate(null)}>
+        <Pressable style={styles.daySheetBackdrop} onPress={() => setDaySheetDate(null)}>
+          <Pressable style={styles.daySheetCard} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.daySheetHandle} />
+            <Text style={styles.daySheetTitle}>{daySheetDate ? formatShortDate(daySheetDate) : ''}</Text>
+
+            {daySheetEvents.length > 0 ? (
+              <View style={styles.daySheetList}>
+                {daySheetEvents.map((ev) => (
+                  <View key={ev.id} style={styles.daySheetEvent}>
+                    <Text style={styles.daySheetEventTime}>{ev.time}</Text>
+                    <View style={[styles.daySheetEventDot, { backgroundColor: ev.color }]} />
+                    <Text style={styles.daySheetEventTitle} numberOfLines={1}>{ev.title}</Text>
+                    <Text style={styles.daySheetEventWho} numberOfLines={1}>{ev.who}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.daySheetEmpty}>Nothing planned. Add something below.</Text>
+            )}
+
+            <View style={styles.daySheetForm}>
+              <TextInput
+                placeholder="Add an event…"
+                placeholderTextColor={colors.subtext}
+                style={styles.input}
+                value={dayNewTitle}
+                onChangeText={setDayNewTitle}
+              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
+                {DAY_TIME_OPTIONS.map((t) => (
+                  <Pressable key={t} style={[styles.daySheetChip, dayNewTime === t && styles.daySheetChipActive]} onPress={() => setDayNewTime(t)}>
+                    <Text style={[styles.daySheetChipText, dayNewTime === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
+                <Pressable style={[styles.daySheetChip, dayNewWho === 'mother' && styles.daySheetChipActive]} onPress={() => setDayNewWho('mother')}>
+                  <Text style={[styles.daySheetChipText, dayNewWho === 'mother' && styles.daySheetChipTextActive]}>{parentLabel}</Text>
+                </Pressable>
+                {children.map((c) => (
+                  <Pressable key={c.id} style={[styles.daySheetChip, dayNewWho === c.id && styles.daySheetChipActive]} onPress={() => setDayNewWho(c.id)}>
+                    <Text style={[styles.daySheetChipText, dayNewWho === c.id && styles.daySheetChipTextActive]}>{c.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View style={styles.daySheetActions}>
+                <Pressable style={styles.daySheetCancel} onPress={() => setDaySheetDate(null)}>
+                  <Text style={styles.daySheetCancelText}>Done</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.daySheetAdd}
+                  onPress={() => {
+                    if (!dayNewTitle.trim() || !daySheetDate) return;
+                    const child = dayNewWho !== 'mother' ? children.find((c) => c.id === dayNewWho) : null;
+                    const idx = child ? children.findIndex((c) => c.id === child.id) : -1;
+                    const color = child ? childColorPalette[idx % childColorPalette.length] || '#64748b' : colors.primary;
+                    addCalendarEvent({
+                      title: dayNewTitle.trim(),
+                      date: daySheetDate,
+                      time: dayNewTime,
+                      owner: child ? 'child' : 'mother',
+                      ownerName: child ? child.name : parentLabel,
+                      ownerChildProfileId: child ? child.id : undefined,
+                      shareToParent: child ? true : undefined,
+                      category: child ? child.name : 'General',
+                      color,
+                    });
+                    setDayNewTitle('');
+                  }}
+                >
+                  <Text style={styles.daySheetAddText}>Add</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
         <View style={styles.settingsModalRoot}>
           <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
@@ -5058,135 +5323,7 @@ function AppShell() {
               quickActionRequest={dashboardCalendarQuickAction}
               onCompleteStaffTask={markStaffTaskDone}
               getStaffTaskSuggestions={getStaffTaskSuggestions}
-              onAddEvent={({ title, date, time, endTime, owner, ownerName, ownerChildProfileId, shareToParent, category, color, taskPriority, motherColor, staffColor, visibility }) => {
-                const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
-                const deadlineAt = time ? `${date} ${time}` : date;
-                const childForMirror =
-                  owner === 'child' && ownerChildProfileId
-                    ? children.find(
-                        (item) =>
-                          item.id === ownerChildProfileId &&
-                          (shareToParent ?? (item.includeInMotherCalendar ?? true)),
-                      )
-                    : null;
-                const mirrorEvent = childForMirror
-                  ? buildParentMirrorEvent({
-                      childId: childForMirror.id,
-                      childName: childForMirror.name,
-                      parentLabel,
-                      title,
-                      date,
-                      time,
-                      endTime,
-                      color,
-                    })
-                  : null;
-                if (session) {
-                  const tempId = `tmp-e-${Date.now()}`;
-                  const optimisticEvent: CalendarEvent = {
-                    id: tempId,
-                    title,
-                    date,
-                    time,
-                    endTime,
-                    owner,
-                    ownerName,
-                    ownerChildProfileId,
-                    category,
-                    color,
-                    motherColor,
-                    staffColor,
-                    visibility,
-                  };
-                  const optimisticMirrorEvent = mirrorEvent ? { ...mirrorEvent, id: `tmp-mirror-${Date.now()}` } : null;
-
-                  setEvents((prev) => [optimisticEvent, ...(optimisticMirrorEvent ? [optimisticMirrorEvent] : []), ...prev]);
-                  Promise.all([
-                    createCalendarEvent(session, {
-                      title,
-                      date,
-                      time,
-                      endTime,
-                      owner,
-                      ownerName,
-                      ownerChildProfileId: ownerChildProfileId || null,
-                      category,
-                      color,
-                      motherColor,
-                      staffColor,
-                      visibility,
-                    }),
-                    mirrorEvent
-                      ? createCalendarEvent(session, {
-                          title: mirrorEvent.title,
-                          date: mirrorEvent.date,
-                          time: mirrorEvent.time,
-                          endTime: mirrorEvent.endTime,
-                          owner: mirrorEvent.owner,
-                          ownerName: mirrorEvent.ownerName,
-                          ownerChildProfileId: mirrorEvent.ownerChildProfileId || null,
-                          category: mirrorEvent.category,
-                          color: mirrorEvent.color,
-                          motherColor: mirrorEvent.motherColor,
-                          staffColor: mirrorEvent.staffColor,
-                          visibility: mirrorEvent.visibility,
-                        })
-                      : Promise.resolve(),
-                    isStaffTask
-                      ? createTask(session, {
-                          title,
-                          assigneeRole: 'staff',
-                          priority: taskPriority || 'non_urgent',
-                          deadlineAt: toIsoDeadline(date, time),
-                        })
-                      : Promise.resolve(),
-                  ])
-                    .then(() => Promise.all([refreshLiveCalendar(), isStaffTask ? refreshLiveTasks() : Promise.resolve()]))
-                    .catch((error) => {
-                      setEvents((prev) =>
-                        prev.filter((event) => event.id !== tempId && event.id !== optimisticMirrorEvent?.id),
-                      );
-                      setTasksError(error instanceof Error ? error.message : 'Create event failed.');
-                    });
-                  return;
-                }
-
-                const eventId = `e${Date.now()}`;
-                setEvents((prev) => {
-                  const primaryEvent: CalendarEvent = {
-                    id: eventId,
-                    title,
-                    date,
-                    time,
-                    endTime,
-                    owner,
-                    ownerName,
-                    category,
-                    color,
-                    motherColor,
-                    staffColor,
-                    visibility,
-                    ownerChildProfileId,
-                  };
-                  const localMirrorEvent = mirrorEvent ? { ...mirrorEvent, id: `e-mirror-${Date.now()}` } : null;
-                  return [primaryEvent, ...(localMirrorEvent ? [localMirrorEvent] : []), ...prev];
-                });
-                if (isStaffTask) {
-                  setTasks((prev) => [
-                    {
-                      id: eventId.replace(/^e/, 't'),
-                      title,
-                      assigneeRole: 'staff',
-                      assigneeName: ownerName,
-                      priority: taskPriority || 'non_urgent',
-                      status: 'new',
-                      deadline: deadlineAt,
-                      needsParentApproval: false,
-                    },
-                    ...prev,
-                  ]);
-                }
-              }}
+              onAddEvent={addCalendarEvent}
               onUpdateEvent={({ id, title, color, time, endTime, owner, ownerName, ownerChildProfileId, shareToParent, category, date, motherColor, staffColor, visibility }) => {
                 const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
                 const sourceEvent = events.find((event) => event.id === id);
@@ -9450,6 +9587,134 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   tabLabelActive: {
     color: colors.primary,
+    fontWeight: '800',
+  },
+  daySheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.4)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  daySheetCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 26,
+    gap: 10,
+    maxHeight: '82%',
+  },
+  daySheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: 4,
+  },
+  daySheetTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  daySheetList: {
+    gap: 2,
+  },
+  daySheetEvent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  daySheetEventTime: {
+    width: 52,
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  daySheetEventDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  daySheetEventTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  daySheetEventWho: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  daySheetEmpty: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
+    paddingVertical: 4,
+  },
+  daySheetForm: {
+    gap: 9,
+    marginTop: 4,
+  },
+  daySheetChipsRow: {
+    gap: 7,
+    paddingRight: 4,
+  },
+  daySheetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  daySheetChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  daySheetChipText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  daySheetChipTextActive: {
+    color: '#ffffff',
+  },
+  daySheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  daySheetCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  daySheetCancelText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  daySheetAdd: {
+    flex: 1.4,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  daySheetAddText: {
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '800',
   },
   sectionMenuScrim: {
