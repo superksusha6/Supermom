@@ -4392,7 +4392,6 @@ function AppShell() {
           <Pressable style={styles.sectionMenuScrim} onPress={() => setSectionMenuOpen(false)} />
           <View style={styles.sectionMenuAnchor} pointerEvents="box-none">
             <View style={styles.sectionMenuCard}>
-              <Text style={styles.sectionMenuTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
               {sectionActions.map((action, i) => (
                 <View key={action.label}>
                   {i > 0 ? <View style={styles.sectionMenuDivider} /> : null}
@@ -9462,15 +9461,15 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     alignItems: 'flex-end',
   },
   sectionMenuCard: {
-    minWidth: 210,
+    minWidth: 180,
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 6,
+    paddingVertical: 3,
     overflow: 'hidden',
     ...(Platform.OS === 'web'
-      ? ({ boxShadow: '0 18px 44px -18px rgba(15,23,42,0.5)' } as any)
+      ? ({ boxShadow: '0 14px 36px -16px rgba(15,23,42,0.45)' } as any)
       : { elevation: 12 }),
   },
   sectionMenuTitle: {
@@ -9486,14 +9485,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   sectionMenuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   sectionMenuRowText: {
     flex: 1,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   sectionMenuDivider: {
