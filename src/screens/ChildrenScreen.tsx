@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
+import { Icon } from '@/components/Icon';
 import { ChildProfile } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -117,8 +118,8 @@ export function ChildrenScreen({
       <>
       <SectionCard title="Children">
         <View style={styles.profileHeaderRow}>
-          <Pressable style={styles.secondaryBtn} onPress={onAddChild}>
-            <Text style={styles.secondaryBtnText}>+ Add child</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add child" style={styles.addRoundBtn} onPress={onAddChild}>
+            <Icon name="plus" color="#ffffff" size={20} />
           </Pressable>
         </View>
         {children.length === 0 ? (
@@ -199,8 +200,13 @@ export function ChildrenScreen({
 
       <SectionCard title="Activities / Sports / Clubs">
         <View style={styles.profileHeaderRow}>
-          <Pressable style={styles.secondaryBtn} onPress={() => setAddActivityOpen((prev) => !prev)}>
-            <Text style={styles.secondaryBtnText}>{addActivityOpen ? 'Close' : '+ Add activity'}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={addActivityOpen ? 'Close' : 'Add activity'}
+            style={[styles.addRoundBtn, addActivityOpen && styles.addRoundBtnOpen]}
+            onPress={() => setAddActivityOpen((prev) => !prev)}
+          >
+            <Icon name={addActivityOpen ? 'chevron' : 'plus'} color={addActivityOpen ? colors.primary : '#ffffff'} size={20} />
           </Pressable>
         </View>
         {child.activities.map((activity) => (
@@ -453,6 +459,19 @@ const createStyles = (colors: ThemeColors) =>
     fontSize: 13,
     lineHeight: 18,
     paddingVertical: 6,
+  },
+  addRoundBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addRoundBtnOpen: {
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   childCard: {
     flexDirection: 'row',
