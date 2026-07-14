@@ -1093,6 +1093,8 @@ export function CalendarScreen({
       setEditEndTime(value);
     }
     setOpenTimeField(null);
+    setEditingTimeField(null);
+    setTimeDraft('');
   }
 
   function beginEditTimeField(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end') {
@@ -5816,7 +5818,9 @@ const createStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 10,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: 'rgba(37,99,235,0.28)',
     shadowOpacity: 1,
     shadowRadius: 14,
