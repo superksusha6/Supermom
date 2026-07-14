@@ -4711,9 +4711,16 @@ function AppShell() {
 
       {role === 'mother' ? (
         <>
-          {childSetupOpen ? (
-            <View style={styles.authCard}>
-              <Text style={styles.authTitle}>Child Profile Setup</Text>
+          <Modal visible={childSetupOpen} transparent animationType="fade" onRequestClose={() => setChildSetupOpen(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.childEditorModalCard}>
+                <View style={styles.childEditorHeader}>
+                  <Text style={styles.authTitle}>Child Profile Setup</Text>
+                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setChildSetupOpen(false)}>
+                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
               <TextInput placeholder="Child name" style={styles.input} value={childDraftName} onChangeText={setChildDraftName} />
               <TextInput
                 placeholder="Date of birth (Day / Month / Year)"
@@ -4832,8 +4839,10 @@ function AppShell() {
                   <Text style={styles.authBtnText}>Save Child</Text>
                 </Pressable>
               </View>
+                </ScrollView>
+              </View>
             </View>
-          ) : null}
+          </Modal>
 
           {staffSetupOpen ? (
             <View style={styles.authCard}>
