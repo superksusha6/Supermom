@@ -4387,23 +4387,25 @@ function AppShell() {
           </Pressable>
         </View>
       </View>
-      <Modal visible={sectionMenuOpen} transparent animationType="fade" onRequestClose={() => setSectionMenuOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSectionMenuOpen(false)}>
-          <Pressable style={styles.sectionMenuCard} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.sectionMenuTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
-            {sectionActions.map((action, i) => (
-              <View key={action.label}>
-                {i > 0 ? <View style={styles.sectionMenuDivider} /> : null}
-                <Pressable style={styles.sectionMenuRow} onPress={() => { setSectionMenuOpen(false); action.onPress(); }}>
-                  <Icon name={action.icon} color={colors.primary} size={20} />
-                  <Text style={styles.sectionMenuRowText}>{action.label}</Text>
-                  <Icon name="chevron" color={colors.subtext} size={16} />
-                </Pressable>
-              </View>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {sectionMenuOpen ? (
+        <>
+          <Pressable style={styles.sectionMenuScrim} onPress={() => setSectionMenuOpen(false)} />
+          <View style={styles.sectionMenuAnchor} pointerEvents="box-none">
+            <View style={styles.sectionMenuCard}>
+              <Text style={styles.sectionMenuTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
+              {sectionActions.map((action, i) => (
+                <View key={action.label}>
+                  {i > 0 ? <View style={styles.sectionMenuDivider} /> : null}
+                  <Pressable style={styles.sectionMenuRow} onPress={() => { setSectionMenuOpen(false); action.onPress(); }}>
+                    <Icon name={action.icon} color={colors.primary} size={19} />
+                    <Text style={styles.sectionMenuRowText}>{action.label}</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </View>
+        </>
+      ) : null}
       <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
         <View style={styles.settingsModalRoot}>
           <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
@@ -9448,15 +9450,28 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.primary,
     fontWeight: '800',
   },
+  sectionMenuScrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+  },
+  sectionMenuAnchor: {
+    position: 'absolute',
+    top: 66,
+    right: 14,
+    zIndex: 41,
+    alignItems: 'flex-end',
+  },
   sectionMenuCard: {
-    width: '100%',
-    maxWidth: 300,
+    minWidth: 210,
     backgroundColor: colors.card,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 6,
     overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 18px 44px -18px rgba(15,23,42,0.5)' } as any)
+      : { elevation: 12 }),
   },
   sectionMenuTitle: {
     color: colors.subtext,
