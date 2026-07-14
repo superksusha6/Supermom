@@ -98,7 +98,7 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
@@ -120,6 +120,7 @@ type DraftActivity = {
   name: string;
   timesPerWeek: string;
   time: string;
+  endTime?: string;
   color: string;
   weekDays: WeekDayCode[];
   timeSlots: string[];
@@ -5558,25 +5559,55 @@ function AppShell() {
               )
             }
             onDeleteChore={(choreId) => handleChoresChange((prev) => prev.filter((c) => c.id !== choreId))}
-            onAddActivity={(childId, activityName, timesPerWeek, weekDays) => {
+            onAddActivity={(childId, activityName, timesPerWeek, weekDays, time, endTime) => {
+              const targetChild = children.find((child) => child.id === childId);
+              if (!targetChild) return;
+              const start = time ? normalizeTimeText(time) : '';
+              const end = endTime ? normalizeTimeText(endTime) : '';
+              const newActivity: ChildActivity = {
+                id: `a${Date.now()}`,
+                name: activityName,
+                timesPerWeek,
+                weekDays: weekDays.length ? weekDays : undefined,
+                time: start || undefined,
+                endTime: end || undefined,
+                timeSlots: start ? [start] : undefined,
+              };
+              const nextActivities = [...targetChild.activities, newActivity];
+
               setChildren((prev) =>
-                prev.map((child) =>
-                  child.id === childId
-                    ? {
-                        ...child,
-                        activities: [
-                          ...child.activities,
-                          {
-                            id: `a${Date.now()}`,
-                            name: activityName,
-                            timesPerWeek,
-                            weekDays: weekDays.length ? weekDays : undefined,
-                          },
-                        ],
-                      }
-                    : child,
-                ),
+                prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
               );
+
+              // Roll the new activity onto the calendar on the chosen weekdays (with its time range).
+              const draftActivities: DraftActivity[] = nextActivities.map((activity) => ({
+                id: activity.id,
+                name: activity.name,
+                timesPerWeek: String(activity.timesPerWeek || 1),
+                time: activity.time || '10:00 AM',
+                endTime: activity.endTime,
+                color: activity.color || '#64748b',
+                weekDays: activity.weekDays && activity.weekDays.length ? activity.weekDays : [],
+                timeSlots: activity.timeSlots && activity.timeSlots.length ? activity.timeSlots : activity.time ? [activity.time] : [],
+              }));
+              const nextEvents = buildChildScheduleEvents({
+                childId,
+                childName: targetChild.name,
+                activities: draftActivities,
+                includeInParentCalendar: targetChild.includeInMotherCalendar ?? true,
+                parentLabel,
+                monthsAhead: AUTO_SCHEDULE_MONTHS_AHEAD,
+              });
+
+              if (session && isSupabaseConfigured) {
+                replaceGeneratedChildEvents(session, childId, nextEvents)
+                  .then(() => refreshLiveCalendar())
+                  .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not schedule activity.'));
+              }
+              setEvents((prev) => {
+                const withoutOld = prev.filter((event) => !isAutoScheduleEventForChild(event, childId, targetChild.name));
+                return [...withoutOld, ...nextEvents];
+              });
             }}
             onDeleteActivity={(childId, activityId) => {
               setChildren((prev) =>
@@ -7410,6 +7441,7 @@ function buildChildScheduleEvents(params: {
             ownerChildProfileId: childId,
             date: dateText,
             time: slot,
+            endTime: activity.endTime,
             category: childName,
             color,
           });
@@ -7422,6 +7454,7 @@ function buildChildScheduleEvents(params: {
               ownerName: parentLabel,
               date: dateText,
               time: slot,
+              endTime: activity.endTime,
               category: 'Child Plan',
               color,
             });

@@ -11,6 +11,7 @@ export type ChildActivity = {
   name: string;
   timesPerWeek: number;
   time?: string;
+  endTime?: string;
   color?: string;
   weekDays?: WeekDayCode[];
   timeSlots?: string[];

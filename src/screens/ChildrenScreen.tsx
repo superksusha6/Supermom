@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { Icon } from '@/components/Icon';
@@ -23,11 +23,29 @@ function daysLabel(days?: WeekDayCode[]) {
   return WEEK_DAYS.filter((d) => days.includes(d.code)).map((d) => map[d.code]).join(' · ');
 }
 
+// Half-hour options 6:00 AM → 9:00 PM for the activity time / range picker.
+const TIME_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 6; h <= 21; h += 1) {
+    for (const m of [0, 30]) {
+      const suffix = h < 12 ? 'AM' : 'PM';
+      const hour12 = h % 12 === 0 ? 12 : h % 12;
+      out.push(`${hour12}:${m === 0 ? '00' : '30'} ${suffix}`);
+    }
+  }
+  return out;
+})();
+
+function timeRangeLabel(time?: string, endTime?: string) {
+  if (!time) return null;
+  return endTime ? `${time} – ${endTime}` : time;
+}
+
 type TodayPlan = { time: string; title: string };
 
 type Props = {
   children: ChildProfile[];
-  onAddActivity: (childId: string, activityName: string, timesPerWeek: number, weekDays: WeekDayCode[]) => void;
+  onAddActivity: (childId: string, activityName: string, timesPerWeek: number, weekDays: WeekDayCode[], time: string, endTime: string) => void;
   onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
@@ -67,6 +85,8 @@ export function ChildrenScreen({
   const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
   const [activityDays, setActivityDays] = useState<WeekDayCode[]>([]);
+  const [activityStart, setActivityStart] = useState<string>('');
+  const [activityEnd, setActivityEnd] = useState<string>('');
 
   const child = children.find((item) => item.id === openChildId) || null;
 
@@ -74,6 +94,8 @@ export function ChildrenScreen({
     setAddActivityOpen(false);
     setActivityName('');
     setActivityDays([]);
+    setActivityStart('');
+    setActivityEnd('');
   }, [openChildId]);
 
   // Drop back to the list if the open child was deleted.
@@ -219,7 +241,7 @@ export function ChildrenScreen({
             accessibilityRole="button"
             accessibilityLabel="Add activity"
             style={styles.addRoundBtn}
-            onPress={() => { setActivityName(''); setActivityDays([]); setAddActivityOpen(true); }}
+            onPress={() => { setActivityName(''); setActivityDays([]); setActivityStart(''); setActivityEnd(''); setAddActivityOpen(true); }}
           >
             <Icon name="plus" color="#ffffff" size={20} />
           </Pressable>
@@ -231,7 +253,10 @@ export function ChildrenScreen({
           <View key={activity.id} style={[styles.item, styles.activityRow]}>
             <View style={styles.activityCopy}>
               <Text style={styles.title}>{activity.name}</Text>
-              <Text style={styles.meta}>{daysLabel(activity.weekDays) || `${activity.timesPerWeek} times per week`}</Text>
+              <Text style={styles.meta}>
+                {[daysLabel(activity.weekDays), timeRangeLabel(activity.time, activity.endTime)].filter(Boolean).join('  ·  ') ||
+                  `${activity.timesPerWeek} times per week`}
+              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -352,6 +377,43 @@ export function ChildrenScreen({
                 );
               })}
             </View>
+            <Text style={styles.formSubLabel}>Start time</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
+              {TIME_OPTIONS.map((t) => {
+                const on = activityStart === t;
+                return (
+                  <Pressable
+                    key={`start-${t}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Start ${t}`}
+                    style={[styles.timePill, on && styles.timePillOn]}
+                    onPress={() => {
+                      setActivityStart(on ? '' : t);
+                      if (!on && activityEnd && TIME_OPTIONS.indexOf(activityEnd) <= TIME_OPTIONS.indexOf(t)) setActivityEnd('');
+                    }}
+                  >
+                    <Text style={[styles.timePillText, on && styles.timePillTextOn]}>{t}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.formSubLabel}>Ends (optional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
+              {TIME_OPTIONS.filter((t) => !activityStart || TIME_OPTIONS.indexOf(t) > TIME_OPTIONS.indexOf(activityStart)).map((t) => {
+                const on = activityEnd === t;
+                return (
+                  <Pressable
+                    key={`end-${t}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ends ${t}`}
+                    style={[styles.timePill, on && styles.timePillOn]}
+                    onPress={() => setActivityEnd(on ? '' : t)}
+                  >
+                    <Text style={[styles.timePillText, on && styles.timePillTextOn]}>{t}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <View style={styles.formActions}>
               <Pressable style={styles.formCancel} onPress={() => setAddActivityOpen(false)}>
                 <Text style={styles.formCancelText}>Cancel</Text>
@@ -361,9 +423,11 @@ export function ChildrenScreen({
                 onPress={() => {
                   if (!activityName.trim()) return;
                   const days = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
-                  onAddActivity(child.id, activityName.trim(), days.length || 1, days);
+                  onAddActivity(child.id, activityName.trim(), days.length || 1, days, activityStart, activityEnd);
                   setActivityName('');
                   setActivityDays([]);
+                  setActivityStart('');
+                  setActivityEnd('');
                   setAddActivityOpen(false);
                 }}
               >
@@ -637,6 +701,34 @@ const createStyles = (colors: ThemeColors) =>
     fontWeight: '800',
   },
   dayToggleTextOn: {
+    color: '#ffffff',
+  },
+  timeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  timePill: {
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#f4f7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePillOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timePillText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  timePillTextOn: {
     color: '#ffffff',
   },
   emptyText: {
