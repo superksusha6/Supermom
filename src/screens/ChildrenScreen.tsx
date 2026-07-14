@@ -3,7 +3,8 @@ import { Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, Text
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { Icon } from '@/components/Icon';
-import { ChildProfile } from '@/types/app';
+import { ChildProfile, Chore } from '@/types/app';
+import { choreStatus } from '@/lib/chores';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 const AVATAR_COLORS = ['#3b5bdb', '#7c3aed', '#0ea5e9', '#16a34a', '#e08a2b', '#e11d48', '#0891b2', '#db2777'];
@@ -18,6 +19,10 @@ type Props = {
   onEditChild: (childId: string) => void;
   onAddChild: () => void;
   onSetChildPhoto: (childId: string, photoUri: string) => void;
+  chores: Chore[];
+  onAddChore: (childId: string, title: string) => void;
+  onToggleChore: (choreId: string) => void;
+  onDeleteChore: (choreId: string) => void;
   todayPlansByChild?: Record<string, TodayPlan[]>;
   quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
@@ -30,6 +35,10 @@ export function ChildrenScreen({
   onEditChild,
   onAddChild,
   onSetChildPhoto,
+  chores,
+  onAddChore,
+  onToggleChore,
+  onDeleteChore,
   todayPlansByChild,
   quickActionRequest,
 }: Props) {
@@ -40,6 +49,8 @@ export function ChildrenScreen({
   const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
   const [childMenuOpen, setChildMenuOpen] = useState(false);
+  const [addChoreOpen, setAddChoreOpen] = useState(false);
+  const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
   const [timesPerWeek, setTimesPerWeek] = useState('1');
 
@@ -219,6 +230,77 @@ export function ChildrenScreen({
           </View>
         ))}
       </SectionCard>
+
+      <SectionCard title="Responsibilities / Chores">
+        <View style={styles.profileHeaderRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add chore"
+            style={styles.addRoundBtn}
+            onPress={() => { setChoreTitle(''); setAddChoreOpen(true); }}
+          >
+            <Icon name="plus" color="#ffffff" size={20} />
+          </Pressable>
+        </View>
+        {chores.filter((c) => c.childId === child.id).length === 0 ? (
+          <Text style={styles.emptyText}>No chores yet — tap “+” to give a responsibility.</Text>
+        ) : null}
+        {chores
+          .filter((c) => c.childId === child.id)
+          .map((chore) => {
+            const done = choreStatus(chore) !== 'todo';
+            return (
+              <View key={chore.id} style={[styles.item, styles.activityRow]}>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={`Mark ${chore.title} ${done ? 'not done' : 'done'}`}
+                  hitSlop={8}
+                  style={[styles.choreCheck, done && styles.choreCheckDone]}
+                  onPress={() => onToggleChore(chore.id)}
+                >
+                  {done ? <Text style={styles.choreCheckMark}>✓</Text> : null}
+                </Pressable>
+                <View style={styles.activityCopy}>
+                  <Text style={[styles.title, done && styles.choreTitleDone]}>{chore.title}</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${chore.title}`}
+                  style={styles.activityRemove}
+                  onPress={() => onDeleteChore(chore.id)}
+                >
+                  <Text style={styles.activityRemoveText}>Remove</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+      </SectionCard>
+
+      <Modal visible={addChoreOpen} transparent animationType="fade" onRequestClose={() => setAddChoreOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setAddChoreOpen(false)}>
+          <Pressable style={styles.formCard} onPress={() => undefined}>
+            <Text style={styles.formTitle}>New chore</Text>
+            <TextInput value={choreTitle} onChangeText={setChoreTitle} placeholder="e.g. Make the bed" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
+            <View style={styles.formActions}>
+              <Pressable style={styles.formCancel} onPress={() => setAddChoreOpen(false)}>
+                <Text style={styles.formCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.formSave}
+                onPress={() => {
+                  if (!choreTitle.trim()) return;
+                  onAddChore(child.id, choreTitle.trim());
+                  setChoreTitle('');
+                  setAddChoreOpen(false);
+                }}
+              >
+                <Text style={styles.formSaveText}>Add</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={childMenuOpen} transparent animationType="fade" onRequestClose={() => setChildMenuOpen(false)}>
         <Pressable style={styles.menuBackdrop} onPress={() => setChildMenuOpen(false)}>
@@ -469,6 +551,29 @@ const createStyles = (colors: ThemeColors) =>
     color: '#be123c',
     fontSize: 12.5,
     fontWeight: '800',
+  },
+  choreCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choreCheckDone: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  choreCheckMark: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  choreTitleDone: {
+    textDecorationLine: 'line-through',
+    color: colors.subtext,
   },
   emptyText: {
     color: colors.subtext,

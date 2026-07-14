@@ -79,7 +79,7 @@ import {
   updateTaskStatus,
 } from '@/lib/tasks';
 import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
-import { choreStatus } from '@/lib/chores';
+import { choreStatus, choreTodayKey } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
 import { FixItScreen } from '@/screens/FixItScreen';
@@ -5004,12 +5004,6 @@ function AppShell() {
           <Text style={styles.calBackText}>Back to Food</Text>
         </Pressable>
       ) : null}
-      {screen === 'family' ? (
-        <View style={styles.subnav}>
-          <NavButton label="Children" active={familyTab === 'children'} onPress={() => setFamilyTab('children')} />
-          <NavButton label="Chores" active={familyTab === 'chores'} onPress={() => setFamilyTab('chores')} />
-        </View>
-      ) : null}
         {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
@@ -5405,7 +5399,7 @@ function AppShell() {
             />
         ) : null}
 
-        {screen === 'family' && familyTab === 'children' ? (
+        {screen === 'family' ? (
           <ChildrenScreen
             children={children}
             onDeleteChild={handleDeleteChildDirect}
@@ -5414,6 +5408,19 @@ function AppShell() {
             onSetChildPhoto={(childId, photoUri) => setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)))}
             quickActionRequest={dashboardFamilyQuickAction}
             onAddChild={openAddChild}
+            chores={chores}
+            onAddChore={(childId, title) =>
+              handleChoresChange((prev) => [
+                ...prev,
+                { id: `c${Date.now()}`, title: title.trim(), childId, recurrence: 'daily', verifier: 'self', points: 0 },
+              ])
+            }
+            onToggleChore={(choreId) =>
+              handleChoresChange((prev) =>
+                prev.map((c) => (c.id === choreId ? { ...c, lastDoneDate: choreStatus(c) === 'todo' ? choreTodayKey() : undefined } : c)),
+              )
+            }
+            onDeleteChore={(choreId) => handleChoresChange((prev) => prev.filter((c) => c.id !== choreId))}
             onAddActivity={(childId, activityName, timesPerWeek) => {
               setChildren((prev) =>
                 prev.map((child) =>
@@ -5443,10 +5450,6 @@ function AppShell() {
               );
             }}
           />
-        ) : null}
-
-        {screen === 'family' && familyTab === 'chores' ? (
-          <ChoresScreen chores={chores} onChoresChange={handleChoresChange} children={children} />
         ) : null}
 
         {screen === 'food' && foodTab === 'recipes' ? (
