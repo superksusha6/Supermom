@@ -774,6 +774,7 @@ function AppShell() {
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
@@ -2761,6 +2762,17 @@ function AppShell() {
     setChildDialStep('hour');
   }
 
+  function openAddChild() {
+    setEditingChildId(null);
+    setChildDraftName('');
+    setChildDraftDob('');
+    setChildDraftIncludeInMotherCalendar(true);
+    setChildDraftActivities([createDefaultDraftActivity()]);
+    setChildSetupOpen(true);
+    setStaffSetupOpen(false);
+    setTasksError(null);
+  }
+
   function openChildActivitiesEditor(childId: string) {
     const child = children.find((item) => item.id === childId);
     if (!child) return;
@@ -4346,6 +4358,12 @@ function AppShell() {
     </View>
   );
 
+  // Per-section quick actions for the top-right ☰ menu.
+  const sectionActions: { label: string; icon: IconName; onPress: () => void }[] =
+    screen === 'family' && familyTab === 'children'
+      ? [{ label: 'Add child', icon: 'plus', onPress: openAddChild }]
+      : [];
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -4361,11 +4379,29 @@ function AppShell() {
           <Text style={styles.brandSubtitle}>{screen === 'calendar' ? dashboardGreeting : 'your family operating system'}</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable style={styles.menuButton} onPress={() => setSettingsPanelOpen(true)}>
+          <Pressable
+            style={styles.menuButton}
+            onPress={() => (sectionActions.length ? setSectionMenuOpen(true) : setSettingsPanelOpen(true))}
+          >
             <Text style={styles.menuButtonIcon}>☰</Text>
           </Pressable>
         </View>
       </View>
+      <Modal visible={sectionMenuOpen} transparent animationType="fade" onRequestClose={() => setSectionMenuOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSectionMenuOpen(false)}>
+          <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{screen === 'family' ? 'Family' : 'Options'}</Text>
+            {sectionActions.map((action) => (
+              <Pressable key={action.label} style={styles.sheetRow} onPress={() => { setSectionMenuOpen(false); action.onPress(); }}>
+                <Icon name={action.icon} color={colors.primary} size={20} />
+                <Text style={styles.sheetRowText}>{action.label}</Text>
+                <Icon name="chevron" color={colors.subtext} size={16} />
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
       <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
         <View style={styles.settingsModalRoot}>
           <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
@@ -5374,16 +5410,7 @@ function AppShell() {
             todayPlansByChild={childTodayPlans}
             onSetChildPhoto={(childId, photoUri) => setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)))}
             quickActionRequest={dashboardFamilyQuickAction}
-            onAddChild={() => {
-              setEditingChildId(null);
-              setChildDraftName('');
-              setChildDraftDob('');
-              setChildDraftIncludeInMotherCalendar(true);
-              setChildDraftActivities([createDefaultDraftActivity()]);
-              setChildSetupOpen(true);
-              setStaffSetupOpen(false);
-              setTasksError(null);
-            }}
+            onAddChild={openAddChild}
             onAddActivity={(childId, activityName, timesPerWeek) => {
               setChildren((prev) =>
                 prev.map((child) =>

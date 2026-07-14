@@ -118,13 +118,8 @@ export function ChildrenScreen({
     return (
       <>
       <SectionCard title="Children">
-        <View style={styles.profileHeaderRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Add child" style={styles.addRoundBtn} onPress={onAddChild}>
-            <Icon name="plus" color="#ffffff" size={20} />
-          </Pressable>
-        </View>
         {children.length === 0 ? (
-          <Text style={styles.emptyText}>No children yet — tap “+ Add child” to create a profile.</Text>
+          <Text style={styles.emptyText}>No children yet — use the ☰ menu (top right) → “Add child”.</Text>
         ) : (
           children.map((item) => {
             const plans = todayPlansByChild?.[item.id] || [];
