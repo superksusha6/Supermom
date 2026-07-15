@@ -5264,14 +5264,7 @@ function AppShell() {
         </>
       ) : null}
 
-      {screen === 'food' ? (
-        <View style={styles.subnav}>
-          <NavButton label="Today" active={foodTab === 'today'} onPress={() => setFoodTab('today')} />
-          <NavButton label="Shopping" active={foodTab === 'shopping'} onPress={() => setFoodTab('shopping')} />
-          <NavButton label="Recipes" active={foodTab === 'recipes'} onPress={() => setFoodTab('recipes')} />
-        </View>
-      ) : null}
-      {screen === 'food' && (foodTab === 'plan' || foodTab === 'diary') ? (
+      {screen === 'food' && foodTab !== 'today' ? (
         <Pressable style={styles.calBackBtn} onPress={() => setFoodTab('today')}>
           <Icon name="chevron" color={colors.primary} size={16} />
           <Text style={styles.calBackText}>Back to Food</Text>
@@ -5496,6 +5489,17 @@ function AppShell() {
             >
               <View style={styles.foodShopIcon}><Icon name="cart" color={colors.primary} size={20} /></View>
               <Text style={styles.foodShopText}>Shopping list</Text>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Recipes"
+              style={styles.foodShopBtn}
+              onPress={() => setFoodTab('recipes')}
+            >
+              <View style={styles.foodShopIcon}><Icon name="meal" color={colors.primary} size={20} /></View>
+              <Text style={styles.foodShopText}>Recipes</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
 
