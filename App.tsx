@@ -124,6 +124,7 @@ type DraftActivity = {
   color: string;
   weekDays: WeekDayCode[];
   timeSlots: string[];
+  dayTimes?: Partial<Record<WeekDayCode, string>>;
 };
 type ActivityColorEditorTarget = {
   activityId: string;
@@ -1586,11 +1587,11 @@ function AppShell() {
         const existing = byTitle.get(key);
         if (!existing || (!existing.raw && raw)) byTitle.set(key, { raw, title });
       };
-      // Recurring activities that fall on today (by weekday).
+      // Recurring activities that fall on today (by weekday), using today's per-day time.
       (c.activities || []).forEach((a) => {
         if (!a.weekDays || !a.weekDays.length || !a.weekDays.includes(todayCode)) return;
-        const slots = a.timeSlots && a.timeSlots.length ? a.timeSlots : a.time ? [a.time] : [''];
-        slots.forEach((slot) => add(slot || '', a.name));
+        const time = a.dayTimes?.[todayCode] || a.time || '';
+        add(time, a.name);
       });
       // One-off calendar events for today.
       todayEvents
@@ -1602,6 +1603,48 @@ function AppShell() {
     }
     return map;
   }, [events, children, todayDateKey]);
+
+  function normalizeDayTimes(dayTimes: Partial<Record<WeekDayCode, string>>): Partial<Record<WeekDayCode, string>> {
+    const out: Partial<Record<WeekDayCode, string>> = {};
+    (Object.keys(dayTimes) as WeekDayCode[]).forEach((code) => {
+      const value = dayTimes[code];
+      if (value) out[code] = normalizeTimeText(value);
+    });
+    return out;
+  }
+
+  // Rebuild + persist the auto-scheduled calendar events for one child's full activity list.
+  function scheduleChildActivities(childId: string, childName: string, includeInParent: boolean, nextActivities: ChildActivity[]) {
+    const draftActivities: DraftActivity[] = nextActivities.map((activity) => ({
+      id: activity.id,
+      name: activity.name,
+      timesPerWeek: String(activity.timesPerWeek || 1),
+      time: activity.time || '10:00 AM',
+      endTime: activity.endTime,
+      color: activity.color || '#64748b',
+      weekDays: activity.weekDays && activity.weekDays.length ? activity.weekDays : [],
+      timeSlots: activity.timeSlots && activity.timeSlots.length ? activity.timeSlots : activity.time ? [activity.time] : [],
+      dayTimes: activity.dayTimes,
+    }));
+    const nextEvents = buildChildScheduleEvents({
+      childId,
+      childName,
+      activities: draftActivities,
+      includeInParentCalendar: includeInParent,
+      parentLabel,
+      monthsAhead: AUTO_SCHEDULE_MONTHS_AHEAD,
+    });
+    if (session && isSupabaseConfigured) {
+      replaceGeneratedChildEvents(session, childId, nextEvents)
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not schedule activity.'));
+    }
+    setEvents((prev) => {
+      const withoutOld = prev.filter((event) => !isAutoScheduleEventForChild(event, childId, childName));
+      return [...withoutOld, ...nextEvents];
+    });
+  }
+
   const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
   const eventColorsByDate = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -5677,55 +5720,52 @@ function AppShell() {
               )
             }
             onDeleteChore={(choreId) => handleChoresChange((prev) => prev.filter((c) => c.id !== choreId))}
-            onAddActivity={(childId, activityName, timesPerWeek, weekDays, time, endTime) => {
+            onAddActivity={(childId, activityName, weekDays, dayTimes) => {
               const targetChild = children.find((child) => child.id === childId);
               if (!targetChild) return;
-              const start = time ? normalizeTimeText(time) : '';
-              const end = endTime ? normalizeTimeText(endTime) : '';
+              const days = weekDays.length ? weekDays : undefined;
+              const normDayTimes = normalizeDayTimes(dayTimes);
+              const hasTimes = Object.keys(normDayTimes).length > 0;
+              const firstTime = days ? normDayTimes[days[0]] : undefined;
               const newActivity: ChildActivity = {
                 id: `a${Date.now()}`,
                 name: activityName,
-                timesPerWeek,
-                weekDays: weekDays.length ? weekDays : undefined,
-                time: start || undefined,
-                endTime: end || undefined,
-                timeSlots: start ? [start] : undefined,
+                timesPerWeek: weekDays.length || 1,
+                weekDays: days,
+                dayTimes: hasTimes ? normDayTimes : undefined,
+                time: firstTime || undefined,
               };
               const nextActivities = [...targetChild.activities, newActivity];
-
               setChildren((prev) =>
                 prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
               );
-
-              // Roll the new activity onto the calendar on the chosen weekdays (with its time range).
-              const draftActivities: DraftActivity[] = nextActivities.map((activity) => ({
-                id: activity.id,
-                name: activity.name,
-                timesPerWeek: String(activity.timesPerWeek || 1),
-                time: activity.time || '10:00 AM',
-                endTime: activity.endTime,
-                color: activity.color || '#64748b',
-                weekDays: activity.weekDays && activity.weekDays.length ? activity.weekDays : [],
-                timeSlots: activity.timeSlots && activity.timeSlots.length ? activity.timeSlots : activity.time ? [activity.time] : [],
-              }));
-              const nextEvents = buildChildScheduleEvents({
-                childId,
-                childName: targetChild.name,
-                activities: draftActivities,
-                includeInParentCalendar: targetChild.includeInMotherCalendar ?? true,
-                parentLabel,
-                monthsAhead: AUTO_SCHEDULE_MONTHS_AHEAD,
-              });
-
-              if (session && isSupabaseConfigured) {
-                replaceGeneratedChildEvents(session, childId, nextEvents)
-                  .then(() => refreshLiveCalendar())
-                  .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not schedule activity.'));
-              }
-              setEvents((prev) => {
-                const withoutOld = prev.filter((event) => !isAutoScheduleEventForChild(event, childId, targetChild.name));
-                return [...withoutOld, ...nextEvents];
-              });
+              scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
+            }}
+            onUpdateActivity={(childId, activityId, activityName, weekDays, dayTimes) => {
+              const targetChild = children.find((child) => child.id === childId);
+              if (!targetChild) return;
+              const days = weekDays.length ? weekDays : undefined;
+              const normDayTimes = normalizeDayTimes(dayTimes);
+              const hasTimes = Object.keys(normDayTimes).length > 0;
+              const firstTime = days ? normDayTimes[days[0]] : undefined;
+              const nextActivities = targetChild.activities.map((activity) =>
+                activity.id === activityId
+                  ? {
+                      ...activity,
+                      name: activityName,
+                      timesPerWeek: weekDays.length || 1,
+                      weekDays: days,
+                      dayTimes: hasTimes ? normDayTimes : undefined,
+                      time: firstTime || undefined,
+                      timeSlots: undefined,
+                      endTime: undefined,
+                    }
+                  : activity,
+              );
+              setChildren((prev) =>
+                prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
+              );
+              scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
             }}
             onDeleteActivity={(childId, activityId) => {
               setChildren((prev) =>
@@ -7546,11 +7586,13 @@ function buildChildScheduleEvents(params: {
     const weekDays = activity.weekDays.length > 0 ? activity.weekDays : [jsDayToWeekDayCode(now.getDay())];
 
     weekDays.forEach((dayCode) => {
+      // A per-day time (activity.dayTimes[day]) overrides the shared slots for that weekday.
+      const daySlots = activity.dayTimes && activity.dayTimes[dayCode] ? [activity.dayTimes[dayCode] as string] : slots;
       const firstDate = getNextDateForWeekDay(dayCode, now);
       const cursor = parseDateKey(firstDate);
       while (cursor <= endDate) {
         const dateText = toDateKey(cursor);
-        slots.forEach((timeSlot, timeIndex) => {
+        daySlots.forEach((timeSlot, timeIndex) => {
           const slot = normalizeTimeText(timeSlot);
           const seed = `${activityIndex}-${dayCode}-${timeIndex}-${dateText}`;
           scheduleEvents.push({

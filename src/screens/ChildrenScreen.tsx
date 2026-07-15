@@ -3,7 +3,7 @@ import { Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet
 import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { Icon } from '@/components/Icon';
-import { ChildProfile, Chore, WeekDayCode } from '@/types/app';
+import { ChildActivity, ChildProfile, Chore, WeekDayCode } from '@/types/app';
 import { choreStatus } from '@/lib/chores';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -17,12 +17,6 @@ const WEEK_DAYS: { code: WeekDayCode; label: string }[] = [
   { code: 'sat', label: 'S' },
   { code: 'sun', label: 'S' },
 ];
-function daysLabel(days?: WeekDayCode[]) {
-  if (!days || !days.length) return null;
-  const map: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-  return WEEK_DAYS.filter((d) => days.includes(d.code)).map((d) => map[d.code]).join(' · ');
-}
-
 // Half-hour options 6:00 AM → 9:00 PM for the activity time / range picker.
 const TIME_OPTIONS: string[] = (() => {
   const out: string[] = [];
@@ -36,16 +30,28 @@ const TIME_OPTIONS: string[] = (() => {
   return out;
 })();
 
-function timeRangeLabel(time?: string, endTime?: string) {
-  if (!time) return null;
-  return endTime ? `${time} – ${endTime}` : time;
+const SHORT_DAY: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+const FULL_DAY: Record<WeekDayCode, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+
+function activityScheduleLabel(activity: ChildActivity): string {
+  const days = WEEK_DAYS.filter((d) => (activity.weekDays || []).includes(d.code)).map((d) => d.code);
+  if (!days.length) return `${activity.timesPerWeek} times per week`;
+  const dt = activity.dayTimes || {};
+  const timeFor = (code: WeekDayCode) => dt[code] || activity.time || '';
+  const uniqueTimes = Array.from(new Set(days.map(timeFor)));
+  if (uniqueTimes.length === 1) {
+    const daysStr = days.map((d) => SHORT_DAY[d]).join(' · ');
+    return uniqueTimes[0] ? `${daysStr} · ${uniqueTimes[0]}` : daysStr;
+  }
+  return days.map((d) => `${SHORT_DAY[d]}${timeFor(d) ? ` ${timeFor(d)}` : ''}`).join(' · ');
 }
 
 type TodayPlan = { time: string; title: string };
 
 type Props = {
   children: ChildProfile[];
-  onAddActivity: (childId: string, activityName: string, timesPerWeek: number, weekDays: WeekDayCode[], time: string, endTime: string) => void;
+  onAddActivity: (childId: string, activityName: string, weekDays: WeekDayCode[], dayTimes: Partial<Record<WeekDayCode, string>>) => void;
+  onUpdateActivity: (childId: string, activityId: string, activityName: string, weekDays: WeekDayCode[], dayTimes: Partial<Record<WeekDayCode, string>>) => void;
   onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
@@ -62,6 +68,7 @@ type Props = {
 export function ChildrenScreen({
   children,
   onAddActivity,
+  onUpdateActivity,
   onDeleteActivity,
   onDeleteChild,
   onEditChild,
@@ -85,8 +92,9 @@ export function ChildrenScreen({
   const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
   const [activityDays, setActivityDays] = useState<WeekDayCode[]>([]);
-  const [activityStart, setActivityStart] = useState<string>('');
-  const [activityEnd, setActivityEnd] = useState<string>('');
+  const [activityDayTimes, setActivityDayTimes] = useState<Partial<Record<WeekDayCode, string>>>({});
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [openTimeDay, setOpenTimeDay] = useState<WeekDayCode | null>(null);
 
   const child = children.find((item) => item.id === openChildId) || null;
 
@@ -94,8 +102,9 @@ export function ChildrenScreen({
     setAddActivityOpen(false);
     setActivityName('');
     setActivityDays([]);
-    setActivityStart('');
-    setActivityEnd('');
+    setActivityDayTimes({});
+    setEditingActivityId(null);
+    setOpenTimeDay(null);
   }, [openChildId]);
 
   // Drop back to the list if the open child was deleted.
@@ -108,6 +117,64 @@ export function ChildrenScreen({
     setOpenChildId((prev) => (prev && children.some((c) => c.id === prev) ? prev : children[0].id));
     setAddActivityOpen(true);
   }, [quickActionRequest, children]);
+
+  function openAddActivity() {
+    setEditingActivityId(null);
+    setActivityName('');
+    setActivityDays([]);
+    setActivityDayTimes({});
+    setOpenTimeDay(null);
+    setAddActivityOpen(true);
+  }
+
+  function openEditActivity(activity: ChildActivity) {
+    setEditingActivityId(activity.id);
+    setActivityName(activity.name);
+    const days = WEEK_DAYS.filter((d) => (activity.weekDays || []).includes(d.code)).map((d) => d.code);
+    setActivityDays(days);
+    const dt: Partial<Record<WeekDayCode, string>> = { ...(activity.dayTimes || {}) };
+    // Seed per-day times from a legacy single time so existing activities stay editable.
+    if (!activity.dayTimes && activity.time) days.forEach((d) => { dt[d] = activity.time; });
+    setActivityDayTimes(dt);
+    setOpenTimeDay(null);
+    setAddActivityOpen(true);
+  }
+
+  function toggleActivityDay(code: WeekDayCode) {
+    const isOn = activityDays.includes(code);
+    if (isOn) {
+      setActivityDays((prev) => prev.filter((x) => x !== code));
+      setActivityDayTimes((prev) => {
+        const next = { ...prev };
+        delete next[code];
+        return next;
+      });
+      if (openTimeDay === code) setOpenTimeDay(null);
+    } else {
+      setActivityDays((prev) => [...prev, code]);
+      // Default the new day to a time already used on another day (one-tap "same time").
+      setActivityDayTimes((prev) => {
+        const shared = Object.values(prev).find(Boolean);
+        return shared ? { ...prev, [code]: shared } : prev;
+      });
+    }
+  }
+
+  function saveActivity() {
+    const name = activityName.trim();
+    if (!name || !child) return;
+    const days = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
+    const dayTimes: Partial<Record<WeekDayCode, string>> = {};
+    days.forEach((d) => { if (activityDayTimes[d]) dayTimes[d] = activityDayTimes[d]; });
+    if (editingActivityId) onUpdateActivity(child.id, editingActivityId, name, days, dayTimes);
+    else onAddActivity(child.id, name, days, dayTimes);
+    setAddActivityOpen(false);
+    setEditingActivityId(null);
+    setActivityName('');
+    setActivityDays([]);
+    setActivityDayTimes({});
+    setOpenTimeDay(null);
+  }
 
   const colorFor = (id: string) => AVATAR_COLORS[Math.max(0, children.findIndex((c) => c.id === id)) % AVATAR_COLORS.length];
 
@@ -241,7 +308,7 @@ export function ChildrenScreen({
             accessibilityRole="button"
             accessibilityLabel="Add activity"
             style={styles.addRoundBtn}
-            onPress={() => { setActivityName(''); setActivityDays([]); setActivityStart(''); setActivityEnd(''); setAddActivityOpen(true); }}
+            onPress={openAddActivity}
           >
             <Icon name="plus" color="#ffffff" size={20} />
           </Pressable>
@@ -251,13 +318,23 @@ export function ChildrenScreen({
         ) : null}
         {child.activities.map((activity) => (
           <View key={activity.id} style={[styles.item, styles.activityRow]}>
-            <View style={styles.activityCopy}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${activity.name}`}
+              style={styles.activityCopy}
+              onPress={() => openEditActivity(activity)}
+            >
               <Text style={styles.title}>{activity.name}</Text>
-              <Text style={styles.meta}>
-                {[daysLabel(activity.weekDays), timeRangeLabel(activity.time, activity.endTime)].filter(Boolean).join('  ·  ') ||
-                  `${activity.timesPerWeek} times per week`}
-              </Text>
-            </View>
+              <Text style={styles.meta}>{activityScheduleLabel(activity)}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${activity.name}`}
+              style={styles.activityEdit}
+              onPress={() => openEditActivity(activity)}
+            >
+              <Text style={styles.activityEditText}>Edit</Text>
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove ${activity.name}`}
@@ -358,80 +435,77 @@ export function ChildrenScreen({
       <Modal visible={addActivityOpen} transparent animationType="fade" onRequestClose={() => setAddActivityOpen(false)}>
         <Pressable style={styles.menuBackdrop} onPress={() => setAddActivityOpen(false)}>
           <Pressable style={styles.formCard} onPress={() => undefined}>
-            <Text style={styles.formTitle}>New activity</Text>
-            <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
-            <Text style={styles.formSubLabel}>Which days?</Text>
-            <View style={styles.dayRow}>
-              {WEEK_DAYS.map((d) => {
-                const on = activityDays.includes(d.code);
-                return (
-                  <Pressable
-                    key={d.code}
-                    accessibilityRole="button"
-                    accessibilityLabel={d.code}
-                    style={[styles.dayToggle, on && styles.dayToggleOn]}
-                    onPress={() => setActivityDays((prev) => (on ? prev.filter((x) => x !== d.code) : [...prev, d.code]))}
-                  >
-                    <Text style={[styles.dayToggleText, on && styles.dayToggleTextOn]}>{d.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.formSubLabel}>Start time</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
-              {TIME_OPTIONS.map((t) => {
-                const on = activityStart === t;
-                return (
-                  <Pressable
-                    key={`start-${t}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Start ${t}`}
-                    style={[styles.timePill, on && styles.timePillOn]}
-                    onPress={() => {
-                      setActivityStart(on ? '' : t);
-                      if (!on && activityEnd && TIME_OPTIONS.indexOf(activityEnd) <= TIME_OPTIONS.indexOf(t)) setActivityEnd('');
-                    }}
-                  >
-                    <Text style={[styles.timePillText, on && styles.timePillTextOn]}>{t}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Text style={styles.formSubLabel}>Ends (optional)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
-              {TIME_OPTIONS.filter((t) => !activityStart || TIME_OPTIONS.indexOf(t) > TIME_OPTIONS.indexOf(activityStart)).map((t) => {
-                const on = activityEnd === t;
-                return (
-                  <Pressable
-                    key={`end-${t}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ends ${t}`}
-                    style={[styles.timePill, on && styles.timePillOn]}
-                    onPress={() => setActivityEnd(on ? '' : t)}
-                  >
-                    <Text style={[styles.timePillText, on && styles.timePillTextOn]}>{t}</Text>
-                  </Pressable>
-                );
-              })}
+            <Text style={styles.formTitle}>{editingActivityId ? 'Edit activity' : 'New activity'}</Text>
+            <ScrollView style={styles.formScroll} keyboardShouldPersistTaps="handled">
+              <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
+              <Text style={styles.formSubLabel}>Which days?</Text>
+              <View style={styles.dayRow}>
+                {WEEK_DAYS.map((d) => {
+                  const on = activityDays.includes(d.code);
+                  return (
+                    <Pressable
+                      key={d.code}
+                      accessibilityRole="button"
+                      accessibilityLabel={d.code}
+                      style={[styles.dayToggle, on && styles.dayToggleOn]}
+                      onPress={() => toggleActivityDay(d.code)}
+                    >
+                      <Text style={[styles.dayToggleText, on && styles.dayToggleTextOn]}>{d.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {activityDays.length ? (
+                <>
+                  <Text style={styles.formSubLabel}>Time for each day</Text>
+                  {WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => {
+                    const t = activityDayTimes[d.code] || '';
+                    const open = openTimeDay === d.code;
+                    return (
+                      <View key={d.code}>
+                        <View style={styles.dayTimeRow}>
+                          <Text style={styles.dayTimeLabel}>{FULL_DAY[d.code]}</Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Time for ${FULL_DAY[d.code]}`}
+                            style={[styles.dayTimeChip, t && styles.dayTimeChipSet]}
+                            onPress={() => setOpenTimeDay(open ? null : d.code)}
+                          >
+                            <Text style={[styles.dayTimeChipText, t && styles.dayTimeChipTextSet]}>{t || 'Set time'}</Text>
+                          </Pressable>
+                        </View>
+                        {open ? (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
+                            <Pressable
+                              style={[styles.timePill, !t && styles.timePillOn]}
+                              onPress={() => { setActivityDayTimes((p) => ({ ...p, [d.code]: '' })); setOpenTimeDay(null); }}
+                            >
+                              <Text style={[styles.timePillText, !t && styles.timePillTextOn]}>No time</Text>
+                            </Pressable>
+                            {TIME_OPTIONS.map((opt) => (
+                              <Pressable
+                                key={`${d.code}-${opt}`}
+                                style={[styles.timePill, t === opt && styles.timePillOn]}
+                                onPress={() => { setActivityDayTimes((p) => ({ ...p, [d.code]: opt })); setOpenTimeDay(null); }}
+                              >
+                                <Text style={[styles.timePillText, t === opt && styles.timePillTextOn]}>{opt}</Text>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </>
+              ) : null}
             </ScrollView>
             <View style={styles.formActions}>
               <Pressable style={styles.formCancel} onPress={() => setAddActivityOpen(false)}>
                 <Text style={styles.formCancelText}>Cancel</Text>
               </Pressable>
-              <Pressable
-                style={styles.formSave}
-                onPress={() => {
-                  if (!activityName.trim()) return;
-                  const days = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
-                  onAddActivity(child.id, activityName.trim(), days.length || 1, days, activityStart, activityEnd);
-                  setActivityName('');
-                  setActivityDays([]);
-                  setActivityStart('');
-                  setActivityEnd('');
-                  setAddActivityOpen(false);
-                }}
-              >
-                <Text style={styles.formSaveText}>Add</Text>
+              <Pressable style={styles.formSave} onPress={saveActivity}>
+                <Text style={styles.formSaveText}>{editingActivityId ? 'Save' : 'Add'}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -646,6 +720,54 @@ const createStyles = (colors: ThemeColors) =>
     color: '#be123c',
     fontSize: 12.5,
     fontWeight: '800',
+  },
+  activityEdit: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#f4f7ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  activityEditText: {
+    color: colors.primary,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  formScroll: {
+    maxHeight: 380,
+  },
+  dayTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  dayTimeLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dayTimeChip: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#f4f7ff',
+    paddingHorizontal: 14,
+    height: 36,
+    justifyContent: 'center',
+  },
+  dayTimeChipSet: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dayTimeChipText: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dayTimeChipTextSet: {
+    color: '#ffffff',
   },
   choreCheck: {
     width: 24,
