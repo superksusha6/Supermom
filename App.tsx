@@ -1395,6 +1395,46 @@ function AppShell() {
       updateShoppingListMeta(session, listId, { title: clean }).catch((error) => setTasksError(error instanceof Error ? error.message : 'Rename failed.'));
     }
   }
+
+  // Add recipe ingredients (usually the missing ones) to the current shopping list, or start one.
+  function addIngredientsToShoppingList(items: { name: string; quantity: string }[]) {
+    if (!items.length) return;
+    const prepared = items.map((it) => ({
+      name: it.name,
+      quantity: it.quantity || '1 pcs',
+      category: inferShoppingItemCategory(it.name),
+    }));
+    const current = getCurrentShoppingList(shoppingLists);
+    markShoppingBootstrapComplete();
+    const newRows = () =>
+      prepared.map((item, i) => ({
+        id: `si-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        ...item,
+        purchased: false,
+      }));
+    if (session && isSupabaseConfigured) {
+      if (current) {
+        updateShoppingListItems(session, current.id, mergeShoppingItemsByName(newRows(), current.items))
+          .then(() => refreshLiveShopping())
+          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not update list.'));
+      } else {
+        createShoppingList(session, 'Shopping List', prepared.map((p) => ({ ...p, purchased: false })), { listType: 'current' })
+          .then(() => refreshLiveShopping())
+          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not create list.'));
+      }
+      return;
+    }
+    setShoppingLists((prev) => {
+      const cur = getCurrentShoppingList(prev);
+      if (cur) {
+        return prev.map((list) => (list.id === cur.id ? { ...list, items: mergeShoppingItemsByName(newRows(), list.items) } : list));
+      }
+      return [
+        { id: `sl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: 'Shopping List', listType: 'current' as const, createdAt: new Date().toISOString(), items: newRows() },
+        ...prev,
+      ];
+    });
+  }
   const currentShoppingRemainingCount = useMemo(
     () => currentShoppingList?.items.filter((item) => !item.purchased).length ?? 0,
     [currentShoppingList],
@@ -5787,6 +5827,8 @@ function AppShell() {
         {screen === 'food' && foodTab === 'recipes' ? (
           <RecipesScreen
             recipes={recipes}
+            fridgeItems={fridgeItems}
+            onAddToShoppingList={addIngredientsToShoppingList}
             onRecipeCreate={handleRecipeCreate}
             onRecipeUpdate={handleRecipeUpdate}
             onRecipeDelete={handleRecipeDelete}

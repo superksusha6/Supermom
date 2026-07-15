@@ -2,7 +2,8 @@ import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
-import { NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
+import { FridgeItem, NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
+import { buildInventoryIndex, matchRecipeToInventory, RecipeMatch } from '@/lib/recipeMatch';
 import { cleanNutritionNumber, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { computeRecipeNutritionForSelection, resolveRecipeIngredients, type RecipeSelection } from '@/lib/recipeNutrition';
 import { RECIPE_IMAGES } from '@/lib/generated/recipeImageMap';
@@ -10,6 +11,8 @@ import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
   recipes: Recipe[];
+  fridgeItems?: FridgeItem[];
+  onAddToShoppingList?: (items: { name: string; quantity: string }[]) => void;
   onRecipeCreate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeUpdate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeDelete: (recipeId: string) => Promise<void> | void;
@@ -311,7 +314,7 @@ function formatIngredientLine(ingredient: { amount: string; name: string; option
   return ingredient.optional ? `${base} (optional)` : base;
 }
 
-export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
+export function RecipesScreen({ recipes, fridgeItems = [], onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
@@ -319,6 +322,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
   const [search, setSearch] = useState('');
   const [mealFilter, setMealFilter] = useState<RecipeMealType | 'all'>('all');
   const [classifierFilter, setClassifierFilter] = useState<RecipeClassifier | 'all'>('all');
+  const [cookFilter, setCookFilter] = useState<'all' | 'can' | 'almost'>('all');
   const [layoutMode, setLayoutMode] = useState<RecipeLayoutMode>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
@@ -607,11 +611,28 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
     }
   }
 
+  const inventoryIndex = useMemo(() => buildInventoryIndex(fridgeItems), [fridgeItems]);
+  const matchByRecipe = useMemo(() => {
+    const map = new Map<string, RecipeMatch>();
+    catalogRecipes.forEach((recipe) => map.set(recipe.id, matchRecipeToInventory(recipe, inventoryIndex)));
+    return map;
+  }, [catalogRecipes, inventoryIndex]);
+  const hasInventory = inventoryIndex.tokens.size > 0;
+  const canCookCount = useMemo(
+    () => catalogRecipes.filter((r) => matchByRecipe.get(r.id)?.status === 'can').length,
+    [catalogRecipes, matchByRecipe],
+  );
+  const almostCount = useMemo(
+    () => catalogRecipes.filter((r) => matchByRecipe.get(r.id)?.status === 'almost').length,
+    [catalogRecipes, matchByRecipe],
+  );
+
   const filteredRecipes = useMemo(() => {
     const query = search.trim().toLowerCase();
     return catalogRecipes.filter((recipe) => {
       if (mealFilter !== 'all' && recipe.mealType !== mealFilter) return false;
       if (classifierFilter !== 'all' && !recipe.classifiers.includes(classifierFilter)) return false;
+      if (cookFilter !== 'all' && matchByRecipe.get(recipe.id)?.status !== cookFilter) return false;
       if (!query) return true;
       const haystack = [
         recipe.title,
@@ -625,21 +646,24 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [catalogRecipes, classifierFilter, mealFilter, search]);
+  }, [catalogRecipes, classifierFilter, mealFilter, cookFilter, matchByRecipe, search]);
 
   const activeFilterCount = (mealFilter !== 'all' ? 1 : 0) + (classifierFilter !== 'all' ? 1 : 0);
 
   const selectedRecipe = selectedRecipeId ? catalogRecipes.find((recipe) => recipe.id === selectedRecipeId) || null : null;
+  const selectedMatch = selectedRecipe && hasInventory ? matchByRecipe.get(selectedRecipe.id) : undefined;
 
   // Live customization: chosen option per choice slot; recomputed nutrition + ingredients.
   const [recipeSelection, setRecipeSelection] = useState<RecipeSelection>({});
   const [logMealType, setLogMealType] = useState<NutritionMealType>('lunch');
   const [logServings, setLogServings] = useState(1);
   const [logAdded, setLogAdded] = useState(false);
+  const [addedToListId, setAddedToListId] = useState<string | null>(null);
   useEffect(() => {
     setRecipeSelection({});
     setLogServings(1);
     setLogAdded(false);
+    setAddedToListId(null);
     setLogMealType(defaultMealTypeForSlot(selectedRecipe?.mealSlot));
     // selectedRecipe is keyed by selectedRecipeId; re-running on id change is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -761,9 +785,27 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
             </View>
           ) : null}
 
+          {hasInventory ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cookFilterRow}>
+              <Pressable style={[styles.cookChip, cookFilter === 'all' && styles.cookChipActive]} onPress={() => setCookFilter('all')}>
+                <Text style={[styles.cookChipText, cookFilter === 'all' && styles.cookChipTextActive]}>All recipes</Text>
+              </Pressable>
+              <Pressable style={[styles.cookChip, cookFilter === 'can' && styles.cookChipActive]} onPress={() => setCookFilter(cookFilter === 'can' ? 'all' : 'can')}>
+                <View style={[styles.cookDot, { backgroundColor: '#16a34a' }]} />
+                <Text style={[styles.cookChipText, cookFilter === 'can' && styles.cookChipTextActive]}>Can cook now · {canCookCount}</Text>
+              </Pressable>
+              <Pressable style={[styles.cookChip, cookFilter === 'almost' && styles.cookChipActive]} onPress={() => setCookFilter(cookFilter === 'almost' ? 'all' : 'almost')}>
+                <View style={[styles.cookDot, { backgroundColor: '#e08a2b' }]} />
+                <Text style={[styles.cookChipText, cookFilter === 'almost' && styles.cookChipTextActive]}>Almost · {almostCount}</Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
           {filteredRecipes.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No recipes match this search</Text>
+              <Text style={styles.emptyTitle}>
+                {cookFilter === 'can' ? 'Nothing fully cookable right now' : cookFilter === 'almost' ? 'Nothing almost-ready right now' : 'No recipes match this search'}
+              </Text>
               <Text style={styles.emptyText}>Try another search or clear the filters.</Text>
             </View>
           ) : (
@@ -775,6 +817,7 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 const shortDescription = getShortRecipeDescription(recipe);
                 const gridMode = layoutMode === 'grid';
                 const listRow = !gridMode && !isMobile;
+                const match = hasInventory ? matchByRecipe.get(recipe.id) : undefined;
                 return (
                   <Pressable
                     key={recipe.id}
@@ -821,6 +864,13 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                             <Text style={[styles.recipeDescription, gridMode && styles.recipeDescriptionGrid]} numberOfLines={2}>
                               {shortDescription}
                             </Text>
+                          ) : null}
+                          {match && match.status !== 'none' ? (
+                            <View style={[styles.cookBadge, match.status === 'can' ? styles.cookBadgeCan : styles.cookBadgeAlmost]}>
+                              <Text style={[styles.cookBadgeText, match.status === 'can' ? styles.cookBadgeTextCan : styles.cookBadgeTextAlmost]}>
+                                {match.status === 'can' ? '✓ Have everything' : `${match.missing.length} to buy`}
+                              </Text>
+                            </View>
                           ) : null}
                         </View>
                       </View>
@@ -965,12 +1015,46 @@ export function RecipesScreen({ recipes, onRecipeCreate, onRecipeUpdate, onRecip
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSectionTitle}>Ingredients</Text>
                   <Text style={styles.detailHint}>Per serving · {selectedRecipe.servings} servings total</Text>
-                  {(recipeView?.ingredients ?? selectedRecipe.ingredients).map((ingredient) => (
-                    <View key={ingredient.id} style={styles.detailRow}>
-                      <Text style={styles.detailBullet}>•</Text>
-                      <Text style={styles.detailText}>{formatIngredientLine(ingredient)}</Text>
-                    </View>
-                  ))}
+                  {(recipeView?.ingredients ?? selectedRecipe.ingredients).map((ingredient) => {
+                    const held = hasInventory && !(selectedMatch?.missing ?? []).some((m) => m.id === ingredient.id) && !ingredient.optional;
+                    return (
+                      <View key={ingredient.id} style={styles.detailRow}>
+                        <Text style={[styles.detailBullet, hasInventory && (held ? styles.detailBulletHave : styles.detailBulletMissing)]}>{hasInventory ? (held ? '✓' : '•') : '•'}</Text>
+                        <Text style={styles.detailText}>{formatIngredientLine(ingredient)}</Text>
+                      </View>
+                    );
+                  })}
+                  {onAddToShoppingList ? (
+                    <>
+                      {hasInventory && selectedMatch ? (
+                        <Text style={styles.detailHint}>
+                          {selectedMatch.status === 'can'
+                            ? 'You have everything for this recipe.'
+                            : `Missing: ${selectedMatch.missing.map((m) => m.name).join(', ')}`}
+                        </Text>
+                      ) : null}
+                      <Pressable
+                        style={styles.addMissingBtn}
+                        onPress={() => {
+                          const toAdd = (hasInventory && selectedMatch && selectedMatch.missing.length
+                            ? selectedMatch.missing
+                            : selectedRecipe.ingredients.filter((i) => !i.optional)
+                          ).map((i) => ({ name: i.name, quantity: i.amount || '1 pcs' }));
+                          if (!toAdd.length) return;
+                          onAddToShoppingList(toAdd);
+                          setAddedToListId(selectedRecipe.id);
+                        }}
+                      >
+                        <Text style={styles.addMissingBtnText}>
+                          {addedToListId === selectedRecipe.id
+                            ? 'Added to shopping list ✓'
+                            : hasInventory && selectedMatch && selectedMatch.status !== 'can' && selectedMatch.missing.length
+                              ? `Add ${selectedMatch.missing.length} missing to shopping list`
+                              : 'Add ingredients to shopping list'}
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : null}
                 </View>
 
                 <View style={styles.detailSection}>
@@ -1636,6 +1720,80 @@ const createStyles = (colors: ThemeColors) =>
     },
     filterChipTextActive: {
       color: colors.text,
+    },
+    cookFilterRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingBottom: 12,
+    },
+    cookChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      backgroundColor: colors.glassSoft,
+    },
+    cookChipActive: {
+      backgroundColor: colors.selection,
+      borderColor: colors.primary,
+    },
+    cookChipText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    cookChipTextActive: {
+      color: colors.text,
+    },
+    cookDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    cookBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      marginTop: 6,
+    },
+    cookBadgeCan: {
+      backgroundColor: 'rgba(22,163,74,0.12)',
+    },
+    cookBadgeAlmost: {
+      backgroundColor: 'rgba(224,138,43,0.14)',
+    },
+    cookBadgeText: {
+      fontSize: 11.5,
+      fontWeight: '800',
+    },
+    cookBadgeTextCan: {
+      color: '#16a34a',
+    },
+    cookBadgeTextAlmost: {
+      color: '#b45309',
+    },
+    detailBulletHave: {
+      color: '#16a34a',
+    },
+    detailBulletMissing: {
+      color: colors.subtext,
+    },
+    addMissingBtn: {
+      marginTop: 12,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    addMissingBtnText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '800',
     },
     summaryRow: {
       flexDirection: 'row',
