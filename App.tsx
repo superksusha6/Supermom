@@ -125,6 +125,7 @@ type DraftActivity = {
   weekDays: WeekDayCode[];
   timeSlots: string[];
   dayTimes?: Partial<Record<WeekDayCode, string>>;
+  dayEndTimes?: Partial<Record<WeekDayCode, string>>;
 };
 type ActivityColorEditorTarget = {
   activityId: string;
@@ -1579,27 +1580,29 @@ function AppShell() {
     const todayCode = jsDayToWeekDayCode(new Date().getDay());
     for (const c of children) {
       // Merge by activity/event title; a timed entry wins over an untimed one.
-      const byTitle = new Map<string, { raw: string; title: string }>();
-      const add = (raw: string, rawTitle: string) => {
+      const byTitle = new Map<string, { raw: string; display: string; title: string }>();
+      const add = (raw: string, end: string, rawTitle: string) => {
         const title = rawTitle.trim();
         const key = title.toLowerCase();
         if (!key) return;
+        const display = raw ? (end ? `${raw} – ${end}` : raw) : '';
         const existing = byTitle.get(key);
-        if (!existing || (!existing.raw && raw)) byTitle.set(key, { raw, title });
+        if (!existing || (!existing.raw && raw)) byTitle.set(key, { raw, display, title });
       };
-      // Recurring activities that fall on today (by weekday), using today's per-day time.
+      // Recurring activities that fall on today (by weekday), using today's per-day busy window.
       (c.activities || []).forEach((a) => {
         if (!a.weekDays || !a.weekDays.length || !a.weekDays.includes(todayCode)) return;
-        const time = a.dayTimes?.[todayCode] || a.time || '';
-        add(time, a.name);
+        const start = a.dayTimes?.[todayCode] || a.time || '';
+        const end = a.dayEndTimes?.[todayCode] || '';
+        add(start, end, a.name);
       });
       // One-off calendar events for today.
       todayEvents
         .filter((e) => e.ownerChildProfileId === c.id || e.ownerName === c.name)
-        .forEach((e) => add(e.time || '', e.title.replace(/\s*\(.*?\)\s*/g, ' ').trim() || e.title));
+        .forEach((e) => add(e.time || '', e.endTime || '', e.title.replace(/\s*\(.*?\)\s*/g, ' ').trim() || e.title));
       map[c.id] = Array.from(byTitle.values())
         .sort((a, b) => dashTimeToMinutes(a.raw) - dashTimeToMinutes(b.raw))
-        .map((p) => ({ time: p.raw.trim(), title: p.title }));
+        .map((p) => ({ time: p.display, title: p.title }));
     }
     return map;
   }, [events, children, todayDateKey]);
@@ -1625,6 +1628,7 @@ function AppShell() {
       weekDays: activity.weekDays && activity.weekDays.length ? activity.weekDays : [],
       timeSlots: activity.timeSlots && activity.timeSlots.length ? activity.timeSlots : activity.time ? [activity.time] : [],
       dayTimes: activity.dayTimes,
+      dayEndTimes: activity.dayEndTimes,
     }));
     const nextEvents = buildChildScheduleEvents({
       childId,
@@ -5720,12 +5724,14 @@ function AppShell() {
               )
             }
             onDeleteChore={(choreId) => handleChoresChange((prev) => prev.filter((c) => c.id !== choreId))}
-            onAddActivity={(childId, activityName, weekDays, dayTimes) => {
+            onAddActivity={(childId, activityName, weekDays, dayTimes, dayEndTimes) => {
               const targetChild = children.find((child) => child.id === childId);
               if (!targetChild) return;
               const days = weekDays.length ? weekDays : undefined;
               const normDayTimes = normalizeDayTimes(dayTimes);
+              const normDayEndTimes = normalizeDayTimes(dayEndTimes);
               const hasTimes = Object.keys(normDayTimes).length > 0;
+              const hasEnds = Object.keys(normDayEndTimes).length > 0;
               const firstTime = days ? normDayTimes[days[0]] : undefined;
               const newActivity: ChildActivity = {
                 id: `a${Date.now()}`,
@@ -5733,6 +5739,7 @@ function AppShell() {
                 timesPerWeek: weekDays.length || 1,
                 weekDays: days,
                 dayTimes: hasTimes ? normDayTimes : undefined,
+                dayEndTimes: hasEnds ? normDayEndTimes : undefined,
                 time: firstTime || undefined,
               };
               const nextActivities = [...targetChild.activities, newActivity];
@@ -5741,12 +5748,14 @@ function AppShell() {
               );
               scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
             }}
-            onUpdateActivity={(childId, activityId, activityName, weekDays, dayTimes) => {
+            onUpdateActivity={(childId, activityId, activityName, weekDays, dayTimes, dayEndTimes) => {
               const targetChild = children.find((child) => child.id === childId);
               if (!targetChild) return;
               const days = weekDays.length ? weekDays : undefined;
               const normDayTimes = normalizeDayTimes(dayTimes);
+              const normDayEndTimes = normalizeDayTimes(dayEndTimes);
               const hasTimes = Object.keys(normDayTimes).length > 0;
+              const hasEnds = Object.keys(normDayEndTimes).length > 0;
               const firstTime = days ? normDayTimes[days[0]] : undefined;
               const nextActivities = targetChild.activities.map((activity) =>
                 activity.id === activityId
@@ -5756,6 +5765,7 @@ function AppShell() {
                       timesPerWeek: weekDays.length || 1,
                       weekDays: days,
                       dayTimes: hasTimes ? normDayTimes : undefined,
+                      dayEndTimes: hasEnds ? normDayEndTimes : undefined,
                       time: firstTime || undefined,
                       timeSlots: undefined,
                       endTime: undefined,
@@ -7588,6 +7598,7 @@ function buildChildScheduleEvents(params: {
     weekDays.forEach((dayCode) => {
       // A per-day time (activity.dayTimes[day]) overrides the shared slots for that weekday.
       const daySlots = activity.dayTimes && activity.dayTimes[dayCode] ? [activity.dayTimes[dayCode] as string] : slots;
+      const dayEnd = activity.dayEndTimes && activity.dayEndTimes[dayCode] ? activity.dayEndTimes[dayCode] : activity.endTime;
       const firstDate = getNextDateForWeekDay(dayCode, now);
       const cursor = parseDateKey(firstDate);
       while (cursor <= endDate) {
@@ -7603,7 +7614,7 @@ function buildChildScheduleEvents(params: {
             ownerChildProfileId: childId,
             date: dateText,
             time: slot,
-            endTime: activity.endTime,
+            endTime: dayEnd,
             category: childName,
             color,
           });
@@ -7616,7 +7627,7 @@ function buildChildScheduleEvents(params: {
               ownerName: parentLabel,
               date: dateText,
               time: slot,
-              endTime: activity.endTime,
+              endTime: dayEnd,
               category: 'Child Plan',
               color,
             });

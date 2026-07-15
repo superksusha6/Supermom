@@ -37,21 +37,39 @@ function activityScheduleLabel(activity: ChildActivity): string {
   const days = WEEK_DAYS.filter((d) => (activity.weekDays || []).includes(d.code)).map((d) => d.code);
   if (!days.length) return `${activity.timesPerWeek} times per week`;
   const dt = activity.dayTimes || {};
-  const timeFor = (code: WeekDayCode) => dt[code] || activity.time || '';
-  const uniqueTimes = Array.from(new Set(days.map(timeFor)));
-  if (uniqueTimes.length === 1) {
+  const de = activity.dayEndTimes || {};
+  const rangeFor = (code: WeekDayCode) => {
+    const start = dt[code] || activity.time || '';
+    if (!start) return '';
+    return de[code] ? `${start}–${de[code]}` : start;
+  };
+  const uniqueRanges = Array.from(new Set(days.map(rangeFor)));
+  if (uniqueRanges.length === 1) {
     const daysStr = days.map((d) => SHORT_DAY[d]).join(' · ');
-    return uniqueTimes[0] ? `${daysStr} · ${uniqueTimes[0]}` : daysStr;
+    return uniqueRanges[0] ? `${daysStr} · ${uniqueRanges[0]}` : daysStr;
   }
-  return days.map((d) => `${SHORT_DAY[d]}${timeFor(d) ? ` ${timeFor(d)}` : ''}`).join(' · ');
+  return days.map((d) => `${SHORT_DAY[d]}${rangeFor(d) ? ` ${rangeFor(d)}` : ''}`).join(' · ');
 }
 
 type TodayPlan = { time: string; title: string };
 
 type Props = {
   children: ChildProfile[];
-  onAddActivity: (childId: string, activityName: string, weekDays: WeekDayCode[], dayTimes: Partial<Record<WeekDayCode, string>>) => void;
-  onUpdateActivity: (childId: string, activityId: string, activityName: string, weekDays: WeekDayCode[], dayTimes: Partial<Record<WeekDayCode, string>>) => void;
+  onAddActivity: (
+    childId: string,
+    activityName: string,
+    weekDays: WeekDayCode[],
+    dayTimes: Partial<Record<WeekDayCode, string>>,
+    dayEndTimes: Partial<Record<WeekDayCode, string>>,
+  ) => void;
+  onUpdateActivity: (
+    childId: string,
+    activityId: string,
+    activityName: string,
+    weekDays: WeekDayCode[],
+    dayTimes: Partial<Record<WeekDayCode, string>>,
+    dayEndTimes: Partial<Record<WeekDayCode, string>>,
+  ) => void;
   onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
@@ -92,9 +110,10 @@ export function ChildrenScreen({
   const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
   const [activityDays, setActivityDays] = useState<WeekDayCode[]>([]);
-  const [activityDayTimes, setActivityDayTimes] = useState<Partial<Record<WeekDayCode, string>>>({});
+  const [activityDayStart, setActivityDayStart] = useState<Partial<Record<WeekDayCode, string>>>({});
+  const [activityDayEnd, setActivityDayEnd] = useState<Partial<Record<WeekDayCode, string>>>({});
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
-  const [openTimeDay, setOpenTimeDay] = useState<WeekDayCode | null>(null);
+  const [openTime, setOpenTime] = useState<{ day: WeekDayCode; field: 'start' | 'end' } | null>(null);
 
   const child = children.find((item) => item.id === openChildId) || null;
 
@@ -102,9 +121,10 @@ export function ChildrenScreen({
     setAddActivityOpen(false);
     setActivityName('');
     setActivityDays([]);
-    setActivityDayTimes({});
+    setActivityDayStart({});
+    setActivityDayEnd({});
     setEditingActivityId(null);
-    setOpenTimeDay(null);
+    setOpenTime(null);
   }, [openChildId]);
 
   // Drop back to the list if the open child was deleted.
@@ -122,8 +142,9 @@ export function ChildrenScreen({
     setEditingActivityId(null);
     setActivityName('');
     setActivityDays([]);
-    setActivityDayTimes({});
-    setOpenTimeDay(null);
+    setActivityDayStart({});
+    setActivityDayEnd({});
+    setOpenTime(null);
     setAddActivityOpen(true);
   }
 
@@ -132,11 +153,12 @@ export function ChildrenScreen({
     setActivityName(activity.name);
     const days = WEEK_DAYS.filter((d) => (activity.weekDays || []).includes(d.code)).map((d) => d.code);
     setActivityDays(days);
-    const dt: Partial<Record<WeekDayCode, string>> = { ...(activity.dayTimes || {}) };
-    // Seed per-day times from a legacy single time so existing activities stay editable.
-    if (!activity.dayTimes && activity.time) days.forEach((d) => { dt[d] = activity.time; });
-    setActivityDayTimes(dt);
-    setOpenTimeDay(null);
+    const start: Partial<Record<WeekDayCode, string>> = { ...(activity.dayTimes || {}) };
+    // Seed per-day start from a legacy single time so existing activities stay editable.
+    if (!activity.dayTimes && activity.time) days.forEach((d) => { start[d] = activity.time; });
+    setActivityDayStart(start);
+    setActivityDayEnd({ ...(activity.dayEndTimes || {}) });
+    setOpenTime(null);
     setAddActivityOpen(true);
   }
 
@@ -144,16 +166,17 @@ export function ChildrenScreen({
     const isOn = activityDays.includes(code);
     if (isOn) {
       setActivityDays((prev) => prev.filter((x) => x !== code));
-      setActivityDayTimes((prev) => {
-        const next = { ...prev };
-        delete next[code];
-        return next;
-      });
-      if (openTimeDay === code) setOpenTimeDay(null);
+      setActivityDayStart((prev) => { const next = { ...prev }; delete next[code]; return next; });
+      setActivityDayEnd((prev) => { const next = { ...prev }; delete next[code]; return next; });
+      if (openTime?.day === code) setOpenTime(null);
     } else {
       setActivityDays((prev) => [...prev, code]);
-      // Default the new day to a time already used on another day (one-tap "same time").
-      setActivityDayTimes((prev) => {
+      // Default the new day to a range already used on another day (one-tap "same time").
+      setActivityDayStart((prev) => {
+        const shared = Object.values(prev).find(Boolean);
+        return shared ? { ...prev, [code]: shared } : prev;
+      });
+      setActivityDayEnd((prev) => {
         const shared = Object.values(prev).find(Boolean);
         return shared ? { ...prev, [code]: shared } : prev;
       });
@@ -165,15 +188,21 @@ export function ChildrenScreen({
     if (!name || !child) return;
     const days = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
     const dayTimes: Partial<Record<WeekDayCode, string>> = {};
-    days.forEach((d) => { if (activityDayTimes[d]) dayTimes[d] = activityDayTimes[d]; });
-    if (editingActivityId) onUpdateActivity(child.id, editingActivityId, name, days, dayTimes);
-    else onAddActivity(child.id, name, days, dayTimes);
+    const dayEndTimes: Partial<Record<WeekDayCode, string>> = {};
+    days.forEach((d) => {
+      if (activityDayStart[d]) dayTimes[d] = activityDayStart[d];
+      // Only keep an end if there is a start to pair it with.
+      if (activityDayStart[d] && activityDayEnd[d]) dayEndTimes[d] = activityDayEnd[d];
+    });
+    if (editingActivityId) onUpdateActivity(child.id, editingActivityId, name, days, dayTimes, dayEndTimes);
+    else onAddActivity(child.id, name, days, dayTimes, dayEndTimes);
     setAddActivityOpen(false);
     setEditingActivityId(null);
     setActivityName('');
     setActivityDays([]);
-    setActivityDayTimes({});
-    setOpenTimeDay(null);
+    setActivityDayStart({});
+    setActivityDayEnd({});
+    setOpenTime(null);
   }
 
   const colorFor = (id: string) => AVATAR_COLORS[Math.max(0, children.findIndex((c) => c.id === id)) % AVATAR_COLORS.length];
@@ -458,38 +487,82 @@ export function ChildrenScreen({
 
               {activityDays.length ? (
                 <>
-                  <Text style={styles.formSubLabel}>Time for each day</Text>
+                  <Text style={styles.formSubLabel}>Busy time each day</Text>
                   {WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => {
-                    const t = activityDayTimes[d.code] || '';
-                    const open = openTimeDay === d.code;
+                    const start = activityDayStart[d.code] || '';
+                    const end = activityDayEnd[d.code] || '';
+                    const openStart = openTime?.day === d.code && openTime.field === 'start';
+                    const openEnd = openTime?.day === d.code && openTime.field === 'end';
                     return (
                       <View key={d.code}>
                         <View style={styles.dayTimeRow}>
                           <Text style={styles.dayTimeLabel}>{FULL_DAY[d.code]}</Text>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Time for ${FULL_DAY[d.code]}`}
-                            style={[styles.dayTimeChip, t && styles.dayTimeChipSet]}
-                            onPress={() => setOpenTimeDay(open ? null : d.code)}
-                          >
-                            <Text style={[styles.dayTimeChipText, t && styles.dayTimeChipTextSet]}>{t || 'Set time'}</Text>
-                          </Pressable>
+                          <View style={styles.dayTimeRange}>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Start on ${FULL_DAY[d.code]}`}
+                              style={[styles.dayTimeChip, start && styles.dayTimeChipSet]}
+                              onPress={() => setOpenTime(openStart ? null : { day: d.code, field: 'start' })}
+                            >
+                              <Text style={[styles.dayTimeChipText, start && styles.dayTimeChipTextSet]}>{start || 'From'}</Text>
+                            </Pressable>
+                            {start ? (
+                              <>
+                                <Text style={styles.dayTimeDash}>–</Text>
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`End on ${FULL_DAY[d.code]}`}
+                                  style={[styles.dayTimeChip, end && styles.dayTimeChipSet]}
+                                  onPress={() => setOpenTime(openEnd ? null : { day: d.code, field: 'end' })}
+                                >
+                                  <Text style={[styles.dayTimeChipText, end && styles.dayTimeChipTextSet]}>{end || 'To'}</Text>
+                                </Pressable>
+                              </>
+                            ) : null}
+                          </View>
                         </View>
-                        {open ? (
+                        {openStart ? (
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
                             <Pressable
-                              style={[styles.timePill, !t && styles.timePillOn]}
-                              onPress={() => { setActivityDayTimes((p) => ({ ...p, [d.code]: '' })); setOpenTimeDay(null); }}
+                              style={[styles.timePill, !start && styles.timePillOn]}
+                              onPress={() => {
+                                setActivityDayStart((p) => ({ ...p, [d.code]: '' }));
+                                setActivityDayEnd((p) => { const n = { ...p }; delete n[d.code]; return n; });
+                                setOpenTime(null);
+                              }}
                             >
-                              <Text style={[styles.timePillText, !t && styles.timePillTextOn]}>No time</Text>
+                              <Text style={[styles.timePillText, !start && styles.timePillTextOn]}>No time</Text>
                             </Pressable>
                             {TIME_OPTIONS.map((opt) => (
                               <Pressable
-                                key={`${d.code}-${opt}`}
-                                style={[styles.timePill, t === opt && styles.timePillOn]}
-                                onPress={() => { setActivityDayTimes((p) => ({ ...p, [d.code]: opt })); setOpenTimeDay(null); }}
+                                key={`s-${d.code}-${opt}`}
+                                style={[styles.timePill, start === opt && styles.timePillOn]}
+                                onPress={() => {
+                                  setActivityDayStart((p) => ({ ...p, [d.code]: opt }));
+                                  setActivityDayEnd((p) => (p[d.code] && TIME_OPTIONS.indexOf(p[d.code] as string) <= TIME_OPTIONS.indexOf(opt) ? { ...p, [d.code]: '' } : p));
+                                  setOpenTime(null);
+                                }}
                               >
-                                <Text style={[styles.timePillText, t === opt && styles.timePillTextOn]}>{opt}</Text>
+                                <Text style={[styles.timePillText, start === opt && styles.timePillTextOn]}>{opt}</Text>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        ) : null}
+                        {openEnd ? (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
+                            <Pressable
+                              style={[styles.timePill, !end && styles.timePillOn]}
+                              onPress={() => { setActivityDayEnd((p) => ({ ...p, [d.code]: '' })); setOpenTime(null); }}
+                            >
+                              <Text style={[styles.timePillText, !end && styles.timePillTextOn]}>No end</Text>
+                            </Pressable>
+                            {TIME_OPTIONS.filter((opt) => TIME_OPTIONS.indexOf(opt) > TIME_OPTIONS.indexOf(start)).map((opt) => (
+                              <Pressable
+                                key={`e-${d.code}-${opt}`}
+                                style={[styles.timePill, end === opt && styles.timePillOn]}
+                                onPress={() => { setActivityDayEnd((p) => ({ ...p, [d.code]: opt })); setOpenTime(null); }}
+                              >
+                                <Text style={[styles.timePillText, end === opt && styles.timePillTextOn]}>{opt}</Text>
                               </Pressable>
                             ))}
                           </ScrollView>
@@ -768,6 +841,16 @@ const createStyles = (colors: ThemeColors) =>
   },
   dayTimeChipTextSet: {
     color: '#ffffff',
+  },
+  dayTimeRange: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dayTimeDash: {
+    color: colors.subtext,
+    fontSize: 15,
+    fontWeight: '800',
   },
   choreCheck: {
     width: 24,

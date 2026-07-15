@@ -17,6 +17,8 @@ export type ChildActivity = {
   timeSlots?: string[];
   // Optional per-weekday start time, e.g. { mon: '4:00 PM', wed: '5:00 PM' }.
   dayTimes?: Partial<Record<WeekDayCode, string>>;
+  // Optional per-weekday end time (busy-until), paired with dayTimes.
+  dayEndTimes?: Partial<Record<WeekDayCode, string>>;
 };
 
 export type ChildProfile = {
