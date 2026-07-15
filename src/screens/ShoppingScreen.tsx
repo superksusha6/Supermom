@@ -540,6 +540,19 @@ function formatShoppingQuantity(amount: string, unit: UnitOption) {
   return `${trimmed} ${unit}`;
 }
 
+// Split a single quick-add entry into a clean name and an optional trailing quantity,
+// e.g. "bananas 3 kg" -> { name: "bananas", quantity: "3 kg" }, "milk" -> { name: "milk", quantity: "1 pcs" }.
+function splitNameAndQuantity(raw: string): { name: string; quantity: string } {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zа-я]+)?$/i);
+  if (match && match[1].trim()) {
+    const name = match[1].trim();
+    const parsed = parseShoppingQuantityText(`${match[2]}${match[3] ? ` ${match[3]}` : ''}`);
+    return { name, quantity: formatShoppingQuantity(parsed.amount, parsed.unit) };
+  }
+  return { name: trimmed, quantity: '1 pcs' };
+}
+
 function mergeShoppingItemsByName(primary: ShoppingItem[], secondary: ShoppingItem[]) {
   const seen = new Set<string>();
   const merged: ShoppingItem[] = [];
@@ -606,6 +619,7 @@ export function ShoppingScreen({
   const [baseListOpen, setBaseListOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [addComposerOpen, setAddComposerOpen] = useState(false);
+  const [quickAddName, setQuickAddName] = useState('');
   const [composerMode, setComposerMode] = useState<ComposerMode>('list');
   const [pendingCreateBehavior, setPendingCreateBehavior] = useState<'default' | 'force-current'>('default');
   const [fridgePhotoUri, setFridgePhotoUri] = useState<string | null>(null);
@@ -633,6 +647,7 @@ export function ShoppingScreen({
   const [editRows, setEditRows] = useState<EditShoppingRow[]>([]);
   const draftInputRefs = useRef<Record<string, TextInput | null>>({});
   const editInputRefs = useRef<Record<string, TextInput | null>>({});
+  const quickAddRef = useRef<TextInput | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
   const pendingFocusRowIdRef = useRef<string | null>(null);
   const pendingEditSourceIdRef = useRef<string | null>(null);
@@ -892,6 +907,17 @@ export function ShoppingScreen({
     setTimeout(() => {
       draftInputRefs.current[targetId]?.focus();
     }, 0);
+  }
+
+  function submitQuickAdd() {
+    const raw = quickAddName.trim();
+    if (!raw) return;
+    const { name, quantity } = splitNameAndQuantity(raw);
+    onCreateList([{ name, quantity, category: inferShoppingItemCategory(name) }], activeList?.id ?? null, 'force-current');
+    setQuickAddName('');
+    if (filter !== 'active') setFilter('active');
+    // Keep the field focused so the next item can be typed straight away.
+    setTimeout(() => quickAddRef.current?.focus(), 0);
   }
 
   function openAddComposer(mode: ComposerMode = 'list', createBehavior: 'default' | 'force-current' = 'default') {
@@ -1401,14 +1427,16 @@ export function ShoppingScreen({
                     : `${purchasedShoppingItemsCount} purchased`}
             </Text>
           </View>
-          <Pressable
-            style={styles.shoppingPrimaryBtn}
-            onPress={needsBasketOnboarding ? () => openAddComposer('basket') : canStartFromBasket ? onStartFromBaseList : () => openAddComposer('list')}
-          >
-            <Text style={styles.shoppingPrimaryBtnText}>
-              {needsBasketOnboarding ? 'Create basket' : canStartFromBasket ? 'Use basket' : 'Add'}
-            </Text>
-          </Pressable>
+          {needsBasketOnboarding || canStartFromBasket ? (
+            <Pressable
+              style={styles.shoppingPrimaryBtn}
+              onPress={needsBasketOnboarding ? () => openAddComposer('basket') : onStartFromBaseList}
+            >
+              <Text style={styles.shoppingPrimaryBtnText}>
+                {needsBasketOnboarding ? 'Create basket' : 'Use basket'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {needsBasketOnboarding ? (
@@ -1436,12 +1464,37 @@ export function ShoppingScreen({
 
         {!needsBasketOnboarding && !canStartFromBasket ? (
         <View style={styles.shoppingBoard}>
+          {filter === 'active' ? (
+            <View style={styles.quickAddBar}>
+              <TextInput
+                ref={quickAddRef}
+                value={quickAddName}
+                onChangeText={setQuickAddName}
+                onSubmitEditing={submitQuickAdd}
+                blurOnSubmit={false}
+                returnKeyType="done"
+                placeholder="Add product…"
+                placeholderTextColor={colors.subtext}
+                autoCorrect={false}
+                autoCapitalize="none"
+                style={styles.quickAddInput}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add product"
+                style={[styles.quickAddBtn, !quickAddName.trim() && styles.quickAddBtnDisabled]}
+                onPress={submitQuickAdd}
+              >
+                <Text style={styles.quickAddBtnText}>+</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {visibleItems.length === 0 ? (
             <View style={styles.shoppingEmptyState}>
               <Text style={styles.shoppingEmptyTitle}>Nothing here yet</Text>
               <Text style={styles.shoppingEmptyText}>
                 {filter === 'active'
-                  ? 'Add your first item to start your shopping list.'
+                  ? 'Type a product above and press + to start your list.'
                   : 'Purchased items will appear here after you check them off.'}
               </Text>
             </View>
@@ -4479,6 +4532,42 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     },
     shoppingGroupList: {
       gap: 12,
+    },
+    quickAddBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 12,
+    },
+    quickAddInput: {
+      flex: 1,
+      height: 48,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: 'rgba(228,236,246,0.92)',
+      backgroundColor: '#ffffff',
+      paddingHorizontal: 16,
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    quickAddBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickAddBtnDisabled: {
+      opacity: 0.45,
+    },
+    quickAddBtnText: {
+      color: '#ffffff',
+      fontSize: 26,
+      lineHeight: 30,
+      fontWeight: '700',
+      marginTop: -2,
     },
     shoppingRow: {
       flexDirection: 'row',
