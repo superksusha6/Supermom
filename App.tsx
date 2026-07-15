@@ -1503,19 +1503,6 @@ function AppShell() {
     const title = recipe?.title || entry.customTitle || 'Dinner planned';
     return { title, recipe, servings: recipe?.servings || null, cookTime: recipe?.cookTimeMinutes || null };
   }, [weeklyMealPlan, recipes, todayDateKey]);
-  const weekAhead = useMemo(() => {
-    const codes = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-    const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayIdx = new Date().getDay();
-    return Array.from({ length: 3 }, (_, i) => {
-      const idx = (todayIdx + i) % 7;
-      const code = codes[idx];
-      const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
-      const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
-      const title = entry ? recipes.find((r) => r.id === entry.recipeId)?.title || entry.customTitle || 'Planned' : null;
-      return { label: i === 0 ? 'Today' : labels[idx], title };
-    });
-  }, [weeklyMealPlan, recipes, todayDateKey]);
   const todayChoreList = useMemo(() => {
     return chores
       .filter((c) => c.childId && choreStatus(c) === 'todo')
@@ -5503,20 +5490,16 @@ function AppShell() {
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
 
-            <FamCard title="This week" padded={false}>
-              {weekAhead.map((row, i) => (
-                <View key={row.label}>
-                  {i > 0 ? <View style={styles.agendaLine} /> : null}
-                  <Pressable style={styles.foodWeekRow} onPress={() => setFoodTab('plan')}>
-                    <Text style={styles.foodWeekDay}>{row.label}</Text>
-                    <Text style={[styles.foodWeekMeal, !row.title && styles.foodWeekMealEmpty]} numberOfLines={1}>
-                      {row.title || 'Tap to plan'}
-                    </Text>
-                    <Icon name="chevron" color={colors.subtext} size={15} />
-                  </Pressable>
-                </View>
-              ))}
-            </FamCard>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Menu for the week"
+              style={styles.foodShopBtn}
+              onPress={() => setFoodTab('plan')}
+            >
+              <View style={styles.foodShopIcon}><Icon name="calendar" color={colors.primary} size={20} /></View>
+              <Text style={styles.foodShopText}>Menu for the week</Text>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
 
             <Pressable style={styles.foodDiaryLink} onPress={() => setFoodTab('diary')}>
               <Icon name="plus" color={colors.subtext} size={15} />
