@@ -542,7 +542,7 @@ function formatShoppingQuantity(amount: string, unit: UnitOption) {
 
 // Split a single quick-add entry into a clean name and an optional trailing quantity,
 // e.g. "bananas 3 kg" -> { name: "bananas", quantity: "3 kg" }, "milk" -> { name: "milk", quantity: "1 pcs" }.
-function splitNameAndQuantity(raw: string): { name: string; quantity: string } {
+function splitNameAndQuantity(raw: string): { name: string; quantity: string | null } {
   const trimmed = raw.trim();
   const match = trimmed.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zа-я]+)?$/i);
   if (match && match[1].trim()) {
@@ -550,7 +550,7 @@ function splitNameAndQuantity(raw: string): { name: string; quantity: string } {
     const parsed = parseShoppingQuantityText(`${match[2]}${match[3] ? ` ${match[3]}` : ''}`);
     return { name, quantity: formatShoppingQuantity(parsed.amount, parsed.unit) };
   }
-  return { name: trimmed, quantity: '1 pcs' };
+  return { name: trimmed, quantity: null };
 }
 
 function mergeShoppingItemsByName(primary: ShoppingItem[], secondary: ShoppingItem[]) {
@@ -620,6 +620,9 @@ export function ShoppingScreen({
   const [moreOpen, setMoreOpen] = useState(false);
   const [addComposerOpen, setAddComposerOpen] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddAmount, setQuickAddAmount] = useState('1');
+  const [quickAddUnit, setQuickAddUnit] = useState<UnitOption>('pcs');
+  const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>('list');
   const [pendingCreateBehavior, setPendingCreateBehavior] = useState<'default' | 'force-current'>('default');
   const [fridgePhotoUri, setFridgePhotoUri] = useState<string | null>(null);
@@ -912,9 +915,13 @@ export function ShoppingScreen({
   function submitQuickAdd() {
     const raw = quickAddName.trim();
     if (!raw) return;
-    const { name, quantity } = splitNameAndQuantity(raw);
-    onCreateList([{ name, quantity, category: inferShoppingItemCategory(name) }], activeList?.id ?? null, 'force-current');
+    const parsed = splitNameAndQuantity(raw);
+    // A quantity typed inline ("milk 2 l") wins; otherwise use the amount + unit controls.
+    const quantity = parsed.quantity ?? formatShoppingQuantity(quickAddAmount.trim() || '1', quickAddUnit);
+    onCreateList([{ name: parsed.name, quantity, category: inferShoppingItemCategory(parsed.name) }], activeList?.id ?? null, 'force-current');
     setQuickAddName('');
+    setQuickAddAmount('1');
+    setQuickAddUnitOpen(false);
     if (filter !== 'active') setFilter('active');
     // Keep the field focused so the next item can be typed straight away.
     setTimeout(() => quickAddRef.current?.focus(), 0);
@@ -1470,6 +1477,7 @@ export function ShoppingScreen({
                 ref={quickAddRef}
                 value={quickAddName}
                 onChangeText={setQuickAddName}
+                onFocus={() => setQuickAddUnitOpen(false)}
                 onSubmitEditing={submitQuickAdd}
                 blurOnSubmit={false}
                 returnKeyType="done"
@@ -1479,6 +1487,40 @@ export function ShoppingScreen({
                 autoCapitalize="none"
                 style={styles.quickAddInput}
               />
+              <TextInput
+                value={quickAddAmount}
+                onChangeText={(t) => setQuickAddAmount(t.replace(/[^0-9.,]/g, ''))}
+                keyboardType="numeric"
+                placeholder="1"
+                placeholderTextColor={colors.subtext}
+                style={styles.quickAddQty}
+              />
+              <View style={styles.quickAddUnitWrap}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose unit"
+                  style={styles.quickAddUnitBtn}
+                  onPress={() => setQuickAddUnitOpen((v) => !v)}
+                >
+                  <Text style={styles.quickAddUnitText}>{quickAddUnit}</Text>
+                </Pressable>
+                {quickAddUnitOpen ? (
+                  <View style={styles.quickAddUnitMenu}>
+                    {UNIT_OPTIONS.map((u) => (
+                      <Pressable
+                        key={u}
+                        style={[styles.unitMenuItem, quickAddUnit === u && styles.unitMenuItemActive]}
+                        onPress={() => {
+                          setQuickAddUnit(u);
+                          setQuickAddUnitOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.unitMenuText, quickAddUnit === u && styles.unitMenuTextActive]}>{u}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Add product"
@@ -4536,20 +4578,71 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     quickAddBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
       marginBottom: 12,
+      zIndex: 30,
     },
     quickAddInput: {
       flex: 1,
+      minWidth: 0,
       height: 48,
       borderRadius: 16,
       borderWidth: 1,
       borderColor: 'rgba(228,236,246,0.92)',
       backgroundColor: '#ffffff',
-      paddingHorizontal: 16,
+      paddingHorizontal: 14,
       fontSize: 15,
       fontWeight: '600',
       color: colors.text,
+    },
+    quickAddQty: {
+      width: 46,
+      height: 48,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(228,236,246,0.92)',
+      backgroundColor: '#ffffff',
+      textAlign: 'center',
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      paddingHorizontal: 2,
+    },
+    quickAddUnitWrap: {
+      position: 'relative',
+      zIndex: 40,
+    },
+    quickAddUnitBtn: {
+      width: 50,
+      height: 48,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(228,236,246,0.92)',
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickAddUnitText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    quickAddUnitMenu: {
+      position: 'absolute',
+      top: 52,
+      right: 0,
+      width: 66,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: '#ffffff',
+      overflow: 'hidden',
+      zIndex: 200,
+      elevation: 40,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
     },
     quickAddBtn: {
       width: 48,
