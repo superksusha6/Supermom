@@ -30,6 +30,18 @@ const TIME_OPTIONS: string[] = (() => {
   return out;
 })();
 
+// Filter the time list by a typed query: "6" -> all 6-o'clock options, "6 pm"/"6p" -> PM only, "630" -> 6:30.
+function filterTimeOptions(query: string): string[] {
+  const s = query.trim().toLowerCase();
+  if (!s) return TIME_OPTIONS;
+  const compact = s.replace(/[\s:]/g, '');
+  return TIME_OPTIONS.filter((opt) => {
+    const low = opt.toLowerCase();
+    const optCompact = low.replace(/[\s:]/g, '');
+    return low.startsWith(s) || optCompact.startsWith(compact) || optCompact.includes(compact);
+  });
+}
+
 const SHORT_DAY: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
 const FULL_DAY: Record<WeekDayCode, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
@@ -114,6 +126,7 @@ export function ChildrenScreen({
   const [activityDayEnd, setActivityDayEnd] = useState<Partial<Record<WeekDayCode, string>>>({});
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [openTime, setOpenTime] = useState<{ day: WeekDayCode; field: 'start' | 'end' } | null>(null);
+  const [timeQuery, setTimeQuery] = useState('');
 
   const child = children.find((item) => item.id === openChildId) || null;
 
@@ -502,7 +515,7 @@ export function ChildrenScreen({
                               accessibilityRole="button"
                               accessibilityLabel={`Start on ${FULL_DAY[d.code]}`}
                               style={[styles.dayTimeChip, start && styles.dayTimeChipSet]}
-                              onPress={() => setOpenTime(openStart ? null : { day: d.code, field: 'start' })}
+                              onPress={() => { setTimeQuery(''); setOpenTime(openStart ? null : { day: d.code, field: 'start' }); }}
                             >
                               <Text style={[styles.dayTimeChipText, start && styles.dayTimeChipTextSet]}>{start || 'From'}</Text>
                             </Pressable>
@@ -513,7 +526,7 @@ export function ChildrenScreen({
                                   accessibilityRole="button"
                                   accessibilityLabel={`End on ${FULL_DAY[d.code]}`}
                                   style={[styles.dayTimeChip, end && styles.dayTimeChipSet]}
-                                  onPress={() => setOpenTime(openEnd ? null : { day: d.code, field: 'end' })}
+                                  onPress={() => { setTimeQuery(''); setOpenTime(openEnd ? null : { day: d.code, field: 'end' }); }}
                                 >
                                   <Text style={[styles.dayTimeChipText, end && styles.dayTimeChipTextSet]}>{end || 'To'}</Text>
                                 </Pressable>
@@ -522,50 +535,92 @@ export function ChildrenScreen({
                           </View>
                         </View>
                         {openStart ? (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
-                            <Pressable
-                              style={[styles.timePill, !start && styles.timePillOn]}
-                              onPress={() => {
-                                setActivityDayStart((p) => ({ ...p, [d.code]: '' }));
-                                setActivityDayEnd((p) => { const n = { ...p }; delete n[d.code]; return n; });
+                          <View>
+                            {(() => {
+                              const matches = filterTimeOptions(timeQuery);
+                              const pickStart = (opt: string) => {
+                                setActivityDayStart((p) => ({ ...p, [d.code]: opt }));
+                                setActivityDayEnd((p) => (p[d.code] && TIME_OPTIONS.indexOf(p[d.code] as string) <= TIME_OPTIONS.indexOf(opt) ? { ...p, [d.code]: '' } : p));
                                 setOpenTime(null);
-                              }}
-                            >
-                              <Text style={[styles.timePillText, !start && styles.timePillTextOn]}>No time</Text>
-                            </Pressable>
-                            {TIME_OPTIONS.map((opt) => (
-                              <Pressable
-                                key={`s-${d.code}-${opt}`}
-                                style={[styles.timePill, start === opt && styles.timePillOn]}
-                                onPress={() => {
-                                  setActivityDayStart((p) => ({ ...p, [d.code]: opt }));
-                                  setActivityDayEnd((p) => (p[d.code] && TIME_OPTIONS.indexOf(p[d.code] as string) <= TIME_OPTIONS.indexOf(opt) ? { ...p, [d.code]: '' } : p));
-                                  setOpenTime(null);
-                                }}
-                              >
-                                <Text style={[styles.timePillText, start === opt && styles.timePillTextOn]}>{opt}</Text>
-                              </Pressable>
-                            ))}
-                          </ScrollView>
+                              };
+                              return (
+                                <>
+                                  <TextInput
+                                    value={timeQuery}
+                                    onChangeText={setTimeQuery}
+                                    onSubmitEditing={() => { if (matches[0]) pickStart(matches[0]); }}
+                                    placeholder="Type a time — e.g. 6 or 6 pm"
+                                    placeholderTextColor={colors.subtext}
+                                    autoFocus
+                                    autoCorrect={false}
+                                    autoCapitalize="none"
+                                    style={styles.timeSearch}
+                                  />
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow} keyboardShouldPersistTaps="handled">
+                                    <Pressable
+                                      style={[styles.timePill, !start && styles.timePillOn]}
+                                      onPress={() => {
+                                        setActivityDayStart((p) => ({ ...p, [d.code]: '' }));
+                                        setActivityDayEnd((p) => { const n = { ...p }; delete n[d.code]; return n; });
+                                        setOpenTime(null);
+                                      }}
+                                    >
+                                      <Text style={[styles.timePillText, !start && styles.timePillTextOn]}>No time</Text>
+                                    </Pressable>
+                                    {matches.map((opt) => (
+                                      <Pressable
+                                        key={`s-${d.code}-${opt}`}
+                                        style={[styles.timePill, start === opt && styles.timePillOn]}
+                                        onPress={() => pickStart(opt)}
+                                      >
+                                        <Text style={[styles.timePillText, start === opt && styles.timePillTextOn]}>{opt}</Text>
+                                      </Pressable>
+                                    ))}
+                                  </ScrollView>
+                                </>
+                              );
+                            })()}
+                          </View>
                         ) : null}
                         {openEnd ? (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
-                            <Pressable
-                              style={[styles.timePill, !end && styles.timePillOn]}
-                              onPress={() => { setActivityDayEnd((p) => ({ ...p, [d.code]: '' })); setOpenTime(null); }}
-                            >
-                              <Text style={[styles.timePillText, !end && styles.timePillTextOn]}>No end</Text>
-                            </Pressable>
-                            {TIME_OPTIONS.filter((opt) => TIME_OPTIONS.indexOf(opt) > TIME_OPTIONS.indexOf(start)).map((opt) => (
-                              <Pressable
-                                key={`e-${d.code}-${opt}`}
-                                style={[styles.timePill, end === opt && styles.timePillOn]}
-                                onPress={() => { setActivityDayEnd((p) => ({ ...p, [d.code]: opt })); setOpenTime(null); }}
-                              >
-                                <Text style={[styles.timePillText, end === opt && styles.timePillTextOn]}>{opt}</Text>
-                              </Pressable>
-                            ))}
-                          </ScrollView>
+                          <View>
+                            {(() => {
+                              const matches = filterTimeOptions(timeQuery).filter((opt) => TIME_OPTIONS.indexOf(opt) > TIME_OPTIONS.indexOf(start));
+                              const pickEnd = (opt: string) => { setActivityDayEnd((p) => ({ ...p, [d.code]: opt })); setOpenTime(null); };
+                              return (
+                                <>
+                                  <TextInput
+                                    value={timeQuery}
+                                    onChangeText={setTimeQuery}
+                                    onSubmitEditing={() => { if (matches[0]) pickEnd(matches[0]); }}
+                                    placeholder="Type a time — e.g. 7 or 7 pm"
+                                    placeholderTextColor={colors.subtext}
+                                    autoFocus
+                                    autoCorrect={false}
+                                    autoCapitalize="none"
+                                    style={styles.timeSearch}
+                                  />
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow} keyboardShouldPersistTaps="handled">
+                                    <Pressable
+                                      style={[styles.timePill, !end && styles.timePillOn]}
+                                      onPress={() => { setActivityDayEnd((p) => ({ ...p, [d.code]: '' })); setOpenTime(null); }}
+                                    >
+                                      <Text style={[styles.timePillText, !end && styles.timePillTextOn]}>No end</Text>
+                                    </Pressable>
+                                    {matches.map((opt) => (
+                                      <Pressable
+                                        key={`e-${d.code}-${opt}`}
+                                        style={[styles.timePill, end === opt && styles.timePillOn]}
+                                        onPress={() => pickEnd(opt)}
+                                      >
+                                        <Text style={[styles.timePillText, end === opt && styles.timePillTextOn]}>{opt}</Text>
+                                      </Pressable>
+                                    ))}
+                                  </ScrollView>
+                                </>
+                              );
+                            })()}
+                          </View>
                         ) : null}
                       </View>
                     );
@@ -841,6 +896,19 @@ const createStyles = (colors: ThemeColors) =>
   },
   dayTimeChipTextSet: {
     color: '#ffffff',
+  },
+  timeSearch: {
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 6,
+    marginBottom: 6,
   },
   dayTimeRange: {
     flexDirection: 'row',
