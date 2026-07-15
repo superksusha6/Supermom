@@ -1575,18 +1575,30 @@ function AppShell() {
   const childTodayPlans = useMemo(() => {
     const map: Record<string, { time: string; title: string }[]> = {};
     const todayEvents = events.filter((e) => e.date === todayDateKey && e.owner === 'child');
+    const todayCode = jsDayToWeekDayCode(new Date().getDay());
     for (const c of children) {
-      const seen = new Set<string>();
-      map[c.id] = todayEvents
+      // Merge by activity/event title; a timed entry wins over an untimed one.
+      const byTitle = new Map<string, { raw: string; title: string }>();
+      const add = (raw: string, rawTitle: string) => {
+        const title = rawTitle.trim();
+        const key = title.toLowerCase();
+        if (!key) return;
+        const existing = byTitle.get(key);
+        if (!existing || (!existing.raw && raw)) byTitle.set(key, { raw, title });
+      };
+      // Recurring activities that fall on today (by weekday).
+      (c.activities || []).forEach((a) => {
+        if (!a.weekDays || !a.weekDays.length || !a.weekDays.includes(todayCode)) return;
+        const slots = a.timeSlots && a.timeSlots.length ? a.timeSlots : a.time ? [a.time] : [''];
+        slots.forEach((slot) => add(slot || '', a.name));
+      });
+      // One-off calendar events for today.
+      todayEvents
         .filter((e) => e.ownerChildProfileId === c.id || e.ownerName === c.name)
-        .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
-        .map((e) => ({ time: (e.time || '').replace(/\s?[AP]M/i, ''), title: e.title.replace(/\s*\(.*?\)\s*/g, ' ').trim() || e.title }))
-        .filter((p) => {
-          const k = `${p.time}|${p.title.toLowerCase()}`;
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
+        .forEach((e) => add(e.time || '', e.title.replace(/\s*\(.*?\)\s*/g, ' ').trim() || e.title));
+      map[c.id] = Array.from(byTitle.values())
+        .sort((a, b) => dashTimeToMinutes(a.raw) - dashTimeToMinutes(b.raw))
+        .map((p) => ({ time: p.raw.trim(), title: p.title }));
     }
     return map;
   }, [events, children, todayDateKey]);
