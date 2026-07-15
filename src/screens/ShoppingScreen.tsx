@@ -429,6 +429,8 @@ type DraftRow = {
 
 type Props = {
   lists: ShoppingListDoc[];
+  selectedListId?: string | null;
+  onRenameList?: (listId: string, title: string) => void;
   fridgeItems: FridgeItem[];
   recipes: Recipe[];
   onImportFridgeItems: (items: Array<Omit<FridgeItem, 'id'>>) => void;
@@ -578,6 +580,8 @@ function mergeShoppingItemsByName(primary: ShoppingItem[], secondary: ShoppingIt
 
 export function ShoppingScreen({
   lists,
+  selectedListId,
+  onRenameList,
   fridgeItems,
   recipes,
   onImportFridgeItems,
@@ -623,6 +627,8 @@ export function ShoppingScreen({
   const [quickAddAmount, setQuickAddAmount] = useState('1');
   const [quickAddUnit, setQuickAddUnit] = useState<UnitOption>('pcs');
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const [composerMode, setComposerMode] = useState<ComposerMode>('list');
   const [pendingCreateBehavior, setPendingCreateBehavior] = useState<'default' | 'force-current'>('default');
   const [fridgePhotoUri, setFridgePhotoUri] = useState<string | null>(null);
@@ -668,8 +674,12 @@ export function ShoppingScreen({
     [baseList?.id, lists],
   );
   const activeList = useReactMemo(
-    () => nonBaseLists.find((list) => list.listType === 'current') || nonBaseLists[0] || null,
-    [nonBaseLists],
+    () =>
+      (selectedListId ? nonBaseLists.find((list) => list.id === selectedListId) : null) ||
+      nonBaseLists.find((list) => list.listType === 'current' || list.listType === undefined) ||
+      nonBaseLists[0] ||
+      null,
+    [nonBaseLists, selectedListId],
   );
   const historyLists = useReactMemo(
     () =>
@@ -1423,7 +1433,38 @@ export function ShoppingScreen({
         ) : null}
         <View style={[styles.shoppingListHeader, isMobile && styles.shoppingListHeaderMobile]}>
           <View style={styles.shoppingListHeaderCopy}>
-            <Text style={styles.shoppingListTitle}>Shopping List</Text>
+            {titleEditing && activeList ? (
+              <TextInput
+                value={titleDraft}
+                onChangeText={setTitleDraft}
+                autoFocus
+                returnKeyType="done"
+                placeholder="List name"
+                placeholderTextColor={colors.subtext}
+                style={styles.shoppingTitleInput}
+                onSubmitEditing={() => {
+                  const clean = titleDraft.trim();
+                  if (activeList && clean && onRenameList) onRenameList(activeList.id, clean);
+                  setTitleEditing(false);
+                }}
+                onBlur={() => {
+                  const clean = titleDraft.trim();
+                  if (activeList && clean && onRenameList) onRenameList(activeList.id, clean);
+                  setTitleEditing(false);
+                }}
+              />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  if (activeList && onRenameList && !needsBasketOnboarding && !canStartFromBasket) {
+                    setTitleDraft(activeList.title);
+                    setTitleEditing(true);
+                  }
+                }}
+              >
+                <Text style={styles.shoppingListTitle}>{activeList?.title || 'Shopping List'}</Text>
+              </Pressable>
+            )}
             <Text style={styles.shoppingListSubtitle}>
               {needsBasketOnboarding
                 ? 'Create your usual grocery basket'
@@ -4069,6 +4110,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontSize: 24,
       lineHeight: 28,
       fontWeight: '800',
+    },
+    shoppingTitleInput: {
+      color: colors.text,
+      fontSize: 24,
+      lineHeight: 28,
+      fontWeight: '800',
+      paddingVertical: 2,
+      paddingHorizontal: 0,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.primary,
     },
     shoppingListSubtitle: {
       color: colors.subtext,

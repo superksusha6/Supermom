@@ -732,6 +732,9 @@ function AppShell() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [children, setChildren] = useState<ChildProfile[]>(() => loadLocalChildren());
   const [shoppingLists, setShoppingLists] = useState<ShoppingListDoc[]>(() => loadLocalShoppingLists());
+  const [selectedShoppingListId, setSelectedShoppingListId] = useState<string | null>(null);
+  const [newListModalOpen, setNewListModalOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const [shoppingBootstrapComplete, setShoppingBootstrapComplete] = useState(() => loadShoppingBootstrapComplete());
   const [shoppingInsights, setShoppingInsights] = useState<ShoppingItemInsight[]>(() => loadLocalShoppingInsights());
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>(() => loadLocalFridgeItems());
@@ -1330,6 +1333,66 @@ function AppShell() {
   const todayDateKey = toDateKey(new Date());
   const currentShoppingList = useMemo(() => getCurrentShoppingList(shoppingLists), [shoppingLists]);
   const baseShoppingList = useMemo(() => getBaseShoppingList(shoppingLists), [shoppingLists]);
+  const activeShoppingLists = useMemo(
+    () =>
+      shoppingLists
+        .filter((list) => list.listType !== 'base' && list.listType !== 'history' && list.title !== 'Family base list' && list.title !== 'Usual basket')
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [shoppingLists],
+  );
+
+  // A list drops into history once every item on it has been checked off.
+  useEffect(() => {
+    const completed = shoppingLists.filter(
+      (list) =>
+        list.listType !== 'base' &&
+        list.listType !== 'history' &&
+        list.title !== 'Family base list' &&
+        list.title !== 'Usual basket' &&
+        list.items.length > 0 &&
+        list.items.every((item) => item.purchased),
+    );
+    if (completed.length === 0) return;
+    const stamp = new Date().toISOString();
+    setShoppingLists((prev) =>
+      prev.map((list) => (completed.some((c) => c.id === list.id) ? { ...list, listType: 'history', completedAt: stamp } : list)),
+    );
+    if (session && isSupabaseConfigured) {
+      completed.forEach((list) => updateShoppingListMeta(session, list.id, { listType: 'history', completedAt: stamp }).catch(() => null));
+    }
+  }, [shoppingLists, session]);
+
+  function handleCreateNamedShoppingList() {
+    const title = newListName.trim() || `Shopping · ${formatShortDate(todayDateKey)}`;
+    setNewListModalOpen(false);
+    setNewListName('');
+    markShoppingBootstrapComplete();
+    if (session && isSupabaseConfigured) {
+      createShoppingList(session, title, [], { listType: 'current' })
+        .then((id) => {
+          setSelectedShoppingListId(id);
+          setScreen('food');
+          setFoodTab('shopping');
+          return refreshLiveShopping();
+        })
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not create list.'));
+      return;
+    }
+    const id = `sl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setShoppingLists((prev) => [{ id, title, listType: 'current', createdAt: new Date().toISOString(), items: [] }, ...prev]);
+    setSelectedShoppingListId(id);
+    setScreen('food');
+    setFoodTab('shopping');
+  }
+
+  function handleRenameShoppingList(listId: string, title: string) {
+    const clean = title.trim();
+    if (!clean) return;
+    setShoppingLists((prev) => prev.map((list) => (list.id === listId ? { ...list, title: clean } : list)));
+    if (session && isSupabaseConfigured) {
+      updateShoppingListMeta(session, listId, { title: clean }).catch((error) => setTasksError(error instanceof Error ? error.message : 'Rename failed.'));
+    }
+  }
   const currentShoppingRemainingCount = useMemo(
     () => currentShoppingList?.items.filter((item) => !item.purchased).length ?? 0,
     [currentShoppingList],
@@ -4665,6 +4728,33 @@ function AppShell() {
         </Pressable>
       </Modal>
 
+      <Modal visible={newListModalOpen} transparent animationType="fade" onRequestClose={() => setNewListModalOpen(false)}>
+        <Pressable style={styles.daySheetBackdrop} onPress={() => setNewListModalOpen(false)}>
+          <Pressable style={styles.daySheetCard} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.daySheetHandle} />
+            <Text style={styles.daySheetTitle}>New shopping list</Text>
+            <TextInput
+              placeholder="List name (e.g. store or trip)"
+              placeholderTextColor={colors.subtext}
+              style={styles.input}
+              value={newListName}
+              onChangeText={setNewListName}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleCreateNamedShoppingList}
+            />
+            <View style={styles.daySheetActions}>
+              <Pressable style={styles.daySheetCancel} onPress={() => setNewListModalOpen(false)}>
+                <Text style={styles.daySheetCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.daySheetAdd} onPress={handleCreateNamedShoppingList}>
+                <Text style={styles.daySheetAddText}>Create</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
         <View style={styles.settingsModalRoot}>
           <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
@@ -5468,14 +5558,36 @@ function AppShell() {
               </Pressable>
             </View>
 
+            {activeShoppingLists.map((list) => {
+              const remaining = list.items.filter((i) => !i.purchased).length;
+              return (
+                <Pressable
+                  key={list.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${list.title}, ${remaining} to buy`}
+                  style={styles.foodShopBtn}
+                  onPress={() => { setSelectedShoppingListId(list.id); setFoodTab('shopping'); }}
+                >
+                  <View style={styles.foodShopIcon}><Icon name="cart" color={colors.primary} size={20} /></View>
+                  <View style={styles.foodListCopy}>
+                    <Text style={styles.foodListTitle} numberOfLines={1}>{list.title}</Text>
+                    <Text style={styles.foodListSub}>
+                      {formatShortDate(list.createdAt)} · {remaining ? `${remaining} to buy` : 'all done'}
+                    </Text>
+                  </View>
+                  <Icon name="chevron" color={colors.subtext} size={18} />
+                </Pressable>
+              );
+            })}
+
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Shopping list"
+              accessibilityLabel="New shopping list"
               style={styles.foodShopBtn}
-              onPress={() => setFoodTab('shopping')}
+              onPress={() => { setNewListName(''); setNewListModalOpen(true); }}
             >
-              <View style={styles.foodShopIcon}><Icon name="cart" color={colors.primary} size={20} /></View>
-              <Text style={styles.foodShopText}>Shopping list</Text>
+              <View style={styles.foodShopIcon}><Icon name="plus" color={colors.primary} size={20} /></View>
+              <Text style={styles.foodShopText}>{activeShoppingLists.length ? 'New shopping list' : 'Start a shopping list'}</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
 
@@ -5698,6 +5810,8 @@ function AppShell() {
         {screen === 'food' && foodTab === 'shopping' ? (
           <ShoppingScreen
             lists={shoppingLists}
+            selectedListId={selectedShoppingListId}
+            onRenameList={handleRenameShoppingList}
             fridgeItems={fridgeItems}
             recipes={recipes}
             shareTargets={shoppingShareTargets}
@@ -10222,6 +10336,20 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 15,
     fontWeight: '800',
+  },
+  foodListCopy: {
+    flex: 1,
+  },
+  foodListTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  foodListSub: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   foodWeekRow: {
     flexDirection: 'row',
