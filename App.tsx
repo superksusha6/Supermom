@@ -4479,31 +4479,26 @@ function AppShell() {
     </View>
   );
 
-  const focusNeeds = (
-    <FamCard title={needsYouCount === 0 ? 'Needs you' : `Needs you · ${needsYouCount}`} padded={false}>
-      {needsYouItems.length > 0 ? (
-        needsYouItems.slice(0, 5).map((item, i) => (
-          <View key={`${item.label}-${i}`}>
-            {i > 0 ? <View style={styles.agendaLine} /> : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={item.label}
-              style={styles.needsRow}
-              onPress={item.go}
-            >
-              <View style={styles.needsBadge}>
-                <Icon name="alert" color={statusColor(colors, 'soon')} size={15} />
-              </View>
-              <Text style={styles.needsText} numberOfLines={2}>{item.label}</Text>
-              <Icon name="chevron" color={colors.subtext} size={16} />
-            </Pressable>
-          </View>
-        ))
-      ) : (
-        <View style={styles.needsEmpty}>
-          <Text style={styles.needsEmptyText}>All clear — nothing needs you right now.</Text>
+  // Hide the whole card when nothing needs attention — no point showing an "all clear" panel.
+  const focusNeeds = needsYouItems.length === 0 ? null : (
+    <FamCard title={`Needs you · ${needsYouCount}`} padded={false}>
+      {needsYouItems.slice(0, 5).map((item, i) => (
+        <View key={`${item.label}-${i}`}>
+          {i > 0 ? <View style={styles.agendaLine} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            style={styles.needsRow}
+            onPress={item.go}
+          >
+            <View style={styles.needsBadge}>
+              <Icon name="alert" color={statusColor(colors, 'soon')} size={15} />
+            </View>
+            <Text style={styles.needsText} numberOfLines={2}>{item.label}</Text>
+            <Icon name="chevron" color={colors.subtext} size={16} />
+          </Pressable>
         </View>
-      )}
+      ))}
     </FamCard>
   );
 
