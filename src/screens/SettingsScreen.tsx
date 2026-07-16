@@ -199,8 +199,7 @@ export function SettingsScreen({
     {
       header: 'Profile',
       rows: [
-        { key: 'personal', title: 'Personal' },
-        { key: 'nutrition', title: 'Nutrition' },
+        { key: 'personal', title: 'Personal & Nutrition' },
         ...(showCycleTracking ? [{ key: 'cycle' as const, title: 'Cycle' }] : []),
       ],
     },
@@ -219,7 +218,7 @@ export function SettingsScreen({
 
   const activeSectionTitle =
     activeSection === 'personal'
-      ? 'Personal'
+      ? 'Personal & Nutrition'
       : activeSection === 'nutrition'
         ? 'Nutrition'
         : activeSection === 'cycle'
@@ -234,7 +233,7 @@ export function SettingsScreen({
 
   const activeSectionSubtitle =
     activeSection === 'personal'
-      ? 'Basic personal information and health profile.'
+      ? 'Personal details, health profile and nutrition target.'
       : activeSection === 'nutrition'
         ? 'Your goal, activity level and calorie target.'
         : activeSection === 'cycle'
@@ -789,8 +788,13 @@ export function SettingsScreen({
                 </Pressable>
               </View>
               <ScrollView style={styles.editorScroll} contentContainerStyle={styles.editorScrollContent} showsVerticalScrollIndicator={false}>
-                {activeSection === 'personal' ? renderPersonalEditor() : null}
-                {activeSection === 'nutrition' ? renderNutritionEditor() : null}
+                {activeSection === 'personal' ? (
+                  <>
+                    {renderPersonalEditor()}
+                    <View style={styles.editorSectionDivider} />
+                    {renderNutritionEditor()}
+                  </>
+                ) : null}
                 {activeSection === 'cycle' ? renderCycleEditor() : null}
                 {activeSection === 'notifications' ? renderNotificationsEditor() : null}
                 {activeSection === 'habits' ? renderHabitsEditor() : null}
@@ -824,6 +828,11 @@ const createStyles = (colors: ThemeColors) =>
     },
     settingsGroup: {
       gap: 8,
+    },
+    editorSectionDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 18,
     },
     settingsGroupLabel: {
       color: colors.subtext,
