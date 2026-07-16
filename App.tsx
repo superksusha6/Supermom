@@ -735,8 +735,6 @@ function AppShell() {
   const [children, setChildren] = useState<ChildProfile[]>(() => loadLocalChildren());
   const [shoppingLists, setShoppingLists] = useState<ShoppingListDoc[]>(() => loadLocalShoppingLists());
   const [selectedShoppingListId, setSelectedShoppingListId] = useState<string | null>(null);
-  const [newListModalOpen, setNewListModalOpen] = useState(false);
-  const [newListName, setNewListName] = useState('');
   const [shoppingBootstrapComplete, setShoppingBootstrapComplete] = useState(() => loadShoppingBootstrapComplete());
   const [shoppingInsights, setShoppingInsights] = useState<ShoppingItemInsight[]>(() => loadLocalShoppingInsights());
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>(() => loadLocalFridgeItems());
@@ -1364,10 +1362,8 @@ function AppShell() {
     }
   }, [shoppingLists, session]);
 
-  function handleCreateNamedShoppingList() {
-    const title = newListName.trim() || `Shopping · ${formatShortDate(todayDateKey)}`;
-    setNewListModalOpen(false);
-    setNewListName('');
+  function handleCreateNamedShoppingList(explicitName?: string) {
+    const title = (explicitName ?? '').trim() || `Shopping · ${formatShortDate(todayDateKey)}`;
     markShoppingBootstrapComplete();
     if (session && isSupabaseConfigured) {
       createShoppingList(session, title, [], { listType: 'current' })
@@ -4822,32 +4818,6 @@ function AppShell() {
         </Pressable>
       </Modal>
 
-      <Modal visible={newListModalOpen} transparent animationType="fade" onRequestClose={() => setNewListModalOpen(false)}>
-        <Pressable style={styles.newListBackdrop} onPress={() => setNewListModalOpen(false)}>
-          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.daySheetTitle}>New shopping list</Text>
-            <TextInput
-              placeholder="List name (e.g. store or trip)"
-              placeholderTextColor={colors.subtext}
-              style={styles.input}
-              value={newListName}
-              onChangeText={setNewListName}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleCreateNamedShoppingList}
-            />
-            <View style={styles.daySheetActions}>
-              <Pressable style={styles.daySheetCancel} onPress={() => setNewListModalOpen(false)}>
-                <Text style={styles.daySheetCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.daySheetAdd} onPress={handleCreateNamedShoppingList}>
-                <Text style={styles.daySheetAddText}>Create</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
         <View style={styles.settingsModalRoot}>
           <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
@@ -5677,7 +5647,7 @@ function AppShell() {
               accessibilityRole="button"
               accessibilityLabel="New shopping list"
               style={styles.foodShopBtn}
-              onPress={() => { setNewListName(''); setNewListModalOpen(true); }}
+              onPress={() => handleCreateNamedShoppingList('')}
             >
               <View style={styles.foodShopIcon}><Icon name="plus" color={colors.primary} size={20} /></View>
               <Text style={styles.foodShopText}>{activeShoppingLists.length ? 'New shopping list' : 'Start a shopping list'}</Text>
