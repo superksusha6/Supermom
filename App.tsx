@@ -735,6 +735,7 @@ function AppShell() {
   const [children, setChildren] = useState<ChildProfile[]>(() => loadLocalChildren());
   const [shoppingLists, setShoppingLists] = useState<ShoppingListDoc[]>(() => loadLocalShoppingLists());
   const [selectedShoppingListId, setSelectedShoppingListId] = useState<string | null>(null);
+  const [recipesCookNowToken, setRecipesCookNowToken] = useState(0);
   const [shoppingBootstrapComplete, setShoppingBootstrapComplete] = useState(() => loadShoppingBootstrapComplete());
   const [shoppingInsights, setShoppingInsights] = useState<ShoppingItemInsight[]>(() => loadLocalShoppingInsights());
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>(() => loadLocalFridgeItems());
@@ -1348,6 +1349,18 @@ function AppShell() {
         .slice(0, 5),
     [shoppingLists],
   );
+  // Items checked off a shopping list in the last 5 days are treated as "at home"
+  // for recipe matching, so cooking suggestions reflect recent shopping.
+  const recentlyPurchasedNames = useMemo(() => {
+    const cutoff = Date.now() - 5 * 24 * 60 * 60 * 1000;
+    const names: string[] = [];
+    shoppingLists.forEach((list) => {
+      const stamp = Date.parse(list.completedAt || list.createdAt || '');
+      if (Number.isFinite(stamp) && stamp < cutoff) return; // too old — likely used up
+      list.items.forEach((item) => { if (item.purchased) names.push(item.name); });
+    });
+    return names;
+  }, [shoppingLists]);
 
   // A list drops into history once every item on it has been checked off.
   useEffect(() => {
@@ -5697,6 +5710,17 @@ function AppShell() {
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="What can I cook now"
+              style={styles.foodCookNowBtn}
+              onPress={() => { setRecipesCookNowToken((t) => t + 1); setFoodTab('recipes'); }}
+            >
+              <View style={styles.foodCookNowIcon}><Icon name="check" color="#16a34a" size={20} /></View>
+              <Text style={styles.foodCookNowText}>What can I cook now?</Text>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Menu for the week"
               style={styles.foodShopBtn}
               onPress={() => setFoodTab('plan')}
@@ -5827,6 +5851,8 @@ function AppShell() {
           <RecipesScreen
             recipes={recipes}
             fridgeItems={fridgeItems}
+            pantryExtras={recentlyPurchasedNames}
+            cookNowToken={recipesCookNowToken}
             onAddToShoppingList={addIngredientsToShoppingList}
             onRecipeCreate={handleRecipeCreate}
             onRecipeUpdate={handleRecipeUpdate}
@@ -10450,6 +10476,31 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     backgroundColor: colors.selection,
   },
   foodShopText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  foodCookNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(22,163,74,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(22,163,74,0.35)',
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+  },
+  foodCookNowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(22,163,74,0.16)',
+  },
+  foodCookNowText: {
     flex: 1,
     color: colors.text,
     fontSize: 15,

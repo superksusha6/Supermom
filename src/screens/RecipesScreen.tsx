@@ -12,6 +12,8 @@ import { ThemeColors, useThemeColors } from '@/theme/theme';
 type Props = {
   recipes: Recipe[];
   fridgeItems?: FridgeItem[];
+  pantryExtras?: string[];
+  cookNowToken?: number;
   onAddToShoppingList?: (items: { name: string; quantity: string }[]) => void;
   onRecipeCreate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeUpdate: (recipe: Recipe) => Promise<Recipe> | Recipe;
@@ -314,7 +316,7 @@ function formatIngredientLine(ingredient: { amount: string; name: string; option
   return ingredient.optional ? `${base} (optional)` : base;
 }
 
-export function RecipesScreen({ recipes, fridgeItems = [], onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
+export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], cookNowToken, onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
@@ -611,7 +613,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], onAddToShoppingList, 
     }
   }
 
-  const inventoryIndex = useMemo(() => buildInventoryIndex(fridgeItems), [fridgeItems]);
+  const inventoryIndex = useMemo(() => buildInventoryIndex(fridgeItems, pantryExtras), [fridgeItems, pantryExtras]);
   const matchByRecipe = useMemo(() => {
     const map = new Map<string, RecipeMatch>();
     catalogRecipes.forEach((recipe) => map.set(recipe.id, matchRecipeToInventory(recipe, inventoryIndex)));
@@ -626,6 +628,15 @@ export function RecipesScreen({ recipes, fridgeItems = [], onAddToShoppingList, 
     () => catalogRecipes.filter((r) => matchByRecipe.get(r.id)?.status === 'almost').length,
     [catalogRecipes, matchByRecipe],
   );
+
+  // "What can I cook now?" from the Food hub: jump straight to the cookable filter.
+  useEffect(() => {
+    if (cookNowToken === undefined || cookNowToken === 0) return;
+    setCookFilter('can');
+    setMealFilter('all');
+    setClassifierFilter('all');
+    setSearch('');
+  }, [cookNowToken]);
 
   const filteredRecipes = useMemo(() => {
     const query = search.trim().toLowerCase();

@@ -58,14 +58,21 @@ function isStapleIngredient(ingredient: RecipeIngredient): boolean {
 
 export type InventoryIndex = { tokens: Set<string>; names: string[] };
 
-// Build a fast lookup once from the current inventory (in-stock items only).
-export function buildInventoryIndex(fridgeItems: FridgeItem[]): InventoryIndex {
+// Build a fast lookup from the inventory (in-stock items) plus any extra names
+// (e.g. recently purchased shopping items, treated as "at home" for a few days).
+export function buildInventoryIndex(fridgeItems: FridgeItem[], extraNames: string[] = []): InventoryIndex {
   const tokens = new Set<string>();
   const names: string[] = [];
+  const addName = (name: string) => {
+    names.push(name.toLowerCase());
+    ingredientTokens(name).forEach((t) => tokens.add(t));
+  };
   fridgeItems.forEach((item) => {
     if (item.status === 'out') return; // out of stock = you don't have it
-    names.push(item.name.toLowerCase());
-    ingredientTokens(item.name).forEach((t) => tokens.add(t));
+    addName(item.name);
+  });
+  extraNames.forEach((name) => {
+    if (name.trim()) addName(name);
   });
   return { tokens, names };
 }
