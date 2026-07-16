@@ -799,7 +799,14 @@ export function RecipesScreen({ recipes, fridgeItems = [], onAddToShoppingList, 
                 <Text style={[styles.cookChipText, cookFilter === 'almost' && styles.cookChipTextActive]}>Almost · {almostCount}</Text>
               </Pressable>
             </ScrollView>
-          ) : null}
+          ) : (
+            <View style={styles.cookHint}>
+              <Text style={styles.cookHintTitle}>See what you can cook</Text>
+              <Text style={styles.cookHintText}>
+                Add what you have at home to your Inventory (Food → Shopping list → “Inventory” tab). Then a “Can cook now / Almost” filter appears here, matching recipes to your ingredients.
+              </Text>
+            </View>
+          )}
 
           {filteredRecipes.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -1725,6 +1732,26 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       gap: 8,
       paddingBottom: 12,
+    },
+    cookHint: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      backgroundColor: colors.glassSoft,
+      padding: 14,
+      marginBottom: 12,
+      gap: 4,
+    },
+    cookHintTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    cookHintText: {
+      color: colors.subtext,
+      fontSize: 12.5,
+      lineHeight: 18,
+      fontWeight: '600',
     },
     cookChip: {
       flexDirection: 'row',
