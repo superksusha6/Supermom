@@ -4857,87 +4857,88 @@ function AppShell() {
               </View>
               <View style={styles.settingsUtilityCard}>
                 <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Theme</Text>
-                  <View style={styles.accountThemeSwatches}>
-                    {(['grey', 'blue', 'blush', 'neonBloom', 'mocha'] as ThemeName[]).map((name) => (
-                      <Pressable
-                        key={name}
-                        hitSlop={8}
-                        style={[
-                          styles.themeSwatch,
-                          styles.accountThemeSwatch,
-                          { backgroundColor: themePalettes[name].primary },
-                          themeName === name && styles.themeSwatchActive,
-                        ]}
-                        onPress={() => {
-                          manualThemeSelectionRef.current = true;
-                          setThemeName(name);
-                        }}
-                      >
-                        {themeName === name ? <View style={styles.accountThemeSwatchInner} /> : null}
-                      </Pressable>
-                    ))}
+                  <Text style={styles.settingsUtilityTitle}>Modules</Text>
+                  <View style={styles.settingsUtilityListCard}>
+                    <Pressable style={[styles.moduleToggleRow, styles.moduleToggleRowDivider]} onPress={() => setMedsEnabled((prev) => !prev)}>
+                      <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
+                      <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
+                        <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
+                      </View>
+                    </Pressable>
+                    <Pressable style={styles.moduleToggleRow} onPress={() => setHabitsEnabled((prev) => !prev)}>
+                      <Text style={styles.moduleToggleTitle}>💚  Habits &amp; wellness</Text>
+                      <View style={[styles.moduleToggle, habitsEnabled && styles.moduleToggleOn]}>
+                        <View style={[styles.moduleToggleKnob, habitsEnabled && styles.moduleToggleKnobOn]} />
+                      </View>
+                    </Pressable>
                   </View>
                 </View>
 
                 <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Modules</Text>
-                  <Pressable style={styles.moduleToggleRow} onPress={() => setMedsEnabled((prev) => !prev)}>
-                    <View style={styles.moduleToggleCopy}>
-                      <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
-                      <Text style={styles.moduleToggleSub}>Track home medicines and expiry dates · in Home tab</Text>
+                  <Text style={styles.settingsUtilityTitle}>Theme</Text>
+                  <View style={styles.settingsUtilityThemeCard}>
+                    <View style={styles.accountThemeSwatches}>
+                      {(['grey', 'blue', 'blush', 'neonBloom', 'mocha'] as ThemeName[]).map((name) => (
+                        <Pressable
+                          key={name}
+                          hitSlop={8}
+                          style={[
+                            styles.themeSwatch,
+                            styles.accountThemeSwatch,
+                            { backgroundColor: themePalettes[name].primary },
+                            themeName === name && styles.themeSwatchActive,
+                          ]}
+                          onPress={() => {
+                            manualThemeSelectionRef.current = true;
+                            setThemeName(name);
+                          }}
+                        >
+                          {themeName === name ? <View style={styles.accountThemeSwatchInner} /> : null}
+                        </Pressable>
+                      ))}
                     </View>
-                    <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
-                      <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
-                    </View>
-                  </Pressable>
-                  <Pressable style={styles.moduleToggleRow} onPress={() => setHabitsEnabled((prev) => !prev)}>
-                    <View style={styles.moduleToggleCopy}>
-                      <Text style={styles.moduleToggleTitle}>💚  Habits &amp; wellness</Text>
-                      <Text style={styles.moduleToggleSub}>Personal habit tracking · opens from the More menu</Text>
-                    </View>
-                    <View style={[styles.moduleToggle, habitsEnabled && styles.moduleToggleOn]}>
-                      <View style={[styles.moduleToggleKnob, habitsEnabled && styles.moduleToggleKnobOn]} />
-                    </View>
-                  </Pressable>
+                  </View>
                 </View>
 
-                {!session ? (
-                  <View style={styles.settingsUtilityActionsRow}>
-                    <Pressable
-                      style={styles.accountMenuPrimaryItem}
-                      onPress={() => {
-                        setSettingsPanelOpen(false);
-                        openAuthMenu('signin');
-                      }}
-                    >
-                      <Text style={styles.accountMenuPrimaryItemText}>Log in</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.accountMenuItem}
-                      onPress={() => {
-                        setSettingsPanelOpen(false);
-                        openAuthMenu('signup');
-                      }}
-                    >
-                      <Text style={styles.accountMenuItemText}>Create account</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <Pressable
-                    style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
-                    onPress={() => {
-                      signOut()
-                        .then(() => {
-                          resetSignedOutState();
+                <View style={styles.settingsUtilitySection}>
+                  <Text style={styles.settingsUtilityTitle}>Account</Text>
+                  {!session ? (
+                    <View style={styles.settingsUtilityActionsRow}>
+                      <Pressable
+                        style={styles.accountMenuPrimaryItem}
+                        onPress={() => {
                           setSettingsPanelOpen(false);
-                        })
-                        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
-                    }}
-                  >
-                    <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
-                  </Pressable>
-                )}
+                          openAuthMenu('signin');
+                        }}
+                      >
+                        <Text style={styles.accountMenuPrimaryItemText}>Log in</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.accountMenuItem}
+                        onPress={() => {
+                          setSettingsPanelOpen(false);
+                          openAuthMenu('signup');
+                        }}
+                      >
+                        <Text style={styles.accountMenuItemText}>Create account</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
+                      onPress={() => {
+                        signOut()
+                          .then(() => {
+                            resetSignedOutState();
+                            setSettingsPanelOpen(false);
+                          })
+                          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
+                      }}
+                    >
+                      <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -9038,21 +9039,43 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingTop: 12,
   },
   settingsUtilitySection: {
-    gap: 10,
+    gap: 8,
   },
   settingsUtilityTitle: {
     color: colors.subtext,
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1.1,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
+    marginLeft: 4,
+  },
+  settingsUtilityListCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    overflow: 'hidden',
+  },
+  settingsUtilityThemeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassStrong,
+    paddingHorizontal: 16,
+    height: 52,
+    justifyContent: 'center',
   },
   moduleToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    paddingVertical: 4,
+    height: 52,
+    paddingHorizontal: 16,
+  },
+  moduleToggleRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   moduleToggleCopy: {
     flex: 1,

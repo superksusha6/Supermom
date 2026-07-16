@@ -195,31 +195,26 @@ export function SettingsScreen({
       } as Record<string, string>
     )[icon] || '19:00';
 
-  const personalSummary = [personalProfile.fullName?.trim(), personalProfile.dateOfBirth?.trim()].filter(Boolean).join(' • ') || 'Add your main details';
-  const nutritionSummary = nutritionPlan
-    ? `${nutritionGoal === 'lose' ? 'Lose' : nutritionGoal === 'gain' ? 'Gain' : 'Maintain'} • ${activityLevel === 'high' ? 'Active' : activityLevel === 'low' ? 'Low activity' : 'Moderate'} • ${nutritionPlan.calories} kcal`
-    : 'Set your goal and nutrition target';
-  const cycleSummary = personalProfile.cycleTrackingEnabled
-    ? `${personalProfile.cycleLengthDays || '28'} days • ${personalProfile.cyclePeriodLengthDays || '5'} days`
-    : 'Disabled';
-  const notificationsSummary = [
-    habitRemindersEnabled ? 'Habits on' : 'Habits off',
-    periodRemindersEnabled ? `Period ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before` : 'Period off',
-  ].join(' • ');
-  const habitsSummary = `${habits.filter((habit) => habit.enabled).length} active • ${habits.length} total`;
-  const familySummary = [
-    parentLabel,
-    `${children.length} child${children.length === 1 ? '' : 'ren'}`,
-    staffEnabled ? 'staff on' : 'staff off',
-  ].join(' • ');
-
-  const sectionRows: Array<{ key: SettingsSectionKey; title: string; subtitle: string }> = [
-    { key: 'personal', title: 'Personal', subtitle: personalSummary },
-    { key: 'nutrition', title: 'Nutrition', subtitle: nutritionSummary },
-    ...(showCycleTracking ? [{ key: 'cycle' as const, title: 'Cycle', subtitle: cycleSummary }] : []),
-    { key: 'notifications', title: 'Notifications', subtitle: notificationsSummary },
-    { key: 'habits', title: 'Habit trackers', subtitle: habitsSummary },
-    { key: 'family', title: 'Family & Access', subtitle: familySummary },
+  const settingsGroups: Array<{ header: string; rows: Array<{ key: SettingsSectionKey; title: string }> }> = [
+    {
+      header: 'Profile',
+      rows: [
+        { key: 'personal', title: 'Personal' },
+        { key: 'nutrition', title: 'Nutrition' },
+        ...(showCycleTracking ? [{ key: 'cycle' as const, title: 'Cycle' }] : []),
+      ],
+    },
+    {
+      header: 'Preferences',
+      rows: [
+        { key: 'notifications', title: 'Notifications' },
+        { key: 'habits', title: 'Habit trackers' },
+      ],
+    },
+    {
+      header: 'Family',
+      rows: [{ key: 'family', title: 'Family & Access' }],
+    },
   ];
 
   const activeSectionTitle =
@@ -760,21 +755,23 @@ export function SettingsScreen({
   return (
     <>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.settingsList}>
-          {sectionRows.map((section, index) => (
-            <Pressable
-              key={section.key}
-              style={[styles.settingsRow, index === sectionRows.length - 1 && styles.settingsRowLast]}
-              onPress={() => openSection(section.key)}
-            >
-              <View style={styles.settingsRowCopy}>
-                <Text style={styles.settingsRowTitle}>{section.title}</Text>
-                <Text style={styles.settingsRowSubtitle}>{section.subtitle}</Text>
-              </View>
-              <Text style={styles.settingsRowChevron}>›</Text>
-            </Pressable>
-          ))}
-        </View>
+        {settingsGroups.map((group) => (
+          <View key={group.header} style={styles.settingsGroup}>
+            <Text style={styles.settingsGroupLabel}>{group.header}</Text>
+            <View style={styles.settingsList}>
+              {group.rows.map((section, index) => (
+                <Pressable
+                  key={section.key}
+                  style={[styles.settingsRow, index === group.rows.length - 1 && styles.settingsRowLast]}
+                  onPress={() => openSection(section.key)}
+                >
+                  <Text style={styles.settingsRowTitle}>{section.title}</Text>
+                  <Text style={styles.settingsRowChevron}>›</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
       </ScrollView>
 
       <Modal visible={!!activeSection} transparent animationType="fade" onRequestClose={closeSection}>
@@ -825,6 +822,17 @@ const createStyles = (colors: ThemeColors) =>
       gap: 14,
       paddingBottom: 32,
     },
+    settingsGroup: {
+      gap: 8,
+    },
+    settingsGroupLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginLeft: 4,
+    },
     settingsList: {
       borderRadius: 18,
       borderWidth: 1,
@@ -837,28 +845,19 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+      height: 52,
       paddingHorizontal: 16,
-      paddingVertical: 15,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
     settingsRowLast: {
       borderBottomWidth: 0,
     },
-    settingsRowCopy: {
-      flex: 1,
-      gap: 3,
-    },
     settingsRowTitle: {
+      flex: 1,
       color: colors.text,
-      fontSize: 16,
-      fontWeight: '800',
-    },
-    settingsRowSubtitle: {
-      color: colors.subtext,
-      fontSize: 12,
-      lineHeight: 17,
-      fontWeight: '600',
+      fontSize: 15.5,
+      fontWeight: '700',
     },
     settingsRowChevron: {
       color: colors.subtext,
