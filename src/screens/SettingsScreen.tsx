@@ -323,33 +323,6 @@ export function SettingsScreen({
   function renderNutritionEditor() {
     return (
       <>
-        {nutritionPlan ? (
-          <View style={styles.nutritionPlanCard}>
-            <Text style={styles.nutritionPlanTitle}>Calculated daily target</Text>
-            <Text style={styles.nutritionPlanCalories}>{nutritionPlan.calories} kcal</Text>
-            <Text style={styles.nutritionPlanMeta}>
-              {nutritionPlan.effectiveGoal === 'lose' ? 'Weight loss' : nutritionPlan.effectiveGoal === 'gain' ? 'Weight gain' : 'Weight maintenance'}
-              {` • ${Math.round(nutritionPlan.desiredWeight)} kg target`}
-            </Text>
-            <View style={styles.nutritionPlanMacros}>
-              <View style={styles.nutritionPlanMacro}>
-                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.protein} g</Text>
-                <Text style={styles.nutritionPlanMacroLabel}>Protein</Text>
-              </View>
-              <View style={styles.nutritionPlanMacro}>
-                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.fat} g</Text>
-                <Text style={styles.nutritionPlanMacroLabel}>Fat</Text>
-              </View>
-              <View style={styles.nutritionPlanMacro}>
-                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.carbs} g</Text>
-                <Text style={styles.nutritionPlanMacroLabel}>Carbs</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <Text style={styles.helpText}>Fill in date of birth, height, and weight in Personal to calculate calories and macros automatically.</Text>
-        )}
-
         <Text style={styles.label}>Goal</Text>
         <View style={styles.pillRow}>
           {(['lose', 'maintain', 'gain'] as NutritionGoal[]).map((goal) => (
@@ -411,6 +384,33 @@ export function SettingsScreen({
           value={calorieOverride}
           onChangeText={(text) => onCalorieOverrideChange(text.replace(/[^\d]/g, '').slice(0, 4))}
         />
+
+        {nutritionPlan ? (
+          <View style={styles.nutritionPlanCard}>
+            <Text style={styles.nutritionPlanTitle}>Calculated daily target</Text>
+            <Text style={styles.nutritionPlanCalories}>{nutritionPlan.calories} kcal</Text>
+            <Text style={styles.nutritionPlanMeta}>
+              {nutritionPlan.effectiveGoal === 'lose' ? 'Weight loss' : nutritionPlan.effectiveGoal === 'gain' ? 'Weight gain' : 'Weight maintenance'}
+              {` • ${Math.round(nutritionPlan.desiredWeight)} kg target`}
+            </Text>
+            <View style={styles.nutritionPlanMacros}>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.protein} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Protein</Text>
+              </View>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.fat} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Fat</Text>
+              </View>
+              <View style={styles.nutritionPlanMacro}>
+                <Text style={styles.nutritionPlanMacroValue}>{nutritionPlan.carbs} g</Text>
+                <Text style={styles.nutritionPlanMacroLabel}>Carbs</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.helpText}>Fill in date of birth, height, and weight in Personal to calculate calories and macros automatically.</Text>
+        )}
 
         <Pressable style={styles.primaryBtn} onPress={closeSection}>
           <Text style={styles.primaryBtnText}>Save</Text>
