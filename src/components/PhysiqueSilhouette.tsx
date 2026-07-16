@@ -1,42 +1,57 @@
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Ellipse, Path } from 'react-native-svg';
 import { PhysiqueGoal, NutritionSex } from '@/types/app';
 
-// Half-widths in a 64×120 viewBox (centre x=32). A neutral full-body figure:
-// s=shoulder, w=waist, h=hip, arm=arm thickness, leg=leg thickness.
-// Female = narrower shoulders, waist indent, wider hips. Male = broader shoulders, straighter.
-type Dim = { s: number; w: number; h: number; arm: number; leg: number };
+// Neutral full-body figure in a 64×132 viewBox (centre x=32), drawn as one mirrored
+// outline: shoulders → tapered arms with hands → waist → hips → legs with feet.
+// s=shoulder, a=arm thickness, w=waist, h=hip, thigh=leg spread, ankle=ankle width.
+type Dim = { s: number; a: number; w: number; h: number; thigh: number; ankle: number };
 
 const SHAPES: Record<NutritionSex, Record<PhysiqueGoal, Dim>> = {
   female: {
-    lean: { s: 9, w: 6, h: 11, arm: 4, leg: 5 },
-    toned: { s: 10, w: 6.5, h: 12, arm: 4.5, leg: 5.5 },
-    athletic: { s: 12, w: 6.5, h: 11.5, arm: 5, leg: 6 },
-    curvy: { s: 10, w: 8, h: 16, arm: 5, leg: 7 },
-    strong: { s: 13, w: 8.5, h: 13, arm: 6.5, leg: 7.5 },
+    lean: { s: 13.5, a: 5, w: 7.5, h: 12, thigh: 10.5, ankle: 4 },
+    toned: { s: 15, a: 5.5, w: 8, h: 13, thigh: 11.5, ankle: 4.5 },
+    athletic: { s: 17, a: 5.5, w: 8, h: 12.5, thigh: 11, ankle: 4.5 },
+    curvy: { s: 15.5, a: 6, w: 9.5, h: 17, thigh: 13.5, ankle: 5 },
+    strong: { s: 18, a: 6.5, w: 10, h: 14, thigh: 12.5, ankle: 5.5 },
   },
   male: {
-    lean: { s: 11, w: 8, h: 10, arm: 5, leg: 6 },
-    toned: { s: 13, w: 8.5, h: 10.5, arm: 5.5, leg: 6.5 },
-    athletic: { s: 15, w: 8.5, h: 10.5, arm: 6.5, leg: 7 },
-    curvy: { s: 13, w: 12, h: 13, arm: 6.5, leg: 7.5 },
-    strong: { s: 17, w: 10.5, h: 11.5, arm: 8, leg: 8.5 },
+    lean: { s: 16, a: 6, w: 9.5, h: 10.5, thigh: 10, ankle: 5 },
+    toned: { s: 18, a: 6.5, w: 10, h: 11, thigh: 10.5, ankle: 5 },
+    athletic: { s: 20.5, a: 7, w: 10, h: 11, thigh: 10.5, ankle: 5 },
+    curvy: { s: 20, a: 7, w: 13, h: 14.5, thigh: 13.5, ankle: 5.5 },
+    strong: { s: 23, a: 8.5, w: 12, h: 13.5, thigh: 12.5, ankle: 6 },
   },
 };
 
-function torsoPath(cx: number, d: Dim): string {
-  const pelvis = d.h * 0.55;
-  return [
-    `M ${cx - d.s} 25`,
-    `L ${cx + d.s} 25`,
-    `Q ${cx + d.s} 38 ${cx + d.w} 50`,
-    `Q ${cx + d.w} 58 ${cx + d.h} 65`,
-    `L ${cx + pelvis} 73`,
-    `L ${cx - pelvis} 73`,
-    `L ${cx - d.h} 65`,
-    `Q ${cx - d.w} 58 ${cx - d.w} 50`,
-    `Q ${cx - d.s} 38 ${cx - d.s} 25`,
-    'Z',
-  ].join(' ');
+// Right-half outline, top(neck) → down outer arm → hand → up inner arm → torso →
+// down outer leg → foot → up inner leg → crotch centre. Left half is mirrored.
+function bodyPath(cx: number, d: Dim): string {
+  const r: [number, number][] = [
+    [3.5, 25], // neck base right
+    [d.s, 30], // shoulder
+    [d.s + 2, 35], // deltoid
+    [d.s, 52], // elbow outer
+    [d.s - 2, 76], // wrist outer
+    [d.s - 3, 81], // hand tip
+    [d.s - d.a, 78], // hand inner
+    [d.s - d.a + 1, 52], // elbow inner
+    [d.w + 2, 44], // armpit
+    [d.w, 60], // waist
+    [d.h, 72], // hip
+    [d.thigh + 1, 80], // outer thigh
+    [d.thigh - 1, 101], // knee
+    [d.ankle + 1, 123], // ankle
+    [d.ankle + 4, 128], // toe
+    [2.5, 128], // inner foot
+    [2.5, 80], // inner leg
+    [0, 78], // crotch centre
+  ];
+  const left = r
+    .slice(0, -1)
+    .reverse()
+    .map(([dx, y]) => [-dx, y] as [number, number]);
+  const pts = [...r, ...left];
+  return pts.map(([dx, y], i) => `${i === 0 ? 'M' : 'L'} ${cx + dx} ${y}`).join(' ') + ' Z';
 }
 
 export function PhysiqueSilhouette({
@@ -52,22 +67,10 @@ export function PhysiqueSilhouette({
 }) {
   const cx = 32;
   const d = SHAPES[sex][physique];
-  const legX = d.h * 0.5;
-  const armX = cx + d.s - d.arm * 0.35;
   return (
-    <Svg width={size} height={(size * 120) / 64} viewBox="0 0 64 120">
-      {/* legs */}
-      <Line x1={cx + legX} y1={70} x2={cx + legX} y2={112} stroke={color} strokeWidth={d.leg} strokeLinecap="round" />
-      <Line x1={cx - legX} y1={70} x2={cx - legX} y2={112} stroke={color} strokeWidth={d.leg} strokeLinecap="round" />
-      {/* arms (hang slightly out from the shoulders) */}
-      <Line x1={armX} y1={27} x2={cx + d.s + d.arm * 0.15} y2={68} stroke={color} strokeWidth={d.arm} strokeLinecap="round" />
-      <Line x1={2 * cx - armX} y1={27} x2={cx - d.s - d.arm * 0.15} y2={68} stroke={color} strokeWidth={d.arm} strokeLinecap="round" />
-      {/* torso */}
-      <Path d={torsoPath(cx, d)} fill={color} />
-      {/* neck */}
-      <Rect x={cx - 2.6} y={19} width={5.2} height={8} rx={2} fill={color} />
-      {/* head */}
-      <Circle cx={cx} cy={13} r={8} fill={color} />
+    <Svg width={size} height={(size * 132) / 64} viewBox="0 0 64 132">
+      <Path d={bodyPath(cx, d)} fill={color} />
+      <Ellipse cx={cx} cy={13} rx={7.5} ry={8.5} fill={color} />
     </Svg>
   );
 }

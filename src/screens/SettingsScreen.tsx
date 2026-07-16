@@ -920,12 +920,12 @@ const createStyles = (colors: ThemeColors) =>
     editorModalLayer: {
       flex: 1,
       justifyContent: 'center',
-      padding: 16,
+      padding: 14,
     },
     editorModalCard: {
       alignSelf: 'center',
       width: '100%',
-      maxWidth: 440,
+      maxWidth: 412,
       maxHeight: '88%',
       minHeight: '62%',
       borderRadius: 22,
