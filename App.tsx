@@ -98,7 +98,7 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
@@ -203,6 +203,7 @@ const LOCAL_DAILY_CARD_STATE_KEY = 'smartmom.dailyCardState.v1';
 const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
+const LOCAL_PHYSIQUE_GOAL_KEY = 'smartmom.physiqueGoal.v1';
 const DAY_TIME_OPTIONS = ['7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
 type HomeLayout = 'focus' | 'zen' | 'bento';
@@ -748,6 +749,7 @@ function AppShell() {
   const [nutritionSex, setNutritionSex] = useState<NutritionSex>('female');
   const [desiredWeight, setDesiredWeight] = useState('');
   const [nutritionPace, setNutritionPace] = useState<NutritionPace>('flexible');
+  const [physiqueGoal, setPhysiqueGoal] = useState<PhysiqueGoal>(() => loadLocalPhysiqueGoal());
   const [calorieOverride, setCalorieOverride] = useState('');
   const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
@@ -1532,9 +1534,10 @@ function AppShell() {
       calorieOverride,
       desiredWeightKg: desiredWeight,
       pace: nutritionPace,
+      physiqueGoal,
     });
     return plan?.calories || 0;
-  }, [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace]);
+  }, [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace, physiqueGoal]);
   const eventsTodayCount = useMemo(
     () => events.filter((event) => event.date === todayDateKey).length,
     [events, todayDateKey],
@@ -2389,6 +2392,10 @@ function AppShell() {
   useEffect(() => {
     persistLocalHabitsEnabled(habitsEnabled);
   }, [habitsEnabled]);
+
+  useEffect(() => {
+    persistLocalPhysiqueGoal(physiqueGoal);
+  }, [physiqueGoal]);
 
   useEffect(() => {
     persistLocalHomeLayout(homeLayout);
@@ -4284,6 +4291,8 @@ function AppShell() {
       onDesiredWeightChange={setDesiredWeight}
       nutritionPace={nutritionPace}
       onNutritionPaceChange={setNutritionPace}
+      physiqueGoal={physiqueGoal}
+      onPhysiqueGoalChange={setPhysiqueGoal}
       calorieOverride={calorieOverride}
       onCalorieOverrideChange={setCalorieOverride}
       habits={habits}
@@ -4415,8 +4424,9 @@ function AppShell() {
         calorieOverride,
         desiredWeightKg: desiredWeight,
         pace: nutritionPace,
+        physiqueGoal,
       }),
-    [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace],
+    [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace, physiqueGoal],
   );
   const eatenTodayMacros = useMemo(
     () => getNutritionTotals(nutritionEntries.filter((e) => e.date === todayDateKey)),
@@ -8410,6 +8420,27 @@ function loadLocalHabitsEnabled(): boolean {
     return globalThis.localStorage.getItem(LOCAL_HABITS_ENABLED_KEY) === 'true';
   } catch {
     return false;
+  }
+}
+
+function loadLocalPhysiqueGoal(): PhysiqueGoal {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return 'toned';
+  try {
+    const value = globalThis.localStorage.getItem(LOCAL_PHYSIQUE_GOAL_KEY);
+    return (['lean', 'toned', 'athletic', 'curvy', 'strong'] as PhysiqueGoal[]).includes(value as PhysiqueGoal)
+      ? (value as PhysiqueGoal)
+      : 'toned';
+  } catch {
+    return 'toned';
+  }
+}
+
+function persistLocalPhysiqueGoal(value: PhysiqueGoal) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_PHYSIQUE_GOAL_KEY, value);
+  } catch {
+    // Ignore.
   }
 }
 

@@ -57,6 +57,8 @@ export type CycleDayEntry = {
 };
 
 export type NutritionGoal = 'lose' | 'maintain' | 'gain';
+// Target physique / body-composition intent — mainly drives protein emphasis + a small calorie nudge.
+export type PhysiqueGoal = 'lean' | 'toned' | 'athletic' | 'curvy' | 'strong';
 export type ActivityLevel = 'low' | 'moderate' | 'high';
 export type NutritionSex = 'female' | 'male';
 export type NutritionPace = 'fast' | 'flexible';

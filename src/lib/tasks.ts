@@ -18,6 +18,7 @@ import {
   NutritionGoal,
   NutritionPace,
   NutritionSex,
+  PhysiqueGoal,
   PersonalProfile,
   PurchaseRequest,
   Recipe,
@@ -108,6 +109,7 @@ export type UserPreferencesRecord = {
   nutritionSex?: NutritionSex;
   desiredWeight?: string;
   nutritionPace?: NutritionPace;
+  physiqueGoal?: PhysiqueGoal;
   calorieOverride?: string;
   activeMealPlanProfile?: string;
   periodRemindersEnabled?: boolean;

@@ -1,4 +1,4 @@
-import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMacros, NutritionPace, NutritionSex, Recipe } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionFoodEntry, NutritionGoal, NutritionMacros, NutritionPace, NutritionSex, PhysiqueGoal, Recipe } from '@/types/app';
 
 export type NutritionFoodPreset = {
   id: string;
@@ -431,6 +431,16 @@ export function calcAge(dateOfBirth?: string) {
   return Math.max(0, age);
 }
 
+// Target physique → protein per kg of bodyweight + a small calorie nudge (fraction of maintenance).
+// Default 'toned' keeps the previous behaviour (1.8 g/kg, no nudge).
+const PHYSIQUE_TUNING: Record<PhysiqueGoal, { proteinPerKg: number; caloriePct: number }> = {
+  lean: { proteinPerKg: 1.6, caloriePct: -0.06 },
+  toned: { proteinPerKg: 1.8, caloriePct: 0 },
+  athletic: { proteinPerKg: 1.9, caloriePct: 0.03 },
+  curvy: { proteinPerKg: 1.5, caloriePct: 0 },
+  strong: { proteinPerKg: 2.1, caloriePct: 0.08 },
+};
+
 export function getNutritionPlan({
   dateOfBirth,
   heightCm,
@@ -441,6 +451,7 @@ export function getNutritionPlan({
   calorieOverride,
   desiredWeightKg,
   pace,
+  physiqueGoal = 'toned',
 }: {
   dateOfBirth?: string;
   heightCm?: string;
@@ -451,6 +462,7 @@ export function getNutritionPlan({
   calorieOverride?: string;
   desiredWeightKg?: string;
   pace?: NutritionPace;
+  physiqueGoal?: PhysiqueGoal;
 }) {
   const height = toNumber(heightCm);
   const weight = toNumber(weightKg);
@@ -483,10 +495,14 @@ export function getNutritionPlan({
           ? -550
           : -250
         : 0;
-  const calculatedCalories = maintenanceCalories + adjustment;
-  const targetCalories = toNumber(calorieOverride) > 0 ? toNumber(calorieOverride) : calculatedCalories;
+  const tuning = PHYSIQUE_TUNING[physiqueGoal] || PHYSIQUE_TUNING.toned;
+  const physiqueNudge = maintenanceCalories * tuning.caloriePct;
+  const calculatedCalories = maintenanceCalories + adjustment + physiqueNudge;
+  // Safety floor so stacked deficits never go below BMR / ~1200 kcal.
+  const flooredCalories = Math.max(calculatedCalories, Math.max(1200, Math.round(bmr)));
+  const targetCalories = toNumber(calorieOverride) > 0 ? toNumber(calorieOverride) : flooredCalories;
 
-  const proteinTarget = weight * (goal === 'gain' ? 2 : 1.8);
+  const proteinTarget = weight * tuning.proteinPerKg;
   const fatTarget = weight * 0.8;
   const proteinCalories = proteinTarget * 4;
   const fatCalories = fatTarget * 9;

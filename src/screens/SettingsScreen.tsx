@@ -2,7 +2,16 @@ import { Dispatch, SetStateAction, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { getNutritionPlan } from '@/lib/nutrition';
-import { ActivityLevel, HabitEntry, HabitReminderMode, NutritionGoal, NutritionPace, NutritionSex, PersonalProfile } from '@/types/app';
+import { ActivityLevel, HabitEntry, HabitReminderMode, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile } from '@/types/app';
+import { PhysiqueSilhouette } from '@/components/PhysiqueSilhouette';
+
+const PHYSIQUE_OPTIONS: { key: PhysiqueGoal; label: string; labelMale?: string; note: string }[] = [
+  { key: 'lean', label: 'Lean', note: 'Slimmer look · moderate protein, lighter calories' },
+  { key: 'toned', label: 'Toned', note: 'Defined, not bulky · higher protein (recomposition)' },
+  { key: 'athletic', label: 'Athletic', note: 'Fit & energetic · high protein, more carbs' },
+  { key: 'curvy', label: 'Curvy', labelMale: 'Solid', note: 'Comfortable & strong · balanced macros' },
+  { key: 'strong', label: 'Strong', note: 'Build muscle · highest protein, small surplus' },
+];
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type StaffSummary = {
@@ -38,6 +47,8 @@ type Props = {
   onDesiredWeightChange: Dispatch<SetStateAction<string>>;
   nutritionPace: NutritionPace;
   onNutritionPaceChange: Dispatch<SetStateAction<NutritionPace>>;
+  physiqueGoal: PhysiqueGoal;
+  onPhysiqueGoalChange: Dispatch<SetStateAction<PhysiqueGoal>>;
   calorieOverride: string;
   onCalorieOverrideChange: Dispatch<SetStateAction<string>>;
   habits: HabitEntry[];
@@ -82,6 +93,8 @@ export function SettingsScreen({
   onDesiredWeightChange,
   nutritionPace,
   onNutritionPaceChange,
+  physiqueGoal,
+  onPhysiqueGoalChange,
   calorieOverride,
   onCalorieOverrideChange,
   habits,
@@ -375,6 +388,26 @@ export function SettingsScreen({
             </Pressable>
           ))}
         </View>
+
+        <Text style={styles.label}>Target physique</Text>
+        <Text style={styles.helpText}>The shape you’re working toward — it fine-tunes protein and calories. (Body composition is built with training over time; this just sets the nutrition.)</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.physiqueRow}>
+          {PHYSIQUE_OPTIONS.map((opt) => {
+            const active = physiqueGoal === opt.key;
+            const label = nutritionSex === 'male' ? opt.labelMale || opt.label : opt.label;
+            return (
+              <Pressable
+                key={opt.key}
+                style={[styles.physiqueCard, active && styles.physiqueCardActive]}
+                onPress={() => onPhysiqueGoalChange(opt.key)}
+              >
+                <PhysiqueSilhouette physique={opt.key} sex={nutritionSex} color={active ? colors.primary : colors.subtext} size={38} />
+                <Text style={[styles.physiqueLabel, active && styles.physiqueLabelActive]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Text style={styles.physiqueNote}>{(PHYSIQUE_OPTIONS.find((o) => o.key === physiqueGoal) || PHYSIQUE_OPTIONS[1]).note}</Text>
 
         <Text style={styles.label}>Daily Calories Override</Text>
         <TextInput
@@ -1038,6 +1071,42 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
       fontSize: 12,
       lineHeight: 18,
+    },
+    physiqueRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingTop: 8,
+      paddingBottom: 4,
+    },
+    physiqueCard: {
+      width: 66,
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+    },
+    physiqueCardActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    physiqueLabel: {
+      color: colors.subtext,
+      fontSize: 11.5,
+      fontWeight: '700',
+    },
+    physiqueLabelActive: {
+      color: colors.primary,
+    },
+    physiqueNote: {
+      color: colors.subtext,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+      marginTop: 6,
+      marginBottom: 12,
     },
     nutritionPlanCard: {
       borderRadius: 16,
