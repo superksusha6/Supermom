@@ -4823,9 +4823,8 @@ function AppShell() {
       </Modal>
 
       <Modal visible={newListModalOpen} transparent animationType="fade" onRequestClose={() => setNewListModalOpen(false)}>
-        <Pressable style={styles.daySheetBackdrop} onPress={() => setNewListModalOpen(false)}>
-          <Pressable style={styles.daySheetCard} onPress={(e) => e.stopPropagation?.()}>
-            <View style={styles.daySheetHandle} />
+        <Pressable style={styles.newListBackdrop} onPress={() => setNewListModalOpen(false)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
             <Text style={styles.daySheetTitle}>New shopping list</Text>
             <TextInput
               placeholder="List name (e.g. store or trip)"
@@ -9838,6 +9837,23 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     backgroundColor: 'rgba(15,23,42,0.4)',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  newListBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  newListCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
+    gap: 14,
   },
   daySheetCard: {
     width: '100%',
