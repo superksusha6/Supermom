@@ -627,7 +627,6 @@ export function ShoppingScreen({
   const [quickAddAmount, setQuickAddAmount] = useState('1');
   const [quickAddUnit, setQuickAddUnit] = useState<UnitOption>('pcs');
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false);
-  const [quickAddFocused, setQuickAddFocused] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [composerMode, setComposerMode] = useState<ComposerMode>('list');
@@ -1529,8 +1528,7 @@ export function ShoppingScreen({
                 ref={quickAddRef}
                 value={quickAddName}
                 onChangeText={setQuickAddName}
-                onFocus={() => { setQuickAddUnitOpen(false); setQuickAddFocused(true); }}
-                onBlur={() => setQuickAddFocused(false)}
+                onFocus={() => setQuickAddUnitOpen(false)}
                 onSubmitEditing={() => submitQuickAdd()}
                 blurOnSubmit={false}
                 returnKeyType="done"
@@ -1583,7 +1581,7 @@ export function ShoppingScreen({
                 <Text style={styles.quickAddBtnText}>+</Text>
               </Pressable>
             </View>
-            {quickAddFocused && quickAddSuggestions.length ? (
+            {quickAddSuggestions.length ? (
               <View style={styles.quickAddSuggestions}>
                 {quickAddSuggestions.map((suggestion, index) => (
                   // onPressIn fires before the input's onBlur, so the tap isn't swallowed by blur.

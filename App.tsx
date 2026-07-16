@@ -1340,6 +1340,14 @@ function AppShell() {
         .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
     [shoppingLists],
   );
+  const pastShoppingLists = useMemo(
+    () =>
+      shoppingLists
+        .filter((list) => list.listType === 'history')
+        .sort((a, b) => (b.completedAt || b.createdAt || '').localeCompare(a.completedAt || a.createdAt || ''))
+        .slice(0, 5),
+    [shoppingLists],
+  );
 
   // A list drops into history once every item on it has been checked off.
   useEffect(() => {
@@ -5653,6 +5661,28 @@ function AppShell() {
               <Text style={styles.foodShopText}>{activeShoppingLists.length ? 'New shopping list' : 'Start a shopping list'}</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
+
+            {pastShoppingLists.length ? (
+              <>
+                <Text style={styles.foodHubSectionLabel}>Past lists</Text>
+                {pastShoppingLists.map((list) => (
+                  <Pressable
+                    key={list.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open past list ${list.title}`}
+                    style={styles.foodShopBtn}
+                    onPress={() => { setSelectedShoppingListId(list.id); setFoodTab('shopping'); }}
+                  >
+                    <View style={styles.foodShopIcon}><Icon name="cart" color={colors.subtext} size={20} /></View>
+                    <View style={styles.foodListCopy}>
+                      <Text style={styles.foodListTitle} numberOfLines={1}>{list.title}</Text>
+                      <Text style={styles.foodListSub}>{formatShortDate(list.completedAt || list.createdAt)} · done</Text>
+                    </View>
+                    <Icon name="chevron" color={colors.subtext} size={18} />
+                  </Pressable>
+                ))}
+              </>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"
@@ -10438,6 +10468,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
+  },
+  foodHubSectionLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 6,
+    marginBottom: 2,
+    marginLeft: 4,
   },
   foodWeekRow: {
     flexDirection: 'row',
