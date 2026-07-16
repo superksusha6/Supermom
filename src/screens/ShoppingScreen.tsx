@@ -627,6 +627,7 @@ export function ShoppingScreen({
   const [quickAddAmount, setQuickAddAmount] = useState('1');
   const [quickAddUnit, setQuickAddUnit] = useState<UnitOption>('pcs');
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false);
+  const [quickAddFocused, setQuickAddFocused] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [composerMode, setComposerMode] = useState<ComposerMode>('list');
@@ -861,6 +862,15 @@ export function ShoppingScreen({
     });
     return Object.fromEntries(entries) as Record<string, string[]>;
   }, [editRows]);
+  const quickAddSuggestions = useReactMemo(() => {
+    const query = quickAddName.trim().toLowerCase();
+    if (!query) return [] as string[];
+    return SHOPPING_SUGGESTIONS.filter((item) => {
+      const normalized = item.toLowerCase();
+      if (normalized === query) return false; // no point suggesting an exact match
+      return normalized.startsWith(query) || normalized.split(' ').some((word) => word.startsWith(query));
+    }).slice(0, 6);
+  }, [quickAddName]);
 
   useEffect(() => {
     if (!pendingFocusRowIdRef.current) return;
@@ -922,8 +932,8 @@ export function ShoppingScreen({
     }, 0);
   }
 
-  function submitQuickAdd() {
-    const raw = quickAddName.trim();
+  function submitQuickAdd(nameOverride?: string) {
+    const raw = (nameOverride ?? quickAddName).trim();
     if (!raw) return;
     const parsed = splitNameAndQuantity(raw);
     // A quantity typed inline ("milk 2 l") wins; otherwise use the amount + unit controls.
@@ -1513,13 +1523,15 @@ export function ShoppingScreen({
         {!needsBasketOnboarding && !canStartFromBasket ? (
         <View style={styles.shoppingBoard}>
           {filter === 'active' ? (
+            <>
             <View style={styles.quickAddBar}>
               <TextInput
                 ref={quickAddRef}
                 value={quickAddName}
                 onChangeText={setQuickAddName}
-                onFocus={() => setQuickAddUnitOpen(false)}
-                onSubmitEditing={submitQuickAdd}
+                onFocus={() => { setQuickAddUnitOpen(false); setQuickAddFocused(true); }}
+                onBlur={() => setQuickAddFocused(false)}
+                onSubmitEditing={() => submitQuickAdd()}
                 blurOnSubmit={false}
                 returnKeyType="done"
                 placeholder="Add product…"
@@ -1566,11 +1578,27 @@ export function ShoppingScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Add product"
                 style={[styles.quickAddBtn, !quickAddName.trim() && styles.quickAddBtnDisabled]}
-                onPress={submitQuickAdd}
+                onPress={() => submitQuickAdd()}
               >
                 <Text style={styles.quickAddBtnText}>+</Text>
               </Pressable>
             </View>
+            {quickAddFocused && quickAddSuggestions.length ? (
+              <View style={styles.quickAddSuggestions}>
+                {quickAddSuggestions.map((suggestion, index) => (
+                  // onPressIn fires before the input's onBlur, so the tap isn't swallowed by blur.
+                  <Pressable
+                    key={suggestion}
+                    style={[styles.quickAddSuggestionItem, index === quickAddSuggestions.length - 1 && styles.quickAddSuggestionItemLast]}
+                    onPressIn={() => submitQuickAdd(suggestion)}
+                  >
+                    <Text style={styles.quickAddSuggestionText}>{suggestion}</Text>
+                    <Text style={styles.quickAddSuggestionPlus}>+</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            </>
           ) : null}
           {visibleItems.length === 0 ? (
             <View style={styles.shoppingEmptyState}>
@@ -4712,6 +4740,37 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       lineHeight: 30,
       fontWeight: '700',
       marginTop: -2,
+    },
+    quickAddSuggestions: {
+      marginTop: -4,
+      marginBottom: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(228,236,246,0.92)',
+      backgroundColor: '#ffffff',
+      overflow: 'hidden',
+    },
+    quickAddSuggestionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(228,236,246,0.7)',
+    },
+    quickAddSuggestionItemLast: {
+      borderBottomWidth: 0,
+    },
+    quickAddSuggestionText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    quickAddSuggestionPlus: {
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '800',
     },
     shoppingRow: {
       flexDirection: 'row',
