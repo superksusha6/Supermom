@@ -211,13 +211,16 @@ const LOCAL_EVENT_REMINDERS_KEY = 'smartmom.eventReminders.v1';
 const LOCAL_EVENT_LEAD_KEY = 'smartmom.eventLead.v1';
 const LOCAL_STAFF_GRANTS_KEY = 'smartmom.staffGrants.v1';
 
-// The functions each staff role gets by default (a preset of feature toggles).
+// Each role is a job "hat" that grants a bundle of functions. A staff member can hold
+// several at once (union of bundles), then the mom can fine-tune individual functions.
 const STAFF_ROLE_PRESETS: Record<StaffRolePreset, { label: string; features: StaffFeature[] }> = {
-  assistant: { label: 'Assistant', features: ['tasks', 'shopping', 'menu'] },
+  nanny: { label: 'Nanny', features: ['tasks', 'schedule'] },
+  housekeeper: { label: 'Housekeeper', features: ['tasks', 'shopping'] },
   cook: { label: 'Cook', features: ['menu', 'shopping', 'recipes'] },
   driver: { label: 'Driver', features: ['schedule'] },
-  custom: { label: 'Custom', features: [] },
+  assistant: { label: 'Assistant', features: ['tasks', 'shopping', 'menu'] },
 };
+const STAFF_ROLE_ORDER: StaffRolePreset[] = ['nanny', 'housekeeper', 'cook', 'driver', 'assistant'];
 const STAFF_FEATURE_ORDER: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'schedule', 'fixit'];
 const STAFF_FEATURE_LABELS: Record<StaffFeature, string> = {
   tasks: 'Tasks / duties',
@@ -886,8 +889,8 @@ function AppShell() {
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([]);
   const [staffDraftName, setStaffDraftName] = useState('');
   const [staffDraftDob, setStaffDraftDob] = useState('');
-  const [staffDraftRole, setStaffDraftRole] = useState<StaffRolePreset>('assistant');
-  const [staffDraftFeatures, setStaffDraftFeatures] = useState<StaffFeature[]>(STAFF_ROLE_PRESETS.assistant.features);
+  const [staffDraftRoles, setStaffDraftRoles] = useState<StaffRolePreset[]>(['nanny']);
+  const [staffDraftFeatures, setStaffDraftFeatures] = useState<StaffFeature[]>(STAFF_ROLE_PRESETS.nanny.features);
   const [staffGrants, setStaffGrants] = useState<Record<string, StaffGrant>>(() => loadLocalStaffGrants());
   const [staffDraftTasks, setStaffDraftTasks] = useState<StaffDraftTask[]>([createDefaultStaffDraftTask()]);
   const [completedTaskNotifications, setCompletedTaskNotifications] = useState<CompletedTaskNotification[]>([]);
@@ -3740,6 +3743,21 @@ function AppShell() {
     });
   }
 
+  function toggleStaffRole(role: StaffRolePreset) {
+    const has = staffDraftRoles.includes(role);
+    const nextRoles = has ? staffDraftRoles.filter((x) => x !== role) : [...staffDraftRoles, role];
+    setStaffDraftRoles(nextRoles);
+    if (has) {
+      // Drop this role's features unless another still-selected role also grants them.
+      const remove = STAFF_ROLE_PRESETS[role].features.filter(
+        (f) => !nextRoles.some((nr) => STAFF_ROLE_PRESETS[nr].features.includes(f)),
+      );
+      setStaffDraftFeatures((prev) => prev.filter((f) => !remove.includes(f)));
+    } else {
+      setStaffDraftFeatures((prev) => [...prev, ...STAFF_ROLE_PRESETS[role].features.filter((f) => !prev.includes(f))]);
+    }
+  }
+
   function openStaffProfileEditor(staffId: string) {
     const profile = staffProfiles.find((item) => item.id === staffId);
     if (!profile) return;
@@ -3748,8 +3766,8 @@ function AppShell() {
     setStaffDraftDob(profile.dateOfBirth || '');
     setStaffDraftTasks(profile.tasks.length > 0 ? profile.tasks.map((task) => ({ ...task })) : [createDefaultStaffDraftTask()]);
     const grant = staffGrants[staffId];
-    setStaffDraftRole(grant?.role || 'assistant');
-    setStaffDraftFeatures(grant?.features || STAFF_ROLE_PRESETS.assistant.features);
+    setStaffDraftRoles(grant?.roles || ['nanny']);
+    setStaffDraftFeatures(grant?.features || STAFF_ROLE_PRESETS.nanny.features);
     setStaffSetupOpen(true);
     setChildSetupOpen(false);
     setTasksError(null);
@@ -3793,7 +3811,7 @@ function AppShell() {
       return;
     }
     const optimisticStaffId = editingStaffId || `staff-${Date.now()}`;
-    const staffGrant: StaffGrant = { role: staffDraftRole, features: staffDraftFeatures };
+    const staffGrant: StaffGrant = { roles: staffDraftRoles, features: staffDraftFeatures };
     const staffProfile: StaffProfile = {
       id: optimisticStaffId,
       name: staffName,
@@ -5522,23 +5540,26 @@ function AppShell() {
                 onChangeText={(text) => setStaffDraftDob(formatBirthDateInput(text))}
               />
 
-              <Text style={styles.createHint}>Role</Text>
+              <Text style={styles.createHint}>Roles (can combine — e.g. nanny + cook)</Text>
               <View style={styles.dropdownChipWrap}>
-                {(['assistant', 'cook', 'driver', 'custom'] as StaffRolePreset[]).map((r) => (
-                  <Pressable
-                    key={`staff-role-${r}`}
-                    style={[styles.dropdownChip, staffDraftRole === r && styles.dropdownChipActive]}
-                    onPress={() => {
-                      setStaffDraftRole(r);
-                      if (r !== 'custom') setStaffDraftFeatures(STAFF_ROLE_PRESETS[r].features);
-                    }}
-                  >
-                    <Text style={[styles.dropdownChipText, staffDraftRole === r && styles.dropdownChipTextActive]}>{STAFF_ROLE_PRESETS[r].label}</Text>
-                  </Pressable>
-                ))}
+                {STAFF_ROLE_ORDER.map((r) => {
+                  const on = staffDraftRoles.includes(r);
+                  return (
+                    <Pressable
+                      key={`staff-role-${r}`}
+                      style={[styles.dropdownChip, on && styles.dropdownChipActive]}
+                      onPress={() => toggleStaffRole(r)}
+                    >
+                      <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>
+                        {on ? '✓ ' : ''}
+                        {STAFF_ROLE_PRESETS[r].label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
 
-              <Text style={styles.createHint}>What this person can access</Text>
+              <Text style={styles.createHint}>What this person can access (fine-tune)</Text>
               <View style={styles.dropdownChipWrap}>
                 {STAFF_FEATURE_ORDER.map((f) => {
                   const on = staffDraftFeatures.includes(f);
@@ -5546,10 +5567,7 @@ function AppShell() {
                     <Pressable
                       key={`staff-feature-${f}`}
                       style={[styles.dropdownChip, on && styles.dropdownChipActive]}
-                      onPress={() => {
-                        setStaffDraftFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
-                        setStaffDraftRole('custom');
-                      }}
+                      onPress={() => setStaffDraftFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]))}
                     >
                       <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>
                         {on ? '✓ ' : ''}
