@@ -792,6 +792,11 @@ function AppShell() {
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [changePwOpen, setChangePwOpen] = useState(false);
+  const [changePwValue, setChangePwValue] = useState('');
+  const [changePwConfirm, setChangePwConfirm] = useState('');
+  const [changePwBusy, setChangePwBusy] = useState(false);
+  const [changePwMsg, setChangePwMsg] = useState<string | null>(null);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [dayNewTitle, setDayNewTitle] = useState('');
@@ -4071,6 +4076,30 @@ function AppShell() {
     }
   }
 
+  async function handleChangePassword() {
+    if (changePwBusy) return;
+    if (changePwValue.length < 6) {
+      setChangePwMsg('Password must be at least 6 characters.');
+      return;
+    }
+    if (changePwValue !== changePwConfirm) {
+      setChangePwMsg('Passwords do not match.');
+      return;
+    }
+    try {
+      setChangePwBusy(true);
+      setChangePwMsg(null);
+      await updatePassword(changePwValue);
+      setChangePwValue('');
+      setChangePwConfirm('');
+      setChangePwMsg('Password updated ✓');
+    } catch (error) {
+      setChangePwMsg(error instanceof Error ? error.message : 'Could not update password.');
+    } finally {
+      setChangePwBusy(false);
+    }
+  }
+
   async function savePersonalProfile() {
     const rawFullName = personalProfile.fullName.trim();
     const fullName = rawFullName || savedPersonalFullNameRef.current || latestPersonalProfileRef.current.fullName || '';
@@ -4956,25 +4985,73 @@ function AppShell() {
                       </Pressable>
                     </View>
                   ) : (
-                    <Pressable
-                      style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
-                      onPress={() => {
-                        signOut()
-                          .then(() => {
-                            resetSignedOutState();
-                            setSettingsPanelOpen(false);
-                          })
-                          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
-                      }}
-                    >
-                      <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
-                    </Pressable>
+                    <>
+                      <Pressable
+                        style={styles.accountMenuItem}
+                        onPress={() => {
+                          setChangePwValue('');
+                          setChangePwConfirm('');
+                          setChangePwMsg(null);
+                          setChangePwOpen(true);
+                        }}
+                      >
+                        <Text style={styles.accountMenuItemText}>Change password</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
+                        onPress={() => {
+                          signOut()
+                            .then(() => {
+                              resetSignedOutState();
+                              setSettingsPanelOpen(false);
+                            })
+                            .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
+                        }}
+                      >
+                        <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
+                      </Pressable>
+                    </>
                   )}
                 </View>
               </View>
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={changePwOpen} transparent animationType="fade" onRequestClose={() => setChangePwOpen(false)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setChangePwOpen(false)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>Change password</Text>
+            <TextInput
+              placeholder="New password"
+              placeholderTextColor={colors.subtext}
+              style={styles.input}
+              secureTextEntry
+              autoFocus
+              value={changePwValue}
+              onChangeText={setChangePwValue}
+            />
+            <TextInput
+              placeholder="Confirm new password"
+              placeholderTextColor={colors.subtext}
+              style={styles.input}
+              secureTextEntry
+              value={changePwConfirm}
+              onChangeText={setChangePwConfirm}
+              onSubmitEditing={handleChangePassword}
+            />
+            {changePwMsg ? <Text style={styles.changePwMsg}>{changePwMsg}</Text> : null}
+            <View style={styles.daySheetActions}>
+              <Pressable style={styles.daySheetCancel} onPress={() => setChangePwOpen(false)}>
+                <Text style={styles.daySheetCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.daySheetAdd} onPress={handleChangePassword}>
+                <Text style={styles.daySheetAddText}>{changePwBusy ? 'Saving…' : 'Update'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {!isSupabaseConfigured ? (
@@ -9984,6 +10061,12 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingTop: 20,
     paddingBottom: 18,
     gap: 14,
+  },
+  changePwMsg: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: -4,
   },
   daySheetCard: {
     width: '100%',
