@@ -9191,10 +9191,8 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     gap: 8,
   },
   settingsUtilityCard: {
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(214,223,235,0.8)',
-    paddingTop: 12,
+    gap: 14,
+    marginTop: 2,
   },
   settingsUtilitySection: {
     gap: 8,
