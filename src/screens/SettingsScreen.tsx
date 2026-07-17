@@ -12,6 +12,9 @@ const PHYSIQUE_OPTIONS: { key: PhysiqueGoal; label: string; labelMale?: string; 
   { key: 'curvy', label: 'Curvy', labelMale: 'Solid', note: 'Comfortable & strong · balanced macros' },
   { key: 'strong', label: 'Strong', note: 'Build muscle · highest protein, small surplus' },
 ];
+
+const QUIET_HOUR_OPTIONS = ['20:00', '21:00', '22:00', '23:00', '06:00', '07:00', '08:00', '09:00'];
+const EVENT_LEAD_OPTIONS = ['10 min', '30 min', '1 hour', '1 day'];
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type StaffSummary = {
@@ -61,6 +64,16 @@ type Props = {
   onPeriodRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
   periodReminderLeadDays: number;
   onPeriodReminderLeadDaysChange: Dispatch<SetStateAction<number>>;
+  quietHoursEnabled: boolean;
+  onQuietHoursEnabledChange: Dispatch<SetStateAction<boolean>>;
+  quietHoursStart: string;
+  onQuietHoursStartChange: (value: string) => void;
+  quietHoursEnd: string;
+  onQuietHoursEndChange: (value: string) => void;
+  eventRemindersEnabled: boolean;
+  onEventRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
+  eventReminderLead: string;
+  onEventReminderLeadChange: (value: string) => void;
   children: ChildSummary[];
   staffProfiles: StaffSummary[];
   activeFamilyViewKey: string;
@@ -109,6 +122,16 @@ export function SettingsScreen({
   onPeriodRemindersEnabledChange,
   periodReminderLeadDays,
   onPeriodReminderLeadDaysChange,
+  quietHoursEnabled,
+  onQuietHoursEnabledChange,
+  quietHoursStart,
+  onQuietHoursStartChange,
+  quietHoursEnd,
+  onQuietHoursEndChange,
+  eventRemindersEnabled,
+  onEventRemindersEnabledChange,
+  eventReminderLead,
+  onEventReminderLeadChange,
   children,
   staffProfiles,
   activeFamilyViewKey,
@@ -490,6 +513,42 @@ export function SettingsScreen({
                 />
               </View>
             </View>
+
+            <View style={styles.masterReminderRow}>
+              <View style={styles.masterReminderCopy}>
+                <Text style={styles.masterReminderTitle}>Period reminders</Text>
+                <Text style={styles.masterReminderSubtitle}>
+                  {periodRemindersEnabled
+                    ? `Remind me ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before my period may start.`
+                    : 'Period reminders are off.'}
+                </Text>
+              </View>
+              <Pressable
+                style={[styles.toggle, periodRemindersEnabled && styles.toggleOn]}
+                onPress={() => onPeriodRemindersEnabledChange((prev) => !prev)}
+              >
+                <Text style={styles.toggleText}>{periodRemindersEnabled ? 'On' : 'Off'}</Text>
+              </Pressable>
+            </View>
+
+            {periodRemindersEnabled ? (
+              <>
+                <Text style={styles.label}>Remind me before</Text>
+                <View style={styles.pillRow}>
+                  {[1, 2, 3].map((days) => (
+                    <Pressable
+                      key={days}
+                      style={[styles.pillBtn, periodReminderLeadDays === days && styles.pillBtnActive]}
+                      onPress={() => onPeriodReminderLeadDaysChange(days)}
+                    >
+                      <Text style={[styles.pillBtnText, periodReminderLeadDays === days && styles.pillBtnTextActive]}>
+                        {days} day{days === 1 ? '' : 's'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
           </>
         ) : null}
       </>
@@ -499,40 +558,64 @@ export function SettingsScreen({
   function renderNotificationsEditor() {
     return (
       <>
-        <Text style={styles.helpText}>Global reminders. Habit reminders live in Habits; cycle reminders here.</Text>
+        <Text style={styles.helpText}>Global reminders that apply across the whole app.</Text>
 
-        {showCycleTracking ? (
-          <View style={styles.masterReminderRow}>
-            <View style={styles.masterReminderCopy}>
-              <Text style={styles.masterReminderTitle}>Period reminders</Text>
-              <Text style={styles.masterReminderSubtitle}>
-                {periodRemindersEnabled
-                  ? `Remind me ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before my period may start.`
-                  : 'Period reminders are off.'}
-              </Text>
+        <View style={styles.masterReminderRow}>
+          <View style={styles.masterReminderCopy}>
+            <Text style={styles.masterReminderTitle}>Quiet hours</Text>
+            <Text style={styles.masterReminderSubtitle}>
+              {quietHoursEnabled ? `No reminders ${quietHoursStart}–${quietHoursEnd}.` : 'Reminders can arrive any time.'}
+            </Text>
+          </View>
+          <Pressable style={[styles.toggle, quietHoursEnabled && styles.toggleOn]} onPress={() => onQuietHoursEnabledChange((prev) => !prev)}>
+            <Text style={styles.toggleText}>{quietHoursEnabled ? 'On' : 'Off'}</Text>
+          </Pressable>
+        </View>
+
+        {quietHoursEnabled ? (
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Text style={styles.label}>From</Text>
+              <View style={styles.pillRow}>
+                {QUIET_HOUR_OPTIONS.map((t) => (
+                  <Pressable key={`qs-${t}`} style={[styles.pillBtn, quietHoursStart === t && styles.pillBtnActive]} onPress={() => onQuietHoursStartChange(t)}>
+                    <Text style={[styles.pillBtnText, quietHoursStart === t && styles.pillBtnTextActive]}>{t}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-            <Pressable
-              style={[styles.toggle, periodRemindersEnabled && styles.toggleOn]}
-              onPress={() => onPeriodRemindersEnabledChange((prev) => !prev)}
-            >
-              <Text style={styles.toggleText}>{periodRemindersEnabled ? 'On' : 'Off'}</Text>
-            </Pressable>
+            <View style={styles.half}>
+              <Text style={styles.label}>To</Text>
+              <View style={styles.pillRow}>
+                {QUIET_HOUR_OPTIONS.map((t) => (
+                  <Pressable key={`qe-${t}`} style={[styles.pillBtn, quietHoursEnd === t && styles.pillBtnActive]} onPress={() => onQuietHoursEndChange(t)}>
+                    <Text style={[styles.pillBtnText, quietHoursEnd === t && styles.pillBtnTextActive]}>{t}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           </View>
         ) : null}
 
-        {showCycleTracking && periodRemindersEnabled ? (
+        <View style={styles.masterReminderRow}>
+          <View style={styles.masterReminderCopy}>
+            <Text style={styles.masterReminderTitle}>Event reminders</Text>
+            <Text style={styles.masterReminderSubtitle}>
+              {eventRemindersEnabled ? `Remind before calendar events & appointments (${eventReminderLead}).` : 'No reminders for calendar events.'}
+            </Text>
+          </View>
+          <Pressable style={[styles.toggle, eventRemindersEnabled && styles.toggleOn]} onPress={() => onEventRemindersEnabledChange((prev) => !prev)}>
+            <Text style={styles.toggleText}>{eventRemindersEnabled ? 'On' : 'Off'}</Text>
+          </Pressable>
+        </View>
+
+        {eventRemindersEnabled ? (
           <>
             <Text style={styles.label}>Remind me before</Text>
             <View style={styles.pillRow}>
-              {[1, 2, 3].map((days) => (
-                <Pressable
-                  key={days}
-                  style={[styles.pillBtn, periodReminderLeadDays === days && styles.pillBtnActive]}
-                  onPress={() => onPeriodReminderLeadDaysChange(days)}
-                >
-                  <Text style={[styles.pillBtnText, periodReminderLeadDays === days && styles.pillBtnTextActive]}>
-                    {days} day{days === 1 ? '' : 's'}
-                  </Text>
+              {EVENT_LEAD_OPTIONS.map((opt) => (
+                <Pressable key={opt} style={[styles.pillBtn, eventReminderLead === opt && styles.pillBtnActive]} onPress={() => onEventReminderLeadChange(opt)}>
+                  <Text style={[styles.pillBtnText, eventReminderLead === opt && styles.pillBtnTextActive]}>{opt}</Text>
                 </Pressable>
               ))}
             </View>

@@ -204,6 +204,11 @@ const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
 const LOCAL_PHYSIQUE_GOAL_KEY = 'smartmom.physiqueGoal.v1';
+const LOCAL_QUIET_HOURS_KEY = 'smartmom.quietHours.v1';
+const LOCAL_QUIET_START_KEY = 'smartmom.quietStart.v1';
+const LOCAL_QUIET_END_KEY = 'smartmom.quietEnd.v1';
+const LOCAL_EVENT_REMINDERS_KEY = 'smartmom.eventReminders.v1';
+const LOCAL_EVENT_LEAD_KEY = 'smartmom.eventLead.v1';
 const DAY_TIME_OPTIONS = ['7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
 type HomeLayout = 'focus' | 'zen' | 'bento';
@@ -768,6 +773,11 @@ function AppShell() {
   const [habitRemindersEnabled, setHabitRemindersEnabled] = useState(() => loadLocalHabitRemindersEnabled());
   const [periodRemindersEnabled, setPeriodRemindersEnabled] = useState(() => loadLocalPeriodRemindersEnabled());
   const [periodReminderLeadDays, setPeriodReminderLeadDays] = useState(() => loadLocalPeriodReminderLeadDays());
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(() => readLocalBool(LOCAL_QUIET_HOURS_KEY, false));
+  const [quietHoursStart, setQuietHoursStart] = useState(() => readLocalString(LOCAL_QUIET_START_KEY, '22:00'));
+  const [quietHoursEnd, setQuietHoursEnd] = useState(() => readLocalString(LOCAL_QUIET_END_KEY, '07:00'));
+  const [eventRemindersEnabled, setEventRemindersEnabled] = useState(() => readLocalBool(LOCAL_EVENT_REMINDERS_KEY, true));
+  const [eventReminderLead, setEventReminderLead] = useState(() => readLocalString(LOCAL_EVENT_LEAD_KEY, '30 min'));
   const [shoppingShares, setShoppingShares] = useState<ShoppingShare[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
@@ -2396,6 +2406,12 @@ function AppShell() {
   useEffect(() => {
     persistLocalPhysiqueGoal(physiqueGoal);
   }, [physiqueGoal]);
+
+  useEffect(() => { writeLocal(LOCAL_QUIET_HOURS_KEY, quietHoursEnabled ? 'true' : 'false'); }, [quietHoursEnabled]);
+  useEffect(() => { writeLocal(LOCAL_QUIET_START_KEY, quietHoursStart); }, [quietHoursStart]);
+  useEffect(() => { writeLocal(LOCAL_QUIET_END_KEY, quietHoursEnd); }, [quietHoursEnd]);
+  useEffect(() => { writeLocal(LOCAL_EVENT_REMINDERS_KEY, eventRemindersEnabled ? 'true' : 'false'); }, [eventRemindersEnabled]);
+  useEffect(() => { writeLocal(LOCAL_EVENT_LEAD_KEY, eventReminderLead); }, [eventReminderLead]);
 
   useEffect(() => {
     persistLocalHomeLayout(homeLayout);
@@ -4305,6 +4321,16 @@ function AppShell() {
       onPeriodRemindersEnabledChange={setPeriodRemindersEnabled}
       periodReminderLeadDays={periodReminderLeadDays}
       onPeriodReminderLeadDaysChange={setPeriodReminderLeadDays}
+      quietHoursEnabled={quietHoursEnabled}
+      onQuietHoursEnabledChange={setQuietHoursEnabled}
+      quietHoursStart={quietHoursStart}
+      onQuietHoursStartChange={setQuietHoursStart}
+      quietHoursEnd={quietHoursEnd}
+      onQuietHoursEndChange={setQuietHoursEnd}
+      eventRemindersEnabled={eventRemindersEnabled}
+      onEventRemindersEnabledChange={setEventRemindersEnabled}
+      eventReminderLead={eventReminderLead}
+      onEventReminderLeadChange={setEventReminderLead}
       children={children.map((child) => ({ id: child.id, name: child.name }))}
       staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name, dateOfBirth: profile.dateOfBirth }))}
       activeFamilyViewKey={activeOwnerFilter}
@@ -8435,6 +8461,34 @@ function persistLocalPhysiqueGoal(value: PhysiqueGoal) {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
   try {
     globalThis.localStorage.setItem(LOCAL_PHYSIQUE_GOAL_KEY, value);
+  } catch {
+    // Ignore.
+  }
+}
+
+function readLocalString(key: string, fallback: string): string {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return fallback;
+  try {
+    return globalThis.localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readLocalBool(key: string, fallback: boolean): boolean {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return fallback;
+  try {
+    const value = globalThis.localStorage.getItem(key);
+    return value === null ? fallback : value === 'true';
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocal(key: string, value: string) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(key, value);
   } catch {
     // Ignore.
   }
