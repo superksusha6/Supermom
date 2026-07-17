@@ -10,7 +10,7 @@ alter table public.family_invites
 alter table public.family_invites
   add column if not exists features jsonb not null default '[]'::jsonb;
 alter table public.family_invites
-  add column if not exists staff_profile_id uuid references public.staff_profiles(id) on delete set null;
+  add column if not exists staff_profile_id text references public.staff_profiles(id) on delete set null;
 
 alter table public.family_members
   add column if not exists roles jsonb not null default '[]'::jsonb;
