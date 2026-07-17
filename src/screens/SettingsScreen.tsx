@@ -53,6 +53,8 @@ type Props = {
   onCalorieOverrideChange: Dispatch<SetStateAction<string>>;
   habits: HabitEntry[];
   onHabitsChange: Dispatch<SetStateAction<HabitEntry[]>>;
+  habitsEnabled: boolean;
+  onHabitsEnabledChange: Dispatch<SetStateAction<boolean>>;
   habitRemindersEnabled: boolean;
   onHabitRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
   periodRemindersEnabled: boolean;
@@ -99,6 +101,8 @@ export function SettingsScreen({
   onCalorieOverrideChange,
   habits,
   onHabitsChange,
+  habitsEnabled,
+  onHabitsEnabledChange,
   habitRemindersEnabled,
   onHabitRemindersEnabledChange,
   periodRemindersEnabled,
@@ -217,7 +221,7 @@ export function SettingsScreen({
       header: 'Preferences',
       rows: [
         { key: 'notifications', title: 'Notifications' },
-        { key: 'habits', title: 'Habit trackers' },
+        { key: 'habits', title: 'Habits' },
       ],
     },
     {
@@ -236,7 +240,7 @@ export function SettingsScreen({
           : activeSection === 'notifications'
             ? 'Notifications'
             : activeSection === 'habits'
-              ? 'Habit trackers'
+              ? 'Habits'
               : activeSection === 'family'
                 ? 'Family & Access'
                 : '';
@@ -321,11 +325,6 @@ export function SettingsScreen({
           </View>
         </View>
 
-        <Pressable style={styles.primaryBtn} onPress={handleSaveAndClose}>
-          <Text style={styles.primaryBtnText}>Save</Text>
-        </Pressable>
-        {personalProfileStatus ? <Text style={styles.statusText}>{personalProfileStatus}</Text> : null}
-        {personalProfileError ? <Text style={styles.errorText}>{personalProfileError}</Text> : null}
       </>
     );
   }
@@ -441,10 +440,6 @@ export function SettingsScreen({
         ) : (
           <Text style={styles.helpText}>Fill in date of birth, height, and weight in Personal to calculate calories and macros automatically.</Text>
         )}
-
-        <Pressable style={styles.primaryBtn} onPress={closeSection}>
-          <Text style={styles.primaryBtnText}>Save</Text>
-        </Pressable>
       </>
     );
   }
@@ -497,12 +492,6 @@ export function SettingsScreen({
             </View>
           </>
         ) : null}
-
-        <Pressable style={styles.primaryBtn} onPress={handleSaveAndClose}>
-          <Text style={styles.primaryBtnText}>Save</Text>
-        </Pressable>
-        {personalProfileStatus ? <Text style={styles.statusText}>{personalProfileStatus}</Text> : null}
-        {personalProfileError ? <Text style={styles.errorText}>{personalProfileError}</Text> : null}
       </>
     );
   }
@@ -510,16 +499,7 @@ export function SettingsScreen({
   function renderNotificationsEditor() {
     return (
       <>
-        <Text style={styles.helpText}>Control global reminder behavior here. Per-habit reminder details stay inside Habit Trackers.</Text>
-        <View style={styles.masterReminderRow}>
-          <View style={styles.masterReminderCopy}>
-            <Text style={styles.masterReminderTitle}>Habit reminders</Text>
-            <Text style={styles.masterReminderSubtitle}>{habitRemindersEnabled ? 'Reminders are allowed app-wide.' : 'All habit reminders are paused.'}</Text>
-          </View>
-          <Pressable style={[styles.toggle, habitRemindersEnabled && styles.toggleOn]} onPress={() => onHabitRemindersEnabledChange((prev) => !prev)}>
-            <Text style={styles.toggleText}>{habitRemindersEnabled ? 'On' : 'Off'}</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.helpText}>Global reminders. Habit reminders live in Habits; cycle reminders here.</Text>
 
         {showCycleTracking ? (
           <View style={styles.masterReminderRow}>
@@ -569,8 +549,30 @@ export function SettingsScreen({
   function renderHabitsEditor() {
     return (
       <>
-        <Text style={styles.helpText}>Turn ready-made trackers on only when you need them, edit the target, or add your own custom one.</Text>
-        <View style={styles.habitSettingsWrap}>
+        <View style={styles.masterReminderRow}>
+          <View style={styles.masterReminderCopy}>
+            <Text style={styles.masterReminderTitle}>Enable habits</Text>
+            <Text style={styles.masterReminderSubtitle}>{habitsEnabled ? 'Habit tracking is on (opens from the menu).' : 'Habit tracking is off.'}</Text>
+          </View>
+          <Pressable style={[styles.toggle, habitsEnabled && styles.toggleOn]} onPress={() => onHabitsEnabledChange((prev) => !prev)}>
+            <Text style={styles.toggleText}>{habitsEnabled ? 'On' : 'Off'}</Text>
+          </Pressable>
+        </View>
+
+        {habitsEnabled ? (
+          <>
+            <View style={styles.masterReminderRow}>
+              <View style={styles.masterReminderCopy}>
+                <Text style={styles.masterReminderTitle}>Habit reminders</Text>
+                <Text style={styles.masterReminderSubtitle}>{habitRemindersEnabled ? 'Reminders are allowed app-wide.' : 'All habit reminders are paused.'}</Text>
+              </View>
+              <Pressable style={[styles.toggle, habitRemindersEnabled && styles.toggleOn]} onPress={() => onHabitRemindersEnabledChange((prev) => !prev)}>
+                <Text style={styles.toggleText}>{habitRemindersEnabled ? 'On' : 'Off'}</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.helpText}>Turn ready-made trackers on only when you need them, edit the target, or add your own custom one.</Text>
+            <View style={styles.habitSettingsWrap}>
           {habits.map((habit) => (
             <View key={habit.id} style={styles.habitSettingsCard}>
               <View style={styles.habitSettingsTop}>
@@ -705,6 +707,8 @@ export function SettingsScreen({
             <Text style={styles.primaryBtnText}>Add tracker</Text>
           </Pressable>
         </View>
+          </>
+        ) : null}
       </>
     );
   }
@@ -829,6 +833,11 @@ export function SettingsScreen({
                         {renderCycleEditor()}
                       </>
                     ) : null}
+                    <Pressable style={[styles.primaryBtn, styles.editorSaveBtn]} onPress={handleSaveAndClose}>
+                      <Text style={styles.primaryBtnText}>Save &amp; close</Text>
+                    </Pressable>
+                    {personalProfileStatus ? <Text style={styles.statusText}>{personalProfileStatus}</Text> : null}
+                    {personalProfileError ? <Text style={styles.errorText}>{personalProfileError}</Text> : null}
                   </>
                 ) : null}
                 {activeSection === 'notifications' ? renderNotificationsEditor() : null}
@@ -1020,6 +1029,9 @@ const createStyles = (colors: ThemeColors) =>
     primaryBtnText: {
       color: '#fff',
       fontWeight: '800',
+    },
+    editorSaveBtn: {
+      marginTop: 18,
     },
     statusText: {
       color: colors.done,

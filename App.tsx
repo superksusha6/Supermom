@@ -4297,6 +4297,8 @@ function AppShell() {
       onCalorieOverrideChange={setCalorieOverride}
       habits={habits}
       onHabitsChange={setHabits}
+      habitsEnabled={habitsEnabled}
+      onHabitsEnabledChange={setHabitsEnabled}
       habitRemindersEnabled={habitRemindersEnabled}
       onHabitRemindersEnabledChange={setHabitRemindersEnabled}
       periodRemindersEnabled={periodRemindersEnabled}
@@ -4869,16 +4871,10 @@ function AppShell() {
                 <View style={styles.settingsUtilitySection}>
                   <Text style={styles.settingsUtilityTitle}>Modules</Text>
                   <View style={styles.settingsUtilityListCard}>
-                    <Pressable style={[styles.moduleToggleRow, styles.moduleToggleRowDivider]} onPress={() => setMedsEnabled((prev) => !prev)}>
+                    <Pressable style={styles.moduleToggleRow} onPress={() => setMedsEnabled((prev) => !prev)}>
                       <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
                       <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
                         <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
-                      </View>
-                    </Pressable>
-                    <Pressable style={styles.moduleToggleRow} onPress={() => setHabitsEnabled((prev) => !prev)}>
-                      <Text style={styles.moduleToggleTitle}>💚  Habits &amp; wellness</Text>
-                      <View style={[styles.moduleToggle, habitsEnabled && styles.moduleToggleOn]}>
-                        <View style={[styles.moduleToggleKnob, habitsEnabled && styles.moduleToggleKnobOn]} />
                       </View>
                     </Pressable>
                   </View>
