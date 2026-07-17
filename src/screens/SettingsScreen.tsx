@@ -211,10 +211,7 @@ export function SettingsScreen({
   const settingsGroups: Array<{ header: string; rows: Array<{ key: SettingsSectionKey; title: string }> }> = [
     {
       header: 'Profile',
-      rows: [
-        { key: 'personal', title: 'Personal & Nutrition' },
-        ...(showCycleTracking ? [{ key: 'cycle' as const, title: 'Cycle' }] : []),
-      ],
+      rows: [{ key: 'personal', title: 'Personal & Nutrition' }],
     },
     {
       header: 'Preferences',
@@ -826,9 +823,14 @@ export function SettingsScreen({
                     {renderPersonalEditor()}
                     <View style={styles.editorSectionDivider} />
                     {renderNutritionEditor()}
+                    {showCycleTracking ? (
+                      <>
+                        <View style={styles.editorSectionDivider} />
+                        {renderCycleEditor()}
+                      </>
+                    ) : null}
                   </>
                 ) : null}
-                {activeSection === 'cycle' ? renderCycleEditor() : null}
                 {activeSection === 'notifications' ? renderNotificationsEditor() : null}
                 {activeSection === 'habits' ? renderHabitsEditor() : null}
                 {activeSection === 'family' ? renderFamilyEditor() : null}
