@@ -98,7 +98,7 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
@@ -209,6 +209,43 @@ const LOCAL_QUIET_START_KEY = 'smartmom.quietStart.v1';
 const LOCAL_QUIET_END_KEY = 'smartmom.quietEnd.v1';
 const LOCAL_EVENT_REMINDERS_KEY = 'smartmom.eventReminders.v1';
 const LOCAL_EVENT_LEAD_KEY = 'smartmom.eventLead.v1';
+const LOCAL_STAFF_GRANTS_KEY = 'smartmom.staffGrants.v1';
+
+// The functions each staff role gets by default (a preset of feature toggles).
+const STAFF_ROLE_PRESETS: Record<StaffRolePreset, { label: string; features: StaffFeature[] }> = {
+  assistant: { label: 'Assistant', features: ['tasks', 'shopping', 'menu'] },
+  cook: { label: 'Cook', features: ['menu', 'shopping', 'recipes'] },
+  driver: { label: 'Driver', features: ['schedule'] },
+  custom: { label: 'Custom', features: [] },
+};
+const STAFF_FEATURE_ORDER: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'schedule', 'fixit'];
+const STAFF_FEATURE_LABELS: Record<StaffFeature, string> = {
+  tasks: 'Tasks / duties',
+  shopping: 'Shopping list',
+  menu: 'Weekly menu',
+  recipes: 'Recipes',
+  schedule: 'Schedule',
+  fixit: 'Fix it',
+};
+
+function loadLocalStaffGrants(): Record<string, StaffGrant> {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return {};
+  try {
+    const raw = globalThis.localStorage.getItem(LOCAL_STAFF_GRANTS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, StaffGrant>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistLocalStaffGrants(grants: Record<string, StaffGrant>) {
+  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
+  try {
+    globalThis.localStorage.setItem(LOCAL_STAFF_GRANTS_KEY, JSON.stringify(grants));
+  } catch {
+    // Ignore.
+  }
+}
 const DAY_TIME_OPTIONS = ['7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 const LOCAL_HOME_LAYOUT_KEY = 'smartmom.homeLayout.v1';
 type HomeLayout = 'focus' | 'zen' | 'bento';
@@ -849,6 +886,9 @@ function AppShell() {
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([]);
   const [staffDraftName, setStaffDraftName] = useState('');
   const [staffDraftDob, setStaffDraftDob] = useState('');
+  const [staffDraftRole, setStaffDraftRole] = useState<StaffRolePreset>('assistant');
+  const [staffDraftFeatures, setStaffDraftFeatures] = useState<StaffFeature[]>(STAFF_ROLE_PRESETS.assistant.features);
+  const [staffGrants, setStaffGrants] = useState<Record<string, StaffGrant>>(() => loadLocalStaffGrants());
   const [staffDraftTasks, setStaffDraftTasks] = useState<StaffDraftTask[]>([createDefaultStaffDraftTask()]);
   const [completedTaskNotifications, setCompletedTaskNotifications] = useState<CompletedTaskNotification[]>([]);
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
@@ -1175,6 +1215,34 @@ function AppShell() {
     if (role === 'staff' && activeStaffProfileId) return staffProfiles.find((profile) => profile.id === activeStaffProfileId)?.name || 'Staff profile';
     return parentLabel;
   }, [activeChildRoleId, activeStaffProfileId, children, parentLabel, role, staffProfiles]);
+
+  // Staff shell: when the app is showing a staff member's limited view, tabs and screens
+  // are gated by the functions the main user granted them.
+  const isStaffView = role === 'staff' && !!activeStaffProfileId;
+  const staffFeatures = useMemo<StaffFeature[] | null>(
+    () => (isStaffView && activeStaffProfileId ? staffGrants[activeStaffProfileId]?.features ?? [] : null),
+    [isStaffView, activeStaffProfileId, staffGrants],
+  );
+  const staffCan = (feature: StaffFeature) => staffFeatures === null || staffFeatures.includes(feature);
+  const staffScreenAllowed = (targetScreen: string) => {
+    if (staffFeatures === null) return true;
+    if (targetScreen === 'family') return false;
+    if (targetScreen === 'food') return staffCan('shopping') || staffCan('menu') || staffCan('recipes');
+    if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds' || targetScreen === 'wellness') return staffCan('fixit');
+    return staffCan('schedule') || staffCan('tasks');
+  };
+  useEffect(() => {
+    if (!isStaffView || staffScreenAllowed(screen)) return;
+    const first = staffCan('schedule') || staffCan('tasks')
+      ? 'calendar'
+      : staffCan('shopping') || staffCan('menu') || staffCan('recipes')
+        ? 'food'
+        : staffCan('fixit')
+          ? 'household'
+          : 'calendar';
+    setScreen(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaffView, screen, staffFeatures]);
   const overdueStaffTasks = useMemo(
     () =>
       tasks.filter((task) => task.assigneeRole === 'staff' && task.status !== 'done' && isTaskOverdue(task.deadline)).sort((a, b) => {
@@ -2417,6 +2485,7 @@ function AppShell() {
   useEffect(() => { writeLocal(LOCAL_QUIET_END_KEY, quietHoursEnd); }, [quietHoursEnd]);
   useEffect(() => { writeLocal(LOCAL_EVENT_REMINDERS_KEY, eventRemindersEnabled ? 'true' : 'false'); }, [eventRemindersEnabled]);
   useEffect(() => { writeLocal(LOCAL_EVENT_LEAD_KEY, eventReminderLead); }, [eventReminderLead]);
+  useEffect(() => { persistLocalStaffGrants(staffGrants); }, [staffGrants]);
 
   useEffect(() => {
     persistLocalHomeLayout(homeLayout);
@@ -3678,6 +3747,9 @@ function AppShell() {
     setStaffDraftName(profile.name);
     setStaffDraftDob(profile.dateOfBirth || '');
     setStaffDraftTasks(profile.tasks.length > 0 ? profile.tasks.map((task) => ({ ...task })) : [createDefaultStaffDraftTask()]);
+    const grant = staffGrants[staffId];
+    setStaffDraftRole(grant?.role || 'assistant');
+    setStaffDraftFeatures(grant?.features || STAFF_ROLE_PRESETS.assistant.features);
     setStaffSetupOpen(true);
     setChildSetupOpen(false);
     setTasksError(null);
@@ -3721,6 +3793,7 @@ function AppShell() {
       return;
     }
     const optimisticStaffId = editingStaffId || `staff-${Date.now()}`;
+    const staffGrant: StaffGrant = { role: staffDraftRole, features: staffDraftFeatures };
     const staffProfile: StaffProfile = {
       id: optimisticStaffId,
       name: staffName,
@@ -3761,6 +3834,7 @@ function AppShell() {
           })),
         );
         await Promise.all([refreshLiveStaffProfiles(), refreshLiveTasks(), refreshLiveCalendar()]);
+        setStaffGrants((prev) => ({ ...prev, [staffId]: staffGrant }));
         setStaffEnabled(true);
         setRole('staff');
         setActiveStaffProfileId(staffId);
@@ -3782,6 +3856,7 @@ function AppShell() {
     setStaffProfiles((prev) =>
       editingStaffId ? prev.map((item) => (item.id === editingStaffId ? staffProfile : item)) : [staffProfile, ...prev],
     );
+    setStaffGrants((prev) => ({ ...prev, [optimisticStaffId]: staffGrant }));
     setStaffEnabled(true);
     setRole('staff');
     setActiveStaffProfileId(optimisticStaffId);
@@ -4808,6 +4883,14 @@ function AppShell() {
           </Pressable>
         </View>
       </View>
+      {isStaffView ? (
+        <Pressable style={styles.staffPreviewBanner} onPress={() => selectCalendarProfile('mother')}>
+          <Text style={styles.staffPreviewText}>
+            Previewing {staffProfiles.find((p) => p.id === activeStaffProfileId)?.name || 'staff'}’s view
+          </Text>
+          <Text style={styles.staffPreviewExit}>Exit ✕</Text>
+        </Pressable>
+      ) : null}
       {sectionMenuOpen ? (
         <>
           <Pressable style={styles.sectionMenuScrim} onPress={() => setSectionMenuOpen(false)} />
@@ -5439,6 +5522,44 @@ function AppShell() {
                 onChangeText={(text) => setStaffDraftDob(formatBirthDateInput(text))}
               />
 
+              <Text style={styles.createHint}>Role</Text>
+              <View style={styles.dropdownChipWrap}>
+                {(['assistant', 'cook', 'driver', 'custom'] as StaffRolePreset[]).map((r) => (
+                  <Pressable
+                    key={`staff-role-${r}`}
+                    style={[styles.dropdownChip, staffDraftRole === r && styles.dropdownChipActive]}
+                    onPress={() => {
+                      setStaffDraftRole(r);
+                      if (r !== 'custom') setStaffDraftFeatures(STAFF_ROLE_PRESETS[r].features);
+                    }}
+                  >
+                    <Text style={[styles.dropdownChipText, staffDraftRole === r && styles.dropdownChipTextActive]}>{STAFF_ROLE_PRESETS[r].label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.createHint}>What this person can access</Text>
+              <View style={styles.dropdownChipWrap}>
+                {STAFF_FEATURE_ORDER.map((f) => {
+                  const on = staffDraftFeatures.includes(f);
+                  return (
+                    <Pressable
+                      key={`staff-feature-${f}`}
+                      style={[styles.dropdownChip, on && styles.dropdownChipActive]}
+                      onPress={() => {
+                        setStaffDraftFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+                        setStaffDraftRole('custom');
+                      }}
+                    >
+                      <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>
+                        {on ? '✓ ' : ''}
+                        {STAFF_FEATURE_LABELS[f]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
               <View style={styles.eventsHeader}>
                 <Pressable style={styles.addIconBtn} onPress={addStaffDraftTask}>
                   <Text style={styles.addIconText}>+</Text>
@@ -5752,6 +5873,8 @@ function AppShell() {
               </Pressable>
             </View>
 
+            {staffCan('shopping') ? (
+            <>
             {activeShoppingLists.map((list) => {
               const remaining = list.items.filter((i) => !i.purchased).length;
               return (
@@ -5806,7 +5929,10 @@ function AppShell() {
                 ))}
               </>
             ) : null}
+            </>
+            ) : null}
 
+            {staffCan('recipes') ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Recipes"
@@ -5817,7 +5943,9 @@ function AppShell() {
               <Text style={styles.foodShopText}>Recipes</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
+            ) : null}
 
+            {staffCan('recipes') ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="What can I cook now"
@@ -5828,7 +5956,9 @@ function AppShell() {
               <Text style={styles.foodCookNowText}>What can I cook now?</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
+            ) : null}
 
+            {staffCan('menu') ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Menu for the week"
@@ -5839,11 +5969,14 @@ function AppShell() {
               <Text style={styles.foodShopText}>Menu for the week</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
+            ) : null}
 
+            {!isStaffView ? (
             <Pressable style={styles.foodDiaryLink} onPress={() => setFoodTab('diary')}>
               <Icon name="plus" color={colors.subtext} size={15} />
               <Text style={styles.foodDiaryLinkText}>Log what I ate → Diary</Text>
             </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -6940,10 +7073,18 @@ function AppShell() {
       </ScrollView>
 
       <View style={styles.tabBar}>
-        <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
-        <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
-        <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
-        <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds' || screen === 'wellness'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
+        {staffCan('schedule') || staffCan('tasks') ? (
+          <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
+        ) : null}
+        {staffCan('shopping') || staffCan('menu') || staffCan('recipes') ? (
+          <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
+        ) : null}
+        {!isStaffView ? (
+          <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
+        ) : null}
+        {staffCan('fixit') ? (
+          <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds' || screen === 'wellness'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
+        ) : null}
         <TabButton icon="settings" label="Settings" active={settingsPanelOpen} onPress={() => setSettingsPanelOpen(true)} styles={styles} colors={colors} />
       </View>
 
@@ -9060,6 +9201,33 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     left: isMobile ? 10 : 16,
     alignItems: 'flex-end',
     zIndex: 60,
+  },
+  staffPreviewBanner: {
+    width: '100%',
+    maxWidth: 1240,
+    alignSelf: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59,91,219,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,91,219,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  staffPreviewText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  staffPreviewExit: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
   },
   topBar: {
     width: '100%',

@@ -1,4 +1,8 @@
 export type Role = 'mother' | 'child' | 'staff' | 'admin';
+// Which app functions a staff member (nanny / cook / driver) may access.
+export type StaffFeature = 'tasks' | 'shopping' | 'menu' | 'recipes' | 'schedule' | 'fixit';
+export type StaffRolePreset = 'assistant' | 'cook' | 'driver' | 'custom';
+export type StaffGrant = { role: StaffRolePreset; features: StaffFeature[] };
 
 export type TaskPriority = 'urgent' | 'non_urgent';
 export type TaskStatus = 'new' | 'in_progress' | 'done';
