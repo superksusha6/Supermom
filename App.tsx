@@ -1219,13 +1219,17 @@ function AppShell() {
     return parentLabel;
   }, [activeChildRoleId, activeStaffProfileId, children, parentLabel, role, staffProfiles]);
 
-  // Staff shell: when the app is showing a staff member's limited view, tabs and screens
-  // are gated by the functions the main user granted them.
-  const isStaffView = role === 'staff' && !!activeStaffProfileId;
-  const staffFeatures = useMemo<StaffFeature[] | null>(
-    () => (isStaffView && activeStaffProfileId ? staffGrants[activeStaffProfileId]?.features ?? [] : null),
-    [isStaffView, activeStaffProfileId, staffGrants],
-  );
+  // Staff shell: shown either for a real staff login (session.role === 'staff', features
+  // from the server grant) or for the mom previewing a staff member (local grant). Tabs and
+  // screens are gated by the granted functions.
+  const isRealStaffSession = session?.role === 'staff';
+  const isStaffPreview = !isRealStaffSession && role === 'staff' && !!activeStaffProfileId;
+  const isStaffView = isRealStaffSession || isStaffPreview;
+  const staffFeatures = useMemo<StaffFeature[] | null>(() => {
+    if (isRealStaffSession) return session?.allowedFeatures ?? [];
+    if (isStaffPreview && activeStaffProfileId) return staffGrants[activeStaffProfileId]?.features ?? [];
+    return null;
+  }, [isRealStaffSession, session, isStaffPreview, activeStaffProfileId, staffGrants]);
   const staffCan = (feature: StaffFeature) => staffFeatures === null || staffFeatures.includes(feature);
   const staffScreenAllowed = (targetScreen: string) => {
     if (staffFeatures === null) return true;
@@ -4901,7 +4905,7 @@ function AppShell() {
           </Pressable>
         </View>
       </View>
-      {isStaffView ? (
+      {isStaffPreview ? (
         <Pressable style={styles.staffPreviewBanner} onPress={() => selectCalendarProfile('mother')}>
           <Text style={styles.staffPreviewText}>
             Previewing {staffProfiles.find((p) => p.id === activeStaffProfileId)?.name || 'staff'}’s view

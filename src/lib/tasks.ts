@@ -21,6 +21,7 @@ import {
   PhysiqueGoal,
   PersonalProfile,
   PurchaseRequest,
+  StaffFeature,
   Recipe,
   RecipeClassifier,
   RecipeMealType,
@@ -43,6 +44,7 @@ export type AppSession = {
   userId: string;
   familyId: string;
   role: Role;
+  allowedFeatures: StaffFeature[];
 };
 
 type TaskInsert = {
@@ -453,12 +455,31 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   const user = session?.user;
   if (!user) return null;
 
+  // Prefer an active staff membership (an invited nanny/cook/driver) over a self-owned
+  // family, so a staff user lands in the family that invited them with their granted features.
+  const { data: memberships, error: membershipsError } = await client
+    .from('family_members')
+    .select('family_id, role, features, status')
+    .eq('user_id', user.id);
+  if (membershipsError) throw membershipsError;
+
+  const staffMembership = (memberships || []).find((m) => m.role === 'staff' && m.status === 'active');
+  if (staffMembership) {
+    return {
+      userId: user.id,
+      familyId: staffMembership.family_id as string,
+      role: 'staff',
+      allowedFeatures: normalizeStaffFeatures(staffMembership.features),
+    };
+  }
+
+  // Otherwise ensure the user's own family (mother bootstrap) and read their row.
   const { data: familyId, error: bootstrapError } = await client.rpc('ensure_user_family');
   if (bootstrapError) throw bootstrapError;
 
   const { data: member, error: memberError } = await client
     .from('family_members')
-    .select('role')
+    .select('role, features')
     .eq('family_id', familyId)
     .eq('user_id', user.id)
     .single();
@@ -469,7 +490,14 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
     userId: user.id,
     familyId,
     role: member.role as Role,
+    allowedFeatures: normalizeStaffFeatures(member.features),
   };
+}
+
+const STAFF_FEATURE_VALUES: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'schedule', 'fixit'];
+function normalizeStaffFeatures(value: unknown): StaffFeature[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is StaffFeature => typeof v === 'string' && STAFF_FEATURE_VALUES.includes(v as StaffFeature));
 }
 
 export async function listTasks(familyId: string): Promise<TaskItem[]> {
