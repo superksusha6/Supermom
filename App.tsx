@@ -1496,6 +1496,20 @@ function AppShell() {
     }
   }, [shoppingLists, session]);
 
+  // Empty active lists carry no value and never archive — drop them automatically.
+  // The one currently open in the shopping screen is spared so a just-created list
+  // you're filling doesn't vanish under you.
+  useEffect(() => {
+    const viewingListId = screen === 'food' && foodTab === 'shopping' ? selectedShoppingListId : null;
+    const strays = activeShoppingLists.filter((list) => list.items.length === 0 && list.id !== viewingListId);
+    if (strays.length === 0) return;
+    const strayIds = new Set(strays.map((list) => list.id));
+    setShoppingLists((prev) => prev.filter((list) => !strayIds.has(list.id)));
+    if (session && isSupabaseConfigured) {
+      strays.forEach((list) => deleteShoppingList(session, list.id).catch(() => null));
+    }
+  }, [activeShoppingLists, selectedShoppingListId, screen, foodTab, session]);
+
   function handleDeleteShoppingList(listId: string) {
     const doDelete = () => {
       setShoppingLists((prev) => prev.filter((list) => list.id !== listId));
