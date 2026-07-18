@@ -5521,7 +5521,8 @@ function AppShell() {
 
       {role === 'mother' ? (
         <>
-          <Modal visible={childSetupOpen} transparent animationType="fade" onRequestClose={() => setChildSetupOpen(false)}>
+          {childSetupOpen ? (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setChildSetupOpen(false)}>
             <View style={styles.modalBackdrop}>
               <View style={styles.childEditorModalCard}>
                 <View style={styles.childEditorHeader}>
@@ -5653,8 +5654,10 @@ function AppShell() {
               </View>
             </View>
           </Modal>
+          ) : null}
 
-          <Modal visible={staffSetupOpen} transparent animationType="fade" onRequestClose={() => setStaffSetupOpen(false)}>
+          {staffSetupOpen ? (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setStaffSetupOpen(false)}>
             <View style={styles.modalBackdrop}>
               <View style={styles.childEditorModalCard}>
                 <View style={styles.childEditorHeader}>
@@ -5806,6 +5809,7 @@ function AppShell() {
               </View>
             </View>
           </Modal>
+          ) : null}
         </>
       ) : null}
 
