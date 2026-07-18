@@ -1496,7 +1496,37 @@ function AppShell() {
     }
   }, [shoppingLists, session]);
 
+  function handleDeleteShoppingList(listId: string) {
+    const doDelete = () => {
+      setShoppingLists((prev) => prev.filter((list) => list.id !== listId));
+      if (selectedShoppingListId === listId) setSelectedShoppingListId(null);
+      if (session && isSupabaseConfigured) {
+        deleteShoppingList(session, listId)
+          .then(() => refreshLiveShopping())
+          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete list failed.'));
+      }
+    };
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm('Delete this shopping list?')) doDelete();
+      return;
+    }
+    Alert.alert('Delete list?', 'This removes the shopping list.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ]);
+  }
+
   function handleCreateNamedShoppingList(explicitName?: string) {
+    // Reuse an existing empty list instead of stacking up duplicates.
+    if (!(explicitName ?? '').trim()) {
+      const emptyExisting = activeShoppingLists.find((list) => list.items.length === 0);
+      if (emptyExisting) {
+        setSelectedShoppingListId(emptyExisting.id);
+        setScreen('food');
+        setFoodTab('shopping');
+        return;
+      }
+    }
     const title = (explicitName ?? '').trim() || `Shopping · ${formatShortDate(todayDateKey)}`;
     markShoppingBootstrapComplete();
     if (session && isSupabaseConfigured) {
@@ -6440,11 +6470,13 @@ function AppShell() {
             <>
             {activeShoppingLists.map((list) => {
               const remaining = list.items.filter((i) => !i.purchased).length;
+              const isEmpty = list.items.length === 0;
+              const stateLabel = isEmpty ? 'empty · tap to add' : remaining ? `${remaining} to buy` : 'all done';
               return (
                 <Pressable
                   key={list.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`${list.title}, ${remaining} to buy`}
+                  accessibilityLabel={`${list.title}, ${stateLabel}`}
                   style={styles.foodShopBtn}
                   onPress={() => { setSelectedShoppingListId(list.id); setFoodTab('shopping'); }}
                 >
@@ -6452,10 +6484,22 @@ function AppShell() {
                   <View style={styles.foodListCopy}>
                     <Text style={styles.foodListTitle} numberOfLines={1}>{list.title}</Text>
                     <Text style={styles.foodListSub}>
-                      {formatShortDate(list.createdAt)} · {remaining ? `${remaining} to buy` : 'all done'}
+                      {[formatShortDate(list.createdAt), stateLabel].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
-                  <Icon name="chevron" color={colors.subtext} size={18} />
+                  {isEmpty ? (
+                    <Pressable
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete empty list ${list.title}`}
+                      style={styles.foodListDeleteBtn}
+                      onPress={() => handleDeleteShoppingList(list.id)}
+                    >
+                      <Text style={styles.foodListDeleteText}>✕</Text>
+                    </Pressable>
+                  ) : (
+                    <Icon name="chevron" color={colors.subtext} size={18} />
+                  )}
                 </Pressable>
               );
             })}
@@ -11449,6 +11493,19 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
+  },
+  foodListDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.glassSoft,
+  },
+  foodListDeleteText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '800',
   },
   foodHubSectionLabel: {
     color: colors.subtext,
