@@ -5256,10 +5256,9 @@ function AppShell() {
         </>
       ) : null}
 
-      <Modal visible={daySheetDate !== null} transparent animationType="slide" onRequestClose={() => setDaySheetDate(null)}>
+      <Modal visible={daySheetDate !== null} transparent animationType="fade" onRequestClose={() => setDaySheetDate(null)}>
         <Pressable style={styles.daySheetBackdrop} onPress={() => setDaySheetDate(null)}>
           <Pressable style={styles.daySheetCard} onPress={(e) => e.stopPropagation?.()}>
-            <View style={styles.daySheetHandle} />
             <Text style={styles.daySheetTitle}>{daySheetDate ? formatShortDate(daySheetDate) : ''}</Text>
 
             {daySheetEvents.length > 0 ? (
@@ -10737,8 +10736,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   daySheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.4)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   newListBackdrop: {
     flex: 1,
@@ -10785,15 +10785,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   daySheetCard: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 412,
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 24,
     paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 26,
+    paddingTop: 14,
+    paddingBottom: 18,
     gap: 10,
-    maxHeight: '82%',
+    maxHeight: '86%',
   },
   daySheetHandle: {
     alignSelf: 'center',
