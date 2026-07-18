@@ -12177,7 +12177,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   childEditorModalCard: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 412,
     alignSelf: 'center',
     backgroundColor: 'rgba(248,250,252,0.97)',
     borderRadius: 20,
