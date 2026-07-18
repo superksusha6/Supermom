@@ -1,6 +1,10 @@
 import { createContext, PropsWithChildren, useContext, useMemo, useState } from 'react';
+import { useColorScheme } from 'react-native';
 
-export type ThemeName = 'blue' | 'grey' | 'blush' | 'neonBloom' | 'mocha';
+export type ThemeName = 'blue' | 'grey' | 'blush' | 'neonBloom' | 'mocha' | 'dark';
+
+// User-facing appearance choice. 'auto' follows the phone's Light/Dark setting.
+export type ThemeMode = 'light' | 'dark' | 'auto';
 
 export type ThemeColors = {
   bg: string;
@@ -16,6 +20,9 @@ export type ThemeColors = {
   nonUrgent: string;
   done: string;
   shadow: string;
+  // Opaque surfaces (modals, cards, inputs) — tokenized so dark mode is clean.
+  surface: string;
+  surfaceAlt: string;
 };
 
 export const themePalettes: Record<ThemeName, ThemeColors> = {
@@ -33,6 +40,8 @@ export const themePalettes: Record<ThemeName, ThemeColors> = {
     nonUrgent: '#f59e0b',
     done: '#16a34a',
     shadow: 'rgba(73, 98, 136, 0.22)',
+    surface: '#ffffff',
+    surfaceAlt: '#eef2f8',
   },
   grey: {
     bg: '#c9cdd2',
@@ -48,6 +57,8 @@ export const themePalettes: Record<ThemeName, ThemeColors> = {
     nonUrgent: '#6b7076',
     done: '#2f7d4f',
     shadow: 'rgba(56, 60, 66, 0.12)',
+    surface: '#eef0f2',
+    surfaceAlt: '#e2e5e9',
   },
   blush: {
     bg: '#d6ebf2',
@@ -63,6 +74,8 @@ export const themePalettes: Record<ThemeName, ThemeColors> = {
     nonUrgent: '#83cee2',
     done: '#7bc6da',
     shadow: 'rgba(131, 206, 226, 0.16)',
+    surface: '#ffffff',
+    surfaceAlt: '#eaf3f7',
   },
   neonBloom: {
     bg: '#d7df72',
@@ -78,6 +91,8 @@ export const themePalettes: Record<ThemeName, ThemeColors> = {
     nonUrgent: '#8c9eff',
     done: '#8c9eff',
     shadow: 'rgba(132, 158, 255, 0.12)',
+    surface: '#ffffff',
+    surfaceAlt: '#eef1f6',
   },
   mocha: {
     bg: '#362017',
@@ -93,24 +108,76 @@ export const themePalettes: Record<ThemeName, ThemeColors> = {
     nonUrgent: '#8f624c',
     done: '#7fd6a3',
     shadow: 'rgba(18, 8, 5, 0.22)',
+    surface: '#2a1a13',
+    surfaceAlt: '#3a251b',
+  },
+  // Neutral iOS-style dark. Kept the brand blue accent (brightened for contrast).
+  dark: {
+    bg: '#0d1117',
+    card: 'rgba(255,255,255,0.05)',
+    glassStrong: 'rgba(255,255,255,0.085)',
+    glassSoft: 'rgba(255,255,255,0.04)',
+    text: '#eef2f8',
+    subtext: '#9aa6b6',
+    border: 'rgba(255,255,255,0.12)',
+    primary: '#4f8cff',
+    selection: 'rgba(79,140,255,0.20)',
+    urgent: '#ff5c62',
+    nonUrgent: '#f5a623',
+    done: '#34c759',
+    shadow: 'rgba(0, 0, 0, 0.55)',
+    surface: '#161b22',
+    surfaceAlt: '#0f141b',
   },
 };
 
+const LIGHT_THEME: ThemeName = 'blue';
+const DARK_THEME: ThemeName = 'dark';
+
+export function resolveThemeName(mode: ThemeMode, system: 'light' | 'dark' | null | undefined): ThemeName {
+  if (mode === 'auto') return system === 'dark' ? DARK_THEME : LIGHT_THEME;
+  return mode === 'dark' ? DARK_THEME : LIGHT_THEME;
+}
+
 const ThemeContext = createContext<{
+  mode: ThemeMode;
   themeName: ThemeName;
   colors: ThemeColors;
-  setThemeName: (name: ThemeName) => void;
+  setMode: (mode: ThemeMode) => void;
 } | null>(null);
 
+const THEME_MODE_KEY = 'smartmom.themeMode.v1';
+
+function readStoredMode(): ThemeMode {
+  try {
+    const raw = (globalThis as unknown as { localStorage?: Storage }).localStorage?.getItem(THEME_MODE_KEY);
+    if (raw === 'light' || raw === 'dark' || raw === 'auto') return raw;
+  } catch {
+    // ignore
+  }
+  return 'auto';
+}
+
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const [themeName, setThemeName] = useState<ThemeName>('blue');
+  const systemScheme = useColorScheme();
+  const [mode, setModeState] = useState<ThemeMode>(readStoredMode);
+  const setMode = (next: ThemeMode) => {
+    setModeState(next);
+    try {
+      (globalThis as unknown as { localStorage?: Storage }).localStorage?.setItem(THEME_MODE_KEY, next);
+    } catch {
+      // best-effort persistence
+    }
+  };
+  const themeName = resolveThemeName(mode, systemScheme);
   const value = useMemo(
     () => ({
+      mode,
       themeName,
       colors: themePalettes[themeName],
-      setThemeName,
+      setMode,
     }),
-    [themeName],
+    [mode, themeName],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

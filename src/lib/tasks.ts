@@ -113,7 +113,8 @@ export type StaffReminderNotificationRecord = {
 
 export type UserPreferencesRecord = {
   parentLabel: 'Mom' | 'Dad';
-  themeName?: ThemeName;
+  // Stores the appearance mode ('light' | 'dark' | 'auto'); legacy rows may hold an old color name.
+  themeName?: string;
   dailyCardDate?: string;
   dailyCardId?: string;
   nutritionGoal?: NutritionGoal;
@@ -1795,7 +1796,7 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
 
   const record = data as {
     parent_label: 'Mom' | 'Dad';
-    theme_name?: ThemeName | null;
+    theme_name?: string | null;
     daily_card_date?: string | null;
     daily_card_id?: string | null;
     nutrition_goal?: NutritionGoal | null;

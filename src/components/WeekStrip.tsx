@@ -157,5 +157,5 @@ const createStyles = (colors: ThemeColors) =>
     dayTextToday: { color: '#ffffff', fontWeight: '800' },
     dotsRow: { flexDirection: 'row', gap: 2, height: 6, alignItems: 'center' },
     dot: { width: 5, height: 5, borderRadius: 3 },
-    dotToday: { backgroundColor: '#ffffff' },
+    dotToday: { backgroundColor: colors.surface },
   });

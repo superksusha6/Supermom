@@ -101,7 +101,7 @@ import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
-import { ThemeColors, ThemeName, ThemeProvider, themePalettes, useTheme } from '@/theme/theme';
+import { ThemeColors, ThemeMode, ThemeName, ThemeProvider, useTheme } from '@/theme/theme';
 import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
@@ -758,7 +758,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { colors, themeName, setThemeName } = useTheme();
+  const { colors, themeName, mode: themeMode, setMode: setThemeMode } = useTheme();
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
   // Phone-only app: cap the whole UI to a phone width and center it, so on a
@@ -2219,8 +2219,9 @@ function AppShell() {
       const todayKey = getTodayKey();
       const localDailyCardState = loadLocalDailyCardState(todayKey);
       if (preferences?.parentLabel) setParentLabel(preferences.parentLabel);
-      if (!manualThemeSelectionRef.current && preferences?.themeName && preferences.themeName in themePalettes) {
-        setThemeName(preferences.themeName);
+      if (!manualThemeSelectionRef.current && preferences?.themeName) {
+        const stored = preferences.themeName;
+        setThemeMode(stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'light');
       }
       if (preferences?.nutritionGoal) setNutritionGoal(preferences.nutritionGoal);
       if (preferences?.activityLevel) setActivityLevel(preferences.activityLevel);
@@ -2613,7 +2614,7 @@ function AppShell() {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current) return;
     upsertUserPreferences(session, {
       parentLabel,
-      themeName,
+      themeName: themeMode,
       dailyCardDate: selectedDailyCardId ? dailyCardDateKey : undefined,
       dailyCardId: selectedDailyCardId || undefined,
       nutritionGoal,
@@ -2630,7 +2631,7 @@ function AppShell() {
   }, [
     session,
     parentLabel,
-    themeName,
+    themeMode,
     selectedDailyCardId,
     dailyCardDateKey,
     nutritionGoal,
@@ -2791,6 +2792,7 @@ function AppShell() {
     choresLoadedRef.current = false;
     fridgeLoadedRef.current = false;
     manualThemeSelectionRef.current = false;
+    setThemeMode('auto');
     nutritionSaveInFlightRef.current = false;
     nutritionNeedsResaveRef.current = false;
     customFoodsSaveInFlightRef.current = false;
@@ -2801,7 +2803,6 @@ function AppShell() {
     setDailyCardsModalOpen(false);
     setDailyCardsReady(false);
     dailyCardRevealAnim.setValue(0);
-    setThemeName('blue');
   }
 
   async function handleRecipeCreate(recipe: Recipe): Promise<Recipe> {
@@ -5433,28 +5434,31 @@ function AppShell() {
                 </View>
 
                 <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Theme</Text>
+                  <Text style={styles.settingsUtilityTitle}>Appearance</Text>
                   <View style={styles.settingsUtilityThemeCard}>
-                    <View style={styles.accountThemeSwatches}>
-                      {(['grey', 'blue', 'blush', 'neonBloom', 'mocha'] as ThemeName[]).map((name) => (
+                    <View style={styles.appearanceSeg}>
+                      {([
+                        { key: 'light', label: 'Light' },
+                        { key: 'dark', label: 'Dark' },
+                        { key: 'auto', label: 'Auto' },
+                      ] as { key: ThemeMode; label: string }[]).map((option) => (
                         <Pressable
-                          key={name}
-                          hitSlop={8}
-                          style={[
-                            styles.themeSwatch,
-                            styles.accountThemeSwatch,
-                            { backgroundColor: themePalettes[name].primary },
-                            themeName === name && styles.themeSwatchActive,
-                          ]}
+                          key={option.key}
+                          style={[styles.appearanceSegBtn, themeMode === option.key && styles.appearanceSegBtnActive]}
                           onPress={() => {
                             manualThemeSelectionRef.current = true;
-                            setThemeName(name);
+                            setThemeMode(option.key);
                           }}
                         >
-                          {themeName === name ? <View style={styles.accountThemeSwatchInner} /> : null}
+                          <Text style={[styles.appearanceSegText, themeMode === option.key && styles.appearanceSegTextActive]}>
+                            {option.label}
+                          </Text>
                         </Pressable>
                       ))}
                     </View>
+                    <Text style={styles.appearanceHint}>
+                      {themeMode === 'auto' ? 'Matches your phone’s Light/Dark setting.' : `Always ${themeMode}.`}
+                    </Text>
                   </View>
                 </View>
 
@@ -9773,16 +9777,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   const neonBloomActiveBorder = themeName === 'neonBloom' ? '#ef55a5' : colors.primary;
   const neonBloomActiveText = themeName === 'neonBloom' ? '#ffffff' : colors.primary;
   const orbAColor =
-    themeName === 'mocha' ? 'rgba(255, 244, 236, 0.08)' : 'rgba(255,255,255,0.45)';
+    themeName === 'dark' ? 'rgba(255,255,255,0.04)' : themeName === 'mocha' ? 'rgba(255, 244, 236, 0.08)' : 'rgba(255,255,255,0.45)';
   const orbBColor =
-    themeName === 'mocha' ? 'rgba(111, 77, 58, 0.12)' : 'rgba(191,219,254,0.55)';
+    themeName === 'dark' ? 'rgba(79,140,255,0.10)' : themeName === 'mocha' ? 'rgba(111, 77, 58, 0.12)' : 'rgba(191,219,254,0.55)';
   const orbCColor =
-    themeName === 'mocha' ? 'rgba(34, 23, 18, 0.08)' : 'rgba(255,255,255,0.25)';
+    themeName === 'dark' ? 'rgba(255,255,255,0.025)' : themeName === 'mocha' ? 'rgba(34, 23, 18, 0.08)' : 'rgba(255,255,255,0.25)';
 
   return StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#e7ecf6',
+    backgroundColor: colors.bg,
     alignItems: 'center',
   },
   appFrame: {
@@ -9939,7 +9943,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: isMobile ? 17 : 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.98)',
-    backgroundColor: 'rgba(248,250,252,0.995)',
+    backgroundColor: colors.surface,
     gap: 10,
     shadowColor: colors.shadow,
     shadowOpacity: 1,
@@ -9969,7 +9973,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(214,223,235,0.95)',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -10029,9 +10033,46 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.glassStrong,
-    paddingHorizontal: 16,
-    height: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     justifyContent: 'center',
+    gap: 10,
+  },
+  appearanceSeg: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  appearanceSegBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appearanceSegBtnActive: {
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  appearanceSegText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  appearanceSegTextActive: {
+    color: colors.text,
+    fontWeight: '800',
+  },
+  appearanceHint: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 2,
   },
   moduleToggleRow: {
     flexDirection: 'row',
@@ -10074,7 +10115,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     width: 22,
     height: 22,
     borderRadius: 999,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     alignSelf: 'flex-start',
   },
   moduleToggleKnobOn: {
@@ -10097,7 +10138,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.surface,
   },
   themeSwatch: {
     width: 14,
@@ -10157,7 +10198,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
     color: colors.text,
   },
   passwordInputWrap: {
@@ -10168,7 +10209,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     paddingLeft: 12,
     paddingRight: 8,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
   },
   passwordInputField: {
     flex: 1,
@@ -10216,7 +10257,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -10247,7 +10288,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     elevation: 6,
   },
   authSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.96)',
   },
@@ -10340,7 +10381,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 16,
     padding: 10,
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
   },
   staffTaskRow: {
     flexDirection: 'row',
@@ -10363,7 +10404,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.99)',
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   suggestionItem: {
@@ -10390,7 +10431,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
   },
   dropdownValue: {
     color: colors.text,
@@ -10521,7 +10562,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.99)',
+    backgroundColor: colors.surface,
     padding: 8,
   },
   dropdownChipWrap: {
@@ -10535,7 +10576,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   dropdownChipActive: {
     borderColor: colors.primary,
@@ -10727,7 +10768,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     right: 0,
     top: 44,
     width: 160,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
@@ -10785,7 +10826,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
   },
   roleChipActive: {
     borderColor: neonBloomActiveBorder,
@@ -10866,7 +10907,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   newListCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -10902,7 +10943,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   daySheetCard: {
     width: '100%',
     maxWidth: 412,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 14,
@@ -11033,7 +11074,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   sectionMenuCard: {
     minWidth: 180,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -11198,7 +11239,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: isMobile ? 18 : 24,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: colors.surface,
     paddingHorizontal: isMobile ? 13 : 18,
     paddingVertical: isMobile ? 12 : 16,
     gap: isMobile ? 6 : 8,
@@ -12240,7 +12281,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexGrow: 1,
     flexBasis: isMobile ? '46%' : 180,
     minWidth: isMobile ? '46%' : 160,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e1e8f2',
@@ -12267,7 +12308,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexGrow: 1,
     flexBasis: isMobile ? '46%' : 120,
     minWidth: isMobile ? '46%' : 110,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e1e8f2',
@@ -12284,7 +12325,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: isMobile ? 18 : 22,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     shadowColor: colors.shadow,
     shadowOpacity: 0.12,
@@ -12303,7 +12344,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   dashboardQuickCardImage: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: colors.surface,
   },
   dashboardQuickCardPhotoFrame: {
     ...StyleSheet.absoluteFillObject,
@@ -12553,7 +12594,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   dailyCardBackStarDust: {
     position: 'absolute',
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: colors.surface,
   },
   dailyCardRevealFace: {
     position: 'absolute',
@@ -12562,7 +12603,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     width: 124,
     height: 194,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: 'rgba(201, 210, 235, 0.92)',
     paddingHorizontal: 14,
@@ -12736,7 +12777,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     maxWidth: 118,
   },
   clockModalCard: {
-    backgroundColor: 'rgba(248,250,252,0.97)',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.96)',
@@ -12859,7 +12900,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     width: '100%',
     maxWidth: 412,
     alignSelf: 'center',
-    backgroundColor: 'rgba(248,250,252,0.97)',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.96)',
@@ -12868,7 +12909,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     maxHeight: '86%',
   },
   signInModalCard: {
-    backgroundColor: 'rgba(248,250,252,0.995)',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.99)',
@@ -12918,7 +12959,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     zIndex: 60,
   },
   settingsModalCard: {
-    backgroundColor: 'rgba(248,250,252,0.995)',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.99)',
@@ -12956,7 +12997,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: isMobile ? 22 : 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.99)',
-    backgroundColor: 'rgba(248,250,252,0.995)',
+    backgroundColor: colors.surface,
     padding: isMobile ? 16 : 18,
     gap: 12,
     shadowColor: colors.shadow,
@@ -12984,7 +13025,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 15,
     alignItems: 'center',
@@ -13015,7 +13056,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(214,223,235,0.95)',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
