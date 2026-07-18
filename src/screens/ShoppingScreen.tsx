@@ -542,6 +542,20 @@ function formatShoppingQuantity(amount: string, unit: UnitOption) {
   return `${trimmed} ${unit}`;
 }
 
+// Compact "when" for item attribution: "just now" / "14:30" (today) / "Jul 18".
+function formatAddedWhen(iso?: string): string {
+  if (!iso) return '';
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return '';
+  const now = new Date();
+  const diffMin = Math.floor((now.getTime() - then.getTime()) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const sameDay = then.toDateString() === now.toDateString();
+  if (sameDay) return then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return then.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 // Split a single quick-add entry into a clean name and an optional trailing quantity,
 // e.g. "bananas 3 kg" -> { name: "bananas", quantity: "3 kg" }, "milk" -> { name: "milk", quantity: "1 pcs" }.
 function splitNameAndQuantity(raw: string): { name: string; quantity: string | null } {
@@ -1624,6 +1638,11 @@ export function ShoppingScreen({
                     <Text style={[styles.shoppingRowSubtext, isMobile && styles.shoppingRowSubtextMobile, item.purchased && styles.shoppingRowQtyDone]}>
                       {item.category ? getShoppingItemCategoryLabel(item.category) : 'Tap to edit'}
                     </Text>
+                    {item.addedBy ? (
+                      <Text style={styles.shoppingRowAddedBy} numberOfLines={1}>
+                        Added by {item.addedBy}{item.addedAt ? ` · ${formatAddedWhen(item.addedAt)}` : ''}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={[styles.shoppingRowMeta, isMobile && styles.shoppingRowMetaMobile]}>
                     <Text style={[styles.shoppingRowQty, isMobile && styles.shoppingRowQtyMobile, item.purchased && styles.shoppingRowQtyDone]}>{item.quantity}</Text>
@@ -4858,6 +4877,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     shoppingRowSubtextMobile: {
       fontSize: 11,
       lineHeight: 14,
+    },
+    shoppingRowAddedBy: {
+      color: colors.subtext,
+      fontSize: 10.5,
+      lineHeight: 14,
+      fontWeight: '600',
+      opacity: 0.85,
+      marginTop: 1,
     },
     shoppingRowQty: {
       color: colors.text,

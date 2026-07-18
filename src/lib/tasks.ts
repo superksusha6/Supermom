@@ -1291,7 +1291,7 @@ export async function listShoppingLists(familyId: string): Promise<ShoppingListD
   const client = requireClient();
   const extendedQuery = await client
     .from('shopping_lists')
-    .select('id, title, list_type, completed_at, created_at, shopping_list_items(id, item_name, quantity, category, comment, purchased, sort_order, created_at)')
+    .select('id, title, list_type, completed_at, created_at, shopping_list_items(id, item_name, quantity, category, comment, purchased, sort_order, created_at, added_by_name, added_at)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
 
@@ -1320,14 +1320,50 @@ export async function listShoppingLists(familyId: string): Promise<ShoppingListD
         category: 'category' in item && typeof item.category === 'string' ? (item.category as ShoppingItemCategory) : undefined,
         comment: item.comment || undefined,
         purchased: item.purchased,
+        addedBy: 'added_by_name' in item && typeof item.added_by_name === 'string' ? item.added_by_name : undefined,
+        addedAt: 'added_at' in item && typeof item.added_at === 'string' ? item.added_at : undefined,
       })),
   }));
+}
+
+// Insert item rows, tolerating the attribution columns not being migrated yet
+// (fall back to inserting without them so a save never fails outright).
+async function insertShoppingItemRows(
+  client: ReturnType<typeof requireClient>,
+  listId: string,
+  items: Array<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'comment' | 'purchased' | 'addedBy' | 'addedAt'>>,
+) {
+  const withAttribution = items.map((item, index) => ({
+    list_id: listId,
+    item_name: item.name,
+    quantity: item.quantity,
+    category: item.category || null,
+    comment: item.comment || null,
+    purchased: item.purchased,
+    sort_order: index,
+    added_by_name: item.addedBy || null,
+    added_at: item.addedAt || null,
+  }));
+  const result = await client.from('shopping_list_items').insert(withAttribution);
+  if (isMissingShoppingItemAttributionColumnError(result.error)) {
+    const withoutAttribution = withAttribution.map(({ added_by_name, added_at, ...rest }) => rest);
+    return client.from('shopping_list_items').insert(withoutAttribution);
+  }
+  return result;
+}
+
+function isMissingShoppingItemAttributionColumnError(error: unknown) {
+  const message = String((error as { message?: string } | undefined)?.message || '').toLowerCase();
+  return (
+    message.includes('added_by_name') ||
+    message.includes('added_at')
+  );
 }
 
 export async function createShoppingList(
   session: AppSession,
   title: string,
-  items: Array<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'comment' | 'purchased'>>,
+  items: Array<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'comment' | 'purchased' | 'addedBy' | 'addedAt'>>,
   options?: {
     listType?: ShoppingListType;
     completedAt?: string | null;
@@ -1360,17 +1396,7 @@ export async function createShoppingList(
   if (error) throw error;
 
   if (items.length > 0) {
-    const extendedInsert = await client.from('shopping_list_items').insert(
-      items.map((item, index) => ({
-        list_id: data.id,
-        item_name: item.name,
-        quantity: item.quantity,
-        category: item.category || null,
-        comment: item.comment || null,
-        purchased: item.purchased,
-        sort_order: index,
-      })),
-    );
+    const extendedInsert = await insertShoppingItemRows(client, data.id, items);
     if (isMissingShoppingListItemCategoryColumnError(extendedInsert.error)) {
       throw new Error(
         'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.',
@@ -1390,17 +1416,7 @@ export async function updateShoppingListItems(session: AppSession, listId: strin
 
   if (items.length === 0) return;
 
-  const extendedInsert = await client.from('shopping_list_items').insert(
-    items.map((item, index) => ({
-      list_id: listId,
-      item_name: item.name,
-      quantity: item.quantity,
-      category: item.category || null,
-      comment: item.comment || null,
-      purchased: item.purchased,
-      sort_order: index,
-    })),
-  );
+  const extendedInsert = await insertShoppingItemRows(client, listId, items);
   if (isMissingShoppingListItemCategoryColumnError(extendedInsert.error)) {
     throw new Error(
       'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.',

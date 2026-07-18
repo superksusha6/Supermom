@@ -247,6 +247,8 @@ export type ShoppingItem = {
   category?: ShoppingItemCategory;
   comment?: string;
   purchased: boolean;
+  addedBy?: string;
+  addedAt?: string;
 };
 
 export type ShoppingPurchaseEvent = {

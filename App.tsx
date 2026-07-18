@@ -1561,6 +1561,22 @@ function AppShell() {
     setFoodTab('shopping');
   }
 
+  // Stamp "who added / when" on shopping items: keep existing provenance
+  // (recovered by id from stored state, since the editor may drop the fields),
+  // and attribute any new item to the current actor at this moment.
+  function stampShoppingItems(listId: string, items: ShoppingItem[]): ShoppingItem[] {
+    const prevItems = shoppingLists.find((list) => list.id === listId)?.items ?? [];
+    const nowIso = new Date().toISOString();
+    return items.map((item) => {
+      const prev = prevItems.find((p) => p.id === item.id);
+      return {
+        ...item,
+        addedBy: item.addedBy ?? prev?.addedBy ?? currentShoppingActorLabel,
+        addedAt: item.addedAt ?? prev?.addedAt ?? nowIso,
+      };
+    });
+  }
+
   function handleRenameShoppingList(listId: string, title: string) {
     const clean = title.trim();
     if (!clean) return;
@@ -1580,11 +1596,15 @@ function AppShell() {
     }));
     const current = getCurrentShoppingList(shoppingLists);
     markShoppingBootstrapComplete();
+    const addedBy = currentShoppingActorLabel;
+    const addedAt = new Date().toISOString();
     const newRows = () =>
       prepared.map((item, i) => ({
         id: `si-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
         ...item,
         purchased: false,
+        addedBy,
+        addedAt,
       }));
     if (session && isSupabaseConfigured) {
       if (current) {
@@ -1592,7 +1612,7 @@ function AppShell() {
           .then(() => refreshLiveShopping())
           .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not update list.'));
       } else {
-        createShoppingList(session, 'Shopping List', prepared.map((p) => ({ ...p, purchased: false })), { listType: 'current' })
+        createShoppingList(session, 'Shopping List', prepared.map((p) => ({ ...p, purchased: false, addedBy, addedAt })), { listType: 'current' })
           .then(() => refreshLiveShopping())
           .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not create list.'));
       }
@@ -7098,6 +7118,8 @@ function AppShell() {
             }}
             onCreateList={(items, targetListId, createBehavior = 'default') => {
               const existingBaseList = getBaseShoppingList(shoppingLists);
+              const addedBy = currentShoppingActorLabel;
+              const addedAt = new Date().toISOString();
               if (session && isSupabaseConfigured) {
                 if (targetListId) {
                   const targetList = shoppingLists.find((list) => list.id === targetListId);
@@ -7108,6 +7130,8 @@ function AppShell() {
                     quantity: item.quantity,
                     category: item.category || inferShoppingItemCategory(item.name),
                     purchased: false,
+                    addedBy,
+                    addedAt,
                   }));
                   const mergedItems = mergeShoppingItemsByName(nextItems, targetList.items);
                   updateShoppingListItems(session, targetListId, mergedItems)
@@ -7124,6 +7148,8 @@ function AppShell() {
                     quantity: item.quantity,
                     category: item.category || inferShoppingItemCategory(item.name),
                     purchased: false,
+                    addedBy,
+                    addedAt,
                   })),
                   shouldCreateBaseList ? { listType: 'base' } : { listType: 'current' },
                 )
@@ -7147,6 +7173,8 @@ function AppShell() {
                               quantity: item.quantity,
                               category: item.category || inferShoppingItemCategory(item.name),
                               purchased: false,
+                              addedBy,
+                              addedAt,
                             })),
                             list.items,
                           ),
@@ -7168,6 +7196,8 @@ function AppShell() {
                       quantity: item.quantity,
                       category: item.category || inferShoppingItemCategory(item.name),
                       purchased: false,
+                      addedBy,
+                      addedAt,
                     })),
                   },
                   ...prev,
@@ -7178,8 +7208,9 @@ function AppShell() {
               }
             }}
             onUpdateList={(listId, items) => {
+              const stamped = stampShoppingItems(listId, items);
               if (session && isSupabaseConfigured) {
-                updateShoppingListItems(session, listId, items)
+                updateShoppingListItems(session, listId, stamped)
                   .then(() => refreshLiveShopping())
                   .catch((error) => setTasksError(error instanceof Error ? error.message : 'Update list failed.'));
                 return;
@@ -7189,12 +7220,10 @@ function AppShell() {
                   list.id === listId
                     ? {
                         ...list,
-                        items: items.map((item, index) => ({
+                        items: stamped.map((item, index) => ({
+                          ...item,
                           id: item.id || `si-${listId}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-                          name: item.name,
-                          quantity: item.quantity,
                           category: item.category || inferShoppingItemCategory(item.name),
-                          purchased: item.purchased,
                         })),
                       }
                     : list,
