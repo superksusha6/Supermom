@@ -2201,6 +2201,11 @@ function AppShell() {
     sessionRef.current = ctx;
     setSession(ctx);
     setRole(toUiRole(ctx.role));
+    // A real invited staff account lands in its own limited view, scoped to its profile.
+    if (ctx.role === 'staff' && ctx.staffProfileId) {
+      setActiveStaffProfileId(ctx.staffProfileId);
+      setActiveOwnerFilter(`staff:${ctx.staffProfileId}`);
+    }
     habitsLoadedRef.current = false;
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;

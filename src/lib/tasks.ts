@@ -46,6 +46,7 @@ export type AppSession = {
   familyId: string;
   role: Role;
   allowedFeatures: StaffFeature[];
+  staffProfileId?: string;
 };
 
 type TaskInsert = {
@@ -468,7 +469,7 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   // family, so a staff user lands in the family that invited them with their granted features.
   const { data: memberships, error: membershipsError } = await client
     .from('family_members')
-    .select('family_id, role, features, status')
+    .select('family_id, role, features, status, staff_profile_id')
     .eq('user_id', user.id);
   if (membershipsError) throw membershipsError;
 
@@ -479,6 +480,7 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
       familyId: staffMembership.family_id as string,
       role: 'staff',
       allowedFeatures: normalizeStaffFeatures(staffMembership.features),
+      staffProfileId: (staffMembership.staff_profile_id as string | null) ?? undefined,
     };
   }
 
