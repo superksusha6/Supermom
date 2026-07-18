@@ -19,6 +19,8 @@ import {
   deleteShoppingList,
   deleteShoppingShare,
   getOrCreateSessionContext,
+  createStaffInvite,
+  acceptStaffInvite,
   getMyProfile,
   getWeeklyMealPlanRecord,
   getUserPreferences,
@@ -837,6 +839,12 @@ function AppShell() {
   const [changePwConfirm, setChangePwConfirm] = useState('');
   const [changePwBusy, setChangePwBusy] = useState(false);
   const [changePwMsg, setChangePwMsg] = useState<string | null>(null);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [inviteStaffName, setInviteStaffName] = useState('');
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const pendingInviteTokenRef = useRef<string | null>(null);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [dayNewTitle, setDayNewTitle] = useState('');
@@ -2292,6 +2300,9 @@ function AppShell() {
         setAuthMode('recover');
         setSignInModalOpen(true);
       }
+
+      const inviteToken = searchParams.get('invite');
+      if (inviteToken) pendingInviteTokenRef.current = inviteToken;
     }
 
     let cancelled = false;
@@ -2300,7 +2311,16 @@ function AppShell() {
         const ctx = await getOrCreateSessionContext();
         if (cancelled) return;
         if (ctx) {
-          await hydrateSessionContext(ctx);
+          if (pendingInviteTokenRef.current) {
+            await consumePendingInvite();
+          } else {
+            await hydrateSessionContext(ctx);
+          }
+        } else if (pendingInviteTokenRef.current) {
+          // Not signed in yet — let them create/enter their own account to join.
+          setAuthInfo('Create your account or log in to join the family.');
+          setAuthMode('signup');
+          setSignInModalOpen(true);
         }
       } catch (error) {
         if (cancelled) return;
@@ -3762,6 +3782,69 @@ function AppShell() {
     }
   }
 
+  async function handleInviteStaff(staffId: string) {
+    if (!session || !isSupabaseConfigured) {
+      setTasksError('Sign in to create an invite link.');
+      return;
+    }
+    if (staffId.startsWith('staff-')) {
+      // Local-only (not yet saved to the server) — needs a real profile row first.
+      setTasksError('Save this staff profile first, then create the invite link.');
+      return;
+    }
+    const grant = staffGrants[staffId] || { roles: staffDraftRoles, features: staffDraftFeatures };
+    const name = staffProfiles.find((p) => p.id === staffId)?.name || 'Staff';
+    setInviteStaffName(name);
+    setInviteLink('');
+    setInviteCopied(false);
+    setInviteBusy(true);
+    setInviteModalOpen(true);
+    try {
+      const { token } = await createStaffInvite(session, staffId, grant.roles, grant.features);
+      const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
+      setInviteLink(`${origin}/?invite=${token}`);
+    } catch (error) {
+      setInviteModalOpen(false);
+      setTasksError(error instanceof Error ? error.message : 'Could not create invite link.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  function copyInviteLink(link: string) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(link);
+      setInviteCopied(true);
+    } catch {
+      // Ignore — the link is still visible to copy manually.
+    }
+  }
+
+  function shareInviteWhatsApp(link: string, name: string) {
+    const text = `Join our family on FamOs as ${name}: ${link}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    if (typeof window !== 'undefined') window.open(url, '_blank');
+  }
+
+  // Consume a pending ?invite= token once the user is authenticated: join the family as
+  // staff, clear the URL, and re-resolve the session into the staff shell.
+  async function consumePendingInvite() {
+    const token = pendingInviteTokenRef.current;
+    if (!token || !isSupabaseConfigured) return;
+    pendingInviteTokenRef.current = null;
+    try {
+      await acceptStaffInvite(token);
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      const ctx = await getOrCreateSessionContext();
+      if (ctx) await hydrateSessionContext(ctx);
+      setAuthInfo('You’ve joined the family. Here is your access.');
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not accept the invite.');
+    }
+  }
+
   function openStaffProfileEditor(staffId: string) {
     const profile = staffProfiles.find((item) => item.id === staffId);
     if (!profile) return;
@@ -3969,6 +4052,11 @@ function AppShell() {
       setTasksError(null);
       setAuthInfo(null);
       await signInWithEmail(email, password);
+      if (pendingInviteTokenRef.current) {
+        setSignInModalOpen(false);
+        await consumePendingInvite();
+        return;
+      }
       const ctx = await getOrCreateSessionContext();
       if (ctx) {
         setSignInModalOpen(false);
@@ -4080,6 +4168,11 @@ function AppShell() {
 
       if (result?.session) {
         await upsertMyProfile({ fullName: authName.trim() });
+        if (pendingInviteTokenRef.current) {
+          setSignInModalOpen(false);
+          await consumePendingInvite();
+          return;
+        }
         const ctx = await getOrCreateSessionContext();
         if (ctx) {
           setParentLabel(nextParentLabel);
@@ -4465,6 +4558,7 @@ function AppShell() {
       onToggleChildProfileSetup={() => setChildSetupOpen((prev) => !prev)}
       onToggleStaffProfileSetup={() => setStaffSetupOpen((prev) => !prev)}
       onEditStaffProfile={openStaffProfileEditor}
+      onInviteStaff={handleInviteStaff}
     />
   );
 
@@ -5155,6 +5249,34 @@ function AppShell() {
                 <Text style={styles.daySheetAddText}>{changePwBusy ? 'Saving…' : 'Update'}</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={inviteModalOpen} transparent animationType="fade" onRequestClose={() => setInviteModalOpen(false)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setInviteModalOpen(false)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>Invite {inviteStaffName}</Text>
+            {inviteBusy ? (
+              <Text style={styles.changePwMsg}>Creating link…</Text>
+            ) : (
+              <>
+                <Text style={styles.inviteHint}>
+                  Send this private link. They open it, sign in with their own email, and get only the access you granted. It expires in 14 days.
+                </Text>
+                <View style={styles.inviteLinkBox}>
+                  <Text style={styles.inviteLinkText} numberOfLines={3}>{inviteLink}</Text>
+                </View>
+                <View style={styles.daySheetActions}>
+                  <Pressable style={styles.daySheetCancel} onPress={() => copyInviteLink(inviteLink)}>
+                    <Text style={styles.daySheetCancelText}>{inviteCopied ? 'Copied ✓' : 'Copy link'}</Text>
+                  </Pressable>
+                  <Pressable style={styles.daySheetAdd} onPress={() => shareInviteWhatsApp(inviteLink, inviteStaffName)}>
+                    <Text style={styles.daySheetAddText}>WhatsApp</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -10255,6 +10377,26 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 13,
     fontWeight: '700',
     marginTop: -4,
+  },
+  inviteHint: {
+    color: colors.subtext,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+    marginTop: -4,
+  },
+  inviteLinkBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inviteLinkText: {
+    color: colors.text,
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   daySheetCard: {
     width: '100%',

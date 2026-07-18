@@ -22,6 +22,7 @@ import {
   PersonalProfile,
   PurchaseRequest,
   StaffFeature,
+  StaffRolePreset,
   Recipe,
   RecipeClassifier,
   RecipeMealType,
@@ -498,6 +499,32 @@ const STAFF_FEATURE_VALUES: StaffFeature[] = ['tasks', 'shopping', 'menu', 'reci
 function normalizeStaffFeatures(value: unknown): StaffFeature[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is StaffFeature => typeof v === 'string' && STAFF_FEATURE_VALUES.includes(v as StaffFeature));
+}
+
+// A family admin mints a staff invite carrying the granted roles + features.
+export async function createStaffInvite(
+  session: AppSession,
+  staffProfileId: string,
+  roles: StaffRolePreset[],
+  features: StaffFeature[],
+): Promise<{ token: string; expiresAt: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('create_staff_invite', {
+    p_family_id: session.familyId,
+    p_staff_profile_id: staffProfileId,
+    p_roles: roles,
+    p_features: features,
+  });
+  if (error) throw error;
+  return { token: (data as { token: string }).token, expiresAt: (data as { expires_at: string }).expires_at };
+}
+
+// The invited user consumes a token and is linked to the family as staff.
+export async function acceptStaffInvite(token: string): Promise<{ familyId: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('accept_staff_invite', { p_token: token });
+  if (error) throw error;
+  return { familyId: (data as { family_id: string }).family_id };
 }
 
 export async function listTasks(familyId: string): Promise<TaskItem[]> {

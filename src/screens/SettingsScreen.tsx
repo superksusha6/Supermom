@@ -82,6 +82,7 @@ type Props = {
   onToggleChildProfileSetup: () => void;
   onToggleStaffProfileSetup: () => void;
   onEditStaffProfile: (staffId: string) => void;
+  onInviteStaff: (staffId: string) => void;
 };
 
 type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'family';
@@ -140,6 +141,7 @@ export function SettingsScreen({
   onToggleChildProfileSetup,
   onToggleStaffProfileSetup,
   onEditStaffProfile,
+  onInviteStaff,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -854,9 +856,14 @@ export function SettingsScreen({
               <Text style={styles.staffName}>{profile.name}</Text>
               <Text style={styles.staffMeta}>{profile.dateOfBirth ? `Birthday: ${profile.dateOfBirth}` : 'Birthday not set yet'}</Text>
             </View>
-            <Pressable style={styles.secondaryBtn} onPress={() => onEditStaffProfile(profile.id)}>
-              <Text style={styles.secondaryBtnText}>Edit</Text>
-            </Pressable>
+            <View style={styles.staffCardActions}>
+              <Pressable style={styles.secondaryBtn} onPress={() => onInviteStaff(profile.id)}>
+                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryBtn} onPress={() => onEditStaffProfile(profile.id)}>
+                <Text style={styles.secondaryBtnText}>Edit</Text>
+              </Pressable>
+            </View>
           </View>
         ))}
 
@@ -1379,6 +1386,10 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.glassStrong,
       padding: 14,
       marginBottom: 10,
+    },
+    staffCardActions: {
+      flexDirection: 'row',
+      gap: 8,
     },
     staffCopy: {
       flex: 1,
