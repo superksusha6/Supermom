@@ -4129,6 +4129,42 @@ function AppShell() {
     }
   }
 
+  // Staff ticks their own task done → flip status AND report completion (with time) to the family.
+  async function completeMyTask(task: TaskItem) {
+    const nextStatus: TaskStatus = task.status === 'done' ? 'new' : 'done';
+    const completedAt = new Date().toISOString();
+    const staffName =
+      staffProfiles.find((p) => p.id === activeStaffProfileId)?.name ||
+      (task.assigneeName && task.assigneeName !== 'Staff' ? task.assigneeName : 'Staff');
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)));
+
+    if (session && isSupabaseConfigured) {
+      try {
+        await updateTask(task.id, { status: nextStatus });
+        if (nextStatus === 'done') {
+          await createCompletedTaskNotification(session, {
+            taskId: task.id,
+            taskTitle: task.title,
+            staffName,
+            completedAt,
+            read: false,
+          });
+        }
+        await Promise.all([refreshLiveTasks(), refreshLiveNotifications()]);
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not update task.');
+      }
+      return;
+    }
+
+    if (nextStatus === 'done') {
+      setCompletedTaskNotifications((prev) => [
+        { id: `completed-${Date.now()}`, taskId: task.id, taskTitle: task.title, staffName, completedAt, read: false },
+        ...prev,
+      ]);
+    }
+  }
+
   async function removeManagedTask(taskId: string) {
     const doRemove = async () => {
       if (editingTaskId === taskId) setEditingTaskId(null);
@@ -5111,7 +5147,7 @@ function AppShell() {
                 accessibilityState={{ checked: task.status === 'done' }}
                 hitSlop={8}
                 style={[styles.taskCheck, task.status === 'done' && styles.taskCheckDone]}
-                onPress={() => toggleManagedTaskDone(task)}
+                onPress={() => completeMyTask(task)}
               >
                 {task.status === 'done' ? <Text style={styles.taskCheckMark}>✓</Text> : null}
               </Pressable>
