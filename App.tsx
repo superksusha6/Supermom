@@ -857,6 +857,9 @@ function AppShell() {
   const [authInfo, setAuthInfo] = useState<string | null>(null);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [foodTab, setFoodTab] = useState<FoodTab>('today');
+  // Where a Food sub-view was opened from, so "Back" returns to the true origin
+  // (e.g. the dashboard) instead of always dropping into the Food hub.
+  const [foodEntryOrigin, setFoodEntryOrigin] = useState<'home' | null>(null);
   const [dashboardCalendarQuickAction, setDashboardCalendarQuickAction] = useState<DashboardCalendarQuickAction>(null);
   const [dashboardNutritionQuickAction, setDashboardNutritionQuickAction] = useState<DashboardNutritionQuickAction>(null);
   const [dashboardShoppingQuickAction, setDashboardShoppingQuickAction] = useState<DashboardShoppingQuickAction>(null);
@@ -4723,12 +4726,14 @@ function AppShell() {
 
   function handleDashboardMealTypePick(mealType: NutritionMealType) {
     setDashboardMealPickerOpen(false);
+    setFoodEntryOrigin('home');
     setScreen('food');
     setFoodTab('diary');
     setDashboardNutritionQuickAction({ type: 'add-meal', mealType, token: Date.now() });
   }
 
   function handleDashboardOpenShoppingList() {
+    setFoodEntryOrigin('home');
     setScreen('food');
     setFoodTab('shopping');
     setDashboardShoppingQuickAction({ type: 'add-item', token: Date.now() });
@@ -4848,7 +4853,7 @@ function AppShell() {
       accessibilityRole="button"
       accessibilityLabel={calGoal > 0 ? `Calories, ${calRemaining} left. Tap to log food.` : 'Log food'}
       style={styles.calCard}
-      onPress={() => { setScreen('food'); setFoodTab('diary'); }}
+      onPress={() => { setFoodEntryOrigin('home'); setScreen('food'); setFoodTab('diary'); }}
     >
       <View style={styles.calHeader}>
         <View style={styles.calHeaderLeft}>
@@ -5071,7 +5076,7 @@ function AppShell() {
         accessibilityRole="button"
         accessibilityLabel={todayDinner ? `Dinner, ${todayDinner}` : 'Plan dinner'}
         style={styles.tonightRow}
-        onPress={() => { setScreen('food'); setFoodTab('plan'); }}
+        onPress={() => { setFoodEntryOrigin('home'); setScreen('food'); setFoodTab('plan'); }}
       >
         <Icon name="meal" color={colors.primary} size={18} />
         <Text style={styles.tonightText} numberOfLines={1}>
@@ -6185,9 +6190,21 @@ function AppShell() {
       ) : null}
 
       {screen === 'food' && foodTab !== 'today' ? (
-        <Pressable style={styles.calBackBtn} onPress={() => setFoodTab('today')}>
+        <Pressable
+          style={styles.calBackBtn}
+          onPress={() => {
+            if (foodEntryOrigin === 'home') {
+              setFoodEntryOrigin(null);
+              setFoodTab('today');
+              setScreen('calendar');
+              setHomeTab('today');
+            } else {
+              setFoodTab('today');
+            }
+          }}
+        >
           <Icon name="chevron" color={colors.primary} size={16} />
-          <Text style={styles.calBackText}>Back to Food</Text>
+          <Text style={styles.calBackText}>{foodEntryOrigin === 'home' ? 'Back to Today' : 'Back to Food'}</Text>
         </Pressable>
       ) : null}
         {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
@@ -6401,6 +6418,24 @@ function AppShell() {
               </Pressable>
             </View>
 
+            {!isStaffView ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Meals today, log food and calories"
+              style={styles.foodShopBtn}
+              onPress={() => setFoodTab('diary')}
+            >
+              <View style={styles.foodShopIcon}><Icon name="meal" color={colors.primary} size={20} /></View>
+              <View style={styles.foodListCopy}>
+                <Text style={styles.foodListTitle}>Meals Today</Text>
+                <Text style={styles.foodListSub} numberOfLines={1}>
+                  {calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories'}
+                </Text>
+              </View>
+              <Icon name="chevron" color={colors.subtext} size={18} />
+            </Pressable>
+            ) : null}
+
             {staffCan('shopping') ? (
             <>
             {activeShoppingLists.map((list) => {
@@ -6499,12 +6534,6 @@ function AppShell() {
             </Pressable>
             ) : null}
 
-            {!isStaffView ? (
-            <Pressable style={styles.foodDiaryLink} onPress={() => setFoodTab('diary')}>
-              <Icon name="plus" color={colors.subtext} size={15} />
-              <Text style={styles.foodDiaryLinkText}>Log what I ate → Diary</Text>
-            </Pressable>
-            ) : null}
           </View>
         ) : null}
 
@@ -7605,7 +7634,7 @@ function AppShell() {
           <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {staffCan('shopping') || staffCan('menu') || staffCan('recipes') ? (
-          <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
+          <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {!isStaffView ? (
           <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
