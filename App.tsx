@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { inferShoppingItemCategory } from '@/lib/shopping';
+import { categorizeItem } from '@/lib/shopping';
 import {
   AppSession,
   createRecipe,
@@ -1592,7 +1592,7 @@ function AppShell() {
     const prepared = items.map((it) => ({
       name: it.name,
       quantity: it.quantity || '1 pcs',
-      category: inferShoppingItemCategory(it.name),
+      category: categorizeItem(it.name),
     }));
     const current = getCurrentShoppingList(shoppingLists);
     markShoppingBootstrapComplete();
@@ -6873,7 +6873,7 @@ function AppShell() {
                 const shoppingItem = {
                   name: targetItem.name,
                   quantity: targetItem.quantity,
-                  category: inferShoppingItemCategory(targetItem.name),
+                  category: categorizeItem(targetItem.name),
                   comment: [targetItem.note, targetItem.opened ? 'Opened' : '', targetItem.expiresAt ? `Use by ${targetItem.expiresAt}` : '']
                     .filter(Boolean)
                     .join(' · '),
@@ -6890,7 +6890,7 @@ function AppShell() {
                   id: `si-fridge-restock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                   name: targetItem.name,
                   quantity: targetItem.quantity,
-                  category: inferShoppingItemCategory(targetItem.name),
+                  category: categorizeItem(targetItem.name),
                   comment: [targetItem.note, targetItem.opened ? 'Opened' : '', targetItem.expiresAt ? `Use by ${targetItem.expiresAt}` : '']
                     .filter(Boolean)
                     .join(' · '),
@@ -6940,7 +6940,7 @@ function AppShell() {
                   lowItems.map((item) => ({
                     name: item.name,
                     quantity: item.quantity,
-                    category: inferShoppingItemCategory(item.name),
+                    category: categorizeItem(item.name),
                     comment: [item.note, item.opened ? 'Opened' : '', item.expiresAt ? `Use by ${item.expiresAt}` : '']
                       .filter(Boolean)
                       .join(' · '),
@@ -6964,7 +6964,7 @@ function AppShell() {
                         id: `si-fridge-restock-all-${item.id}`,
                         name: item.name,
                         quantity: item.quantity,
-                        category: inferShoppingItemCategory(item.name),
+                        category: categorizeItem(item.name),
                         comment: [item.note, item.opened ? 'Opened' : '', item.expiresAt ? `Use by ${item.expiresAt}` : '']
                           .filter(Boolean)
                           .join(' · '),
@@ -7021,7 +7021,7 @@ function AppShell() {
                 id: `si-fridge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 name: item.name,
                 quantity: item.quantity,
-                category: inferShoppingItemCategory(item.name),
+                category: categorizeItem(item.name),
                 comment: [item.note, item.opened ? 'Opened' : '', item.expiresAt ? `Use by ${item.expiresAt}` : ''].filter(Boolean).join(' · '),
                 purchased: false,
               };
@@ -7128,7 +7128,7 @@ function AppShell() {
                     id: `si-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
                     name: item.name,
                     quantity: item.quantity,
-                    category: item.category || inferShoppingItemCategory(item.name),
+                    category: item.category || categorizeItem(item.name),
                     purchased: false,
                     addedBy,
                     addedAt,
@@ -7146,7 +7146,7 @@ function AppShell() {
                   items.map((item) => ({
                     name: item.name,
                     quantity: item.quantity,
-                    category: item.category || inferShoppingItemCategory(item.name),
+                    category: item.category || categorizeItem(item.name),
                     purchased: false,
                     addedBy,
                     addedAt,
@@ -7171,7 +7171,7 @@ function AppShell() {
                               id: `si-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
                               name: item.name,
                               quantity: item.quantity,
-                              category: item.category || inferShoppingItemCategory(item.name),
+                              category: item.category || categorizeItem(item.name),
                               purchased: false,
                               addedBy,
                               addedAt,
@@ -7194,7 +7194,7 @@ function AppShell() {
                       id: `si-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
                       name: item.name,
                       quantity: item.quantity,
-                      category: item.category || inferShoppingItemCategory(item.name),
+                      category: item.category || categorizeItem(item.name),
                       purchased: false,
                       addedBy,
                       addedAt,
@@ -7223,7 +7223,7 @@ function AppShell() {
                         items: stamped.map((item, index) => ({
                           ...item,
                           id: item.id || `si-${listId}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-                          category: item.category || inferShoppingItemCategory(item.name),
+                          category: item.category || categorizeItem(item.name),
                         })),
                       }
                     : list,
@@ -7512,7 +7512,7 @@ function AppShell() {
                   id: `si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                   name: request.itemName,
                   quantity: request.quantity,
-                  category: inferShoppingItemCategory(request.itemName),
+                  category: categorizeItem(request.itemName),
                   comment: request.comment,
                   purchased: false,
                 };
@@ -7537,7 +7537,7 @@ function AppShell() {
                               id: `si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                               name: request.itemName,
                               quantity: request.quantity,
-                              category: inferShoppingItemCategory(request.itemName),
+                              category: categorizeItem(request.itemName),
                               comment: request.comment,
                               purchased: false,
                             },
@@ -7557,7 +7557,7 @@ function AppShell() {
                         id: `si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                         name: request.itemName,
                         quantity: request.quantity,
-                        category: inferShoppingItemCategory(request.itemName),
+                        category: categorizeItem(request.itemName),
                         comment: request.comment,
                         purchased: false,
                       },
@@ -8881,7 +8881,7 @@ function mergeShoppingItemsWithFridgeItem(source: ShoppingItem[], fridgeItem: Pi
       ? {
           ...next[existingIndex],
           quantity: fridgeItem.quantity,
-          category: next[existingIndex].category || inferShoppingItemCategory(fridgeItem.name),
+          category: next[existingIndex].category || categorizeItem(fridgeItem.name),
           comment: comment || next[existingIndex].comment,
           purchased: false,
         }
@@ -8889,7 +8889,7 @@ function mergeShoppingItemsWithFridgeItem(source: ShoppingItem[], fridgeItem: Pi
           id: `si-fridge-low-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           name: fridgeItem.name,
           quantity: fridgeItem.quantity,
-          category: inferShoppingItemCategory(fridgeItem.name),
+          category: categorizeItem(fridgeItem.name),
           comment,
           purchased: false,
         };
@@ -8911,7 +8911,7 @@ function mergeShoppingItemsByName(primary: ShoppingItem[], secondary: ShoppingIt
       merged.push({
         ...item,
         id: item.id || `si-merged-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-        category: item.category || inferShoppingItemCategory(item.name),
+        category: item.category || categorizeItem(item.name),
       });
     });
   };
@@ -8967,7 +8967,7 @@ function mergeShoppingInsights(
     next.set(normalizedName, {
       normalizedName,
       displayName: addition.name,
-      category: addition.category || existing?.category || inferShoppingItemCategory(addition.name),
+      category: addition.category || existing?.category || categorizeItem(addition.name),
       purchaseCount: mergedEvents.length,
       lastPurchasedAt,
       averageRestockDays,

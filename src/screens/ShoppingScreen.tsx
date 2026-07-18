@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { analyzeFridgePhoto } from '@/lib/fridgeVision';
 import { STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
-import { SHOPPING_CATEGORY_OPTIONS, getShoppingItemCategoryLabel, inferShoppingItemCategory } from '@/lib/shopping';
+import { SHOPPING_CATEGORY_OPTIONS, getShoppingItemCategoryLabel, inferShoppingItemCategory, categorizeItem, recordCategoryOverride } from '@/lib/shopping';
 import { SectionCard } from '@/components/SectionCard';
 import { FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemCategory, ShoppingListDoc, ShoppingShare } from '@/types/app';
 import { ThemeColors, ThemeName, useTheme, useThemeColors } from '@/theme/theme';
@@ -781,13 +781,13 @@ export function ShoppingScreen({
     [activeList, filter],
   );
   const filteredShoppingItems = useReactMemo(
-    () => visibleItems.filter((item) => shoppingCategory === 'all' || (item.category || inferShoppingItemCategory(item.name)) === shoppingCategory),
+    () => visibleItems.filter((item) => shoppingCategory === 'all' || (item.category || categorizeItem(item.name)) === shoppingCategory),
     [shoppingCategory, visibleItems],
   );
   const groupedShoppingItems = useReactMemo(() => {
     const buckets = new Map<ShoppingCategory, ShoppingItem[]>();
     filteredShoppingItems.forEach((item) => {
-      const category = item.category || inferShoppingItemCategory(item.name);
+      const category = item.category || categorizeItem(item.name);
       const current = buckets.get(category) || [];
       current.push(item);
       buckets.set(category, current);
@@ -800,6 +800,18 @@ export function ShoppingScreen({
       }))
       .filter((group) => group.items.length > 0);
   }, [filteredShoppingItems]);
+  // Only the categories actually present among the current (to-buy / purchased) items,
+  // so the filter bar never offers an empty aisle.
+  const presentCategoryOptions = useReactMemo(() => {
+    const present = new Set<ShoppingItemCategory>();
+    visibleItems.forEach((item) => present.add(item.category || categorizeItem(item.name)));
+    return SHOPPING_CATEGORY_OPTIONS.filter((option) => option.key === 'all' || present.has(option.key as ShoppingItemCategory));
+  }, [visibleItems]);
+  useEffect(() => {
+    if (shoppingCategory !== 'all' && !presentCategoryOptions.some((option) => option.key === shoppingCategory)) {
+      setShoppingCategory('all');
+    }
+  }, [presentCategoryOptions, shoppingCategory]);
   const totalShoppingItemsCount = activeList?.items.length ?? 0;
   const purchasedShoppingItemsCount = useReactMemo(
     () => (activeList ? activeList.items.filter((item) => item.purchased).length : 0),
@@ -1186,6 +1198,14 @@ export function ShoppingScreen({
       }))
       .filter((row) => row.name.length > 0);
 
+    // Remember any hand-picked category that differs from the automatic guess,
+    // so the same product lands in that aisle next time it's added.
+    cleaned.forEach((row) => {
+      if (row.category && row.category !== inferShoppingItemCategory(row.name)) {
+        recordCategoryOverride(row.name, row.category);
+      }
+    });
+
     onUpdateList(editTargetListId, cleaned);
     setEditOpen(false);
     setEditRows([]);
@@ -1347,6 +1367,34 @@ export function ShoppingScreen({
     setFridgeScanSource(null);
     setFridgeScanError(null);
   }
+
+  const renderShoppingRow = (item: ShoppingItem) => (
+    <View key={item.id} style={[styles.shoppingRow, isMobile && styles.shoppingRowMobile]}>
+      <Pressable
+        style={[styles.shoppingCheckbox, isMobile && styles.shoppingCheckboxMobile, item.purchased && styles.shoppingCheckboxActive]}
+        onPress={() => {
+          if (activeList) onTogglePurchased(activeList.id, item.id);
+        }}
+      >
+        {item.purchased ? <View style={styles.shoppingCheckboxDot} /> : null}
+      </Pressable>
+      <Pressable style={[styles.shoppingRowBody, isMobile && styles.shoppingRowBodyMobile]} onPress={() => openEditor({ itemId: item.id })}>
+        <View style={styles.shoppingRowTextWrap}>
+          <Text style={[styles.shoppingRowName, isMobile && styles.shoppingRowNameMobile, item.purchased && styles.shoppingRowNameDone]}>{item.name}</Text>
+          {item.addedBy ? (
+            <Text style={styles.shoppingRowAddedBy} numberOfLines={1}>
+              Added by {item.addedBy}{item.addedAt ? ` · ${formatAddedWhen(item.addedAt)}` : ''}
+            </Text>
+          ) : (
+            <Text style={[styles.shoppingRowSubtext, isMobile && styles.shoppingRowSubtextMobile, item.purchased && styles.shoppingRowQtyDone]}>Tap to edit</Text>
+          )}
+        </View>
+        <View style={[styles.shoppingRowMeta, isMobile && styles.shoppingRowMetaMobile]}>
+          <Text style={[styles.shoppingRowQty, isMobile && styles.shoppingRowQtyMobile, item.purchased && styles.shoppingRowQtyDone]}>{item.quantity}</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
 
   return (
     <>
@@ -1530,6 +1578,23 @@ export function ShoppingScreen({
             <Tab active={filter === 'active'} label="To buy" onPress={() => setFilter('active')} />
             <Tab active={filter === 'purchased'} label="Purchased" onPress={() => setFilter('purchased')} />
           </View>
+          {presentCategoryOptions.length > 2 ? (
+            <View style={[styles.shoppingCategoryRow, styles.shoppingCategoryFilterRow]}>
+              {presentCategoryOptions.map((option) => (
+                <Pressable
+                  key={`cat-${option.key}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter ${option.label}`}
+                  style={[styles.shoppingCategoryChip, shoppingCategory === option.key && styles.shoppingCategoryChipActive]}
+                  onPress={() => setShoppingCategory(option.key)}
+                >
+                  <Text style={[styles.shoppingCategoryChipText, shoppingCategory === option.key && styles.shoppingCategoryChipTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
         ) : null}
 
@@ -1621,35 +1686,20 @@ export function ShoppingScreen({
                   : 'Purchased items will appear here after you check them off.'}
               </Text>
             </View>
-          ) : (
-            visibleItems.map((item) => (
-              <View key={item.id} style={[styles.shoppingRow, isMobile && styles.shoppingRowMobile]}>
-                <Pressable
-                  style={[styles.shoppingCheckbox, isMobile && styles.shoppingCheckboxMobile, item.purchased && styles.shoppingCheckboxActive]}
-                  onPress={() => {
-                    if (activeList) onTogglePurchased(activeList.id, item.id);
-                  }}
-                >
-                  {item.purchased ? <View style={styles.shoppingCheckboxDot} /> : null}
-                </Pressable>
-                <Pressable style={[styles.shoppingRowBody, isMobile && styles.shoppingRowBodyMobile]} onPress={() => openEditor({ itemId: item.id })}>
-                  <View style={styles.shoppingRowTextWrap}>
-                    <Text style={[styles.shoppingRowName, isMobile && styles.shoppingRowNameMobile, item.purchased && styles.shoppingRowNameDone]}>{item.name}</Text>
-                    <Text style={[styles.shoppingRowSubtext, isMobile && styles.shoppingRowSubtextMobile, item.purchased && styles.shoppingRowQtyDone]}>
-                      {item.category ? getShoppingItemCategoryLabel(item.category) : 'Tap to edit'}
-                    </Text>
-                    {item.addedBy ? (
-                      <Text style={styles.shoppingRowAddedBy} numberOfLines={1}>
-                        Added by {item.addedBy}{item.addedAt ? ` · ${formatAddedWhen(item.addedAt)}` : ''}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={[styles.shoppingRowMeta, isMobile && styles.shoppingRowMetaMobile]}>
-                    <Text style={[styles.shoppingRowQty, isMobile && styles.shoppingRowQtyMobile, item.purchased && styles.shoppingRowQtyDone]}>{item.quantity}</Text>
-                  </View>
-                </Pressable>
+          ) : shoppingCategory === 'all' ? (
+            groupedShoppingItems.map((group) => (
+              <View key={`grp-${group.key}`} style={styles.shoppingCatGroup}>
+                <View style={styles.shoppingGroupHeader}>
+                  <Text style={styles.shoppingGroupHeaderText}>{group.label}</Text>
+                  <Text style={styles.shoppingGroupHeaderCount}>{group.items.length}</Text>
+                </View>
+                {group.items.map(renderShoppingRow)}
               </View>
             ))
+          ) : filteredShoppingItems.length === 0 ? (
+            <Text style={styles.shoppingCategoryEmpty}>Nothing in this category.</Text>
+          ) : (
+            filteredShoppingItems.map(renderShoppingRow)
           )}
         </View>
         ) : null}
@@ -4397,6 +4447,40 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
+    },
+    shoppingCategoryFilterRow: {
+      marginTop: 10,
+    },
+    shoppingCatGroup: {
+      marginBottom: 6,
+    },
+    shoppingGroupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 4,
+      paddingTop: 12,
+      paddingBottom: 4,
+    },
+    shoppingGroupHeaderText: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '800',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    shoppingGroupHeaderCount: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '700',
+      opacity: 0.7,
+    },
+    shoppingCategoryEmpty: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '600',
+      paddingVertical: 18,
+      textAlign: 'center',
     },
     shoppingCategoryHeader: {
       flexDirection: 'row',
