@@ -53,6 +53,14 @@ type TaskInsert = {
   assigneeRole: Role;
   priority: TaskPriority;
   deadlineAt?: string;
+  staffProfileId?: string;
+};
+
+export type TaskPatch = {
+  title?: string;
+  priority?: TaskPriority;
+  status?: TaskStatus;
+  deadlineAt?: string | null;
 };
 
 type CalendarInsert = {
@@ -531,7 +539,7 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
   const { data, error } = await client
     .from('tasks')
-    .select('id, title, assignee_role, priority, status, deadline_at, requires_parent_approval')
+    .select('id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
 
@@ -547,6 +555,7 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
         : row.assignee_role === 'staff'
           ? 'Staff'
           : 'Child',
+    staffProfileId: row.source_profile_id ?? undefined,
     priority: row.priority as TaskPriority,
     status: row.status as TaskStatus,
     deadline: row.deadline_at ? new Date(row.deadline_at).toISOString().slice(0, 16).replace('T', ' ') : 'No deadline',
@@ -554,19 +563,43 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
   }));
 }
 
-export async function createTask(session: AppSession, payload: TaskInsert) {
+export async function createTask(session: AppSession, payload: TaskInsert): Promise<string> {
   const client = requireClient();
 
-  const { error } = await client.from('tasks').insert({
-    family_id: session.familyId,
-    title: payload.title,
-    assignee_role: payload.assigneeRole,
-    priority: payload.priority,
-    deadline_at: payload.deadlineAt || null,
-    requires_parent_approval: payload.assigneeRole === 'child',
-    created_by: session.userId,
-  });
+  const { data, error } = await client
+    .from('tasks')
+    .insert({
+      family_id: session.familyId,
+      title: payload.title,
+      assignee_role: payload.assigneeRole,
+      priority: payload.priority,
+      deadline_at: payload.deadlineAt || null,
+      requires_parent_approval: payload.assigneeRole === 'child',
+      source_profile_id: payload.staffProfileId ?? null,
+      created_by: session.userId,
+    })
+    .select('id')
+    .single();
 
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function updateTask(taskId: string, patch: TaskPatch) {
+  const client = requireClient();
+  const update: Record<string, unknown> = {};
+  if (patch.title !== undefined) update.title = patch.title;
+  if (patch.priority !== undefined) update.priority = patch.priority;
+  if (patch.status !== undefined) update.status = patch.status;
+  if (patch.deadlineAt !== undefined) update.deadline_at = patch.deadlineAt;
+  if (Object.keys(update).length === 0) return;
+  const { error } = await client.from('tasks').update(update).eq('id', taskId);
+  if (error) throw error;
+}
+
+export async function deleteTask(taskId: string) {
+  const client = requireClient();
+  const { error } = await client.from('tasks').delete().eq('id', taskId);
   if (error) throw error;
 }
 

@@ -78,7 +78,9 @@ import {
   upsertWeeklyMealPlanRecord,
   updatePassword,
   updateRecipe,
+  updateTask,
   updateTaskStatus,
+  deleteTask,
 } from '@/lib/tasks';
 import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
 import { choreStatus, choreTodayKey } from '@/lib/chores';
@@ -901,6 +903,14 @@ function AppShell() {
   const [staffDraftFeatures, setStaffDraftFeatures] = useState<StaffFeature[]>(STAFF_ROLE_PRESETS.nanny.features);
   const [staffGrants, setStaffGrants] = useState<Record<string, StaffGrant>>(() => loadLocalStaffGrants());
   const [staffDraftTasks, setStaffDraftTasks] = useState<StaffDraftTask[]>([createDefaultStaffDraftTask()]);
+  // Staff Tasks manager (dashboard "Tasks" button): assign/edit/remove per-person duties any time.
+  const [tasksManagerOpen, setTasksManagerOpen] = useState(false);
+  const [tasksManagerStaffId, setTasksManagerStaffId] = useState<string | null>(null);
+  const [newStaffTaskTitle, setNewStaffTaskTitle] = useState('');
+  const [newStaffTaskPriority, setNewStaffTaskPriority] = useState<TaskPriority>('non_urgent');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskPriority, setEditTaskPriority] = useState<TaskPriority>('non_urgent');
   const [completedTaskNotifications, setCompletedTaskNotifications] = useState<CompletedTaskNotification[]>([]);
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
@@ -3090,6 +3100,7 @@ function AppShell() {
     visibility?: 'shared' | 'staff_private';
   }) {
     const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
+    const staffTaskProfileId = isStaffTask ? staffProfiles.find((p) => p.name === ownerName)?.id : undefined;
     const deadlineAt = time ? `${date} ${time}` : date;
     const childForMirror =
       owner === 'child' && ownerChildProfileId
@@ -3165,6 +3176,7 @@ function AppShell() {
               assigneeRole: 'staff',
               priority: taskPriority || 'non_urgent',
               deadlineAt: toIsoDeadline(date, time),
+              staffProfileId: staffTaskProfileId,
             })
           : Promise.resolve(),
       ])
@@ -4030,6 +4042,108 @@ function AppShell() {
     Alert.alert('Task completed?', 'Mark this task as completed?', [
       { text: 'No', style: 'cancel' },
       { text: 'Yes', onPress: confirmCompletion },
+    ]);
+  }
+
+  // ---- Staff Tasks manager (dashboard) ----
+  function openTasksManager() {
+    setTasksManagerStaffId((prev) => prev || staffProfiles[0]?.id || null);
+    setEditingTaskId(null);
+    setNewStaffTaskTitle('');
+    setNewStaffTaskPriority('non_urgent');
+    setTasksManagerOpen(true);
+  }
+
+  async function handleAddStaffTask() {
+    const title = newStaffTaskTitle.trim();
+    const staff = staffProfiles.find((p) => p.id === tasksManagerStaffId);
+    if (!title || !staff) return;
+    const priority = newStaffTaskPriority;
+    setNewStaffTaskTitle('');
+    setNewStaffTaskPriority('non_urgent');
+
+    if (session && isSupabaseConfigured) {
+      try {
+        await createTask(session, { title, assigneeRole: 'staff', priority, staffProfileId: staff.id });
+        await refreshLiveTasks();
+        return;
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not add task.');
+        return;
+      }
+    }
+    setTasks((prev) => [
+      {
+        id: `t-manual-${Date.now()}`,
+        title,
+        assigneeRole: 'staff',
+        assigneeName: staff.name,
+        staffProfileId: staff.id,
+        priority,
+        status: 'new',
+        deadline: 'No deadline',
+        needsParentApproval: false,
+      },
+      ...prev,
+    ]);
+  }
+
+  function startEditTask(task: TaskItem) {
+    setEditingTaskId(task.id);
+    setEditTaskTitle(task.title);
+    setEditTaskPriority(task.priority);
+  }
+
+  async function saveEditTask() {
+    const id = editingTaskId;
+    const title = editTaskTitle.trim();
+    if (!id || !title) return;
+    const priority = editTaskPriority;
+    setEditingTaskId(null);
+    setTasks((prev) => prev.map((item) => (item.id === id ? { ...item, title, priority } : item)));
+    if (session && isSupabaseConfigured) {
+      try {
+        await updateTask(id, { title, priority });
+        await refreshLiveTasks();
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not update task.');
+      }
+    }
+  }
+
+  async function toggleManagedTaskDone(task: TaskItem) {
+    const nextStatus: TaskStatus = task.status === 'done' ? 'new' : 'done';
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)));
+    if (session && isSupabaseConfigured) {
+      try {
+        await updateTask(task.id, { status: nextStatus });
+        await refreshLiveTasks();
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not update task.');
+      }
+    }
+  }
+
+  async function removeManagedTask(taskId: string) {
+    const doRemove = async () => {
+      if (editingTaskId === taskId) setEditingTaskId(null);
+      setTasks((prev) => prev.filter((item) => item.id !== taskId));
+      if (session && isSupabaseConfigured) {
+        try {
+          await deleteTask(taskId);
+          await refreshLiveTasks();
+        } catch (error) {
+          setTasksError(error instanceof Error ? error.message : 'Could not remove task.');
+        }
+      }
+    };
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm('Remove this task?')) doRemove();
+      return;
+    }
+    Alert.alert('Remove task?', 'This deletes the task for the staff member.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: doRemove },
     ]);
   }
 
@@ -4945,10 +5059,83 @@ function AppShell() {
     <WeekStrip eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={(dateKey) => openDaySheet(dateKey)} />
   );
 
+  const openStaffTaskCount = tasks.filter((t) => t.assigneeRole === 'staff' && t.status !== 'done').length;
+  const focusTasks = staffProfiles.length > 0 && role === 'mother' ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Staff tasks${openStaffTaskCount > 0 ? `, ${openStaffTaskCount} open` : ''}`}
+      style={styles.tasksHubCard}
+      onPress={openTasksManager}
+    >
+      <View style={styles.tasksHubIcon}>
+        <Icon name="chores" color={colors.primary} size={20} />
+      </View>
+      <View style={styles.tasksHubCopy}>
+        <Text style={styles.tasksHubTitle}>Staff tasks</Text>
+        <Text style={styles.tasksHubSub} numberOfLines={1}>
+          {openStaffTaskCount > 0 ? `${openStaffTaskCount} open · tap to assign or edit` : 'Assign & send tasks to staff'}
+        </Text>
+      </View>
+      {openStaffTaskCount > 0 ? (
+        <View style={styles.tasksHubBadge}>
+          <Text style={styles.tasksHubBadgeText}>{openStaffTaskCount}</Text>
+        </View>
+      ) : (
+        <Icon name="chevron" color={colors.subtext} size={16} />
+      )}
+    </Pressable>
+  ) : null;
+
+  const myStaffTasks = tasks.filter(
+    (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
+  );
+  const focusStaffTasks = isStaffView && staffCan('tasks') ? (
+    <FamCard title={`My tasks${myStaffTasks.some((t) => t.status !== 'done') ? ` · ${myStaffTasks.filter((t) => t.status !== 'done').length}` : ''}`} padded={false}>
+      {myStaffTasks.length === 0 ? (
+        <View style={styles.agendaEmpty}>
+          <Text style={styles.agendaEmptyText}>No tasks assigned yet.</Text>
+          <Text style={styles.agendaEmptySub}>New tasks from the family will show up here.</Text>
+        </View>
+      ) : (
+        myStaffTasks.map((task, i) => (
+          <View key={task.id}>
+            {i > 0 ? <View style={styles.agendaLine} /> : null}
+            <View style={styles.staffTaskViewRow}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: task.status === 'done' }}
+                hitSlop={8}
+                style={[styles.taskCheck, task.status === 'done' && styles.taskCheckDone]}
+                onPress={() => toggleManagedTaskDone(task)}
+              >
+                {task.status === 'done' ? <Text style={styles.taskCheckMark}>✓</Text> : null}
+              </Pressable>
+              <View style={styles.taskManageCopy}>
+                <Text style={[styles.taskManageTitle, task.status === 'done' && styles.taskManageTitleDone]} numberOfLines={2}>{task.title}</Text>
+                <View style={styles.taskManageMeta}>
+                  {task.priority === 'urgent' ? (
+                    <View style={[styles.taskPill, styles.taskPillUrgent]}>
+                      <Text style={[styles.taskPillText, styles.taskPillTextUrgent]}>Urgent</Text>
+                    </View>
+                  ) : null}
+                  {task.deadline && task.deadline !== 'No deadline' ? (
+                    <Text style={styles.taskManageTime}>{task.deadline}</Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </View>
+        ))
+      )}
+    </FamCard>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusPlanner}
+      {focusStaffTasks}
       {focusCalories}
+      {focusTasks}
       {focusNeeds}
       {focusMiniCal}
     </View>
@@ -4956,7 +5143,9 @@ function AppShell() {
     <View style={styles.dashDesktop}>
       <View style={styles.dashMain}>
         {focusPlanner}
+        {focusStaffTasks}
         {focusCalories}
+        {focusTasks}
       </View>
       <View style={styles.dashRail}>
         {focusMiniCal}
@@ -5805,6 +5994,148 @@ function AppShell() {
                   <Text style={styles.authBtnText}>Save Staff</Text>
                 </Pressable>
               </View>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+          ) : null}
+
+          {tasksManagerOpen ? (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setTasksManagerOpen(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.childEditorModalCard}>
+                <View style={styles.childEditorHeader}>
+                  <Text style={styles.authTitle}>Staff tasks</Text>
+                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setTasksManagerOpen(false)}>
+                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
+                  {staffProfiles.length === 0 ? (
+                    <Text style={styles.authInfoText}>Add a staff member first in Settings → Family &amp; Access.</Text>
+                  ) : (
+                    <>
+                      {staffProfiles.length > 1 ? (
+                        <>
+                          <Text style={styles.createHint}>Assign to</Text>
+                          <View style={styles.dropdownChipWrap}>
+                            {staffProfiles.map((p) => {
+                              const on = p.id === tasksManagerStaffId;
+                              return (
+                                <Pressable
+                                  key={`taskmgr-staff-${p.id}`}
+                                  style={[styles.dropdownChip, on && styles.dropdownChipActive]}
+                                  onPress={() => { setTasksManagerStaffId(p.id); setEditingTaskId(null); }}
+                                >
+                                  <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>{p.name}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </>
+                      ) : null}
+
+                      <View style={styles.taskAddRow}>
+                        <TextInput
+                          placeholder={`Add a task for ${staffProfiles.find((p) => p.id === tasksManagerStaffId)?.name || 'staff'}`}
+                          style={[styles.input, styles.taskAddInput]}
+                          value={newStaffTaskTitle}
+                          onChangeText={setNewStaffTaskTitle}
+                          onSubmitEditing={handleAddStaffTask}
+                          returnKeyType="done"
+                        />
+                        <Pressable style={styles.taskAddBtn} onPress={handleAddStaffTask}>
+                          <Text style={styles.taskAddBtnText}>Add</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.seg}>
+                        <Pressable
+                          style={[styles.roleChip, newStaffTaskPriority === 'non_urgent' && styles.roleChipActive]}
+                          onPress={() => setNewStaffTaskPriority('non_urgent')}
+                        >
+                          <Text style={[styles.roleChipText, newStaffTaskPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.roleChip, newStaffTaskPriority === 'urgent' && styles.roleChipActive]}
+                          onPress={() => setNewStaffTaskPriority('urgent')}
+                        >
+                          <Text style={[styles.roleChipText, newStaffTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
+                        </Pressable>
+                      </View>
+
+                      {(() => {
+                        const list = tasks.filter((t) => t.assigneeRole === 'staff' && t.staffProfileId === tasksManagerStaffId);
+                        if (list.length === 0) {
+                          return <Text style={[styles.authInfoText, { marginTop: 14 }]}>No tasks yet. Add one above — it lands on this person’s account.</Text>;
+                        }
+                        return list.map((task) => (
+                          <View key={task.id} style={styles.taskManageRow}>
+                            <Pressable
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: task.status === 'done' }}
+                              hitSlop={8}
+                              style={[styles.taskCheck, task.status === 'done' && styles.taskCheckDone]}
+                              onPress={() => toggleManagedTaskDone(task)}
+                            >
+                              {task.status === 'done' ? <Text style={styles.taskCheckMark}>✓</Text> : null}
+                            </Pressable>
+                            {editingTaskId === task.id ? (
+                              <View style={styles.taskEditWrap}>
+                                <TextInput
+                                  style={[styles.input, styles.taskAddInput]}
+                                  value={editTaskTitle}
+                                  onChangeText={setEditTaskTitle}
+                                  onSubmitEditing={saveEditTask}
+                                  autoFocus
+                                />
+                                <View style={styles.seg}>
+                                  <Pressable
+                                    style={[styles.roleChip, editTaskPriority === 'non_urgent' && styles.roleChipActive]}
+                                    onPress={() => setEditTaskPriority('non_urgent')}
+                                  >
+                                    <Text style={[styles.roleChipText, editTaskPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    style={[styles.roleChip, editTaskPriority === 'urgent' && styles.roleChipActive]}
+                                    onPress={() => setEditTaskPriority('urgent')}
+                                  >
+                                    <Text style={[styles.roleChipText, editTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
+                                  </Pressable>
+                                </View>
+                                <View style={styles.taskEditActions}>
+                                  <Pressable style={styles.taskAddBtn} onPress={saveEditTask}>
+                                    <Text style={styles.taskAddBtnText}>Save</Text>
+                                  </Pressable>
+                                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setEditingTaskId(null)}>
+                                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Cancel</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ) : (
+                              <>
+                                <Pressable style={styles.taskManageCopy} onPress={() => startEditTask(task)}>
+                                  <Text style={[styles.taskManageTitle, task.status === 'done' && styles.taskManageTitleDone]} numberOfLines={2}>{task.title}</Text>
+                                  <View style={styles.taskManageMeta}>
+                                    <View style={[styles.taskPill, task.priority === 'urgent' ? styles.taskPillUrgent : styles.taskPillNormal]}>
+                                      <Text style={[styles.taskPillText, task.priority === 'urgent' ? styles.taskPillTextUrgent : styles.taskPillTextNormal]}>
+                                        {task.priority === 'urgent' ? 'Urgent' : 'Task'}
+                                      </Text>
+                                    </View>
+                                    {task.deadline && task.deadline !== 'No deadline' ? (
+                                      <Text style={styles.taskManageTime}>{task.deadline}</Text>
+                                    ) : null}
+                                  </View>
+                                </Pressable>
+                                <Pressable hitSlop={8} style={styles.taskDeleteBtn} onPress={() => removeManagedTask(task.id)}>
+                                  <Text style={styles.taskDeleteText}>✕</Text>
+                                </Pressable>
+                              </>
+                            )}
+                          </View>
+                        ));
+                      })()}
+                    </>
+                  )}
                 </ScrollView>
               </View>
             </View>
@@ -11546,6 +11877,186 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 13.5,
     fontWeight: '700',
+  },
+  tasksHubCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    backgroundColor: colors.glassStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+  },
+  tasksHubIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: hexToRgba(colors.primary, 0.13) || colors.selection,
+  },
+  tasksHubCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  tasksHubTitle: {
+    color: colors.text,
+    fontSize: 15.5,
+    fontWeight: '800',
+  },
+  tasksHubSub: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  tasksHubBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  tasksHubBadgeText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  seg: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  taskAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  taskAddInput: {
+    flex: 1,
+    marginTop: 0,
+  },
+  taskAddBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskAddBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  taskManageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 10,
+  },
+  taskCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 1.8,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  taskCheckDone: {
+    backgroundColor: colors.done,
+    borderColor: colors.done,
+  },
+  taskCheckMark: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  taskManageCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  taskManageTitle: {
+    color: colors.text,
+    fontSize: 14.5,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  taskManageTitleDone: {
+    color: colors.subtext,
+    textDecorationLine: 'line-through',
+  },
+  taskManageMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flexWrap: 'wrap',
+  },
+  taskManageTime: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  taskPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  taskPillNormal: {
+    backgroundColor: hexToRgba(colors.primary, 0.12) || colors.selection,
+  },
+  taskPillUrgent: {
+    backgroundColor: hexToRgba(colors.urgent, 0.12) || colors.selection,
+  },
+  taskPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  taskPillTextNormal: {
+    color: colors.primary,
+  },
+  taskPillTextUrgent: {
+    color: colors.urgent,
+  },
+  taskDeleteBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskDeleteText: {
+    color: colors.subtext,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  taskEditWrap: {
+    flex: 1,
+    gap: 8,
+  },
+  taskEditActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+  },
+  staffTaskViewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
   summaryWrap: {
     marginTop: isMobile ? 8 : 12,

@@ -191,6 +191,7 @@ export type TaskItem = {
   title: string;
   assigneeRole: Role;
   assigneeName: string;
+  staffProfileId?: string;
   priority: TaskPriority;
   status: TaskStatus;
   deadline: string;
