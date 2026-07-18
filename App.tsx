@@ -5654,9 +5654,16 @@ function AppShell() {
             </View>
           </Modal>
 
-          {staffSetupOpen ? (
-            <View style={styles.authCard}>
-              <Text style={styles.authTitle}>Staff Profile</Text>
+          <Modal visible={staffSetupOpen} transparent animationType="fade" onRequestClose={() => setStaffSetupOpen(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.childEditorModalCard}>
+                <View style={styles.childEditorHeader}>
+                  <Text style={styles.authTitle}>Staff Profile</Text>
+                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setStaffSetupOpen(false)}>
+                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
               <TextInput placeholder="Staff name" style={styles.input} value={staffDraftName} onChangeText={setStaffDraftName} />
               <TextInput
                 placeholder="Date of birth (DD.MM.YYYY)"
@@ -5795,8 +5802,10 @@ function AppShell() {
                   <Text style={styles.authBtnText}>Save Staff</Text>
                 </Pressable>
               </View>
+                </ScrollView>
+              </View>
             </View>
-          ) : null}
+          </Modal>
         </>
       ) : null}
 
