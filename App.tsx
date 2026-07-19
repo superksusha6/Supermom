@@ -107,7 +107,7 @@ import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActi
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
 
-type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds' | 'household';
+type Screen = 'calendar' | 'food' | 'family' | 'wellness' | 'fixit' | 'meds' | 'household' | 'settings';
 type FamilyTab = 'children' | 'chores';
 type FoodTab = 'today' | 'shopping' | 'recipes' | 'plan' | 'diary';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
@@ -845,7 +845,8 @@ function AppShell() {
   const [authSignupSex, setAuthSignupSex] = useState<NutritionSex>('female');
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
-  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const settingsPanelOpen = screen === 'settings';
+  const setSettingsPanelOpen = (open: boolean) => setScreen(open ? 'settings' : 'calendar');
   const [changePwOpen, setChangePwOpen] = useState(false);
   const [changePwValue, setChangePwValue] = useState('');
   const [changePwConfirm, setChangePwConfirm] = useState('');
@@ -4798,6 +4799,82 @@ function AppShell() {
     />
   );
 
+  // Settings rendered as a normal screen (bottom nav stays visible), not a modal.
+  const settingsScreenContent = (
+    <View style={styles.settingsScreen}>
+      {settingsScreenNode}
+      <View style={styles.settingsUtilityCard}>
+        <View style={styles.settingsUtilitySection}>
+          <Text style={styles.settingsUtilityTitle}>Appearance</Text>
+          <View style={styles.settingsUtilityThemeCard}>
+            <View style={styles.appearanceSeg}>
+              {([
+                { key: 'light', label: 'Light' },
+                { key: 'dark', label: 'Dark' },
+                { key: 'auto', label: 'Auto' },
+              ] as { key: ThemeMode; label: string }[]).map((option) => (
+                <Pressable
+                  key={option.key}
+                  style={[styles.appearanceSegBtn, themeMode === option.key && styles.appearanceSegBtnActive]}
+                  onPress={() => {
+                    manualThemeSelectionRef.current = true;
+                    setThemeMode(option.key);
+                  }}
+                >
+                  <Text style={[styles.appearanceSegText, themeMode === option.key && styles.appearanceSegTextActive]}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.appearanceHint}>
+              {themeMode === 'auto' ? 'Matches your phone’s Light/Dark setting.' : `Always ${themeMode}.`}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.settingsUtilitySection}>
+          <Text style={styles.settingsUtilityTitle}>Account</Text>
+          {!session ? (
+            <View style={styles.settingsUtilityActionsRow}>
+              <Pressable style={styles.accountMenuPrimaryItem} onPress={() => { setScreen('calendar'); openAuthMenu('signin'); }}>
+                <Text style={styles.accountMenuPrimaryItemText}>Log in</Text>
+              </Pressable>
+              <Pressable style={styles.accountMenuItem} onPress={() => { setScreen('calendar'); openAuthMenu('signup'); }}>
+                <Text style={styles.accountMenuItemText}>Create account</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Pressable
+                style={styles.accountMenuItem}
+                onPress={() => {
+                  setChangePwValue('');
+                  setChangePwConfirm('');
+                  setChangePwMsg(null);
+                  setChangePwOpen(true);
+                }}
+              >
+                <Text style={styles.accountMenuItemText}>Change password</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
+                onPress={() => {
+                  signOut()
+                    .then(() => {
+                      resetSignedOutState();
+                      setScreen('calendar');
+                    })
+                    .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
+                }}
+              >
+                <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
   function handleDashboardAddMeal() {
     setDashboardMealPickerOpen(true);
   }
@@ -5472,109 +5549,6 @@ function AppShell() {
         </Pressable>
       </Modal>
 
-      <Modal visible={settingsPanelOpen} transparent animationType="fade" onRequestClose={() => setSettingsPanelOpen(false)}>
-        <View style={styles.settingsModalRoot}>
-          <Pressable style={styles.settingsModalBackdrop} onPress={() => setSettingsPanelOpen(false)} />
-          <View pointerEvents="box-none" style={styles.settingsModalLayer}>
-            <View style={styles.settingsModalCard}>
-              <View style={styles.settingsModalHeader}>
-                <View style={styles.settingsModalHeaderCopy}>
-                  <Text style={styles.settingsModalTitle}>Settings</Text>
-                </View>
-                <Pressable style={styles.settingsModalCloseBtn} onPress={() => setSettingsPanelOpen(false)}>
-                  <Text style={styles.settingsModalCloseText}>Close</Text>
-                </Pressable>
-              </View>
-              <View style={styles.settingsModalContent}>
-                {settingsScreenNode}
-              </View>
-              <View style={styles.settingsUtilityCard}>
-                <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Appearance</Text>
-                  <View style={styles.settingsUtilityThemeCard}>
-                    <View style={styles.appearanceSeg}>
-                      {([
-                        { key: 'light', label: 'Light' },
-                        { key: 'dark', label: 'Dark' },
-                        { key: 'auto', label: 'Auto' },
-                      ] as { key: ThemeMode; label: string }[]).map((option) => (
-                        <Pressable
-                          key={option.key}
-                          style={[styles.appearanceSegBtn, themeMode === option.key && styles.appearanceSegBtnActive]}
-                          onPress={() => {
-                            manualThemeSelectionRef.current = true;
-                            setThemeMode(option.key);
-                          }}
-                        >
-                          <Text style={[styles.appearanceSegText, themeMode === option.key && styles.appearanceSegTextActive]}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Text style={styles.appearanceHint}>
-                      {themeMode === 'auto' ? 'Matches your phone’s Light/Dark setting.' : `Always ${themeMode}.`}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Account</Text>
-                  {!session ? (
-                    <View style={styles.settingsUtilityActionsRow}>
-                      <Pressable
-                        style={styles.accountMenuPrimaryItem}
-                        onPress={() => {
-                          setSettingsPanelOpen(false);
-                          openAuthMenu('signin');
-                        }}
-                      >
-                        <Text style={styles.accountMenuPrimaryItemText}>Log in</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.accountMenuItem}
-                        onPress={() => {
-                          setSettingsPanelOpen(false);
-                          openAuthMenu('signup');
-                        }}
-                      >
-                        <Text style={styles.accountMenuItemText}>Create account</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <>
-                      <Pressable
-                        style={styles.accountMenuItem}
-                        onPress={() => {
-                          setChangePwValue('');
-                          setChangePwConfirm('');
-                          setChangePwMsg(null);
-                          setChangePwOpen(true);
-                        }}
-                      >
-                        <Text style={styles.accountMenuItemText}>Change password</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.accountMenuItem, styles.accountMenuDangerItem]}
-                        onPress={() => {
-                          signOut()
-                            .then(() => {
-                              resetSignedOutState();
-                              setSettingsPanelOpen(false);
-                            })
-                            .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
-                        }}
-                      >
-                        <Text style={[styles.accountMenuItemText, styles.accountMenuDangerText]}>Sign out</Text>
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={changePwOpen} transparent animationType="fade" onRequestClose={() => setChangePwOpen(false)}>
         <Pressable style={styles.newListBackdrop} onPress={() => setChangePwOpen(false)}>
@@ -6331,6 +6305,7 @@ function AppShell() {
           <Text style={styles.calBackText}>{foodEntryOrigin === 'home' ? 'Back to Today' : 'Back to Food'}</Text>
         </Pressable>
       ) : null}
+        {screen === 'settings' ? settingsScreenContent : null}
         {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
@@ -10086,6 +10061,10 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  settingsScreen: {
+    gap: 16,
+    paddingBottom: 12,
   },
   settingsUtilityCard: {
     gap: 14,

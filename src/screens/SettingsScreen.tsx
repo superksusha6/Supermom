@@ -944,7 +944,7 @@ export function SettingsScreen({
 
   return (
     <>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
         {settingsGroups.map((group) => (
           <View key={group.header} style={styles.settingsGroup}>
             <Text style={styles.settingsGroupLabel}>{group.header}</Text>
@@ -962,7 +962,7 @@ export function SettingsScreen({
             </View>
           </View>
         ))}
-      </ScrollView>
+      </View>
 
       <Modal visible={!!activeSection} transparent animationType="fade" onRequestClose={closeSection}>
         <View style={styles.editorModalRoot}>
