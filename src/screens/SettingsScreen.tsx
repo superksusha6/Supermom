@@ -88,7 +88,7 @@ type Props = {
   onInviteStaff: (staffId: string) => void;
 };
 
-type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'meds' | 'family';
+type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'meds' | 'addons' | 'family';
 
 export function SettingsScreen({
   parentLabel,
@@ -250,13 +250,9 @@ export function SettingsScreen({
     },
     {
       header: 'Preferences',
-      rows: [{ key: 'notifications', title: 'Notifications' }],
-    },
-    {
-      header: 'Add-ons',
       rows: [
-        { key: 'habits', title: 'Habits' },
-        { key: 'meds', title: 'Medicine cabinet' },
+        { key: 'notifications', title: 'Notifications' },
+        { key: 'addons', title: 'Add-ons' },
       ],
     },
     {
@@ -278,9 +274,11 @@ export function SettingsScreen({
               ? 'Habits'
               : activeSection === 'meds'
                 ? 'Medicine cabinet'
-                : activeSection === 'family'
-                  ? 'Family & Access'
-                  : '';
+                : activeSection === 'addons'
+                  ? 'Add-ons'
+                  : activeSection === 'family'
+                    ? 'Family & Access'
+                    : '';
 
   const activeSectionSubtitle =
     activeSection === 'personal'
@@ -295,9 +293,11 @@ export function SettingsScreen({
               ? 'Enable, edit and create trackers.'
               : activeSection === 'meds'
                 ? 'Optional meds inventory with expiry reminders.'
-                : activeSection === 'family'
-                  ? 'Family profiles, staff access and workspace.'
-                  : '';
+                : activeSection === 'addons'
+                  ? 'Optional features — turn on what you need.'
+                  : activeSection === 'family'
+                    ? 'Family profiles, staff access and workspace.'
+                    : '';
 
   function openSection(section: SettingsSectionKey) {
     if (section === 'personal' || section === 'cycle') onEditPersonalProfile();
@@ -971,8 +971,15 @@ export function SettingsScreen({
                   </>
                 ) : null}
                 {activeSection === 'notifications' ? renderNotificationsEditor() : null}
-                {activeSection === 'habits' ? renderHabitsEditor() : null}
-                {activeSection === 'meds' ? renderMedsEditor() : null}
+                {activeSection === 'addons' ? (
+                  <>
+                    <Text style={styles.addonModuleLabel}>Habits</Text>
+                    {renderHabitsEditor()}
+                    <View style={styles.editorSectionDivider} />
+                    <Text style={styles.addonModuleLabel}>Medicine cabinet</Text>
+                    {renderMedsEditor()}
+                  </>
+                ) : null}
                 {activeSection === 'family' ? renderFamilyEditor() : null}
               </ScrollView>
             </View>
@@ -1216,6 +1223,14 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
       fontSize: 12,
       lineHeight: 18,
+    },
+    addonModuleLabel: {
+      color: colors.subtext,
+      fontSize: 11,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginBottom: 8,
     },
     physiqueRow: {
       flexDirection: 'row',
