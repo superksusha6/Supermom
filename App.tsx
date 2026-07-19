@@ -199,6 +199,16 @@ const LOCAL_SHOPPING_INSIGHTS_KEY = 'smartmom.shoppingInsights.v1';
 const LOCAL_FRIDGE_ITEMS_KEY = 'smartmom.fridgeItems.v1';
 const LOCAL_CHILDREN_KEY = 'smartmom.children.v1';
 const LOCAL_HABITS_KEY = 'smartmom.habits.v1';
+const LOCAL_HABITS_SEEDED_KEY = 'smartmom.habitsSeeded.v1';
+// Starter set of common habits, pre-filled the first time so "My habits" isn't empty.
+const DEFAULT_HABITS: HabitEntry[] = [
+  { id: 'seed-water', title: 'Drink water', icon: '💧', color: '#38bdf8', targetText: '8 glasses', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+  { id: 'seed-exercise', title: 'Exercise', icon: '🏃', color: '#f59e0b', targetText: '20 min', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+  { id: 'seed-yoga', title: 'Yoga', icon: '🧘', color: '#a78bfa', targetText: '15 min', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+  { id: 'seed-vitamins', title: 'Vitamins', icon: '💊', color: '#34d399', targetText: 'Daily', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+  { id: 'seed-reading', title: 'Reading', icon: '📖', color: '#f472b6', targetText: '10 pages', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+  { id: 'seed-sleep', title: 'Sleep 8h', icon: '🛌', color: '#818cf8', targetText: '8 hours', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
+];
 const LOCAL_HABIT_REMINDERS_KEY = 'smartmom.habitRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDERS_KEY = 'smartmom.periodRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDER_LEAD_DAYS_KEY = 'smartmom.periodReminderLeadDays.v1';
@@ -9178,11 +9188,28 @@ function mergeChildrenPreferLocal(serverChildren: ChildProfile[], localChildren:
   return [...merged.values()];
 }
 
+function loadHabitsSeeded(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(LOCAL_HABITS_SEEDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markHabitsSeeded() {
+  try {
+    globalThis.localStorage?.setItem(LOCAL_HABITS_SEEDED_KEY, '1');
+  } catch {
+    // best-effort
+  }
+}
+
 function loadLocalHabits(): HabitEntry[] {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return [];
   try {
     const raw = globalThis.localStorage.getItem(LOCAL_HABITS_KEY);
-    if (!raw) return [];
+    // First run (never seeded) → pre-fill the starter set so "My habits" isn't empty.
+    if (!raw) return loadHabitsSeeded() ? [] : DEFAULT_HABITS.map((h) => ({ ...h }));
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -9204,6 +9231,9 @@ function loadLocalHabits(): HabitEntry[] {
 function persistLocalHabits(habits: HabitEntry[]) {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return;
   try {
+    // Once we've saved habits at least once, don't re-seed defaults (even if the
+    // user deletes them all).
+    markHabitsSeeded();
     if (habits.length === 0) {
       globalThis.localStorage.removeItem(LOCAL_HABITS_KEY);
       return;
