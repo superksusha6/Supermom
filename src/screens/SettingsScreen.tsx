@@ -817,7 +817,9 @@ export function SettingsScreen({
           <View style={styles.habitSettingsWrap}>
             {habits.map((habit) => (
               <Pressable key={habit.id} style={styles.habitListRow} onPress={() => setEditingHabitId(habit.id)}>
-                <Text style={styles.habitSettingsIcon}>{habit.icon}</Text>
+                <View style={styles.habitRowIcon}>
+                  <Text style={styles.habitRowIconText}>{habit.icon}</Text>
+                </View>
                 <View style={styles.habitSettingsCopy}>
                   <Text style={styles.habitSettingsTitle}>{habit.title}</Text>
                   {habit.targetText ? <Text style={styles.habitSettingsMeta}>{habit.targetText}</Text> : null}
@@ -1365,13 +1367,28 @@ const createStyles = (colors: ThemeColors) =>
     habitListRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      borderRadius: 14,
+      gap: 12,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.glassStrong,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      shadowColor: colors.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+    },
+    habitRowIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    habitRowIconText: {
+      fontSize: 20,
     },
     habitListRowInner: {
       flexDirection: 'row',
@@ -1380,8 +1397,9 @@ const createStyles = (colors: ThemeColors) =>
     },
     habitRowChevron: {
       color: colors.subtext,
-      fontSize: 15,
-      fontWeight: '800',
+      fontSize: 22,
+      fontWeight: '500',
+      opacity: 0.65,
     },
     habitDeleteText: {
       color: colors.urgent,
@@ -1391,13 +1409,17 @@ const createStyles = (colors: ThemeColors) =>
     },
     habitsBackRow: {
       alignSelf: 'flex-start',
-      paddingVertical: 6,
-      paddingRight: 12,
-      marginBottom: 4,
+      backgroundColor: colors.glassSoft,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingVertical: 7,
+      paddingHorizontal: 14,
+      marginBottom: 12,
     },
     habitsBackText: {
       color: colors.primary,
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: '800',
     },
     habitRemoveBtn: {
@@ -1433,12 +1455,13 @@ const createStyles = (colors: ThemeColors) =>
     },
     habitSettingsTitle: {
       color: colors.text,
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '800',
     },
     habitSettingsMeta: {
       color: colors.subtext,
-      fontSize: 11,
+      fontSize: 12.5,
+      fontWeight: '600',
     },
     customHabitCard: {
       marginTop: 12,
