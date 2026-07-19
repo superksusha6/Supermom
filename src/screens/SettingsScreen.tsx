@@ -668,101 +668,40 @@ export function SettingsScreen({
 
         {habitsEnabled && habitsExpanded ? (
           <>
-            <View style={styles.masterReminderRow}>
-              <View style={styles.masterReminderCopy}>
-                <Text style={styles.masterReminderTitle}>Habit reminders</Text>
-                <Text style={styles.masterReminderSubtitle}>{habitRemindersEnabled ? 'Reminders are allowed app-wide.' : 'All habit reminders are paused.'}</Text>
+            {habits.filter((h) => h.enabled).length > 0 ? (
+              <View style={styles.habitSettingsWrap}>
+                {habits
+                  .filter((h) => h.enabled)
+                  .map((habit) => (
+                    <View key={habit.id} style={styles.habitListRow}>
+                      <Text style={styles.habitSettingsIcon}>{habit.icon}</Text>
+                      <View style={styles.habitSettingsCopy}>
+                        <Text style={styles.habitSettingsTitle}>{habit.title}</Text>
+                        {habit.targetText ? <Text style={styles.habitSettingsMeta}>{habit.targetText}</Text> : null}
+                      </View>
+                      <Pressable
+                        hitSlop={8}
+                        style={styles.habitRemoveBtn}
+                        onPress={() =>
+                          onHabitsChange((prev) =>
+                            habit.builtIn
+                              ? prev.map((item) => (item.id === habit.id ? { ...item, enabled: false } : item))
+                              : prev.filter((item) => item.id !== habit.id),
+                          )
+                        }
+                      >
+                        <Text style={styles.habitRemoveX}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
               </View>
-              <Pressable style={[styles.toggle, habitRemindersEnabled && styles.toggleOn]} onPress={() => onHabitRemindersEnabledChange((prev) => !prev)}>
-                <Text style={styles.toggleText}>{habitRemindersEnabled ? 'On' : 'Off'}</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.helpText}>Turn ready-made trackers on only when you need them, edit the target, or add your own custom one.</Text>
-            <View style={styles.habitSettingsWrap}>
-          {habits.map((habit) => (
-            <View key={habit.id} style={styles.habitSettingsCard}>
-              <View style={styles.habitSettingsTop}>
-                <View style={styles.habitSettingsTitleWrap}>
-                  <Text style={styles.habitSettingsIcon}>{habit.icon}</Text>
-                  <View style={styles.habitSettingsCopy}>
-                    <Text style={styles.habitSettingsTitle}>{habit.title}</Text>
-                    <Text style={styles.habitSettingsMeta}>{habit.builtIn ? 'Built-in tracker' : 'Custom tracker'}</Text>
-                  </View>
-                </View>
-                <Pressable
-                  style={[styles.toggle, habit.enabled && styles.toggleOn]}
-                  onPress={() => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, enabled: !item.enabled } : item)))}
-                >
-                  <Text style={styles.toggleText}>{habit.enabled ? 'On' : 'Off'}</Text>
-                </Pressable>
-              </View>
-              <TextInput
-                placeholder="Target"
-                style={styles.input}
-                value={habit.targetText}
-                onChangeText={(text) => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, targetText: text } : item)))}
-              />
-              <Text style={styles.label}>Reminder</Text>
-              <View style={styles.pillRow}>
-                {reminderModes.map((mode) => (
-                  <Pressable
-                    key={`${habit.id}-${mode.key}`}
-                    style={[styles.pillBtn, (habit.reminderMode || 'off') === mode.key && styles.pillBtnActive]}
-                    onPress={() =>
-                      onHabitsChange((prev) =>
-                        prev.map((item) =>
-                          item.id === habit.id
-                            ? {
-                                ...item,
-                                reminderMode: mode.key,
-                                reminderTime: mode.key === 'off' ? '' : mode.key === 'smart' ? getSmartReminderTime(item.icon) : item.reminderTime || '20:00',
-                              }
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    <Text style={[styles.pillBtnText, (habit.reminderMode || 'off') === mode.key && styles.pillBtnTextActive]}>{mode.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              {(habit.reminderMode || 'off') !== 'off' ? (
-                <>
-                  <Text style={styles.label}>{(habit.reminderMode || 'off') === 'smart' ? 'Suggested time' : 'Custom time'}</Text>
-                  <TextInput
-                    placeholder="20:00"
-                    style={[styles.input, !habitRemindersEnabled && styles.inputDimmed]}
-                    editable={(habit.reminderMode || 'off') === 'custom' && habitRemindersEnabled}
-                    value={(habit.reminderMode || 'off') === 'smart' ? getSmartReminderTime(habit.icon) : habit.reminderTime || '20:00'}
-                    onChangeText={(text) => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, reminderTime: text } : item)))}
-                  />
-                </>
-              ) : null}
-              <Text style={styles.label}>Mark style</Text>
-              <View style={styles.pillRow}>
-                {habitMarkStyles.map((option) => (
-                  <Pressable
-                    key={`${habit.id}-${option.key}`}
-                    style={[styles.markStyleChoice, habit.markStyle === option.key && styles.markStyleChoiceActive]}
-                    onPress={() => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, markStyle: option.key } : item)))}
-                  >
-                    <Text style={styles.markStyleChoiceText}>{option.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              {!habit.builtIn ? (
-                <Pressable style={styles.secondaryBtn} onPress={() => onHabitsChange((prev) => prev.filter((item) => item.id !== habit.id))}>
-                  <Text style={styles.secondaryBtnText}>Remove custom tracker</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-        </View>
+            ) : (
+              <Text style={styles.helpText}>No habits yet — add your own below.</Text>
+            )}
 
         <View style={styles.customHabitCard}>
-          <Text style={styles.label}>Add custom tracker</Text>
-          <TextInput placeholder="Tracker title" style={styles.input} value={customHabitTitle} onChangeText={setCustomHabitTitle} />
+          <Text style={styles.label}>Add a habit</Text>
+          <TextInput placeholder="Habit name" style={styles.input} value={customHabitTitle} onChangeText={setCustomHabitTitle} />
           <TextInput placeholder="Target or norm" style={styles.input} value={customHabitTarget} onChangeText={setCustomHabitTarget} />
           <Text style={styles.label}>Icon</Text>
           <View style={styles.pillRow}>
@@ -811,7 +750,7 @@ export function SettingsScreen({
               setCustomHabitMarkStyle('circle');
             }}
           >
-            <Text style={styles.primaryBtnText}>Add tracker</Text>
+            <Text style={styles.primaryBtnText}>Add habit</Text>
           </Pressable>
         </View>
           </>
@@ -1340,6 +1279,29 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.glassStrong,
       padding: 12,
       gap: 8,
+    },
+    habitListRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassStrong,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+    },
+    habitRemoveBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    habitRemoveX: {
+      color: colors.subtext,
+      fontSize: 15,
+      fontWeight: '700',
     },
     habitSettingsTop: {
       flexDirection: 'row',
