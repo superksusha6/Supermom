@@ -183,7 +183,13 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
             <Text style={styles.addHabitBtnText}>+ Add habit</Text>
           </Pressable>
         </View>
-        <View style={styles.boardsGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={312}
+          decelerationRate="fast"
+          contentContainerStyle={styles.boardsRow}
+        >
           {activeHabits.map((habit) => {
             const marks = buildMarks(Math.min(30, habit.streak));
             return (
@@ -289,7 +295,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </SectionCard>
 
       <SectionCard title="Challenges">
@@ -645,10 +651,11 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: '#ff8fab',
       borderColor: '#ff8fab',
     },
-    boardsGrid: {
+    boardsRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
       gap: 12,
+      paddingBottom: 6,
+      paddingRight: 4,
     },
     emptyText: {
       color: colors.subtext,
@@ -678,7 +685,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
     },
     boardCard: {
-      width: '48.2%',
+      width: 300,
       borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
