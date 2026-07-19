@@ -662,7 +662,7 @@ export function SettingsScreen({
 
         {habitsEnabled ? (
           <Pressable style={styles.secondaryBtn} onPress={() => setHabitsExpanded((prev) => !prev)}>
-            <Text style={styles.secondaryBtnText}>{habitsExpanded ? 'Hide habit settings' : 'Edit habits'}</Text>
+            <Text style={styles.secondaryBtnText}>{habitsExpanded ? 'Hide my habits' : 'My habits'}</Text>
           </Pressable>
         ) : null}
 
