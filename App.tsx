@@ -5280,11 +5280,13 @@ function AppShell() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
       <View style={[styles.appFrame, { width: frameWidth }, wideScreen && styles.appFrameFloat]}>
-      <View pointerEvents="none" style={styles.bgDecor}>
-        <View style={styles.bgOrbA} />
-        <View style={styles.bgOrbB} />
-        <View style={styles.bgOrbC} />
-      </View>
+      {Platform.OS !== 'web' ? (
+        <View pointerEvents="none" style={styles.bgDecor}>
+          <View style={styles.bgOrbA} />
+          <View style={styles.bgOrbB} />
+          <View style={styles.bgOrbC} />
+        </View>
+      ) : null}
       <View style={styles.topBar}>
         <View style={styles.brandWrap}>
           <Text style={styles.brandTitle}>FamOs</Text>
@@ -9782,6 +9784,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     themeName === 'dark' ? 'rgba(79,140,255,0.10)' : themeName === 'mocha' ? 'rgba(111, 77, 58, 0.12)' : 'rgba(191,219,254,0.55)';
   const orbCColor =
     themeName === 'dark' ? 'rgba(255,255,255,0.025)' : themeName === 'mocha' ? 'rgba(34, 23, 18, 0.08)' : 'rgba(255,255,255,0.25)';
+  // Aurora-mesh backdrop (web): soft blurred colour blobs behind the glass cards, theme-aware.
+  const auroraLayers =
+    themeName === 'dark'
+      ? 'radial-gradient(58% 48% at 14% 6%, rgba(79,140,255,0.30), transparent 60%), radial-gradient(52% 42% at 94% 16%, rgba(126,92,255,0.24), transparent 60%), radial-gradient(66% 56% at 82% 102%, rgba(40,96,205,0.24), transparent 62%)'
+      : 'radial-gradient(58% 48% at 14% 8%, rgba(120,170,255,0.58), transparent 60%), radial-gradient(52% 42% at 92% 16%, rgba(255,196,150,0.42), transparent 60%), radial-gradient(64% 54% at 82% 100%, rgba(196,164,255,0.44), transparent 60%)';
 
   return StyleSheet.create({
   safe: {
@@ -9795,7 +9802,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     backgroundColor: colors.bg,
     overflow: 'hidden',
     ...(Platform.OS === 'web'
-      ? ({ boxShadow: '0 24px 70px -30px rgba(15,23,42,0.45)' } as any)
+      ? ({ boxShadow: '0 24px 70px -30px rgba(15,23,42,0.45)', backgroundImage: auroraLayers } as any)
       : null),
   },
   appFrameFloat: {
