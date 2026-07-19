@@ -4759,6 +4759,9 @@ function AppShell() {
       onHabitsEnabledChange={setHabitsEnabled}
       habitRemindersEnabled={habitRemindersEnabled}
       onHabitRemindersEnabledChange={setHabitRemindersEnabled}
+      medsEnabled={medsEnabled}
+      onToggleMeds={() => setMedsEnabled((prev) => !prev)}
+      onOpenMeds={() => { setSettingsPanelOpen(false); setMedsEnabled(true); setScreen('meds'); }}
       periodRemindersEnabled={periodRemindersEnabled}
       onPeriodRemindersEnabledChange={setPeriodRemindersEnabled}
       periodReminderLeadDays={periodReminderLeadDays}
@@ -5423,18 +5426,6 @@ function AppShell() {
                 {settingsScreenNode}
               </View>
               <View style={styles.settingsUtilityCard}>
-                <View style={styles.settingsUtilitySection}>
-                  <Text style={styles.settingsUtilityTitle}>Modules</Text>
-                  <View style={styles.settingsUtilityListCard}>
-                    <Pressable style={styles.moduleToggleRow} onPress={() => setMedsEnabled((prev) => !prev)}>
-                      <Text style={styles.moduleToggleTitle}>💊  Medicine cabinet</Text>
-                      <View style={[styles.moduleToggle, medsEnabled && styles.moduleToggleOn]}>
-                        <View style={[styles.moduleToggleKnob, medsEnabled && styles.moduleToggleKnobOn]} />
-                      </View>
-                    </Pressable>
-                  </View>
-                </View>
-
                 <View style={styles.settingsUtilitySection}>
                   <Text style={styles.settingsUtilityTitle}>Appearance</Text>
                   <View style={styles.settingsUtilityThemeCard}>

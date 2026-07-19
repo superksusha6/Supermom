@@ -60,6 +60,9 @@ type Props = {
   onHabitsEnabledChange: Dispatch<SetStateAction<boolean>>;
   habitRemindersEnabled: boolean;
   onHabitRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
+  medsEnabled: boolean;
+  onToggleMeds: () => void;
+  onOpenMeds: () => void;
   periodRemindersEnabled: boolean;
   onPeriodRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
   periodReminderLeadDays: number;
@@ -85,7 +88,7 @@ type Props = {
   onInviteStaff: (staffId: string) => void;
 };
 
-type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'family';
+type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'meds' | 'family';
 
 export function SettingsScreen({
   parentLabel,
@@ -119,6 +122,9 @@ export function SettingsScreen({
   onHabitsEnabledChange,
   habitRemindersEnabled,
   onHabitRemindersEnabledChange,
+  medsEnabled,
+  onToggleMeds,
+  onOpenMeds,
   periodRemindersEnabled,
   onPeriodRemindersEnabledChange,
   periodReminderLeadDays,
@@ -244,9 +250,13 @@ export function SettingsScreen({
     },
     {
       header: 'Preferences',
+      rows: [{ key: 'notifications', title: 'Notifications' }],
+    },
+    {
+      header: 'Add-ons',
       rows: [
-        { key: 'notifications', title: 'Notifications' },
         { key: 'habits', title: 'Habits' },
+        { key: 'meds', title: 'Medicine cabinet' },
       ],
     },
     {
@@ -266,9 +276,11 @@ export function SettingsScreen({
             ? 'Notifications'
             : activeSection === 'habits'
               ? 'Habits'
-              : activeSection === 'family'
-                ? 'Family & Access'
-                : '';
+              : activeSection === 'meds'
+                ? 'Medicine cabinet'
+                : activeSection === 'family'
+                  ? 'Family & Access'
+                  : '';
 
   const activeSectionSubtitle =
     activeSection === 'personal'
@@ -281,9 +293,11 @@ export function SettingsScreen({
             ? 'Global reminder behavior.'
             : activeSection === 'habits'
               ? 'Enable, edit and create trackers.'
-              : activeSection === 'family'
-                ? 'Family profiles, staff access and workspace.'
-                : '';
+              : activeSection === 'meds'
+                ? 'Optional meds inventory with expiry reminders.'
+                : activeSection === 'family'
+                  ? 'Family profiles, staff access and workspace.'
+                  : '';
 
   function openSection(section: SettingsSectionKey) {
     if (section === 'personal' || section === 'cycle') onEditPersonalProfile();
@@ -798,6 +812,32 @@ export function SettingsScreen({
     );
   }
 
+  function renderMedsEditor() {
+    return (
+      <>
+        <View style={styles.masterReminderRow}>
+          <View style={styles.masterReminderCopy}>
+            <Text style={styles.masterReminderTitle}>Enable medicine cabinet</Text>
+            <Text style={styles.masterReminderSubtitle}>
+              {medsEnabled ? 'Meds inventory is on — opens from the Home menu.' : 'Track medicines, quantities and expiry dates.'}
+            </Text>
+          </View>
+          <Pressable style={[styles.toggle, medsEnabled && styles.toggleOn]} onPress={onToggleMeds}>
+            <Text style={styles.toggleText}>{medsEnabled ? 'On' : 'Off'}</Text>
+          </Pressable>
+        </View>
+        {medsEnabled ? (
+          <>
+            <Text style={styles.helpText}>Keep a simple list of what you have at home, with expiry reminders so nothing runs out or goes stale.</Text>
+            <Pressable style={[styles.primaryBtn, styles.editorSaveBtn]} onPress={onOpenMeds}>
+              <Text style={styles.primaryBtnText}>Open medicine cabinet</Text>
+            </Pressable>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
   function renderFamilyEditor() {
     return (
       <>
@@ -932,6 +972,7 @@ export function SettingsScreen({
                 ) : null}
                 {activeSection === 'notifications' ? renderNotificationsEditor() : null}
                 {activeSection === 'habits' ? renderHabitsEditor() : null}
+                {activeSection === 'meds' ? renderMedsEditor() : null}
                 {activeSection === 'family' ? renderFamilyEditor() : null}
               </ScrollView>
             </View>
