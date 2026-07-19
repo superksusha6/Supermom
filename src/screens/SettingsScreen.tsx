@@ -947,7 +947,6 @@ export function SettingsScreen({
       <View style={styles.content}>
         {settingsGroups.map((group) => (
           <View key={group.header} style={styles.settingsGroup}>
-            <Text style={styles.settingsGroupLabel}>{group.header}</Text>
             <View style={styles.settingsList}>
               {group.rows.map((section, index) => (
                 <Pressable

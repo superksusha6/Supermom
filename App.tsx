@@ -4805,7 +4805,6 @@ function AppShell() {
       {settingsScreenNode}
       <View style={styles.settingsUtilityCard}>
         <View style={styles.settingsUtilitySection}>
-          <Text style={styles.settingsUtilityTitle}>Appearance</Text>
           <View style={styles.settingsUtilityThemeCard}>
             <View style={styles.appearanceSeg}>
               {([
@@ -4832,7 +4831,6 @@ function AppShell() {
         </View>
 
         <View style={styles.settingsUtilitySection}>
-          <Text style={styles.settingsUtilityTitle}>Account</Text>
           {!session ? (
             <View style={styles.settingsUtilityActionsRow}>
               <Pressable style={styles.accountMenuPrimaryItem} onPress={() => { setScreen('calendar'); openAuthMenu('signin'); }}>
