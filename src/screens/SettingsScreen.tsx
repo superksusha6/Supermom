@@ -172,6 +172,7 @@ export function SettingsScreen({
   const [customHabitIcon, setCustomHabitIcon] = useState('✨');
   const [customHabitMarkStyle, setCustomHabitMarkStyle] = useState<NonNullable<HabitEntry['markStyle']>>('circle');
   const [activeSection, setActiveSection] = useState<SettingsSectionKey | null>(null);
+  const [habitsExpanded, setHabitsExpanded] = useState(false);
   const habitIconOptions = [
     '💧',
     '🛏️',
@@ -301,6 +302,7 @@ export function SettingsScreen({
 
   function openSection(section: SettingsSectionKey) {
     if (section === 'personal' || section === 'cycle') onEditPersonalProfile();
+    setHabitsExpanded(false);
     setActiveSection(section);
   }
 
@@ -659,6 +661,12 @@ export function SettingsScreen({
         </View>
 
         {habitsEnabled ? (
+          <Pressable style={styles.secondaryBtn} onPress={() => setHabitsExpanded((prev) => !prev)}>
+            <Text style={styles.secondaryBtnText}>{habitsExpanded ? 'Hide habit settings' : 'Edit habits'}</Text>
+          </Pressable>
+        ) : null}
+
+        {habitsEnabled && habitsExpanded ? (
           <>
             <View style={styles.masterReminderRow}>
               <View style={styles.masterReminderCopy}>
