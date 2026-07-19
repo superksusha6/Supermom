@@ -173,6 +173,8 @@ export function SettingsScreen({
   const [customHabitMarkStyle, setCustomHabitMarkStyle] = useState<NonNullable<HabitEntry['markStyle']>>('circle');
   const [activeSection, setActiveSection] = useState<SettingsSectionKey | null>(null);
   const [habitsExpanded, setHabitsExpanded] = useState(false);
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [showCreateHabit, setShowCreateHabit] = useState(false);
   const habitIconOptions = [
     '💧',
     '🛏️',
@@ -303,6 +305,8 @@ export function SettingsScreen({
   function openSection(section: SettingsSectionKey) {
     if (section === 'personal' || section === 'cycle') onEditPersonalProfile();
     setHabitsExpanded(false);
+    setEditingHabitId(null);
+    setShowCreateHabit(false);
     setActiveSection(section);
   }
 
@@ -673,86 +677,140 @@ export function SettingsScreen({
                 {habits
                   .filter((h) => h.enabled)
                   .map((habit) => (
-                    <View key={habit.id} style={styles.habitListRow}>
-                      <Text style={styles.habitSettingsIcon}>{habit.icon}</Text>
-                      <View style={styles.habitSettingsCopy}>
-                        <Text style={styles.habitSettingsTitle}>{habit.title}</Text>
-                        {habit.targetText ? <Text style={styles.habitSettingsMeta}>{habit.targetText}</Text> : null}
-                      </View>
+                    <View key={habit.id} style={styles.habitSettingsCard}>
                       <Pressable
-                        hitSlop={8}
-                        style={styles.habitRemoveBtn}
-                        onPress={() =>
-                          onHabitsChange((prev) =>
-                            habit.builtIn
-                              ? prev.map((item) => (item.id === habit.id ? { ...item, enabled: false } : item))
-                              : prev.filter((item) => item.id !== habit.id),
-                          )
-                        }
+                        style={styles.habitListRowInner}
+                        onPress={() => setEditingHabitId((prev) => (prev === habit.id ? null : habit.id))}
                       >
-                        <Text style={styles.habitRemoveX}>✕</Text>
+                        <Text style={styles.habitSettingsIcon}>{habit.icon}</Text>
+                        <View style={styles.habitSettingsCopy}>
+                          <Text style={styles.habitSettingsTitle}>{habit.title}</Text>
+                          {habit.targetText ? <Text style={styles.habitSettingsMeta}>{habit.targetText}</Text> : null}
+                        </View>
+                        <Text style={styles.habitRowChevron}>{editingHabitId === habit.id ? '⌃' : '⌄'}</Text>
                       </Pressable>
+
+                      {editingHabitId === habit.id ? (
+                        <>
+                          <TextInput
+                            placeholder="Habit name"
+                            style={styles.input}
+                            value={habit.title}
+                            onChangeText={(text) => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, title: text } : item)))}
+                          />
+                          <TextInput
+                            placeholder="Target or norm"
+                            style={styles.input}
+                            value={habit.targetText}
+                            onChangeText={(text) => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, targetText: text } : item)))}
+                          />
+                          <Text style={styles.label}>Icon</Text>
+                          <View style={styles.pillRow}>
+                            {habitIconOptions.map((icon) => (
+                              <Pressable
+                                key={`${habit.id}-${icon}`}
+                                style={[styles.iconChoice, habit.icon === icon && styles.iconChoiceActive]}
+                                onPress={() => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, icon } : item)))}
+                              >
+                                <Text style={styles.iconChoiceText}>{icon}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                          <Text style={styles.label}>Design</Text>
+                          <View style={styles.pillRow}>
+                            {habitMarkStyles.map((option) => (
+                              <Pressable
+                                key={`${habit.id}-${option.key}`}
+                                style={[styles.markStyleChoice, habit.markStyle === option.key && styles.markStyleChoiceActive]}
+                                onPress={() => onHabitsChange((prev) => prev.map((item) => (item.id === habit.id ? { ...item, markStyle: option.key } : item)))}
+                              >
+                                <Text style={styles.markStyleChoiceText}>{option.label}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                          <Pressable
+                            style={styles.secondaryBtn}
+                            onPress={() => {
+                              setEditingHabitId(null);
+                              onHabitsChange((prev) =>
+                                habit.builtIn
+                                  ? prev.map((item) => (item.id === habit.id ? { ...item, enabled: false } : item))
+                                  : prev.filter((item) => item.id !== habit.id),
+                              );
+                            }}
+                          >
+                            <Text style={[styles.secondaryBtnText, styles.habitDeleteText]}>Delete habit</Text>
+                          </Pressable>
+                        </>
+                      ) : null}
                     </View>
                   ))}
               </View>
             ) : (
-              <Text style={styles.helpText}>No habits yet — add your own below.</Text>
+              <Text style={styles.helpText}>No habits yet — create your first one below.</Text>
             )}
 
-        <View style={styles.customHabitCard}>
-          <Text style={styles.label}>Add a habit</Text>
-          <TextInput placeholder="Habit name" style={styles.input} value={customHabitTitle} onChangeText={setCustomHabitTitle} />
-          <TextInput placeholder="Target or norm" style={styles.input} value={customHabitTarget} onChangeText={setCustomHabitTarget} />
-          <Text style={styles.label}>Icon</Text>
-          <View style={styles.pillRow}>
-            {habitIconOptions.map((icon) => (
-              <Pressable key={icon} style={[styles.iconChoice, customHabitIcon === icon && styles.iconChoiceActive]} onPress={() => setCustomHabitIcon(icon)}>
-                <Text style={styles.iconChoiceText}>{icon}</Text>
-              </Pressable>
-            ))}
+        {showCreateHabit ? (
+          <View style={styles.customHabitCard}>
+            <Text style={styles.label}>New habit</Text>
+            <TextInput placeholder="Habit name" style={styles.input} value={customHabitTitle} onChangeText={setCustomHabitTitle} />
+            <TextInput placeholder="Target or norm" style={styles.input} value={customHabitTarget} onChangeText={setCustomHabitTarget} />
+            <Text style={styles.label}>Icon</Text>
+            <View style={styles.pillRow}>
+              {habitIconOptions.map((icon) => (
+                <Pressable key={icon} style={[styles.iconChoice, customHabitIcon === icon && styles.iconChoiceActive]} onPress={() => setCustomHabitIcon(icon)}>
+                  <Text style={styles.iconChoiceText}>{icon}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>Design</Text>
+            <View style={styles.pillRow}>
+              {habitMarkStyles.map((option) => (
+                <Pressable
+                  key={option.key}
+                  style={[styles.markStyleChoice, customHabitMarkStyle === option.key && styles.markStyleChoiceActive]}
+                  onPress={() => setCustomHabitMarkStyle(option.key)}
+                >
+                  <Text style={styles.markStyleChoiceText}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={() => {
+                if (!customHabitTitle.trim()) return;
+                onHabitsChange((prev) => [
+                  {
+                    id: `habit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    title: customHabitTitle.trim(),
+                    icon: customHabitIcon,
+                    color: '#ec4899',
+                    targetText: customHabitTarget.trim() || 'My custom goal',
+                    enabled: true,
+                    builtIn: false,
+                    markStyle: customHabitMarkStyle,
+                    reminderMode: 'off',
+                    reminderTime: '',
+                    completedToday: false,
+                    streak: 0,
+                  },
+                  ...prev,
+                ]);
+                setCustomHabitTitle('');
+                setCustomHabitTarget('');
+                setCustomHabitIcon('✨');
+                setCustomHabitMarkStyle('circle');
+                setShowCreateHabit(false);
+              }}
+            >
+              <Text style={styles.primaryBtnText}>Add habit</Text>
+            </Pressable>
           </View>
-          <Text style={styles.label}>Design</Text>
-          <View style={styles.pillRow}>
-            {habitMarkStyles.map((option) => (
-              <Pressable
-                key={option.key}
-                style={[styles.markStyleChoice, customHabitMarkStyle === option.key && styles.markStyleChoiceActive]}
-                onPress={() => setCustomHabitMarkStyle(option.key)}
-              >
-                <Text style={styles.markStyleChoiceText}>{option.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => {
-              if (!customHabitTitle.trim()) return;
-              onHabitsChange((prev) => [
-                {
-                  id: `habit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                  title: customHabitTitle.trim(),
-                  icon: customHabitIcon,
-                  color: '#ec4899',
-                  targetText: customHabitTarget.trim() || 'My custom goal',
-                  enabled: true,
-                  builtIn: false,
-                  markStyle: customHabitMarkStyle,
-                  reminderMode: 'off',
-                  reminderTime: '',
-                  completedToday: false,
-                  streak: 0,
-                },
-                ...prev,
-              ]);
-              setCustomHabitTitle('');
-              setCustomHabitTarget('');
-              setCustomHabitIcon('✨');
-              setCustomHabitMarkStyle('circle');
-            }}
-          >
-            <Text style={styles.primaryBtnText}>Add habit</Text>
+        ) : (
+          <Pressable style={[styles.primaryBtn, styles.habitCreateBtn]} onPress={() => { setEditingHabitId(null); setShowCreateHabit(true); }}>
+            <Text style={styles.primaryBtnText}>+ Create new habit</Text>
           </Pressable>
-        </View>
+        )}
           </>
         ) : null}
       </>
@@ -1290,6 +1348,22 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.glassStrong,
       paddingVertical: 10,
       paddingHorizontal: 12,
+    },
+    habitListRowInner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    habitRowChevron: {
+      color: colors.subtext,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    habitDeleteText: {
+      color: colors.urgent,
+    },
+    habitCreateBtn: {
+      marginTop: 12,
     },
     habitRemoveBtn: {
       width: 28,
