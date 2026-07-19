@@ -5427,7 +5427,9 @@ function AppShell() {
           <View style={styles.bgOrbB} />
           <View style={styles.bgOrbC} />
         </View>
-      ) : null}
+      ) : (
+        <View pointerEvents="none" style={styles.bgGrain} />
+      )}
       <View style={styles.topBar}>
         <View style={styles.brandWrap}>
           <Text style={styles.brandTitle}>FamOs</Text>
@@ -9832,10 +9834,30 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   const orbCColor =
     themeName === 'dark' ? 'rgba(255,255,255,0.025)' : themeName === 'mocha' ? 'rgba(34, 23, 18, 0.08)' : 'rgba(255,255,255,0.25)';
   // Aurora-mesh backdrop (web): soft blurred colour blobs behind the glass cards, theme-aware.
+  // Aurora with depth: a top glow + edge vignette + far (large/faint) and near
+  // (tighter/brighter) colour blobs so the background reads layered, not flat.
   const auroraLayers =
     themeName === 'dark'
-      ? 'radial-gradient(58% 48% at 14% 6%, rgba(79,140,255,0.30), transparent 60%), radial-gradient(52% 42% at 94% 16%, rgba(126,92,255,0.24), transparent 60%), radial-gradient(66% 56% at 82% 102%, rgba(40,96,205,0.24), transparent 62%)'
-      : 'radial-gradient(58% 48% at 14% 8%, rgba(120,170,255,0.58), transparent 60%), radial-gradient(52% 42% at 92% 16%, rgba(255,196,150,0.42), transparent 60%), radial-gradient(64% 54% at 82% 100%, rgba(196,164,255,0.44), transparent 60%)';
+      ? [
+          'radial-gradient(120% 42% at 50% -8%, rgba(140,170,255,0.16), transparent 62%)',
+          'radial-gradient(125% 95% at 50% 42%, transparent 52%, rgba(0,0,0,0.38) 100%)',
+          'radial-gradient(95% 72% at 20% 2%, rgba(90,150,255,0.18), transparent 72%)',
+          'radial-gradient(88% 66% at 96% 28%, rgba(126,92,255,0.15), transparent 72%)',
+          'radial-gradient(56% 46% at 14% 8%, rgba(79,140,255,0.32), transparent 56%)',
+          'radial-gradient(50% 40% at 94% 15%, rgba(126,92,255,0.26), transparent 56%)',
+          'radial-gradient(62% 52% at 84% 104%, rgba(40,96,205,0.28), transparent 60%)',
+        ].join(', ')
+      : [
+          'radial-gradient(120% 42% at 50% -8%, rgba(255,255,255,0.28), transparent 60%)',
+          'radial-gradient(125% 95% at 50% 42%, transparent 56%, rgba(70,95,150,0.13) 100%)',
+          'radial-gradient(90% 70% at 20% 4%, rgba(140,180,255,0.30), transparent 70%)',
+          'radial-gradient(85% 65% at 95% 30%, rgba(255,205,165,0.24), transparent 70%)',
+          'radial-gradient(58% 48% at 14% 10%, rgba(110,165,255,0.52), transparent 58%)',
+          'radial-gradient(50% 40% at 92% 14%, rgba(255,190,150,0.38), transparent 58%)',
+          'radial-gradient(60% 50% at 84% 102%, rgba(196,164,255,0.42), transparent 60%)',
+        ].join(', ');
+  const grainOpacity = themeName === 'dark' ? 0.6 : 0.5;
+  const grainBlend = themeName === 'dark' ? 'overlay' : 'soft-light';
 
   return StyleSheet.create({
   safe: {
@@ -9861,6 +9883,17 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   bgDecor: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
+  },
+  bgGrain: {
+    ...StyleSheet.absoluteFillObject,
+    ...(Platform.OS === 'web'
+      ? ({
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='130' height='130'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          opacity: grainOpacity,
+          mixBlendMode: grainBlend,
+        } as any)
+      : null),
   },
   bgOrbA: {
     position: 'absolute',

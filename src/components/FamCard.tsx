@@ -93,6 +93,11 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.glassSoft,
       borderWidth: 1,
       borderColor: colors.border,
+      // Soft elevation so cards visibly float above the aurora (depth).
+      shadowColor: colors.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 12 },
     },
     cardPadded: {
       paddingHorizontal: space.lg,
