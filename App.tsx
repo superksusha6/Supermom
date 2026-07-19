@@ -5254,11 +5254,63 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // Today's habits — a compact daily card with one-tap check-off. Only for the
+  // main user, when the Habits add-on is on and there's at least one habit.
+  const activeHabits = habits.filter((h) => h.enabled);
+  const habitsDoneToday = activeHabits.filter((h) => h.completedToday).length;
+  const toggleHabitToday = (id: string) =>
+    setHabits((prev) =>
+      prev.map((h) =>
+        h.id === id
+          ? { ...h, completedToday: !h.completedToday, streak: h.completedToday ? Math.max(0, h.streak - 1) : h.streak + 1 }
+          : h,
+      ),
+    );
+  const focusHabits = !isStaffView && habitsEnabled && activeHabits.length > 0 ? (
+    <View style={styles.habitsDashCard}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Habits, ${habitsDoneToday} of ${activeHabits.length} done today. Open tracker.`}
+        style={styles.habitsDashHeader}
+        onPress={() => setScreen('wellness')}
+      >
+        <View style={styles.habitsDashTitleWrap}>
+          <Icon name="check" color={colors.primary} size={17} />
+          <Text style={styles.habitsDashTitle}>Habits</Text>
+        </View>
+        <View style={styles.habitsDashCountPill}>
+          <Text style={styles.habitsDashCountText}>{habitsDoneToday}/{activeHabits.length}</Text>
+        </View>
+      </Pressable>
+      <View style={styles.habitsDashBar}>
+        <View style={[styles.habitsDashBarFill, { width: `${Math.round((habitsDoneToday / activeHabits.length) * 100)}%` }]} />
+      </View>
+      {activeHabits.slice(0, 6).map((habit) => (
+        <Pressable
+          key={habit.id}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: habit.completedToday }}
+          accessibilityLabel={`${habit.title}${habit.completedToday ? ', done' : ''}`}
+          style={styles.habitsDashRow}
+          onPress={() => toggleHabitToday(habit.id)}
+        >
+          <View style={[styles.habitsDashCheck, habit.completedToday && styles.habitsDashCheckDone]}>
+            {habit.completedToday ? <Text style={styles.habitsDashCheckMark}>✓</Text> : null}
+          </View>
+          <View style={styles.habitsDashIcon}><Text style={styles.habitsDashIconText}>{habit.icon}</Text></View>
+          <Text style={[styles.habitsDashName, habit.completedToday && styles.habitsDashNameDone]} numberOfLines={1}>{habit.title}</Text>
+          {habit.targetText ? <Text style={styles.habitsDashTarget} numberOfLines={1}>{habit.targetText}</Text> : null}
+        </Pressable>
+      ))}
+    </View>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusPlanner}
       {focusStaffTasks}
       {focusCalories}
+      {focusHabits}
       {focusTasks}
       {focusNeeds}
       {focusMiniCal}
@@ -5269,6 +5321,7 @@ function AppShell() {
         {focusPlanner}
         {focusStaffTasks}
         {focusCalories}
+        {focusHabits}
         {focusTasks}
       </View>
       <View style={styles.dashRail}>
@@ -12126,6 +12179,110 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 15,
+  },
+  habitsDashCard: {
+    borderRadius: 20,
+    backgroundColor: colors.glassStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  habitsDashHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  habitsDashTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  habitsDashTitle: {
+    color: colors.text,
+    fontSize: 15.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  habitsDashCountPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: hexToRgba(colors.primary, 0.12) || colors.selection,
+  },
+  habitsDashCountText: {
+    color: colors.primary,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  habitsDashBar: {
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: hexToRgba(colors.text, 0.1) || colors.border,
+    overflow: 'hidden',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  habitsDashBarFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: colors.done,
+  },
+  habitsDashRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingVertical: 8,
+  },
+  habitsDashCheck: {
+    width: 23,
+    height: 23,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.subtext,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  habitsDashCheckDone: {
+    backgroundColor: colors.done,
+    borderColor: colors.done,
+  },
+  habitsDashCheckMark: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 15,
+  },
+  habitsDashIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: colors.glassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  habitsDashIconText: {
+    fontSize: 15,
+  },
+  habitsDashName: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  habitsDashNameDone: {
+    color: colors.subtext,
+    textDecorationLine: 'line-through',
+  },
+  habitsDashTarget: {
+    color: colors.subtext,
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   tasksHubIcon: {
     width: 38,
