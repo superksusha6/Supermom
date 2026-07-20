@@ -1163,8 +1163,8 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: '62%',
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.98)',
-      backgroundColor: 'rgba(248,250,252,0.995)',
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
       padding: 16,
       gap: 12,
       overflow: 'hidden',
@@ -1628,8 +1628,9 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.glassStrong,
     },
     toggleOn: {
-      backgroundColor: 'rgba(220,252,231,0.72)',
+      backgroundColor: colors.glassStrong,
       borderColor: colors.done,
+      borderWidth: 2,
     },
     toggleText: {
       color: colors.text,
