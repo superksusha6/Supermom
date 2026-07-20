@@ -874,6 +874,7 @@ function AppShell() {
   const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
   const [partnerProposals, setPartnerProposals] = useState<CalendarProposal[]>([]);
   const pendingPartnerTokenRef = useRef<string | null>(null);
+  const [dismissedReplies, setDismissedReplies] = useState<Set<string>>(() => loadDismissedReplies());
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [dayEditId, setDayEditId] = useState<string | null>(null);
@@ -1289,6 +1290,20 @@ function AppShell() {
     if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds' || targetScreen === 'wellness') return staffCan('fixit');
     return staffCan('schedule') || staffCan('tasks');
   };
+  // Re-check partner slots/replies whenever the tab regains focus, so a sent slot
+  // and its confirmation surface without a full reload.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && sessionRef.current) {
+        refreshPartner(sessionRef.current);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!isStaffView || staffScreenAllowed(screen)) return;
     const first = staffCan('schedule') || staffCan('tasks')
@@ -5613,6 +5628,7 @@ function AppShell() {
       {incomingProposals.map((p, i) => {
         const d = new Date(p.startsAt);
         const when = `${formatShortDate(p.startsAt.slice(0, 10))} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${p.endTime ? `–${p.endTime}` : ''}`;
+        const clash = findConflictingEvent(events, p.startsAt, p.endTime);
         return (
           <View key={p.id}>
             {i > 0 ? <View style={styles.agendaLine} /> : null}
@@ -5620,6 +5636,9 @@ function AppShell() {
               <View style={styles.proposalCopy}>
                 <Text style={styles.proposalTitle} numberOfLines={1}>{p.title}</Text>
                 <Text style={styles.proposalMeta} numberOfLines={1}>{(p.fromName || 'Partner')} · {when}</Text>
+                <Text style={[styles.proposalFree, clash && styles.proposalBusy]} numberOfLines={1}>
+                  {clash ? `● Busy · overlaps “${clash.title}”` : '● You’re free at this time'}
+                </Text>
                 {p.message ? <Text style={styles.proposalMsg} numberOfLines={2}>“{p.message}”</Text> : null}
               </View>
               <View style={styles.proposalActions}>
@@ -5637,10 +5656,52 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // Replies to the slots YOU sent — the partner confirmed or declined. Acts as your
+  // notification; dismiss once seen so it doesn't linger.
+  const partnerReplies = partnerProposals.filter(
+    (p) =>
+      p.direction === 'outgoing' &&
+      (p.status === 'confirmed' || p.status === 'declined') &&
+      !dismissedReplies.has(`${p.id}:${p.status}`),
+  );
+  const dismissReply = (p: CalendarProposal) => {
+    setDismissedReplies((prev) => {
+      const next = new Set(prev);
+      next.add(`${p.id}:${p.status}`);
+      persistDismissedReplies(next);
+      return next;
+    });
+  };
+  const focusPartnerReplies = !isStaffView && partnerReplies.length > 0 ? (
+    <FamCard title="Partner replies" padded={false}>
+      {partnerReplies.map((p, i) => {
+        const confirmed = p.status === 'confirmed';
+        const who = partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || 'Your partner';
+        return (
+          <View key={p.id}>
+            {i > 0 ? <View style={styles.agendaLine} /> : null}
+            <View style={styles.proposalRow}>
+              <View style={styles.proposalCopy}>
+                <Text style={styles.proposalTitle} numberOfLines={1}>{p.title}</Text>
+                <Text style={[styles.proposalFree, !confirmed && styles.proposalBusy]} numberOfLines={1}>
+                  {confirmed ? `● ${who} confirmed — added to both calendars` : `● ${who} declined`}
+                </Text>
+              </View>
+              <Pressable style={styles.proposalDecline} onPress={() => dismissReply(p)}>
+                <Text style={styles.proposalDeclineText}>Dismiss</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      })}
+    </FamCard>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusPlanner}
       {focusProposals}
+      {focusPartnerReplies}
       {focusStaffTasks}
       {focusCalories}
       {focusHabits}
@@ -5653,6 +5714,7 @@ function AppShell() {
       <View style={styles.dashMain}>
         {focusPlanner}
         {focusProposals}
+        {focusPartnerReplies}
         {focusStaffTasks}
         {focusCalories}
         {focusHabits}
@@ -9585,6 +9647,68 @@ function formatShortDate(dateKey: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
 }
 
+// Locally-dismissed partner replies (so a confirmed/declined notice stops nagging
+// once you've seen it). Keyed by `${proposalId}:${status}`.
+const DISMISSED_REPLIES_KEY = 'smartmom.partnerReplies.v1';
+function loadDismissedReplies(): Set<string> {
+  try {
+    if (typeof localStorage === 'undefined') return new Set();
+    const raw = localStorage.getItem(DISMISSED_REPLIES_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+function persistDismissedReplies(set: Set<string>) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(DISMISSED_REPLIES_KEY, JSON.stringify(Array.from(set)));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Minutes-since-midnight for a "9:00 AM" / "14:30" clock string (null if unparseable).
+function clockToMinutes(value: string): number | null {
+  const t = (value || '').trim();
+  const twelve = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(t);
+  if (twelve) {
+    let h = parseInt(twelve[1], 10) % 12;
+    if (twelve[3].toUpperCase() === 'PM') h += 12;
+    return h * 60 + parseInt(twelve[2], 10);
+  }
+  const twentyFour = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (twentyFour) return parseInt(twentyFour[1], 10) * 60 + parseInt(twentyFour[2], 10);
+  return null;
+}
+
+// Wall-clock minutes of a proposal's UTC-stored start (composeStartsAt writes wall time as UTC).
+function proposalWallMinutes(startsAt: string): number {
+  const d = new Date(startsAt);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+// Find the partner's own event that clashes with a proposed slot, treating
+// slots without an end as a 60-minute block. Runs on the recipient's device —
+// nothing about their calendar leaves it.
+function findConflictingEvent(
+  events: CalendarEvent[],
+  startsAt: string,
+  endTime?: string,
+): CalendarEvent | null {
+  const day = startsAt.slice(0, 10);
+  const pStart = proposalWallMinutes(startsAt);
+  const pEnd = endTime ? clockToMinutes(endTime) ?? pStart + 60 : pStart + 60;
+  for (const ev of events) {
+    if (ev.date !== day) continue;
+    const eStart = clockToMinutes(ev.time);
+    if (eStart == null) continue;
+    const eEnd = ev.endTime ? clockToMinutes(ev.endTime) ?? eStart + 60 : eStart + 60;
+    if (eStart < pEnd && pStart < eEnd) return ev;
+  }
+  return null;
+}
+
 // Normalize an event title so mirrored family/child copies collapse to one:
 // "Roman: boxing" and "boxing (Roman)" both -> "boxing".
 function normalizeEventKey(title: string): string {
@@ -12577,6 +12701,15 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.subtext,
     fontSize: 12,
     fontWeight: '600',
+  },
+  proposalFree: {
+    color: '#16a34a',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  proposalBusy: {
+    color: '#d97706',
   },
   proposalMsg: {
     color: colors.subtext,
