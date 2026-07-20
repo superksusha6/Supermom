@@ -3,6 +3,7 @@ import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from '
 import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { categorizeItem } from '@/lib/shopping';
+import { isPushSupported, currentPushState, enablePush, disablePush, notifyPartner, PushState } from '@/lib/push';
 import {
   AppSession,
   createRecipe,
@@ -875,6 +876,7 @@ function AppShell() {
   const [partnerProposals, setPartnerProposals] = useState<CalendarProposal[]>([]);
   const pendingPartnerTokenRef = useRef<string | null>(null);
   const [dismissedReplies, setDismissedReplies] = useState<Set<string>>(() => loadDismissedReplies());
+  const [pushState, setPushState] = useState<PushState>('default');
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [dayEditId, setDayEditId] = useState<string | null>(null);
@@ -1303,6 +1305,15 @@ function AppShell() {
     return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reflect this device's current push status (permission + live subscription).
+  useEffect(() => {
+    if (!isPushSupported()) {
+      setPushState('unsupported');
+      return;
+    }
+    currentPushState().then(setPushState).catch(() => setPushState('error'));
+  }, [session?.userId]);
 
   useEffect(() => {
     if (!isStaffView || staffScreenAllowed(screen)) return;
@@ -4141,7 +4152,7 @@ function AppShell() {
       return;
     }
     try {
-      await createCalendarProposal(link.id, {
+      const created = await createCalendarProposal(link.id, {
         title: title.trim(),
         startsAt: proposalStartsAt(date, time),
         endTime,
@@ -4150,6 +4161,7 @@ function AppShell() {
         message,
       });
       await refreshPartner();
+      notifyPartner(created.id);
       setAuthInfo(`Sent to ${link.partnerLabel || 'your partner'} — waiting for confirmation.`);
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not send the slot.');
@@ -4161,8 +4173,23 @@ function AppShell() {
     try {
       await respondCalendarProposal(id, decision);
       await Promise.all([refreshPartner(), decision === 'confirm' ? refreshLiveCalendar() : Promise.resolve()]);
+      notifyPartner(id);
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not respond to the proposal.');
+    }
+  }
+
+  async function togglePush() {
+    if (!session) return;
+    if (pushState === 'enabled') {
+      await disablePush();
+      setPushState('default');
+      return;
+    }
+    const next = await enablePush(session.userId);
+    setPushState(next);
+    if (next === 'denied') {
+      setTasksError('Notifications are blocked in your browser settings. Allow them for this site to get partner alerts.');
     }
   }
 
@@ -5036,6 +5063,8 @@ function AppShell() {
         const link = partnerLinks.find((l) => l.status === 'accepted');
         if (link) handleRemovePartner(link.id);
       }}
+      pushState={pushState}
+      onTogglePush={togglePush}
     />
   );
 

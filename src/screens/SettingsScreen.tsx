@@ -89,6 +89,8 @@ type Props = {
   partnerConnectedName?: string | null;
   onInvitePartner: () => void;
   onRemovePartner: () => void;
+  pushState: 'unsupported' | 'default' | 'denied' | 'enabled' | 'error';
+  onTogglePush: () => void;
 };
 
 type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'meds' | 'addons' | 'family';
@@ -154,6 +156,8 @@ export function SettingsScreen({
   partnerConnectedName,
   onInvitePartner,
   onRemovePartner,
+  pushState,
+  onTogglePush,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -960,6 +964,28 @@ export function SettingsScreen({
           <Pressable style={styles.secondaryBtn} onPress={onInvitePartner}>
             <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite partner</Text>
           </Pressable>
+        )}
+
+        {pushState === 'unsupported' ? (
+          <Text style={styles.emptyText}>Push notifications aren't supported in this browser. On iPhone, add FamOs to your Home Screen first, then enable them here.</Text>
+        ) : (
+          <>
+            <Pressable
+              style={[styles.toggle, pushState === 'enabled' && styles.toggleOn]}
+              onPress={onTogglePush}
+            >
+              <Text style={styles.toggleText}>
+                {pushState === 'enabled' ? 'Push notifications: On' : 'Enable push notifications'}
+              </Text>
+            </Pressable>
+            <Text style={styles.emptyText}>
+              {pushState === 'enabled'
+                ? "You'll get a push when your partner sends a slot or answers yours — even with the app closed."
+                : pushState === 'denied'
+                  ? 'Blocked in your browser. Allow notifications for this site, then tap again.'
+                  : 'Get alerted on this device when a slot arrives or is answered.'}
+            </Text>
+          </>
         )}
 
         <Text style={styles.label}>Enable Staff Access</Text>
