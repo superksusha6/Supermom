@@ -860,6 +860,9 @@ function AppShell() {
   const pendingInviteTokenRef = useRef<string | null>(null);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
+  const [dayEditId, setDayEditId] = useState<string | null>(null);
+  const [dayEditTitle, setDayEditTitle] = useState('');
+  const [dayEditTime, setDayEditTime] = useState('');
   const [dayNewTitle, setDayNewTitle] = useState('');
   const [dayNewTime, setDayNewTime] = useState('4:00 PM');
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
@@ -3313,9 +3316,10 @@ function AppShell() {
     setDayNewTitle('');
     setDayNewTime('4:00 PM');
     setDayNewWho('mother');
+    setDayEditId(null);
   }
   const daySheetEvents = useMemo(() => {
-    if (!daySheetDate) return [] as { id: string; title: string; time: string; who: string; color: string }[];
+    if (!daySheetDate) return [] as { id: string; title: string; time: string; who: string; color: string; owner: Role; ownerName: string; rawTime: string }[];
     const seen = new Set<string>();
     return events
       .filter((e) => e.date === daySheetDate)
@@ -3326,8 +3330,96 @@ function AppShell() {
         seen.add(k);
         return true;
       })
-      .map((e) => ({ id: e.id, title: e.title, time: (e.time || '').replace(/\s?[AP]M/i, ''), who: e.ownerName || 'Family', color: e.color || colors.primary }));
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        time: (e.time || '').replace(/\s?[AP]M/i, ''),
+        rawTime: e.time || '',
+        who: e.ownerName || 'Family',
+        color: e.color || colors.primary,
+        owner: e.owner,
+        ownerName: e.ownerName || 'Family',
+      }));
   }, [events, daySheetDate, colors.primary]);
+
+  // Group the day's events: the parent's own plans first, then each child's, then staff.
+  const daySheetGroups = useMemo(() => {
+    const parentKey = 'mother';
+    const groups: { key: string; label: string; items: typeof daySheetEvents }[] = [];
+    const push = (key: string, label: string, item: (typeof daySheetEvents)[number]) => {
+      let g = groups.find((x) => x.key === key);
+      if (!g) { g = { key, label, items: [] }; groups.push(g); }
+      g.items.push(item);
+    };
+    daySheetEvents.forEach((ev) => {
+      if (ev.owner === 'child') push(`child:${ev.ownerName}`, ev.ownerName, ev);
+      else if (ev.owner === 'staff') push('staff', 'Staff', ev);
+      else push(parentKey, parentLabel, ev);
+    });
+    // Order: parent first, then children, then staff.
+    return groups.sort((a, b) => {
+      const rank = (k: string) => (k === 'mother' ? 0 : k === 'staff' ? 2 : 1);
+      return rank(a.key) - rank(b.key);
+    });
+  }, [daySheetEvents, parentLabel]);
+
+  function openDayEventEdit(ev: (typeof daySheetEvents)[number]) {
+    setDayEditId(ev.id);
+    setDayEditTitle(ev.title);
+    setDayEditTime(ev.rawTime);
+  }
+
+  function saveDayEventEdit() {
+    const id = dayEditId;
+    const title = dayEditTitle.trim();
+    const raw = id ? events.find((e) => e.id === id) : null;
+    if (!id || !title || !raw) { setDayEditId(null); return; }
+    const time = dayEditTime || raw.time;
+    setDayEditId(null);
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, title, time } : e)));
+    if (session && isSupabaseConfigured) {
+      updateCalendarEvent(session, {
+        id,
+        title,
+        date: raw.date,
+        time,
+        endTime: raw.endTime,
+        owner: raw.owner,
+        ownerName: raw.ownerName,
+        ownerChildProfileId: raw.ownerChildProfileId || null,
+        category: raw.category || 'General',
+        color: raw.color || colors.primary,
+        motherColor: raw.motherColor,
+        staffColor: raw.staffColor,
+        visibility: raw.visibility,
+      })
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Update event failed.'));
+    }
+  }
+
+  function deleteDayEvent(id: string) {
+    const doDelete = () => {
+      const raw = events.find((e) => e.id === id) || null;
+      const counterpart = findLinkedChildMirrorEvent(events, raw);
+      const ids = [id, counterpart?.id].filter(Boolean) as string[];
+      if (dayEditId === id) setDayEditId(null);
+      setEvents((prev) => prev.filter((e) => !ids.includes(e.id)));
+      if (session && isSupabaseConfigured) {
+        Promise.all(ids.map((x) => deleteCalendarEvent(session, x)))
+          .then(() => refreshLiveCalendar())
+          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
+      }
+    };
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm('Delete this event?')) doDelete();
+      return;
+    }
+    Alert.alert('Delete event?', 'This removes it from the plan.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ]);
+  }
 
   function openAddChild() {
     setEditingChildId(null);
@@ -5478,12 +5570,47 @@ function AppShell() {
 
             {daySheetEvents.length > 0 ? (
               <View style={styles.daySheetList}>
-                {daySheetEvents.map((ev) => (
-                  <View key={ev.id} style={styles.daySheetEvent}>
-                    <Text style={styles.daySheetEventTime}>{ev.time}</Text>
-                    <View style={[styles.daySheetEventDot, { backgroundColor: ev.color }]} />
-                    <Text style={styles.daySheetEventTitle} numberOfLines={1}>{ev.title}</Text>
-                    <Text style={styles.daySheetEventWho} numberOfLines={1}>{ev.who}</Text>
+                {daySheetGroups.map((group) => (
+                  <View key={group.key} style={styles.daySheetGroup}>
+                    <View style={styles.daySheetGroupHeader}>
+                      <View style={[styles.daySheetGroupDot, { backgroundColor: group.items[0].color }]} />
+                      <Text style={styles.daySheetGroupLabel}>{group.key === 'mother' ? 'You' : group.label}</Text>
+                    </View>
+                    {group.items.map((ev) =>
+                      dayEditId === ev.id ? (
+                        <View key={ev.id} style={styles.daySheetEditRow}>
+                          <TextInput
+                            style={styles.input}
+                            value={dayEditTitle}
+                            onChangeText={setDayEditTitle}
+                            placeholder="Event"
+                            placeholderTextColor={colors.subtext}
+                          />
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
+                            {DAY_TIME_OPTIONS.map((t) => (
+                              <Pressable key={t} style={[styles.daySheetChip, dayEditTime === t && styles.daySheetChipActive]} onPress={() => setDayEditTime(t)}>
+                                <Text style={[styles.daySheetChipText, dayEditTime === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                          <View style={styles.daySheetEditActions}>
+                            <Pressable style={styles.daySheetAdd} onPress={saveDayEventEdit}>
+                              <Text style={styles.daySheetAddText}>Save</Text>
+                            </Pressable>
+                            <Pressable style={styles.daySheetDeleteBtn} onPress={() => deleteDayEvent(ev.id)}>
+                              <Text style={styles.daySheetDeleteText}>Delete</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <Pressable key={ev.id} style={styles.daySheetEvent} onPress={() => openDayEventEdit(ev)}>
+                          <Text style={styles.daySheetEventTime}>{ev.time}</Text>
+                          <View style={[styles.daySheetEventDot, { backgroundColor: ev.color }]} />
+                          <Text style={styles.daySheetEventTitle} numberOfLines={1}>{ev.title}</Text>
+                          <Icon name="chevron" color={colors.subtext} size={15} />
+                        </Pressable>
+                      ),
+                    )}
                   </View>
                 ))}
               </View>
@@ -11068,8 +11195,55 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   daySheetEventTime: {
     width: 52,
-    color: '#334155',
+    color: colors.subtext,
     fontSize: 13,
+    fontWeight: '800',
+  },
+  daySheetGroup: {
+    marginBottom: 6,
+  },
+  daySheetGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  daySheetGroupDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  daySheetGroupLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  daySheetEditRow: {
+    gap: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  daySheetEditActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  daySheetDeleteBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: hexToRgba(colors.urgent, 0.4) || colors.border,
+    backgroundColor: hexToRgba(colors.urgent, 0.08) || colors.glassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  daySheetDeleteText: {
+    color: colors.urgent,
+    fontSize: 14,
     fontWeight: '800',
   },
   daySheetEventDot: {
