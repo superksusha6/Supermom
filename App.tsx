@@ -1316,6 +1316,36 @@ function AppShell() {
     currentPushState().then(setPushState).catch(() => setPushState('error'));
   }, [session?.userId]);
 
+  // Live sync: subscribe to Postgres changes on the shared tables and re-pull the
+  // matching data the moment anyone (you on another device, your partner, staff)
+  // changes it. RLS still limits which rows reach this client.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !session) return;
+    const current = session;
+    const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+    const bounce = (key: string, fn: () => void) => {
+      if (timers[key]) clearTimeout(timers[key]);
+      timers[key] = setTimeout(fn, 350);
+    };
+    const pg = 'postgres_changes' as any;
+    const channel = supabase
+      .channel(`famos-live-${current.userId}`)
+      .on(pg, { event: '*', schema: 'public', table: 'events' }, () => bounce('cal', () => refreshLiveCalendar(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'calendar_proposals' }, () => bounce('partner', () => refreshPartner(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'partner_links' }, () => bounce('partner', () => refreshPartner(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'tasks' }, () => bounce('tasks', () => refreshLiveTasks(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'shopping_lists' }, () => bounce('shop', () => refreshLiveShopping(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'shopping_list_items' }, () => bounce('shop', () => refreshLiveShopping(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'completed_task_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
+      .on(pg, { event: '*', schema: 'public', table: 'staff_reminder_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
+      .subscribe();
+    return () => {
+      Object.values(timers).forEach((t) => clearTimeout(t));
+      supabase?.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.userId, session?.familyId]);
+
   useEffect(() => {
     if (!isStaffView || staffScreenAllowed(screen)) return;
     const first = staffCan('schedule') || staffCan('tasks')
@@ -5985,7 +6015,8 @@ function AppShell() {
         </Pressable>
       </Modal>
 
-      <Modal visible={inviteModalOpen} transparent animationType="fade" onRequestClose={() => setInviteModalOpen(false)}>
+      {inviteModalOpen ? (
+      <Modal visible transparent animationType="fade" onRequestClose={() => setInviteModalOpen(false)}>
         <Pressable style={styles.newListBackdrop} onPress={() => setInviteModalOpen(false)}>
           <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
             <Text style={styles.daySheetTitle}>Invite {inviteStaffName}</Text>
@@ -6024,6 +6055,7 @@ function AppShell() {
           </Pressable>
         </Pressable>
       </Modal>
+      ) : null}
 
       {!isSupabaseConfigured ? (
         <View style={styles.warning}>
