@@ -1,5 +1,5 @@
 import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native';
 import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, Role, TaskItem } from '@/types/app';
 import { SectionCard } from '@/components/SectionCard';
@@ -265,15 +265,26 @@ export function CalendarScreen({
     () =>
       events.filter((event) => {
         const birthdayEvent = isBirthdayEvent(event);
-        if (currentRole === 'mother' && birthdayEvent) {
-          if (scope === 'my') return event.owner === 'mother';
-          return true;
+
+        // Mother's device: the avatar row picks whose plans are shown.
+        if (currentRole === 'mother') {
+          if (event.owner === 'staff' && event.visibility === 'staff_private') return false;
+          if (activeOwnerFilter.startsWith('child:')) {
+            const childId = activeOwnerFilter.replace('child:', '');
+            return event.owner === 'child' && event.ownerChildProfileId === childId;
+          }
+          if (activeOwnerFilter.startsWith('staff:')) {
+            const staffId = activeOwnerFilter.replace('staff:', '');
+            const profile = staffProfiles.find((item) => item.id === staffId);
+            if (!profile) return false;
+            return event.owner === 'staff' && event.ownerName === profile.name;
+          }
+          // "You" selected — your own plans, birthdays included.
+          if (birthdayEvent) return true;
+          return event.owner === 'mother';
         }
 
-        if (currentRole === 'mother' && event.owner === 'staff' && event.visibility === 'staff_private') return false;
-
         if (scope === 'my') {
-          if (currentRole === 'mother') return event.owner === 'mother';
           if (currentRole === 'child' && activeOwnerFilter.startsWith('child:')) {
             const childId = activeOwnerFilter.replace('child:', '');
             return event.owner === 'child' && event.ownerChildProfileId === childId;
@@ -288,7 +299,6 @@ export function CalendarScreen({
         }
 
         if (scope === 'family') {
-          if (currentRole === 'mother') return event.owner === 'mother';
           if (currentRole === 'child' && activeOwnerFilter.startsWith('child:')) {
             const childId = activeOwnerFilter.replace('child:', '');
             return event.owner === 'child' && event.ownerChildProfileId === childId;
@@ -304,6 +314,18 @@ export function CalendarScreen({
       }),
     [events, scope, activeOwnerFilter, currentRole, staffProfiles],
   );
+
+  // Faces for the calendar's person switcher (mother's view only): You + each child + each staff.
+  const avatarPeople = useMemo(() => {
+    if (currentRole !== 'mother') return [] as { key: string; label: string; color: string; photo?: string }[];
+    const list: { key: string; label: string; color: string; photo?: string }[] = [
+      { key: 'mother', label: 'You', color: colors.primary },
+    ];
+    children.forEach((c, i) => list.push({ key: `child:${c.id}`, label: c.name, color: basePalette[i % basePalette.length], photo: c.photoUri }));
+    if (showStaff) staffProfiles.forEach((s) => list.push({ key: `staff:${s.id}`, label: s.name, color: '#8b5a2b' }));
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRole, children, staffProfiles, showStaff, colors.primary]);
 
   const selectedEvents = useMemo(() => {
     const eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
@@ -1738,6 +1760,35 @@ export function CalendarScreen({
       </Modal>
 
       <SectionCard title="Calendar">
+        {avatarPeople.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.avatarRow}
+            style={styles.avatarRowScroll}
+          >
+            {avatarPeople.map((person) => {
+              const active = activeOwnerFilter === person.key;
+              const initials = (person.label.trim()[0] || '?').toUpperCase();
+              return (
+                <Pressable key={person.key} style={styles.avatarItem} onPress={() => onSelectOwnerFilter(person.key)}>
+                  <View style={[styles.avatarRing, active && styles.avatarRingActive]}>
+                    <View style={[styles.avatarCircle, { backgroundColor: person.photo ? colors.surfaceAlt : person.color }]}>
+                      {person.photo ? (
+                        <Image source={{ uri: person.photo }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarInitials}>{initials}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.avatarLabel, active && styles.avatarLabelActive]} numberOfLines={1}>
+                    {person.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
         {currentRole === 'mother' ? (
           <View style={styles.scopeRow}>
             <Chip active={scope === 'my'} label="My" onPress={() => onScopeChange('my')} styles={styles} />
@@ -3647,6 +3698,61 @@ const createStyles = (colors: ThemeColors) =>
     flexWrap: 'wrap',
     alignItems: 'center',
     marginBottom: 14,
+  },
+  avatarRowScroll: {
+    marginBottom: 12,
+    marginHorizontal: -4,
+  },
+  avatarRow: {
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignItems: 'flex-start',
+  },
+  avatarItem: {
+    alignItems: 'center',
+    width: 62,
+  },
+  avatarRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  avatarRingActive: {
+    borderColor: colors.primary,
+  },
+  avatarCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarInitials: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  avatarLabel: {
+    marginTop: 4,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.subtext,
+    maxWidth: 60,
+    textAlign: 'center',
+  },
+  avatarLabelActive: {
+    color: colors.text,
+    fontWeight: '800',
   },
   scopeHint: {
     color: colors.subtext,
