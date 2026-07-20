@@ -86,6 +86,9 @@ type Props = {
   onToggleStaffProfileSetup: () => void;
   onEditStaffProfile: (staffId: string) => void;
   onInviteStaff: (staffId: string) => void;
+  partnerConnectedName?: string | null;
+  onInvitePartner: () => void;
+  onRemovePartner: () => void;
 };
 
 type SettingsSectionKey = 'personal' | 'nutrition' | 'cycle' | 'notifications' | 'habits' | 'meds' | 'addons' | 'family';
@@ -148,6 +151,9 @@ export function SettingsScreen({
   onToggleStaffProfileSetup,
   onEditStaffProfile,
   onInviteStaff,
+  partnerConnectedName,
+  onInvitePartner,
+  onRemovePartner,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -933,6 +939,28 @@ export function SettingsScreen({
             </View>
           </View>
         ))}
+
+        <Text style={styles.label}>Partner calendar</Text>
+        <Text style={styles.emptyText}>
+          Connect your partner's own account. You can send a proposed time slot from any day — they confirm it on their side and it lands in both calendars. Neither of you can read the other's calendar.
+        </Text>
+        {partnerConnectedName ? (
+          <View style={styles.staffCard}>
+            <View style={styles.staffCopy}>
+              <Text style={styles.staffName}>{partnerConnectedName}</Text>
+              <Text style={styles.staffMeta}>Connected · you can send time slots</Text>
+            </View>
+            <View style={styles.staffCardActions}>
+              <Pressable style={styles.secondaryBtn} onPress={onRemovePartner}>
+                <Text style={[styles.secondaryBtnText, { color: '#dc2626' }]}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable style={styles.secondaryBtn} onPress={onInvitePartner}>
+            <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite partner</Text>
+          </Pressable>
+        )}
 
         <Text style={styles.label}>Enable Staff Access</Text>
         <Pressable style={[styles.toggle, staffEnabled && styles.toggleOn]} onPress={onToggleStaff}>

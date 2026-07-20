@@ -21,6 +21,18 @@ import {
   getOrCreateSessionContext,
   createStaffInvite,
   acceptStaffInvite,
+  createPartnerInvite,
+  acceptPartnerInvite,
+  revokePartnerLink,
+  listPartnerLinks,
+  createCalendarProposal,
+  respondCalendarProposal,
+  cancelCalendarProposal,
+  listCalendarProposals,
+  buildProposalNotes,
+  proposalStartsAt,
+  PartnerLink,
+  CalendarProposal,
   getMyProfile,
   getWeeklyMealPlanRecord,
   getUserPreferences,
@@ -858,6 +870,10 @@ function AppShell() {
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteCopied, setInviteCopied] = useState(false);
   const pendingInviteTokenRef = useRef<string | null>(null);
+  // Partner calendar: send a time slot to your partner; they confirm → event in both.
+  const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
+  const [partnerProposals, setPartnerProposals] = useState<CalendarProposal[]>([]);
+  const pendingPartnerTokenRef = useRef<string | null>(null);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [dayEditId, setDayEditId] = useState<string | null>(null);
@@ -2194,6 +2210,22 @@ function AppShell() {
     });
   }
 
+  async function refreshPartner(current: AppSession | null = session) {
+    if (!current || !isSupabaseConfigured) return;
+    try {
+      const [links, proposals] = await Promise.all([
+        listPartnerLinks(current.userId),
+        listCalendarProposals(current.userId),
+      ]);
+      setPartnerLinks(links);
+      setPartnerProposals(proposals);
+    } catch (error) {
+      // Partner tables may be absent on older backends; keep the app working.
+      setPartnerLinks([]);
+      setPartnerProposals([]);
+    }
+  }
+
   async function refreshLiveNotifications(current: AppSession | null = session) {
     if (!current) return;
     try {
@@ -2303,6 +2335,7 @@ function AppShell() {
       refreshLiveRecipes(ctx),
       refreshLiveWeeklyMealPlan(ctx),
       refreshLiveNotifications(ctx),
+      refreshPartner(ctx),
       refreshUserPreferences(ctx),
       listHabitEntries(ctx)
         .then(async (liveHabits) => {
@@ -2400,6 +2433,8 @@ function AppShell() {
 
       const inviteToken = searchParams.get('invite');
       if (inviteToken) pendingInviteTokenRef.current = inviteToken;
+      const partnerToken = searchParams.get('partner');
+      if (partnerToken) pendingPartnerTokenRef.current = partnerToken;
     }
 
     let cancelled = false;
@@ -2413,6 +2448,7 @@ function AppShell() {
           } else {
             await hydrateSessionContext(ctx);
           }
+          if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
         } else if (pendingInviteTokenRef.current) {
           // Not signed in yet — let them create/enter their own account to join.
           setAuthInfo('Create your account or log in to join the family.');
@@ -4033,6 +4069,88 @@ function AppShell() {
     }
   }
 
+  // ---- Partner calendar: invite, accept, send slot, respond ----
+  async function handleInvitePartner() {
+    if (!session || !isSupabaseConfigured) {
+      setTasksError('Sign in to invite your partner.');
+      return;
+    }
+    setInviteStaffName('your partner');
+    setInviteLink('');
+    setInviteCopied(false);
+    setInviteBusy(true);
+    setInviteModalOpen(true);
+    try {
+      const { token } = await createPartnerInvite(session, parentLabel);
+      const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
+      setInviteLink(`${origin}/?partner=${token}`);
+    } catch (error) {
+      setInviteModalOpen(false);
+      setTasksError(error instanceof Error ? error.message : 'Could not create partner link.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function consumePendingPartnerInvite() {
+    const token = pendingPartnerTokenRef.current;
+    const current = sessionRef.current || session;
+    if (!token || !current || !isSupabaseConfigured) return;
+    pendingPartnerTokenRef.current = null;
+    try {
+      await acceptPartnerInvite(token, current.familyId, parentLabel);
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      await refreshPartner();
+      setAuthInfo('You’re now connected. You can send and receive calendar slots.');
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not connect with your partner.');
+    }
+  }
+
+  async function handleRemovePartner(linkId: string) {
+    if (!isSupabaseConfigured) return;
+    try {
+      await revokePartnerLink(linkId);
+      await refreshPartner();
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not remove partner.');
+    }
+  }
+
+  async function sendSlotToPartner(date: string, title: string, time: string, endTime?: string, message?: string) {
+    const link = partnerLinks.find((l) => l.status === 'accepted');
+    if (!session || !isSupabaseConfigured || !link) {
+      setTasksError('Connect a partner first (Settings → Family & Access → Partner calendar).');
+      return;
+    }
+    try {
+      await createCalendarProposal(link.id, {
+        title: title.trim(),
+        startsAt: proposalStartsAt(date, time),
+        endTime,
+        notes: buildProposalNotes({ color: colors.primary, endTime, category: 'Together', ownerName: 'Together' }),
+        color: colors.primary,
+        message,
+      });
+      await refreshPartner();
+      setAuthInfo(`Sent to ${link.partnerLabel || 'your partner'} — waiting for confirmation.`);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not send the slot.');
+    }
+  }
+
+  async function respondToProposal(id: string, decision: 'confirm' | 'decline') {
+    if (!isSupabaseConfigured) return;
+    try {
+      await respondCalendarProposal(id, decision);
+      await Promise.all([refreshPartner(), decision === 'confirm' ? refreshLiveCalendar() : Promise.resolve()]);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not respond to the proposal.');
+    }
+  }
+
   function openStaffProfileEditor(staffId: string) {
     const profile = staffProfiles.find((item) => item.id === staffId);
     if (!profile) return;
@@ -4383,6 +4501,13 @@ function AppShell() {
         await consumePendingInvite();
         return;
       }
+      if (pendingPartnerTokenRef.current) {
+        setSignInModalOpen(false);
+        const ctx = await getOrCreateSessionContext();
+        if (ctx) await hydrateSessionContext(ctx);
+        await consumePendingPartnerInvite();
+        return;
+      }
       const ctx = await getOrCreateSessionContext();
       if (ctx) {
         setSignInModalOpen(false);
@@ -4518,6 +4643,8 @@ function AppShell() {
             refreshLiveNotifications(ctx),
             refreshUserPreferences(ctx),
           ]);
+          sessionRef.current = ctx;
+          if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
         }
       } else {
         setParentLabel(nextParentLabel);
@@ -4888,6 +5015,12 @@ function AppShell() {
       onToggleStaffProfileSetup={() => setStaffSetupOpen((prev) => !prev)}
       onEditStaffProfile={openStaffProfileEditor}
       onInviteStaff={handleInviteStaff}
+      partnerConnectedName={partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || null}
+      onInvitePartner={handleInvitePartner}
+      onRemovePartner={() => {
+        const link = partnerLinks.find((l) => l.status === 'accepted');
+        if (link) handleRemovePartner(link.id);
+      }}
     />
   );
 
@@ -5472,9 +5605,42 @@ function AppShell() {
     </View>
   ) : null;
 
+  // Incoming calendar slots from your partner — confirm/decline right here.
+  const activePartnerLink = partnerLinks.find((l) => l.status === 'accepted') || null;
+  const incomingProposals = partnerProposals.filter((p) => p.direction === 'incoming' && p.status === 'pending');
+  const focusProposals = !isStaffView && incomingProposals.length > 0 ? (
+    <FamCard title={`From your partner · ${incomingProposals.length}`} padded={false}>
+      {incomingProposals.map((p, i) => {
+        const d = new Date(p.startsAt);
+        const when = `${formatShortDate(p.startsAt.slice(0, 10))} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${p.endTime ? `–${p.endTime}` : ''}`;
+        return (
+          <View key={p.id}>
+            {i > 0 ? <View style={styles.agendaLine} /> : null}
+            <View style={styles.proposalRow}>
+              <View style={styles.proposalCopy}>
+                <Text style={styles.proposalTitle} numberOfLines={1}>{p.title}</Text>
+                <Text style={styles.proposalMeta} numberOfLines={1}>{(p.fromName || 'Partner')} · {when}</Text>
+                {p.message ? <Text style={styles.proposalMsg} numberOfLines={2}>“{p.message}”</Text> : null}
+              </View>
+              <View style={styles.proposalActions}>
+                <Pressable style={styles.proposalConfirm} onPress={() => respondToProposal(p.id, 'confirm')}>
+                  <Text style={styles.proposalConfirmText}>Confirm</Text>
+                </Pressable>
+                <Pressable style={styles.proposalDecline} onPress={() => respondToProposal(p.id, 'decline')}>
+                  <Text style={styles.proposalDeclineText}>Decline</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </FamCard>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
       {focusPlanner}
+      {focusProposals}
       {focusStaffTasks}
       {focusCalories}
       {focusHabits}
@@ -5486,6 +5652,7 @@ function AppShell() {
     <View style={styles.dashDesktop}>
       <View style={styles.dashMain}>
         {focusPlanner}
+        {focusProposals}
         {focusStaffTasks}
         {focusCalories}
         {focusHabits}
@@ -5647,6 +5814,18 @@ function AppShell() {
                 <Pressable style={styles.daySheetCancel} onPress={() => setDaySheetDate(null)}>
                   <Text style={styles.daySheetCancelText}>Done</Text>
                 </Pressable>
+                {activePartnerLink ? (
+                  <Pressable
+                    style={styles.daySheetSend}
+                    onPress={async () => {
+                      if (!dayNewTitle.trim() || !daySheetDate) return;
+                      await sendSlotToPartner(daySheetDate, dayNewTitle.trim(), dayNewTime);
+                      setDayNewTitle('');
+                    }}
+                  >
+                    <Text style={styles.daySheetSendText}>✈  Send</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
                   style={styles.daySheetAdd}
                   onPress={() => {
@@ -11326,6 +11505,20 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 14,
     fontWeight: '800',
   },
+  daySheetSend: {
+    flex: 1.2,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.glassSoft,
+    alignItems: 'center',
+  },
+  daySheetSendText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
   sectionMenuScrim: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 40,
@@ -12363,6 +12556,61 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 15,
+  },
+  proposalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  proposalCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  proposalTitle: {
+    color: colors.text,
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  proposalMeta: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  proposalMsg: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  proposalActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  proposalConfirm: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.primary,
+  },
+  proposalConfirmText: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  proposalDecline: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+  },
+  proposalDeclineText: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   habitsDashCard: {
     borderRadius: 20,
