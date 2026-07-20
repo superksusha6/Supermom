@@ -898,6 +898,161 @@ export async function deleteCalendarEvent(session: AppSession, eventId: string) 
   if (error) throw error;
 }
 
+// --- Partner calendars (Phase 1: two separate accounts, privacy-first) ---------------------
+
+export type PartnerLink = {
+  id: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  requesterId: string;
+  requesterName?: string;
+  partnerId?: string;
+  partnerName?: string;
+  createdAt: string;
+  // The other person's display name relative to the current user, once accepted.
+  partnerLabel?: string;
+};
+
+export type CalendarProposal = {
+  id: string;
+  linkId: string;
+  fromUserId: string;
+  fromName?: string;
+  toUserId: string;
+  title: string;
+  startsAt: string;
+  endTime?: string;
+  notes?: string;
+  color?: string;
+  message?: string;
+  status: 'pending' | 'confirmed' | 'declined' | 'cancelled';
+  createdAt: string;
+  direction: 'incoming' | 'outgoing';
+};
+
+export async function createPartnerInvite(session: AppSession, requesterName: string): Promise<{ id: string; token: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('create_partner_invite', {
+    p_family_id: session.familyId,
+    p_requester_name: requesterName,
+  });
+  if (error) throw error;
+  return data as { id: string; token: string };
+}
+
+export async function acceptPartnerInvite(token: string, familyId: string, partnerName: string): Promise<{ id: string; requester_name?: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('accept_partner_invite', {
+    p_token: token,
+    p_family_id: familyId,
+    p_partner_name: partnerName,
+  });
+  if (error) throw error;
+  return data as { id: string; requester_name?: string };
+}
+
+export async function revokePartnerLink(linkId: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('revoke_partner_link', { p_id: linkId });
+  if (error) throw error;
+}
+
+export async function listPartnerLinks(userId: string): Promise<PartnerLink[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('partner_links')
+    .select('id, status, requester_id, requester_name, partner_id, partner_name, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const iAmRequester = row.requester_id === userId;
+    return {
+      id: row.id,
+      status: row.status,
+      requesterId: row.requester_id,
+      requesterName: row.requester_name || undefined,
+      partnerId: row.partner_id || undefined,
+      partnerName: row.partner_name || undefined,
+      createdAt: row.created_at,
+      partnerLabel: (iAmRequester ? row.partner_name : row.requester_name) || undefined,
+    };
+  });
+}
+
+export async function createCalendarProposal(
+  linkId: string,
+  payload: { title: string; startsAt: string; endTime?: string; notes?: string; color?: string; message?: string },
+): Promise<{ id: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('create_calendar_proposal', {
+    p_link_id: linkId,
+    p_title: payload.title,
+    p_starts_at: payload.startsAt,
+    p_end_time: payload.endTime || null,
+    p_notes: payload.notes || null,
+    p_color: payload.color || null,
+    p_message: payload.message || null,
+  });
+  if (error) throw error;
+  return data as { id: string };
+}
+
+export async function respondCalendarProposal(id: string, decision: 'confirm' | 'decline'): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('respond_calendar_proposal', { p_id: id, p_decision: decision });
+  if (error) throw error;
+}
+
+export async function cancelCalendarProposal(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('cancel_calendar_proposal', { p_id: id });
+  if (error) throw error;
+}
+
+export async function listCalendarProposals(userId: string): Promise<CalendarProposal[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('calendar_proposals')
+    .select('id, link_id, from_user_id, from_name, to_user_id, title, starts_at, end_time, notes, color, message, status, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    linkId: row.link_id,
+    fromUserId: row.from_user_id,
+    fromName: row.from_name || undefined,
+    toUserId: row.to_user_id,
+    title: row.title,
+    startsAt: row.starts_at,
+    endTime: row.end_time || undefined,
+    notes: row.notes || undefined,
+    color: row.color || undefined,
+    message: row.message || undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    direction: row.to_user_id === userId ? 'incoming' : 'outgoing',
+  }));
+}
+
+// Build the event `notes` json exactly like createCalendarEvent, so a confirmed proposal
+// renders identically on both calendars.
+export function buildProposalNotes(payload: { color?: string; endTime?: string; category?: string; ownerName?: string }) {
+  return JSON.stringify({
+    color: payload.color,
+    motherColor: undefined,
+    staffColor: undefined,
+    visibility: 'shared',
+    category: payload.category || 'Together',
+    owner: 'mother',
+    ownerName: payload.ownerName || 'Together',
+    endTime: payload.endTime,
+  });
+}
+
+// Expose the wall-clock → UTC encoder used for event storage (for building a proposal's starts_at).
+export function proposalStartsAt(date: string, time: string) {
+  return composeStartsAt(date, time);
+}
+
 export async function deleteChildProfile(session: AppSession, childId: string) {
   const client = requireClient();
 
