@@ -315,17 +315,17 @@ export function CalendarScreen({
     [events, scope, activeOwnerFilter, currentRole, staffProfiles],
   );
 
-  // Faces for the calendar's person switcher (mother's view only): You + each child + each staff.
+  // Faces for the calendar's person switcher (mother's view only): You + each child.
+  // Staff are intentionally excluded — the mother manages them in Tasks, not the calendar.
   const avatarPeople = useMemo(() => {
     if (currentRole !== 'mother') return [] as { key: string; label: string; color: string; photo?: string }[];
     const list: { key: string; label: string; color: string; photo?: string }[] = [
       { key: 'mother', label: 'You', color: colors.primary },
     ];
     children.forEach((c, i) => list.push({ key: `child:${c.id}`, label: c.name, color: basePalette[i % basePalette.length], photo: c.photoUri }));
-    if (showStaff) staffProfiles.forEach((s) => list.push({ key: `staff:${s.id}`, label: s.name, color: '#8b5a2b' }));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRole, children, staffProfiles, showStaff, colors.primary]);
+  }, [currentRole, children, colors.primary]);
 
   const selectedEvents = useMemo(() => {
     const eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
