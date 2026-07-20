@@ -5557,7 +5557,12 @@ function AppShell() {
   ) : null;
 
   const focusMiniCal = (
-    <WeekStrip eventColors={eventColorsByDate} today={todayDateKey} onOpenDay={(dateKey) => openDaySheet(dateKey)} />
+    <WeekStrip
+      eventColors={eventColorsByDate}
+      today={todayDateKey}
+      onOpenDay={(dateKey) => openDaySheet(dateKey)}
+      onOpenMonth={() => setHomeTab('calendar')}
+    />
   );
 
   const openStaffTaskCount = tasks.filter((t) => t.assigneeRole === 'staff' && t.status !== 'done').length;

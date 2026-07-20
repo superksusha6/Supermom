@@ -11,6 +11,7 @@ type Props = {
   eventColors: Map<string, string[]>; // 'YYYY-MM-DD' -> event colors
   today: string; // 'YYYY-MM-DD'
   onOpenDay: (dateKey: string) => void;
+  onOpenMonth?: () => void; // tap the month header to open the full month calendar
 };
 
 const WD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -36,7 +37,7 @@ function mondayOf(d: Date) {
   return addDays(d, -((d.getDay() + 6) % 7));
 }
 
-export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
+export function WeekStrip({ eventColors, today, onOpenDay, onOpenMonth }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -78,9 +79,16 @@ export function WeekStrip({ eventColors, today, onOpenDay }: Props) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
+      <Pressable
+        style={styles.header}
+        onPress={onOpenMonth}
+        disabled={!onOpenMonth}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}. Open full month calendar.`}
+      >
         <Text style={styles.title}>{label}</Text>
-      </View>
+        {onOpenMonth ? <Text style={styles.monthLink}>Full month ›</Text> : null}
+      </Pressable>
 
       <View style={styles.stripWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {width > 0 ? (
@@ -147,6 +155,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
     },
     title: { color: colors.text, fontSize: 14, fontWeight: '800' },
+    monthLink: { color: colors.primary, fontSize: 13, fontWeight: '800' },
     stripWrap: { overflow: 'hidden' },
     weekPage: { flexDirection: 'row' },
     cell: { alignItems: 'center', paddingVertical: 2, gap: 3 },
