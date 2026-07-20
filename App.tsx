@@ -870,6 +870,7 @@ function AppShell() {
   const [inviteLink, setInviteLink] = useState('');
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const pendingInviteTokenRef = useRef<string | null>(null);
   // Partner calendar: send a time slot to your partner; they confirm → event in both.
   const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
@@ -4097,22 +4098,24 @@ function AppShell() {
 
   // ---- Partner calendar: invite, accept, send slot, respond ----
   async function handleInvitePartner() {
-    if (!session || !isSupabaseConfigured) {
-      setTasksError('Sign in to invite your partner.');
-      return;
-    }
+    const current = session || sessionRef.current;
     setInviteStaffName('your partner');
     setInviteLink('');
     setInviteCopied(false);
+    setInviteError(null);
     setInviteBusy(true);
     setInviteModalOpen(true);
+    if (!current || !isSupabaseConfigured) {
+      setInviteBusy(false);
+      setInviteError('You need to be signed in to invite your partner. Try reopening the app.');
+      return;
+    }
     try {
-      const { token } = await createPartnerInvite(session, parentLabel);
+      const { token } = await createPartnerInvite(current, parentLabel);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
       setInviteLink(`${origin}/?partner=${token}`);
     } catch (error) {
-      setInviteModalOpen(false);
-      setTasksError(error instanceof Error ? error.message : 'Could not create partner link.');
+      setInviteError(error instanceof Error ? error.message : 'Could not create the partner link. Please try again.');
     } finally {
       setInviteBusy(false);
     }
@@ -5988,13 +5991,25 @@ function AppShell() {
             <Text style={styles.daySheetTitle}>Invite {inviteStaffName}</Text>
             {inviteBusy ? (
               <Text style={styles.changePwMsg}>Creating link…</Text>
+            ) : inviteError ? (
+              <>
+                <Text style={[styles.inviteHint, { color: '#dc2626' }]}>{inviteError}</Text>
+                <View style={styles.daySheetActions}>
+                  <Pressable style={styles.daySheetCancel} onPress={() => setInviteModalOpen(false)}>
+                    <Text style={styles.daySheetCancelText}>Close</Text>
+                  </Pressable>
+                  <Pressable style={styles.daySheetAdd} onPress={() => handleInvitePartner()}>
+                    <Text style={styles.daySheetAddText}>Try again</Text>
+                  </Pressable>
+                </View>
+              </>
             ) : (
               <>
                 <Text style={styles.inviteHint}>
                   Send this private link. They open it, sign in with their own email, and get only the access you granted. It expires in 14 days.
                 </Text>
                 <View style={styles.inviteLinkBox}>
-                  <Text style={styles.inviteLinkText} numberOfLines={3}>{inviteLink}</Text>
+                  <Text style={styles.inviteLinkText} numberOfLines={3}>{inviteLink || 'Preparing link…'}</Text>
                 </View>
                 <View style={styles.daySheetActions}>
                   <Pressable style={styles.daySheetCancel} onPress={() => copyInviteLink(inviteLink)}>
