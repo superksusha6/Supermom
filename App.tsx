@@ -961,6 +961,7 @@ function AppShell() {
   const [completePhoto, setCompletePhoto] = useState<string | null>(null);
   const [completeBusy, setCompleteBusy] = useState(false);
   const [proofView, setProofView] = useState<{ title: string; comment?: string | null; photoUrl?: string | null } | null>(null);
+  const [expandedStaffDays, setExpandedStaffDays] = useState<Set<string>>(() => new Set(['Today']));
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [taskNotificationsFilter, setTaskNotificationsFilter] = useState<TaskNotificationsFilter>('all');
@@ -5659,15 +5660,45 @@ function AppShell() {
   const myStaffTasks = tasks.filter(
     (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
   );
+  const myOpenStaffTasks = myStaffTasks.filter((t) => t.status !== 'done');
+  // Completed tasks leave the active list and file into history, grouped by the day
+  // they were finished (from the completion notifications, which carry time/note/photo).
+  const myStaffTaskIds = new Set(myStaffTasks.map((t) => t.id));
+  const staffHistoryDays = (() => {
+    const mine = completedTaskNotifications.filter((n) => n.taskId && myStaffTaskIds.has(n.taskId));
+    const groups = new Map<string, CompletedTaskNotification[]>();
+    mine
+      .slice()
+      .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+      .forEach((n) => {
+        const day = completionDayLabel(n.completedAt);
+        if (!groups.has(day)) groups.set(day, []);
+        groups.get(day)!.push(n);
+      });
+    const rank = (d: string) => (d === 'Today' ? 0 : d === 'Yesterday' ? 1 : 2);
+    return [...groups.entries()].map(([day, items]) => ({ day, items })).sort((a, b) => rank(a.day) - rank(b.day));
+  })();
+  const toggleStaffDay = (day: string) =>
+    setExpandedStaffDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day);
+      else next.add(day);
+      return next;
+    });
   const focusStaffTasks = isStaffView && staffCan('tasks') ? (
-    <FamCard title={`My tasks${myStaffTasks.some((t) => t.status !== 'done') ? ` · ${myStaffTasks.filter((t) => t.status !== 'done').length}` : ''}`} padded={false}>
+    <FamCard title={`My tasks${myOpenStaffTasks.length ? ` · ${myOpenStaffTasks.length}` : ''}`} padded={false}>
       {myStaffTasks.length === 0 ? (
         <View style={styles.agendaEmpty}>
           <Text style={styles.agendaEmptyText}>No tasks assigned yet.</Text>
           <Text style={styles.agendaEmptySub}>New tasks from the family will show up here.</Text>
         </View>
+      ) : myOpenStaffTasks.length === 0 ? (
+        <View style={styles.agendaEmpty}>
+          <Text style={styles.agendaEmptyText}>All done for today ✓</Text>
+          <Text style={styles.agendaEmptySub}>Completed tasks are in History below.</Text>
+        </View>
       ) : (
-        myStaffTasks.map((task, i) => (
+        myOpenStaffTasks.map((task, i) => (
           <View key={task.id}>
             {i > 0 ? <View style={styles.agendaLine} /> : null}
             <View style={styles.staffTaskViewRow}>
@@ -5697,6 +5728,39 @@ function AppShell() {
           </View>
         ))
       )}
+    </FamCard>
+  ) : null;
+
+  const focusStaffHistory = isStaffView && staffCan('tasks') && staffHistoryDays.length > 0 ? (
+    <FamCard title="History" padded={false}>
+      {staffHistoryDays.map((grp, gi) => (
+        <View key={grp.day}>
+          {gi > 0 ? <View style={styles.agendaLine} /> : null}
+          <Pressable style={styles.staffHistHeader} onPress={() => toggleStaffDay(grp.day)}>
+            <Text style={styles.staffHistDay}>{grp.day}</Text>
+            <Text style={styles.staffHistCount}>{grp.items.length} done</Text>
+            <Text style={styles.staffHistCaret}>{expandedStaffDays.has(grp.day) ? '▾' : '▸'}</Text>
+          </Pressable>
+          {expandedStaffDays.has(grp.day)
+            ? grp.items.map((n) => (
+                <View key={n.id} style={styles.staffHistItem}>
+                  <Text style={styles.staffHistTime}>
+                    {new Date(n.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                  <Text style={styles.staffHistTitle} numberOfLines={1}>{n.taskTitle}</Text>
+                  {n.comment || n.photoUrl ? (
+                    <Pressable
+                      hitSlop={6}
+                      onPress={() => setProofView({ title: n.taskTitle, comment: n.comment, photoUrl: n.photoUrl })}
+                    >
+                      <Text style={styles.staffHistNote}>note ›</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))
+            : null}
+        </View>
+      ))}
     </FamCard>
   ) : null;
 
@@ -5834,6 +5898,7 @@ function AppShell() {
       {focusProposals}
       {focusPartnerReplies}
       {focusStaffTasks}
+      {focusStaffHistory}
       {focusCalories}
       {focusHabits}
       {focusTasks}
@@ -5847,6 +5912,7 @@ function AppShell() {
         {focusProposals}
         {focusPartnerReplies}
         {focusStaffTasks}
+        {focusStaffHistory}
         {focusCalories}
         {focusHabits}
         {focusTasks}
@@ -9906,6 +9972,18 @@ function persistDismissedReplies(set: Set<string>) {
   }
 }
 
+// Human day label for a completion timestamp: Today / Yesterday / "Jul 18".
+function completionDayLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (key(d) === key(now)) return 'Today';
+  if (key(d) === key(yest)) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 // Minutes-since-midnight for a "9:00 AM" / "14:30" clock string (null if unparseable).
 function clockToMinutes(value: string): number | null {
   const t = (value || '').trim();
@@ -11969,6 +12047,57 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   proofChipGo: {
     color: colors.subtext,
+    fontWeight: '800',
+  },
+  staffHistHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  staffHistDay: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  staffHistCount: {
+    marginLeft: 'auto',
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  staffHistCaret: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '800',
+    width: 14,
+    textAlign: 'center',
+  },
+  staffHistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  staffHistTime: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    width: 52,
+  },
+  staffHistTitle: {
+    flex: 1,
+    color: colors.subtext,
+    fontSize: 13.5,
+    fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  staffHistNote: {
+    color: colors.primary,
+    fontSize: 12.5,
     fontWeight: '800',
   },
   daySheetSendText: {
