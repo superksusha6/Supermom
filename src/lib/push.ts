@@ -118,6 +118,16 @@ export async function notifyPartner(proposalId: string): Promise<void> {
   }
 }
 
+// Push a staff member that the family assigned them a task. Fire-and-forget.
+export async function notifyStaffTask(staffProfileId: string, title: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase || !staffProfileId) return;
+  try {
+    await supabase.functions.invoke('notify-staff', { body: { staffProfileId, title } });
+  } catch {
+    /* non-fatal */
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

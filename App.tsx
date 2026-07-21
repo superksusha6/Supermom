@@ -4,7 +4,7 @@ import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, Scrol
 import * as ImagePicker from 'expo-image-picker';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { categorizeItem } from '@/lib/shopping';
-import { isPushSupported, currentPushState, enablePush, disablePush, notifyPartner, PushState } from '@/lib/push';
+import { isPushSupported, currentPushState, enablePush, disablePush, notifyPartner, notifyStaffTask, PushState } from '@/lib/push';
 import {
   AppSession,
   createRecipe,
@@ -3377,7 +3377,10 @@ function AppShell() {
             })
           : Promise.resolve(),
       ])
-        .then(() => Promise.all([refreshLiveCalendar(), isStaffTask ? refreshLiveTasks() : Promise.resolve()]))
+        .then(() => {
+          if (isStaffTask && staffTaskProfileId) notifyStaffTask(staffTaskProfileId, title);
+          return Promise.all([refreshLiveCalendar(), isStaffTask ? refreshLiveTasks() : Promise.resolve()]);
+        })
         .catch((error) => {
           setEvents((prev) => prev.filter((event) => event.id !== tempId && event.id !== optimisticMirrorEvent?.id));
           setTasksError(error instanceof Error ? error.message : 'Create event failed.');
@@ -4451,6 +4454,7 @@ function AppShell() {
     if (session && isSupabaseConfigured) {
       try {
         await createTask(session, { title, assigneeRole: 'staff', priority, staffProfileId: staff.id });
+        notifyStaffTask(staff.id, title);
         await refreshLiveTasks();
         return;
       } catch (error) {
