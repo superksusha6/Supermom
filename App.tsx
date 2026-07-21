@@ -5168,9 +5168,42 @@ function AppShell() {
   );
 
   // Settings rendered as a normal screen (bottom nav stays visible), not a modal.
+  // Staff get a light Settings panel (not the family's personal/nutrition/cycle screens).
+  const settingsStaffId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
+  const settingsStaffName = staffProfiles.find((p) => p.id === settingsStaffId)?.name || 'You';
+  const staffSettingsNode = (
+    <View style={styles.staffSettingsWrap}>
+      <Text style={styles.staffSettingsTitle}>Settings</Text>
+      <Text style={styles.staffSettingsSub}>{settingsStaffName}</Text>
+      <View style={styles.staffSettingsCard}>
+        <Text style={styles.staffSettingsSectionLabel}>Notifications</Text>
+        {pushState === 'unsupported' ? (
+          <Text style={styles.staffSettingsHint}>
+            Not supported in this browser. On iPhone: add FamOs to your Home Screen, then enable here.
+          </Text>
+        ) : (
+          <>
+            <Pressable style={[styles.staffToggle, pushState === 'enabled' && styles.staffToggleOn]} onPress={togglePush}>
+              <Text style={styles.staffToggleText}>
+                {pushState === 'enabled' ? 'Push notifications: On' : 'Enable push notifications'}
+              </Text>
+            </Pressable>
+            <Text style={styles.staffSettingsHint}>
+              {pushState === 'enabled'
+                ? "You'll get a ping when the family assigns you a task."
+                : pushState === 'denied'
+                  ? 'Blocked in your browser — allow notifications, then tap again.'
+                  : 'Get notified on this device when the family assigns you a task.'}
+            </Text>
+          </>
+        )}
+      </View>
+    </View>
+  );
+
   const settingsScreenContent = (
     <View style={styles.settingsScreen}>
-      {settingsScreenNode}
+      {isStaffView ? staffSettingsNode : settingsScreenNode}
       <View style={styles.settingsUtilityCard}>
         <View style={styles.settingsUtilitySection}>
           <View style={styles.settingsUtilityThemeCard}>
@@ -12143,6 +12176,60 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.primary,
     fontSize: 12.5,
     fontWeight: '800',
+  },
+  staffSettingsWrap: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  staffSettingsTitle: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  staffSettingsSub: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: -3,
+  },
+  staffSettingsCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 18,
+    padding: 14,
+    gap: 9,
+    marginTop: 8,
+  },
+  staffSettingsSectionLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  staffSettingsHint: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  staffToggle: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: colors.glassStrong,
+  },
+  staffToggleOn: {
+    borderColor: colors.done,
+    borderWidth: 2,
+  },
+  staffToggleText: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 14,
   },
   daySheetSendText: {
     color: colors.primary,
