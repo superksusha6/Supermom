@@ -4561,18 +4561,19 @@ function AppShell() {
   async function submitMyTaskCompletion() {
     const task = completeTask;
     if (!task || completeBusy) return;
+    const isRoutine = task.id.startsWith('routine:'); // daily duty — no real task row to flip
     const completedAt = new Date().toISOString();
     const staffName = myStaffName(task);
     const comment = completeComment.trim() || null;
     const photoUrl = completePhoto || null;
     setCompleteBusy(true);
-    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'done' } : item)));
+    if (!isRoutine) setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'done' } : item)));
 
     if (session && isSupabaseConfigured) {
       try {
-        await updateTask(task.id, { status: 'done' });
+        if (!isRoutine) await updateTask(task.id, { status: 'done' });
         await createCompletedTaskNotification(session, {
-          taskId: task.id,
+          taskId: isRoutine ? '' : task.id,
           taskTitle: task.title,
           staffName,
           completedAt,
@@ -4586,7 +4587,7 @@ function AppShell() {
       }
     } else {
       setCompletedTaskNotifications((prev) => [
-        { id: `completed-${Date.now()}`, taskId: task.id, taskTitle: task.title, staffName, completedAt, read: false, comment, photoUrl },
+        { id: `completed-${Date.now()}`, taskId: isRoutine ? '' : task.id, taskTitle: task.title, staffName, completedAt, read: false, comment, photoUrl },
         ...prev,
       ]);
     }
@@ -5661,11 +5662,54 @@ function AppShell() {
     (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
   );
   const myOpenStaffTasks = myStaffTasks.filter((t) => t.status !== 'done');
+  const myStaffTaskIds = new Set(myStaffTasks.map((t) => t.id));
+
+  // Base/daily duties defined on the staff profile auto-appear as tasks each day.
+  // We generate them for today (respecting weekDays; empty = every day) and drop any
+  // already ticked off today (matched by title via the completion notifications).
+  const currentStaffProfileId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
+  const currentStaffProfile = staffProfiles.find((p) => p.id === currentStaffProfileId) || null;
+  const doneTitlesToday = new Set(
+    completedTaskNotifications
+      .filter((n) => completionDayLabel(n.completedAt) === 'Today')
+      .map((n) => (n.taskTitle || '').trim().toLowerCase()),
+  );
+  const routineTasksToday: TaskItem[] = (() => {
+    if (!isStaffView || !currentStaffProfile) return [];
+    const todayCode = jsDayToWeekDayCode(new Date().getDay());
+    const openTitles = new Set(myOpenStaffTasks.map((t) => t.title.trim().toLowerCase()));
+    return (currentStaffProfile.tasks || [])
+      .filter((d) => d.title.trim())
+      .filter((d) => !d.weekDays || d.weekDays.length === 0 || d.weekDays.includes(todayCode))
+      .filter((d) => {
+        const key = d.title.trim().toLowerCase();
+        return !doneTitlesToday.has(key) && !openTitles.has(key);
+      })
+      .map((d) => ({
+        id: `routine:${d.id}`,
+        title: d.title.trim(),
+        assigneeRole: 'staff' as Role,
+        assigneeName: currentStaffProfile.name || 'Staff',
+        staffProfileId: currentStaffProfile.id,
+        priority: (d.priority || 'non_urgent') as TaskPriority,
+        status: 'new' as TaskStatus,
+        deadline: d.time ? d.time : 'No deadline',
+        needsParentApproval: false,
+      }));
+  })();
+  const displayStaffOpen = [...myOpenStaffTasks, ...routineTasksToday].sort(
+    (a, b) => (clockToMinutes(a.deadline) ?? 9999) - (clockToMinutes(b.deadline) ?? 9999),
+  );
+
   // Completed tasks leave the active list and file into history, grouped by the day
   // they were finished (from the completion notifications, which carry time/note/photo).
-  const myStaffTaskIds = new Set(myStaffTasks.map((t) => t.id));
   const staffHistoryDays = (() => {
-    const mine = completedTaskNotifications.filter((n) => n.taskId && myStaffTaskIds.has(n.taskId));
+    const myName = currentStaffProfile?.name?.trim().toLowerCase();
+    const mine = completedTaskNotifications.filter(
+      (n) =>
+        (n.taskId && myStaffTaskIds.has(n.taskId)) ||
+        (!!myName && (n.staffName || '').trim().toLowerCase() === myName),
+    );
     const groups = new Map<string, CompletedTaskNotification[]>();
     mine
       .slice()
@@ -5686,19 +5730,19 @@ function AppShell() {
       return next;
     });
   const focusStaffTasks = isStaffView && staffCan('tasks') ? (
-    <FamCard title={`My tasks${myOpenStaffTasks.length ? ` · ${myOpenStaffTasks.length}` : ''}`} padded={false}>
-      {myStaffTasks.length === 0 ? (
+    <FamCard title={`My tasks${displayStaffOpen.length ? ` · ${displayStaffOpen.length}` : ''}`} padded={false}>
+      {displayStaffOpen.length === 0 && myStaffTasks.length === 0 ? (
         <View style={styles.agendaEmpty}>
           <Text style={styles.agendaEmptyText}>No tasks assigned yet.</Text>
           <Text style={styles.agendaEmptySub}>New tasks from the family will show up here.</Text>
         </View>
-      ) : myOpenStaffTasks.length === 0 ? (
+      ) : displayStaffOpen.length === 0 ? (
         <View style={styles.agendaEmpty}>
           <Text style={styles.agendaEmptyText}>All done for today ✓</Text>
           <Text style={styles.agendaEmptySub}>Completed tasks are in History below.</Text>
         </View>
       ) : (
-        myOpenStaffTasks.map((task, i) => (
+        displayStaffOpen.map((task, i) => (
           <View key={task.id}>
             {i > 0 ? <View style={styles.agendaLine} /> : null}
             <View style={styles.staffTaskViewRow}>
@@ -6708,7 +6752,7 @@ function AppShell() {
                 <Pressable style={styles.addIconBtn} onPress={addStaffDraftTask}>
                   <Text style={styles.addIconText}>+</Text>
                 </Pressable>
-                <Text style={styles.createHint}>Add recurring staff duties</Text>
+                <Text style={styles.createHint}>Daily duties — appear as tasks automatically each day</Text>
               </View>
 
               {staffDraftTasks.map((task, index) => (
