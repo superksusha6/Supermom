@@ -101,6 +101,8 @@ export type CompletedTaskNotificationRecord = {
   staffName: string;
   completedAt: string;
   read: boolean;
+  comment?: string | null;
+  photoUrl?: string | null;
 };
 
 export type StaffReminderNotificationRecord = {
@@ -1863,10 +1865,28 @@ export async function listCompletedTaskNotifications(familyId: string): Promise<
   const client = requireClient();
   const { data, error } = await client
     .from('completed_task_notifications')
-    .select('id, task_id, task_title, staff_name, completed_at, read')
+    .select('id, task_id, task_title, staff_name, completed_at, read, staff_comment, photo_url')
     .eq('family_id', familyId)
     .order('completed_at', { ascending: false });
-  if (error) throw error;
+  // Resilient if the proof columns haven't been migrated yet: retry without them.
+  if (error) {
+    const fallback = await client
+      .from('completed_task_notifications')
+      .select('id, task_id, task_title, staff_name, completed_at, read')
+      .eq('family_id', familyId)
+      .order('completed_at', { ascending: false });
+    if (fallback.error) throw fallback.error;
+    return (fallback.data ?? []).map((row) => ({
+      id: row.id,
+      taskId: row.task_id || '',
+      taskTitle: row.task_title,
+      staffName: row.staff_name,
+      completedAt: row.completed_at,
+      read: row.read,
+      comment: null,
+      photoUrl: null,
+    }));
+  }
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -1875,6 +1895,8 @@ export async function listCompletedTaskNotifications(familyId: string): Promise<
     staffName: row.staff_name,
     completedAt: row.completed_at,
     read: row.read,
+    comment: (row as { staff_comment?: string | null }).staff_comment ?? null,
+    photoUrl: (row as { photo_url?: string | null }).photo_url ?? null,
   }));
 }
 
@@ -1883,7 +1905,7 @@ export async function createCompletedTaskNotification(
   payload: Omit<CompletedTaskNotificationRecord, 'id'>,
 ) {
   const client = requireClient();
-  const { error } = await client.from('completed_task_notifications').insert({
+  const base = {
     family_id: session.familyId,
     task_id: payload.taskId || null,
     task_title: payload.taskTitle,
@@ -1891,8 +1913,15 @@ export async function createCompletedTaskNotification(
     completed_at: payload.completedAt,
     read: payload.read,
     created_by: session.userId,
-  });
-  if (error) throw error;
+  };
+  const { error } = await client
+    .from('completed_task_notifications')
+    .insert({ ...base, staff_comment: payload.comment ?? null, photo_url: payload.photoUrl ?? null });
+  // Resilient if the proof columns haven't been migrated yet: retry without them.
+  if (error) {
+    const fallback = await client.from('completed_task_notifications').insert(base);
+    if (fallback.error) throw fallback.error;
+  }
 }
 
 export async function markCompletedTaskNotificationsRead(session: AppSession) {

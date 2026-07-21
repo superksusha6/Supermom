@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { categorizeItem } from '@/lib/shopping';
 import { isPushSupported, currentPushState, enablePush, disablePush, notifyPartner, PushState } from '@/lib/push';
@@ -168,6 +169,8 @@ type CompletedTaskNotification = {
   staffName: string;
   completedAt: string;
   read: boolean;
+  comment?: string | null;
+  photoUrl?: string | null;
 };
 type StaffReminderNotification = {
   taskId: string;
@@ -193,6 +196,8 @@ type TaskNotificationEntry = {
   happenedAt: string;
   deadline?: string;
   taskId: string;
+  comment?: string | null;
+  photoUrl?: string | null;
 };
 type MealPlanProfilePreference = {
   key: string;
@@ -885,6 +890,7 @@ function AppShell() {
   const [dayEditTime, setDayEditTime] = useState('');
   const [dayNewTitle, setDayNewTitle] = useState('');
   const [dayNewTime, setDayNewTime] = useState('4:00 PM');
+  const [dayNewEnd, setDayNewEnd] = useState('');
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -949,6 +955,12 @@ function AppShell() {
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskPriority, setEditTaskPriority] = useState<TaskPriority>('non_urgent');
   const [completedTaskNotifications, setCompletedTaskNotifications] = useState<CompletedTaskNotification[]>([]);
+  // Staff task completion sheet: attach a photo of the result + an optional note.
+  const [completeTask, setCompleteTask] = useState<TaskItem | null>(null);
+  const [completeComment, setCompleteComment] = useState('');
+  const [completePhoto, setCompletePhoto] = useState<string | null>(null);
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [proofView, setProofView] = useState<{ title: string; comment?: string | null; photoUrl?: string | null } | null>(null);
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [taskNotificationsFilter, setTaskNotificationsFilter] = useState<TaskNotificationsFilter>('all');
@@ -1390,6 +1402,8 @@ function AppShell() {
           staffName: item.staffName,
           happenedAt: item.completedAt,
           taskId: item.taskId,
+          comment: item.comment ?? null,
+          photoUrl: item.photoUrl ?? null,
         })),
       ].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime()),
     [completedTaskNotifications, overdueStaffTasks],
@@ -2298,6 +2312,8 @@ function AppShell() {
           staffName: item.staffName,
           completedAt: item.completedAt,
           read: item.read,
+          comment: item.comment ?? null,
+          photoUrl: item.photoUrl ?? null,
         })),
       );
       setStaffReminderNotifications(
@@ -4493,40 +4509,88 @@ function AppShell() {
     }
   }
 
-  // Staff ticks their own task done → flip status AND report completion (with time) to the family.
-  async function completeMyTask(task: TaskItem) {
-    const nextStatus: TaskStatus = task.status === 'done' ? 'new' : 'done';
-    const completedAt = new Date().toISOString();
-    const staffName =
+  function myStaffName(task: TaskItem) {
+    return (
       staffProfiles.find((p) => p.id === activeStaffProfileId)?.name ||
-      (task.assigneeName && task.assigneeName !== 'Staff' ? task.assigneeName : 'Staff');
-    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)));
+      (task.assigneeName && task.assigneeName !== 'Staff' ? task.assigneeName : 'Staff')
+    );
+  }
 
+  // Staff taps their task: completing opens the proof sheet (photo + note); un-completing flips back.
+  function completeMyTask(task: TaskItem) {
+    if (task.status === 'done') {
+      uncompleteMyTask(task);
+      return;
+    }
+    setCompleteTask(task);
+    setCompleteComment('');
+    setCompletePhoto(null);
+  }
+
+  async function uncompleteMyTask(task: TaskItem) {
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'new' } : item)));
     if (session && isSupabaseConfigured) {
       try {
-        await updateTask(task.id, { status: nextStatus });
-        if (nextStatus === 'done') {
-          await createCompletedTaskNotification(session, {
-            taskId: task.id,
-            taskTitle: task.title,
-            staffName,
-            completedAt,
-            read: false,
-          });
-        }
-        await Promise.all([refreshLiveTasks(), refreshLiveNotifications()]);
+        await updateTask(task.id, { status: 'new' });
+        await refreshLiveTasks();
       } catch (error) {
         setTasksError(error instanceof Error ? error.message : 'Could not update task.');
       }
-      return;
     }
+  }
 
-    if (nextStatus === 'done') {
+  async function pickCompletePhoto() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      setCompletePhoto(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
+    } catch {
+      // ignore picker failures
+    }
+  }
+
+  // Staff confirms the proof sheet → mark done and report completion (time + note + photo) to the family.
+  async function submitMyTaskCompletion() {
+    const task = completeTask;
+    if (!task || completeBusy) return;
+    const completedAt = new Date().toISOString();
+    const staffName = myStaffName(task);
+    const comment = completeComment.trim() || null;
+    const photoUrl = completePhoto || null;
+    setCompleteBusy(true);
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'done' } : item)));
+
+    if (session && isSupabaseConfigured) {
+      try {
+        await updateTask(task.id, { status: 'done' });
+        await createCompletedTaskNotification(session, {
+          taskId: task.id,
+          taskTitle: task.title,
+          staffName,
+          completedAt,
+          read: false,
+          comment,
+          photoUrl,
+        });
+        await Promise.all([refreshLiveTasks(), refreshLiveNotifications()]);
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not mark task complete.');
+      }
+    } else {
       setCompletedTaskNotifications((prev) => [
-        { id: `completed-${Date.now()}`, taskId: task.id, taskTitle: task.title, staffName, completedAt, read: false },
+        { id: `completed-${Date.now()}`, taskId: task.id, taskTitle: task.title, staffName, completedAt, read: false, comment, photoUrl },
         ...prev,
       ]);
     }
+    setCompleteBusy(false);
+    setCompleteTask(null);
   }
 
   async function removeManagedTask(taskId: string) {
@@ -5922,13 +5986,35 @@ function AppShell() {
                 value={dayNewTitle}
                 onChangeText={setDayNewTitle}
               />
+              <Text style={styles.daySheetFieldLabel}>Starts</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
                 {DAY_TIME_OPTIONS.map((t) => (
-                  <Pressable key={t} style={[styles.daySheetChip, dayNewTime === t && styles.daySheetChipActive]} onPress={() => setDayNewTime(t)}>
+                  <Pressable
+                    key={t}
+                    style={[styles.daySheetChip, dayNewTime === t && styles.daySheetChipActive]}
+                    onPress={() => {
+                      setDayNewTime(t);
+                      const si = DAY_TIME_OPTIONS.indexOf(t);
+                      const ei = DAY_TIME_OPTIONS.indexOf(dayNewEnd);
+                      if (ei >= 0 && ei <= si) setDayNewEnd('');
+                    }}
+                  >
                     <Text style={[styles.daySheetChipText, dayNewTime === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
+              <Text style={styles.daySheetFieldLabel}>Ends (optional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
+                <Pressable style={[styles.daySheetChip, !dayNewEnd && styles.daySheetChipActive]} onPress={() => setDayNewEnd('')}>
+                  <Text style={[styles.daySheetChipText, !dayNewEnd && styles.daySheetChipTextActive]}>No end</Text>
+                </Pressable>
+                {DAY_TIME_OPTIONS.slice(Math.max(0, DAY_TIME_OPTIONS.indexOf(dayNewTime) + 1)).map((t) => (
+                  <Pressable key={`end-${t}`} style={[styles.daySheetChip, dayNewEnd === t && styles.daySheetChipActive]} onPress={() => setDayNewEnd(t)}>
+                    <Text style={[styles.daySheetChipText, dayNewEnd === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <Text style={styles.daySheetFieldLabel}>For</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
                 <Pressable style={[styles.daySheetChip, dayNewWho === 'mother' && styles.daySheetChipActive]} onPress={() => setDayNewWho('mother')}>
                   <Text style={[styles.daySheetChipText, dayNewWho === 'mother' && styles.daySheetChipTextActive]}>{parentLabel}</Text>
@@ -5948,7 +6034,7 @@ function AppShell() {
                     style={styles.daySheetSend}
                     onPress={async () => {
                       if (!dayNewTitle.trim() || !daySheetDate) return;
-                      await sendSlotToPartner(daySheetDate, dayNewTitle.trim(), dayNewTime);
+                      await sendSlotToPartner(daySheetDate, dayNewTitle.trim(), dayNewTime, dayNewEnd || undefined);
                       setDayNewTitle('');
                     }}
                   >
@@ -5966,6 +6052,7 @@ function AppShell() {
                       title: dayNewTitle.trim(),
                       date: daySheetDate,
                       time: dayNewTime,
+                      endTime: dayNewEnd || undefined,
                       owner: child ? 'child' : 'mother',
                       ownerName: child ? child.name : parentLabel,
                       ownerChildProfileId: child ? child.id : undefined,
@@ -6057,6 +6144,62 @@ function AppShell() {
                 </View>
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+      ) : null}
+
+      {completeTask ? (
+      <Modal visible transparent animationType="fade" onRequestClose={() => setCompleteTask(null)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setCompleteTask(null)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>Mark done</Text>
+            <Text style={styles.inviteHint}>{completeTask.title}</Text>
+            <Pressable style={styles.proofPhotoBtn} onPress={pickCompletePhoto}>
+              {completePhoto ? (
+                <Image source={{ uri: completePhoto }} style={styles.proofThumb} />
+              ) : (
+                <Text style={styles.proofPhotoBtnText}>＋ Add photo of the result</Text>
+              )}
+              {completePhoto ? <Text style={styles.proofPhotoChange}>Change photo</Text> : null}
+            </Pressable>
+            <TextInput
+              placeholder="Comment (optional) — e.g. couldn't do it that way, did X instead"
+              placeholderTextColor={colors.subtext}
+              style={[styles.input, styles.proofComment]}
+              value={completeComment}
+              onChangeText={setCompleteComment}
+              multiline
+            />
+            <View style={styles.daySheetActions}>
+              <Pressable style={styles.daySheetCancel} onPress={() => setCompleteTask(null)}>
+                <Text style={styles.daySheetCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.daySheetAdd} onPress={submitMyTaskCompletion} disabled={completeBusy}>
+                <Text style={styles.daySheetAddText}>{completeBusy ? 'Sending…' : 'Mark done & send'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      ) : null}
+
+      {proofView ? (
+      <Modal visible transparent animationType="fade" onRequestClose={() => setProofView(null)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setProofView(null)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>{proofView.title}</Text>
+            {proofView.photoUrl ? <Image source={{ uri: proofView.photoUrl }} style={styles.proofBig} /> : null}
+            {proofView.comment ? (
+              <Text style={styles.proofFull}>{proofView.comment}</Text>
+            ) : (
+              <Text style={styles.inviteHint}>Marked done — no note.</Text>
+            )}
+            <View style={styles.daySheetActions}>
+              <Pressable style={styles.daySheetAdd} onPress={() => setProofView(null)}>
+                <Text style={styles.daySheetAddText}>Close</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -8302,6 +8445,20 @@ function AppShell() {
                     {item.kind === 'completed' ? (
                       <>
                         <Text style={styles.meta}>Completed at {new Date(item.happenedAt).toLocaleString()}</Text>
+                        {item.comment || item.photoUrl ? (
+                          <Pressable
+                            style={styles.proofChip}
+                            onPress={() => setProofView({ title: item.title, comment: item.comment, photoUrl: item.photoUrl })}
+                          >
+                            {item.photoUrl ? (
+                              <Image source={{ uri: item.photoUrl }} style={styles.proofChipThumb} />
+                            ) : (
+                              <View style={styles.proofChipIcon}><Text style={styles.proofChipIconText}>🖉</Text></View>
+                            )}
+                            <Text style={styles.proofChipText} numberOfLines={1}>{item.comment || 'Photo attached'}</Text>
+                            <Text style={styles.proofChipGo}>›</Text>
+                          </Pressable>
+                        ) : null}
                         <View style={styles.row}>
                           <Pressable style={[styles.authBtn, styles.completedBtn]}>
                             <Text style={styles.authBtnText}>Completed</Text>
@@ -11656,6 +11813,15 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     gap: 9,
     marginTop: 4,
   },
+  daySheetFieldLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: 2,
+    marginBottom: -3,
+  },
   daySheetChipsRow: {
     gap: 7,
     paddingRight: 4,
@@ -11718,6 +11884,92 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: colors.primary,
     backgroundColor: colors.glassSoft,
     alignItems: 'center',
+  },
+  proofPhotoBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  proofPhotoBtnText: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 13.5,
+  },
+  proofPhotoChange: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 12.5,
+  },
+  proofThumb: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+  },
+  proofComment: {
+    marginTop: 10,
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  proofBig: {
+    width: '100%',
+    height: 220,
+    borderRadius: 14,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  proofFull: {
+    color: colors.text,
+    fontSize: 14.5,
+    lineHeight: 21,
+    marginTop: 4,
+  },
+  proofChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: '100%',
+  },
+  proofChipThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  proofChipIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.done,
+  },
+  proofChipIconText: {
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  proofChipText: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  proofChipGo: {
+    color: colors.subtext,
+    fontWeight: '800',
   },
   daySheetSendText: {
     color: colors.primary,
