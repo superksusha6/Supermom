@@ -962,6 +962,8 @@ function AppShell() {
   const [completeBusy, setCompleteBusy] = useState(false);
   const [proofView, setProofView] = useState<{ title: string; comment?: string | null; photoUrl?: string | null } | null>(null);
   const [expandedStaffDays, setExpandedStaffDays] = useState<Set<string>>(() => new Set(['Today']));
+  const [staffShopName, setStaffShopName] = useState('');
+  const [staffShopQty, setStaffShopQty] = useState('');
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [taskNotificationsFilter, setTaskNotificationsFilter] = useState<TaskNotificationsFilter>('all');
@@ -5845,6 +5847,55 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // Staff home extras: a peek at today's dinner (if they cook) and a fast way to jot
+  // products onto the family's shopping list (if they shop). Both feature-gated.
+  const focusStaffMenu = isStaffView && staffCan('menu') && tonightMeal ? (
+    <Pressable onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }}>
+      <FamCard title="Menu today">
+        <Text style={styles.staffMenuMeal}>Dinner · {tonightMeal.title}</Text>
+        {tonightMeal.cookTime ? (
+          <Text style={styles.staffMenuMeta}>
+            {tonightMeal.cookTime} min{tonightMeal.servings ? ` · ${tonightMeal.servings} servings` : ''}
+          </Text>
+        ) : null}
+      </FamCard>
+    </Pressable>
+  ) : null;
+  const addStaffShop = () => {
+    const name = staffShopName.trim();
+    if (!name) return;
+    addIngredientsToShoppingList([{ name, quantity: staffShopQty.trim() || '1 pcs' }]);
+    setStaffShopName('');
+    setStaffShopQty('');
+  };
+  const focusStaffShopping = isStaffView && staffCan('shopping') ? (
+    <FamCard title="Shopping list">
+      <Text style={styles.staffShopHint}>Add what needs buying — the family sees it live.</Text>
+      <View style={styles.staffShopRow}>
+        <TextInput
+          style={[styles.input, styles.staffShopName]}
+          placeholder="Add a product…"
+          placeholderTextColor={colors.subtext}
+          value={staffShopName}
+          onChangeText={setStaffShopName}
+          onSubmitEditing={addStaffShop}
+          returnKeyType="done"
+        />
+        <TextInput
+          style={[styles.input, styles.staffShopQty]}
+          placeholder="qty"
+          placeholderTextColor={colors.subtext}
+          value={staffShopQty}
+          onChangeText={setStaffShopQty}
+          onSubmitEditing={addStaffShop}
+        />
+        <Pressable style={styles.staffShopAdd} onPress={addStaffShop}>
+          <Text style={styles.staffShopAddText}>Add</Text>
+        </Pressable>
+      </View>
+    </FamCard>
+  ) : null;
+
   // Today's habits — a compact daily card with one-tap check-off. Only for the
   // main user, when the Habits add-on is on and there's at least one habit.
   const activeHabits = habits.filter((h) => h.enabled);
@@ -5980,6 +6031,8 @@ function AppShell() {
       {focusPartnerReplies}
       {focusStaffTasks}
       {focusStaffHistory}
+      {focusStaffMenu}
+      {focusStaffShopping}
       {focusCalories}
       {focusHabits}
       {focusTasks}
@@ -5994,6 +6047,8 @@ function AppShell() {
         {focusPartnerReplies}
         {focusStaffTasks}
         {focusStaffHistory}
+        {focusStaffMenu}
+        {focusStaffShopping}
         {focusCalories}
         {focusHabits}
         {focusTasks}
@@ -12232,6 +12287,49 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   staffToggleText: {
     color: colors.text,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  staffMenuMeal: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  staffMenuMeta: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  staffShopHint: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    marginBottom: 10,
+  },
+  staffShopRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'stretch',
+  },
+  staffShopName: {
+    flex: 1,
+    minWidth: 0,
+    marginTop: 0,
+  },
+  staffShopQty: {
+    width: 66,
+    textAlign: 'center',
+    marginTop: 0,
+  },
+  staffShopAdd: {
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  staffShopAddText: {
+    color: '#ffffff',
     fontWeight: '800',
     fontSize: 14,
   },
