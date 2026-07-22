@@ -4101,9 +4101,9 @@ function AppShell() {
 
   async function handleInviteStaff(staffId: string) {
     const current = session || sessionRef.current;
-    const name = staffProfiles.find((p) => p.id === staffId)?.name || 'Staff';
+    const profile = staffProfiles.find((p) => p.id === staffId);
     inviteRetryRef.current = () => handleInviteStaff(staffId);
-    setInviteStaffName(name);
+    setInviteStaffName(profile?.name || 'Staff');
     setInviteLink('');
     setInviteCopied(false);
     setInviteError(null);
@@ -4114,15 +4114,28 @@ function AppShell() {
       setInviteError('You need to be signed in to create an invite link. Try reopening the app.');
       return;
     }
-    if (staffId.startsWith('staff-')) {
-      // Local-only (not yet saved to the server) — needs a real profile row first.
-      setInviteBusy(false);
-      setInviteError('Save this staff profile first (open Edit, then Save), and try Invite again.');
-      return;
-    }
     const grant = staffGrants[staffId] || { roles: staffDraftRoles, features: staffDraftFeatures };
     try {
-      const { token } = await createStaffInvite(current, staffId, grant.roles, grant.features);
+      let realId = staffId;
+      // Local-only profile (id starts with "staff-") → persist it now so it has a real
+      // server id, then create the link. No manual "Edit → Save" needed.
+      if (staffId.startsWith('staff-')) {
+        if (!profile) throw new Error('Staff profile not found.');
+        realId = await upsertStaffProfileRecord(current, {
+          name: profile.name,
+          dateOfBirth: profile.dateOfBirth || undefined,
+          tasks: (profile.tasks || []).map((t) => ({
+            id: t.id,
+            title: t.title,
+            time: t.time,
+            priority: t.priority,
+            weekDays: t.weekDays,
+          })),
+        });
+        setStaffGrants((prev) => ({ ...prev, [realId]: grant }));
+        await refreshLiveStaffProfiles(current);
+      }
+      const { token } = await createStaffInvite(current, realId, grant.roles, grant.features);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
       setInviteLink(`${origin}/?invite=${token}`);
     } catch (error) {
