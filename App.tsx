@@ -876,6 +876,7 @@ function AppShell() {
   const [authSignupSex, setAuthSignupSex] = useState<NutritionSex>('female');
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [signInModalOpen, setSignInModalOpen] = useState(false);
+  const [pendingInviteActive, setPendingInviteActive] = useState(false);
   const settingsPanelOpen = screen === 'settings';
   const setSettingsPanelOpen = (open: boolean) => setScreen(open ? 'settings' : 'calendar');
   const [changePwOpen, setChangePwOpen] = useState(false);
@@ -2522,7 +2523,10 @@ function AppShell() {
       }
 
       const inviteToken = searchParams.get('invite');
-      if (inviteToken) pendingInviteTokenRef.current = inviteToken;
+      if (inviteToken) {
+        pendingInviteTokenRef.current = inviteToken;
+        setPendingInviteActive(true);
+      }
       const partnerToken = searchParams.get('partner');
       if (partnerToken) pendingPartnerTokenRef.current = partnerToken;
     }
@@ -2533,15 +2537,19 @@ function AppShell() {
         const ctx = await getOrCreateSessionContext();
         if (cancelled) return;
         if (ctx) {
+          await hydrateSessionContext(ctx);
           if (pendingInviteTokenRef.current) {
-            await consumePendingInvite();
-          } else {
-            await hydrateSessionContext(ctx);
+            // An invite link is for a NEW person — show registration instead of silently
+            // joining with whatever account is already signed in on this browser. A signed-in
+            // person can still tap "Join with this account" in the modal.
+            setAuthInfo('Register a new account (email + password) to join as staff — or join with your current account.');
+            setAuthMode('signup');
+            setSignInModalOpen(true);
           }
           if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
         } else if (pendingInviteTokenRef.current) {
-          // Not signed in yet — let them create/enter their own account to join.
-          setAuthInfo('Create your account or log in to join the family.');
+          // Not signed in yet — let them create their own account to join.
+          setAuthInfo('Create your account (email + password) to join the family.');
           setAuthMode('signup');
           setSignInModalOpen(true);
         }
@@ -4166,6 +4174,7 @@ function AppShell() {
     const token = pendingInviteTokenRef.current;
     if (!token || !isSupabaseConfigured) return;
     pendingInviteTokenRef.current = null;
+    setPendingInviteActive(false);
     try {
       await acceptStaffInvite(token);
       if (typeof window !== 'undefined' && window.history?.replaceState) {
@@ -6545,6 +6554,18 @@ function AppShell() {
             ) : null}
             {tasksError ? <Text style={styles.authErrorText}>{tasksError}</Text> : null}
             {authInfo ? <Text style={styles.authInfoText}>{authInfo}</Text> : null}
+            {session && pendingInviteActive ? (
+              <Pressable
+                style={[styles.authBtn, styles.authSecondary]}
+                onPress={() => {
+                  setSignInModalOpen(false);
+                  setPendingInviteActive(false);
+                  consumePendingInvite();
+                }}
+              >
+                <Text style={[styles.authBtnText, styles.authSecondaryText]}>Join with this account</Text>
+              </Pressable>
+            ) : null}
             {authMode === 'signin' ? (
               <Pressable
                 onPress={() => {
