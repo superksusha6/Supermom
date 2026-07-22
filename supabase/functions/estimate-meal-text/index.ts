@@ -1,9 +1,33 @@
 // @ts-nocheck
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Require an authenticated caller and cap per-user calls so nobody can run up OpenAI cost.
+async function rateGate(req: Request, bucket: string, limit: number, windowSeconds: number) {
+  const url = Deno.env.get('SUPABASE_URL');
+  const svc = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anon = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !svc) return null;
+  const userClient = createClient(url, anon || svc, {
+    global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
+  });
+  const { data: u } = await userClient.auth.getUser();
+  const uid = u?.user?.id;
+  if (!uid) return json({ error: 'Not authenticated.' }, 401);
+  const admin = createClient(url, svc);
+  const { data: allowed } = await admin.rpc('bump_rate_limit', {
+    p_user: uid,
+    p_bucket: bucket,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  if (allowed === false) return json({ error: 'Too many requests — please try again shortly.' }, 429);
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,6 +35,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const gate = await rateGate(req, 'meal-text', 60, 3600);
+    if (gate) return gate;
     const openAiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAiKey) {
       return json({ error: 'OPENAI_API_KEY is not configured for the edge function.' }, 500);
