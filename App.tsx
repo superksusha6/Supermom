@@ -6516,7 +6516,7 @@ function AppShell() {
       ) : null}
       <Modal visible={signInModalOpen} transparent animationType="fade" onRequestClose={() => setSignInModalOpen(false)}>
         <View style={styles.signInModalRoot}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setSignInModalOpen(false)} />
+          <Pressable style={styles.signInBackdrop} onPress={() => setSignInModalOpen(false)} />
           <View pointerEvents="box-none" style={styles.signInModalLayer}>
             <View style={styles.signInModalCard}>
             <Text style={styles.authTitle}>
@@ -6539,7 +6539,7 @@ function AppShell() {
                   placeholder="Full name"
                   autoCapitalize="words"
                   autoCorrect={false}
-                  style={styles.input}
+                  style={[styles.input, styles.authField]}
                   value={authName}
                   onChangeText={setAuthName}
                 />
@@ -6548,7 +6548,7 @@ function AppShell() {
                     placeholder="Date of birth (DD.MM.YYYY)"
                     keyboardType="numbers-and-punctuation"
                     autoCorrect={false}
-                    style={styles.input}
+                    style={[styles.input, styles.authField]}
                     value={authStaffDob}
                     onChangeText={(t) => setAuthStaffDob(formatBirthDateInput(t))}
                   />
@@ -6578,7 +6578,7 @@ function AppShell() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 autoComplete="email"
-                style={styles.input}
+                style={[styles.input, styles.authField]}
                 value={authEmail}
                 onChangeText={setAuthEmail}
               />
@@ -6586,7 +6586,7 @@ function AppShell() {
               <Text style={styles.authInfoText}>Enter a new password for your account.</Text>
             )}
             {authMode !== 'reset' ? (
-              <View style={styles.passwordInputWrap}>
+              <View style={[styles.passwordInputWrap, styles.authFieldWrap]}>
                 <TextInput
                   key={`auth-password-${authMode}`}
                   placeholder="Password"
@@ -6611,7 +6611,7 @@ function AppShell() {
               </View>
             ) : null}
             {authMode === 'signup' || authMode === 'recover' ? (
-              <View style={styles.passwordInputWrap}>
+              <View style={[styles.passwordInputWrap, styles.authFieldWrap]}>
                 <TextInput
                   key={`auth-password-confirm-${authMode}`}
                   placeholder={authMode === 'recover' ? 'Confirm new password' : 'Confirm password'}
@@ -14513,6 +14513,22 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flex: 1,
     justifyContent: 'center',
     padding: 20,
+  },
+  // Absolute so it doesn't consume flex height (which pushed the card toward the bottom);
+  // the centered layer then fills the whole screen and the card sits truly in the middle.
+  signInBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  // Auth form fields use the contrasting surface so each box is clearly visible
+  // against the white/dark modal card (fixes near-invisible Email/Password fields).
+  authField: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.subtext,
+  },
+  authFieldWrap: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.subtext,
   },
   signInModalLayer: {
     flex: 1,
