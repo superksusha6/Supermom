@@ -2416,7 +2416,7 @@ function AppShell() {
       listHabitEntries(ctx)
         .then(async (liveHabits) => {
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
-          const mergedHabits = mergeHabitsPreferLocal(liveHabits, localHabits);
+          const mergedHabits = normalizeHabitsForToday(mergeHabitsPreferLocal(liveHabits, localHabits));
           latestHabitsRef.current = mergedHabits;
           setHabits(mergedHabits);
           habitsLoadedRef.current = true;
@@ -5904,7 +5904,7 @@ function AppShell() {
     setHabits((prev) =>
       prev.map((h) =>
         h.id === id
-          ? { ...h, completedToday: !h.completedToday, streak: h.completedToday ? Math.max(0, h.streak - 1) : h.streak + 1 }
+          ? { ...h, completedToday: !h.completedToday, completedDate: !h.completedToday ? getTodayKey() : undefined, streak: h.completedToday ? Math.max(0, h.streak - 1) : h.streak + 1 }
           : h,
       ),
     );
@@ -10040,6 +10040,13 @@ function markHabitsSeeded() {
   }
 }
 
+// A habit is "done today" only if it was ticked on today's date. This resets the
+// check-marks each new day (the completion date persists; the boolean is derived).
+function normalizeHabitsForToday(habits: HabitEntry[]): HabitEntry[] {
+  const today = getTodayKey();
+  return habits.map((h) => ({ ...h, completedToday: h.completedDate === today }));
+}
+
 function loadLocalHabits(): HabitEntry[] {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return [];
   try {
@@ -10048,7 +10055,7 @@ function loadLocalHabits(): HabitEntry[] {
     if (!raw) return loadHabitsSeeded() ? [] : DEFAULT_HABITS.map((h) => ({ ...h }));
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    return normalizeHabitsForToday(parsed.filter(
       (habit): habit is HabitEntry =>
         !!habit &&
         typeof habit === 'object' &&
@@ -10058,7 +10065,7 @@ function loadLocalHabits(): HabitEntry[] {
         typeof habit.color === 'string' &&
         typeof habit.targetText === 'string' &&
         typeof habit.enabled === 'boolean',
-    );
+    ));
   } catch {
     return [];
   }

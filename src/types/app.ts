@@ -174,6 +174,7 @@ export type HabitEntry = {
   reminderMode?: HabitReminderMode;
   reminderTime?: string;
   completedToday: boolean;
+  completedDate?: string; // YYYY-MM-DD the habit was last ticked; drives the daily reset
   streak: number;
 };
 

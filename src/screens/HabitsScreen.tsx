@@ -12,6 +12,12 @@ type Props = {
   quickActionRequest?: { type: 'create-habit'; token: number } | null;
 };
 
+// Local date key (YYYY-MM-DD) — must match App's getTodayKey so the daily reset lines up.
+function habitTodayKey(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
 const HABIT_ICON_TITLE_SUGGESTIONS: Record<string, string> = {
   '💧': 'Water goal',
   '🛏️': 'Sleep routine',
@@ -203,6 +209,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                         ? {
                             ...item,
                             completedToday: !item.completedToday,
+                            completedDate: !item.completedToday ? habitTodayKey() : undefined,
                             streak: item.completedToday ? Math.max(0, item.streak - 1) : item.streak + 1,
                           }
                         : item,
