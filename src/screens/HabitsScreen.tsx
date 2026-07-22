@@ -101,6 +101,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
   const [draftMarkStyle, setDraftMarkStyle] = useState<NonNullable<HabitEntry['markStyle']>>('circle');
   const [draftReminderMode, setDraftReminderMode] = useState<HabitReminderMode>('off');
   const [draftReminderTime, setDraftReminderTime] = useState('');
+  const [draftStreak, setDraftStreak] = useState('0');
 
   const completedCount = activeHabits.filter((item) => item.completedToday).length;
   const completionPercent = activeHabits.length ? Math.round((completedCount / activeHabits.length) * 100) : 0;
@@ -126,6 +127,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
     setDraftMarkStyle(habit.markStyle || 'circle');
     setDraftReminderMode(habit.reminderMode || 'off');
     setDraftReminderTime(habit.reminderTime || getSmartReminderTime(habit.icon));
+    setDraftStreak(String(habit.streak || 0));
   }
 
   function getHabitTitleSuggestion(icon: string) {
@@ -138,6 +140,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
     setDraftIcon('✨');
     setDraftTitle('Custom habit');
     setDraftTarget('');
+    setDraftStreak('0');
     setDraftMarkStyle('circle');
     setDraftReminderMode('off');
     setDraftReminderTime('');
@@ -387,6 +390,20 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
             <Text style={styles.modalLabel}>Target or norm</Text>
             <TextInput placeholder="Target or norm" value={draftTarget} onChangeText={setDraftTarget} style={styles.input} />
 
+            {!creatingHabit ? (
+              <>
+                <Text style={styles.modalLabel}>Current streak (days)</Text>
+                <TextInput
+                  placeholder="0"
+                  value={draftStreak}
+                  onChangeText={(t) => setDraftStreak(t.replace(/\D/g, ''))}
+                  keyboardType="number-pad"
+                  style={styles.input}
+                />
+                <Text style={styles.streakHint}>Set the days you've already kept this up. Today's tick continues from here.</Text>
+              </>
+            ) : null}
+
             <Text style={styles.modalLabel}>Tracker design</Text>
             <View style={styles.optionGrid}>
               {markStyleOptions.map((option) => (
@@ -484,6 +501,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                     return;
                   }
                   if (!editingHabitId) return;
+                  const streakNum = Math.max(0, parseInt(draftStreak, 10) || 0);
                   onHabitsChange((prev) =>
                     prev.map((item) =>
                       item.id === editingHabitId
@@ -500,6 +518,11 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                                 : draftReminderMode === 'smart'
                                   ? getSmartReminderTime(draftIcon)
                                   : draftReminderTime.trim() || '20:00',
+                            // Manually setting the streak dates it to "through yesterday" so today's
+                            // tick continues (streak+1), and today shows as not-yet-done.
+                            ...(streakNum !== item.streak
+                              ? { streak: streakNum, completedDate: streakNum > 0 ? habitDayKey(-1) : undefined, completedToday: false }
+                              : {}),
                           }
                         : item,
                     ),
@@ -1018,6 +1041,13 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '700',
       marginBottom: 8,
+    },
+    streakHint: {
+      color: colors.subtext,
+      fontSize: 11.5,
+      lineHeight: 16,
+      marginTop: -4,
+      marginBottom: 4,
     },
     input: {
       borderRadius: 14,
