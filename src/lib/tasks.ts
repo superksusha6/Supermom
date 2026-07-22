@@ -91,6 +91,7 @@ export type StaffProfileRecord = {
   id: string;
   name: string;
   dateOfBirth?: string;
+  photoUri?: string;
   tasks: StaffTaskDraftRecord[];
 };
 
@@ -1147,11 +1148,25 @@ export async function deleteChildProfile(session: AppSession, childId: string) {
 
 export async function listStaffProfiles(familyId: string): Promise<StaffProfileRecord[]> {
   const client = requireClient();
-  const { data, error } = await client
+  // Include photo_uri (staff avatar). If the column hasn't been added yet, retry
+  // without it so the whole list doesn't fail.
+  const withPhoto = await client
     .from('staff_profiles')
-    .select('id, name, date_of_birth, tasks_json')
+    .select('id, name, date_of_birth, tasks_json, photo_uri')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
+
+  let data: any[] | null = withPhoto.data;
+  let error = withPhoto.error;
+  if (error && String(error.message || '').toLowerCase().includes('photo_uri')) {
+    const fallback = await client
+      .from('staff_profiles')
+      .select('id, name, date_of_birth, tasks_json')
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
 
@@ -1159,8 +1174,20 @@ export async function listStaffProfiles(familyId: string): Promise<StaffProfileR
     id: row.id,
     name: row.name,
     dateOfBirth: normalizeBirthDateValue(row.date_of_birth),
+    photoUri: 'photo_uri' in row && row.photo_uri ? String(row.photo_uri) : undefined,
     tasks: Array.isArray(row.tasks_json) ? (row.tasks_json as StaffTaskDraftRecord[]) : [],
   }));
+}
+
+// A staff member sets their own avatar (or the admin sets it). Uses a security-definer
+// RPC because staff can't UPDATE staff_profiles directly under RLS (same as DOB).
+export async function setStaffProfilePhoto(staffProfileId: string, photoUri: string | null): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('set_staff_profile_photo', {
+    p_staff_profile_id: staffProfileId,
+    p_photo: photoUri || null,
+  });
+  if (error) throw error;
 }
 
 export async function upsertStaffProfileRecord(

@@ -60,6 +60,7 @@ import {
   listShoppingShares,
   listStaffProfiles,
   listStaffConnections,
+  setStaffProfilePhoto,
   listStaffReminderNotifications,
   listTasks,
   markCompletedTaskNotificationsRead,
@@ -164,6 +165,7 @@ type StaffProfile = {
   id: string;
   name: string;
   dateOfBirth?: string;
+  photoUri?: string;
   tasks: StaffDraftTask[];
 };
 type CompletedTaskNotification = {
@@ -2116,6 +2118,7 @@ function AppShell() {
           id: profile.id,
           name: profile.name,
           dateOfBirth: profile.dateOfBirth,
+          photoUri: profile.photoUri,
           tasks: profile.tasks.map((task) => ({
             ...task,
             weekDays: Array.isArray(task.weekDays) ? task.weekDays : [],
@@ -4660,6 +4663,34 @@ function AppShell() {
     }
   }
 
+  // Staff picks their own avatar photo → optimistic update + persist via RPC.
+  async function pickStaffAvatar() {
+    const staffId = currentStaffProfileId;
+    if (!staffId) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.4,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setStaffProfiles((prev) => prev.map((p) => (p.id === staffId ? { ...p, photoUri: uri } : p)));
+      try {
+        await setStaffProfilePhoto(staffId, uri);
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not save your photo yet.');
+      }
+    } catch {
+      // ignore picker failures
+    }
+  }
+
   // Staff confirms the proof sheet → mark done and report completion (time + note + photo) to the family.
   async function submitMyTaskCompletion() {
     const task = completeTask;
@@ -5872,6 +5903,39 @@ function AppShell() {
       else next.add(day);
       return next;
     });
+  const staffFirstName = (currentStaffProfile?.name || '').trim().split(/\s+/)[0] || 'there';
+  const staffInitials =
+    (currentStaffProfile?.name || 'S')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'S';
+  const staffTimeGreeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  })();
+  const staffHeaderDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+  const focusStaffHeader = isStaffView && currentStaffProfile ? (
+    <View style={styles.staffHeaderCard}>
+      <Pressable style={styles.staffHeaderAvatar} onPress={pickStaffAvatar} accessibilityRole="button" accessibilityLabel="Change your photo">
+        {currentStaffProfile.photoUri ? (
+          <Image source={{ uri: currentStaffProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
+        ) : (
+          <Text style={styles.staffHeaderAvatarText}>{staffInitials}</Text>
+        )}
+        <View style={styles.staffHeaderAvatarEdit}>
+          <Icon name="plus" color="#ffffff" size={11} />
+        </View>
+      </Pressable>
+      <View style={styles.staffHeaderCopy}>
+        <Text style={styles.staffHeaderHi}>{staffTimeGreeting}, {staffFirstName} 👋</Text>
+        <Text style={styles.staffHeaderSub}>{staffHeaderDate}</Text>
+      </View>
+    </View>
+  ) : null;
   const focusStaffTasks = isStaffView && staffCan('tasks') ? (
     <FamCard title={`My tasks${displayStaffOpen.length ? ` · ${displayStaffOpen.length}` : ''}`} padded={false}>
       {displayStaffOpen.length === 0 && myStaffTasks.length === 0 ? (
@@ -6130,6 +6194,7 @@ function AppShell() {
 
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
+      {focusStaffHeader}
       {focusPlanner}
       {focusProposals}
       {focusPartnerReplies}
@@ -6146,6 +6211,7 @@ function AppShell() {
   ) : (
     <View style={styles.dashDesktop}>
       <View style={styles.dashMain}>
+        {focusStaffHeader}
         {focusPlanner}
         {focusProposals}
         {focusPartnerReplies}
@@ -12756,6 +12822,64 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   dashRail: {
     flex: 1,
     gap: 14,
+  },
+  staffHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  staffHeaderAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  staffHeaderAvatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  staffHeaderAvatarText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  staffHeaderAvatarEdit: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  staffHeaderCopy: {
+    flex: 1,
+  },
+  staffHeaderHi: {
+    color: colors.text,
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  staffHeaderSub: {
+    color: colors.subtext,
+    fontSize: 13,
+    marginTop: 2,
   },
   statGrid: {
     flexWrap: 'wrap',
