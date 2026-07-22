@@ -734,7 +734,7 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
   const client = requireClient();
   const { data, error } = await client
     .from('child_profiles')
-    .select('id, name, age, date_of_birth, child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)')
+    .select('id, name, age, date_of_birth, photo_uri, child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
 
@@ -745,6 +745,7 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
     name: row.name,
     age: typeof row.age === 'number' ? row.age : 0,
     dateOfBirth: normalizeBirthDateValue(row.date_of_birth),
+    photoUri: 'photo_uri' in row && row.photo_uri ? String(row.photo_uri) : undefined,
     includeInMotherCalendar: true,
     activities: (row.child_activities ?? []).map((activity) => ({
       id: activity.id,
@@ -758,6 +759,18 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
   }));
 }
 
+// Persist just a child's photo (data URI) to the server so it survives reloads and
+// syncs across devices. Skips local-only ids that were never saved server-side.
+export async function updateChildPhoto(session: AppSession, childId: string, photoUri: string | null): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from('child_profiles')
+    .update({ photo_uri: photoUri || null })
+    .eq('family_id', session.familyId)
+    .eq('id', childId);
+  if (error) throw error;
+}
+
 export async function upsertChildProfileRecord(
   session: AppSession,
   payload: {
@@ -766,6 +779,7 @@ export async function upsertChildProfileRecord(
     age: number;
     dateOfBirth?: string;
     includeInMotherCalendar?: boolean;
+    photoUri?: string;
     activities: ChildProfile['activities'];
   },
 ) {
@@ -779,6 +793,7 @@ export async function upsertChildProfileRecord(
         name: payload.name,
         age: payload.age,
         date_of_birth: toStorageBirthDate(payload.dateOfBirth),
+        ...(payload.photoUri !== undefined ? { photo_uri: payload.photoUri || null } : {}),
       })
       .eq('family_id', session.familyId)
       .eq('id', childId);
@@ -791,6 +806,7 @@ export async function upsertChildProfileRecord(
         name: payload.name,
         age: payload.age,
         date_of_birth: toStorageBirthDate(payload.dateOfBirth),
+        photo_uri: payload.photoUri || null,
         created_by: session.userId,
       })
       .select('id')

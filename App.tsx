@@ -87,6 +87,7 @@ import {
   updateShoppingListItems,
   updateCalendarEvent,
   upsertChildProfileRecord,
+  updateChildPhoto,
   upsertMyProfile,
   upsertStaffProfileRecord,
   upsertStaffReminderNotification,
@@ -2075,7 +2076,21 @@ function AppShell() {
     try {
       const liveChildren = await listChildProfiles(current.familyId);
       const localChildren = latestChildrenRef.current.length > 0 ? latestChildrenRef.current : loadLocalChildren();
-      setChildren(enforceUniqueChildActivityColors(mergeChildrenPreferLocal(liveChildren, localChildren), CHILD_COLOR_PALETTE));
+      const merged = enforceUniqueChildActivityColors(mergeChildrenPreferLocal(liveChildren, localChildren), CHILD_COLOR_PALETTE);
+      setChildren(merged);
+      // One-way recovery: if a child still has a photo saved locally (e.g. on the phone
+      // where it was added) but the server doesn't have it yet, upload it so it persists
+      // and syncs to every device.
+      if (isSupabaseConfigured) {
+        merged.forEach((child) => {
+          if (child.photoUri && !child.id.startsWith('child-')) {
+            const server = liveChildren.find((c) => c.id === child.id);
+            if (server && !server.photoUri) {
+              updateChildPhoto(current, child.id, child.photoUri).catch(() => {});
+            }
+          }
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync children.';
       setTasksError(message);
@@ -7567,7 +7582,15 @@ function AppShell() {
             onDeleteChild={handleDeleteChildDirect}
             onEditChild={openChildActivitiesEditor}
             todayPlansByChild={childTodayPlans}
-            onSetChildPhoto={(childId, photoUri) => setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)))}
+            onSetChildPhoto={(childId, photoUri) => {
+              setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)));
+              // Persist to the server so the photo survives reloads and syncs across devices.
+              if (session && isSupabaseConfigured && !childId.startsWith('child-')) {
+                updateChildPhoto(session, childId, photoUri || null).catch((error) =>
+                  setTasksError(error instanceof Error ? error.message : 'Could not save the photo.'),
+                );
+              }
+            }}
             quickActionRequest={dashboardFamilyQuickAction}
             onAddChild={openAddChild}
             chores={chores}
