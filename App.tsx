@@ -4363,10 +4363,7 @@ function AppShell() {
         await Promise.all([refreshLiveStaffProfiles(), refreshLiveTasks(), refreshLiveCalendar()]);
         setStaffGrants((prev) => ({ ...prev, [staffId]: staffGrant }));
         setStaffEnabled(true);
-        setRole('staff');
-        setActiveStaffProfileId(staffId);
-        setActiveOwnerFilter(`staff:${staffId}`);
-        setScreen('calendar');
+        // Stay in the admin (parent) view after saving — don't drop into the staff's preview.
         setStaffDraftName('');
         setStaffDraftDob('');
         setStaffDraftTasks([createDefaultStaffDraftTask()]);
@@ -4385,10 +4382,7 @@ function AppShell() {
     );
     setStaffGrants((prev) => ({ ...prev, [optimisticStaffId]: staffGrant }));
     setStaffEnabled(true);
-    setRole('staff');
-    setActiveStaffProfileId(optimisticStaffId);
-    setActiveOwnerFilter(`staff:${optimisticStaffId}`);
-    setScreen('calendar');
+    // Stay in the admin (parent) view after saving — don't drop into the staff's preview.
     setTasks((prev) => {
       const filtered = editingStaffId ? prev.filter((item) => !item.id.startsWith(`t-staff-${optimisticStaffId}-`)) : prev;
       return [...schedule.tasks, ...filtered];
