@@ -4140,7 +4140,10 @@ function AppShell() {
       // server id, then create the link. No manual "Edit → Save" needed.
       if (staffId.startsWith('staff-')) {
         if (!profile) throw new Error('Staff profile not found.');
+        // Persist under the SAME id every time (idempotent) so re-tapping Invite never
+        // creates a duplicate profile. staff_profiles.id is text, so the local id is fine.
         realId = await upsertStaffProfileRecord(current, {
+          id: staffId,
           name: profile.name,
           dateOfBirth: profile.dateOfBirth || undefined,
           tasks: (profile.tasks || []).map((t) => ({
