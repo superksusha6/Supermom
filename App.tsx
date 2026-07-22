@@ -889,6 +889,7 @@ function AppShell() {
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const inviteRetryRef = useRef<(() => void) | null>(null);
   const pendingInviteTokenRef = useRef<string | null>(null);
   // Partner calendar: send a time slot to your partner; they confirm → event in both.
   const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
@@ -4099,29 +4100,33 @@ function AppShell() {
   }
 
   async function handleInviteStaff(staffId: string) {
-    if (!session || !isSupabaseConfigured) {
-      setTasksError('Sign in to create an invite link.');
+    const current = session || sessionRef.current;
+    const name = staffProfiles.find((p) => p.id === staffId)?.name || 'Staff';
+    inviteRetryRef.current = () => handleInviteStaff(staffId);
+    setInviteStaffName(name);
+    setInviteLink('');
+    setInviteCopied(false);
+    setInviteError(null);
+    setInviteBusy(true);
+    setInviteModalOpen(true);
+    if (!current || !isSupabaseConfigured) {
+      setInviteBusy(false);
+      setInviteError('You need to be signed in to create an invite link. Try reopening the app.');
       return;
     }
     if (staffId.startsWith('staff-')) {
       // Local-only (not yet saved to the server) — needs a real profile row first.
-      setTasksError('Save this staff profile first, then create the invite link.');
+      setInviteBusy(false);
+      setInviteError('Save this staff profile first (open Edit, then Save), and try Invite again.');
       return;
     }
     const grant = staffGrants[staffId] || { roles: staffDraftRoles, features: staffDraftFeatures };
-    const name = staffProfiles.find((p) => p.id === staffId)?.name || 'Staff';
-    setInviteStaffName(name);
-    setInviteLink('');
-    setInviteCopied(false);
-    setInviteBusy(true);
-    setInviteModalOpen(true);
     try {
-      const { token } = await createStaffInvite(session, staffId, grant.roles, grant.features);
+      const { token } = await createStaffInvite(current, staffId, grant.roles, grant.features);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
       setInviteLink(`${origin}/?invite=${token}`);
     } catch (error) {
-      setInviteModalOpen(false);
-      setTasksError(error instanceof Error ? error.message : 'Could not create invite link.');
+      setInviteError(error instanceof Error ? error.message : 'Could not create the invite link. Please try again.');
     } finally {
       setInviteBusy(false);
     }
@@ -4164,6 +4169,7 @@ function AppShell() {
   // ---- Partner calendar: invite, accept, send slot, respond ----
   async function handleInvitePartner() {
     const current = session || sessionRef.current;
+    inviteRetryRef.current = handleInvitePartner;
     setInviteStaffName('your partner');
     setInviteLink('');
     setInviteCopied(false);
@@ -6336,7 +6342,7 @@ function AppShell() {
                   <Pressable style={styles.daySheetCancel} onPress={() => setInviteModalOpen(false)}>
                     <Text style={styles.daySheetCancelText}>Close</Text>
                   </Pressable>
-                  <Pressable style={styles.daySheetAdd} onPress={() => handleInvitePartner()}>
+                  <Pressable style={styles.daySheetAdd} onPress={() => inviteRetryRef.current?.()}>
                     <Text style={styles.daySheetAddText}>Try again</Text>
                   </Pressable>
                 </View>
