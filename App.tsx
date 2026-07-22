@@ -23,6 +23,7 @@ import {
   getOrCreateSessionContext,
   createStaffInvite,
   acceptStaffInvite,
+  setStaffProfileDob,
   createPartnerInvite,
   acceptPartnerInvite,
   revokePartnerLink,
@@ -869,6 +870,9 @@ function AppShell() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [authName, setAuthName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
+  const [staffInviteName, setStaffInviteName] = useState<string | null>(null);
+  const [staffInviteProfileId, setStaffInviteProfileId] = useState<string | null>(null);
+  const [authStaffDob, setAuthStaffDob] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
   const [authPasswordVisible, setAuthPasswordVisible] = useState(false);
@@ -2526,6 +2530,13 @@ function AppShell() {
       if (inviteToken) {
         pendingInviteTokenRef.current = inviteToken;
         setPendingInviteActive(true);
+        const sn = searchParams.get('sn');
+        const sp = searchParams.get('sp');
+        if (sn) {
+          setStaffInviteName(sn);
+          setAuthName(sn); // pre-fill their name
+        }
+        if (sp) setStaffInviteProfileId(sp);
       }
       const partnerToken = searchParams.get('partner');
       if (partnerToken) pendingPartnerTokenRef.current = partnerToken;
@@ -4145,7 +4156,10 @@ function AppShell() {
       }
       const { token } = await createStaffInvite(current, realId, grant.roles, grant.features);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
-      setInviteLink(`${origin}/?invite=${token}`);
+      // Carry the staff name + profile id so their sign-up screen greets them and can
+      // save their date of birth back to this profile.
+      const q = `invite=${token}&sn=${encodeURIComponent(profile?.name || '')}&sp=${encodeURIComponent(realId)}`;
+      setInviteLink(`${origin}/?${q}`);
     } catch (error) {
       setInviteError(error instanceof Error ? error.message : 'Could not create the invite link. Please try again.');
     } finally {
@@ -4804,6 +4818,10 @@ function AppShell() {
         if (pendingInviteTokenRef.current) {
           setSignInModalOpen(false);
           await consumePendingInvite();
+          if (staffInviteProfileId && authStaffDob.trim()) {
+            // Sync their date of birth to the staff profile so the family sees it. Non-fatal.
+            await setStaffProfileDob(staffInviteProfileId, authStaffDob.trim()).catch(() => {});
+          }
           return;
         }
         const ctx = await getOrCreateSessionContext();
@@ -6454,13 +6472,18 @@ function AppShell() {
             <View style={styles.signInModalCard}>
             <Text style={styles.authTitle}>
               {authMode === 'signup'
-                ? 'Create Account'
+                ? staffInviteName
+                  ? `Hi, ${staffInviteName} 👋`
+                  : 'Create Account'
                 : authMode === 'reset'
                   ? 'Reset Password'
                   : authMode === 'recover'
                     ? 'Set New Password'
                     : 'Sign In'}
             </Text>
+            {authMode === 'signup' && staffInviteName ? (
+              <Text style={styles.authInfoText}>You’ve been invited to join as staff. Fill in your details to get your own private screen.</Text>
+            ) : null}
             {authMode === 'signup' ? (
               <>
                 <TextInput
@@ -6471,20 +6494,31 @@ function AppShell() {
                   value={authName}
                   onChangeText={setAuthName}
                 />
-                <View style={styles.accountChoiceRow}>
-                  <Pressable
-                    style={[styles.accountChoiceChip, authSignupSex === 'female' && styles.accountChoiceChipActive]}
-                    onPress={() => setAuthSignupSex('female')}
-                  >
-                    <Text style={[styles.accountChoiceChipText, authSignupSex === 'female' && styles.accountChoiceChipTextActive]}>Woman</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.accountChoiceChip, authSignupSex === 'male' && styles.accountChoiceChipActive]}
-                    onPress={() => setAuthSignupSex('male')}
-                  >
-                    <Text style={[styles.accountChoiceChipText, authSignupSex === 'male' && styles.accountChoiceChipTextActive]}>Man</Text>
-                  </Pressable>
-                </View>
+                {staffInviteName ? (
+                  <TextInput
+                    placeholder="Date of birth (DD.MM.YYYY)"
+                    keyboardType="numbers-and-punctuation"
+                    autoCorrect={false}
+                    style={styles.input}
+                    value={authStaffDob}
+                    onChangeText={(t) => setAuthStaffDob(formatBirthDateInput(t))}
+                  />
+                ) : (
+                  <View style={styles.accountChoiceRow}>
+                    <Pressable
+                      style={[styles.accountChoiceChip, authSignupSex === 'female' && styles.accountChoiceChipActive]}
+                      onPress={() => setAuthSignupSex('female')}
+                    >
+                      <Text style={[styles.accountChoiceChipText, authSignupSex === 'female' && styles.accountChoiceChipTextActive]}>Woman</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.accountChoiceChip, authSignupSex === 'male' && styles.accountChoiceChipActive]}
+                      onPress={() => setAuthSignupSex('male')}
+                    >
+                      <Text style={[styles.accountChoiceChipText, authSignupSex === 'male' && styles.accountChoiceChipTextActive]}>Man</Text>
+                    </Pressable>
+                  </View>
+                )}
               </>
             ) : null}
             {authMode !== 'recover' ? (

@@ -545,6 +545,16 @@ export async function acceptStaffInvite(token: string): Promise<{ familyId: stri
   return { familyId: (data as { family_id: string }).family_id };
 }
 
+// A newly-joined staff member writes their own date of birth back to their profile.
+// Uses a security-definer RPC (staff can't update staff_profiles directly via RLS).
+export async function setStaffProfileDob(staffProfileId: string, dob: string): Promise<void> {
+  const stored = toStorageBirthDate(dob); // "DD.MM.YYYY" -> "YYYY-MM-DD" for the date column
+  if (!stored) return;
+  const client = requireClient();
+  const { error } = await client.rpc('set_staff_profile_dob', { p_staff_profile_id: staffProfileId, p_dob: stored });
+  if (error) throw error;
+}
+
 export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
   const { data, error } = await client
