@@ -21,6 +21,7 @@ type StaffSummary = {
   id: string;
   name: string;
   dateOfBirth?: string;
+  connected?: boolean;
 };
 
 type ChildSummary = {
@@ -934,10 +935,13 @@ export function SettingsScreen({
             <View style={styles.staffCopy}>
               <Text style={styles.staffName}>{profile.name}</Text>
               <Text style={styles.staffMeta}>{profile.dateOfBirth ? `Birthday: ${profile.dateOfBirth}` : 'Birthday not set yet'}</Text>
+              <Text style={[styles.staffMeta, { color: profile.connected ? '#16a34a' : colors.subtext, fontWeight: profile.connected ? '600' : '400' }]}>
+                {profile.connected ? '✓ Connected · has their own login' : 'Not connected yet · send an invite'}
+              </Text>
             </View>
             <View style={styles.staffCardActions}>
               <Pressable style={styles.secondaryBtn} onPress={() => onInviteStaff(profile.id)}>
-                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite</Text>
+                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>{profile.connected ? 'Re-invite' : 'Invite'}</Text>
               </Pressable>
               <Pressable style={styles.secondaryBtn} onPress={() => onEditStaffProfile(profile.id)}>
                 <Text style={styles.secondaryBtnText}>Edit</Text>

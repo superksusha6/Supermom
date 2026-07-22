@@ -59,6 +59,7 @@ import {
   listShoppingLists,
   listShoppingShares,
   listStaffProfiles,
+  listStaffConnections,
   listStaffReminderNotifications,
   listTasks,
   markCompletedTaskNotificationsRead,
@@ -961,6 +962,8 @@ function AppShell() {
   const [childSetupOpen, setChildSetupOpen] = useState(false);
   const [staffSetupOpen, setStaffSetupOpen] = useState(false);
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([]);
+  // staff_profile_ids that have an activated, linked account (invite accepted).
+  const [staffConnectedIds, setStaffConnectedIds] = useState<string[]>([]);
   const [staffDraftName, setStaffDraftName] = useState('');
   const [staffDraftDob, setStaffDraftDob] = useState('');
   const [staffDraftRoles, setStaffDraftRoles] = useState<StaffRolePreset[]>(['nanny']);
@@ -2103,9 +2106,11 @@ function AppShell() {
       const liveStaffProfiles = await listStaffProfiles(current.familyId);
       if (liveStaffProfiles.length === 0) {
         setStaffProfiles([]);
+        setStaffConnectedIds([]);
         setStaffEnabled(false);
         return;
       }
+      listStaffConnections(current).then(setStaffConnectedIds).catch(() => {});
       setStaffProfiles(
         liveStaffProfiles.map((profile) => ({
           id: profile.id,
@@ -5250,7 +5255,7 @@ function AppShell() {
       eventReminderLead={eventReminderLead}
       onEventReminderLeadChange={setEventReminderLead}
       children={children.map((child) => ({ id: child.id, name: child.name }))}
-      staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name, dateOfBirth: profile.dateOfBirth }))}
+      staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name, dateOfBirth: profile.dateOfBirth, connected: staffConnectedIds.includes(profile.id) }))}
       activeFamilyViewKey={activeOwnerFilter}
       onSelectFamilyView={selectCalendarProfile}
       onSelectParentLabel={handleSelectParentLabel}

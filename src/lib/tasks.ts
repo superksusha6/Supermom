@@ -565,6 +565,26 @@ export async function setStaffProfileDob(staffProfileId: string, dob: string): P
   if (error) throw error;
 }
 
+// Which staff profiles in this family have a real, activated account linked to them.
+// Returns the set of staff_profile_ids that an invited user has actually joined with,
+// so the admin can see "Connected ✓" vs "Not connected yet" on each profile.
+export async function listStaffConnections(session: AppSession): Promise<string[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('family_members')
+    .select('staff_profile_id, status, role')
+    .eq('family_id', session.familyId)
+    .eq('role', 'staff')
+    .eq('status', 'active');
+  if (error) {
+    // Non-fatal: if the read fails, just treat everyone as not-yet-connected.
+    return [];
+  }
+  return (data || [])
+    .map((row) => (row.staff_profile_id as string | null) || '')
+    .filter((id): id is string => Boolean(id));
+}
+
 export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
   const { data, error } = await client
