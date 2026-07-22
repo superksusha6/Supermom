@@ -5546,7 +5546,7 @@ function AppShell() {
     const d = new Date();
     return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   })();
-  const focusPlanner = (
+  const focusPlanner = isStaffView ? null : (
     <View style={styles.plannerCard}>
       <View style={styles.plannerHead}>
         <Text style={styles.plannerTitle}>Today</Text>
@@ -5619,7 +5619,7 @@ function AppShell() {
   );
 
   // Hide the whole card when nothing needs attention — no point showing an "all clear" panel.
-  const focusNeeds = needsYouItems.length === 0 ? null : (
+  const focusNeeds = isStaffView || needsYouItems.length === 0 ? null : (
     <FamCard title={`Needs you · ${needsYouCount}`} padded={false}>
       {needsYouItems.slice(0, 5).map((item, i) => (
         <View key={`${item.label}-${i}`}>
@@ -5765,7 +5765,7 @@ function AppShell() {
     </FamCard>
   ) : null;
 
-  const focusMiniCal = (
+  const focusMiniCal = isStaffView ? null : (
     <WeekStrip
       eventColors={eventColorsByDate}
       today={todayDateKey}
@@ -6168,7 +6168,7 @@ function AppShell() {
   const sectionActions: { label: string; icon: IconName; onPress: () => void }[] =
     screen === 'family' && familyTab === 'children'
       ? [{ label: 'Add child', icon: 'plus', onPress: openAddChild }]
-      : screen === 'calendar'
+      : screen === 'calendar' && !isStaffView
         ? [
             { label: 'Add event today', icon: 'plus', onPress: () => openDaySheet(todayDateKey) },
             { label: 'Open full calendar', icon: 'calendar', onPress: () => setHomeTab('calendar') },
@@ -7220,14 +7220,14 @@ function AppShell() {
         </Pressable>
       ) : null}
         {screen === 'settings' ? settingsScreenContent : null}
-        {screen === 'calendar' && homeTab === 'today' ? focusHome : null}
-        {screen === 'calendar' && homeTab === 'calendar' ? (
+        {screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
+        {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
             <Icon name="chevron" color={colors.primary} size={16} />
             <Text style={styles.calBackText}>Back to home</Text>
           </Pressable>
         ) : null}
-        {screen === 'calendar' && homeTab === 'calendar' ? (
+        {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
             <CalendarScreen
               isActive={screen === 'calendar'}
               parentLabel={parentLabel}
@@ -8675,7 +8675,7 @@ function AppShell() {
 
       <View style={styles.tabBar}>
         {staffCan('schedule') || staffCan('tasks') ? (
-          <TabButton icon="calendar" label="Today" active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
+          <TabButton icon={isStaffView ? 'chores' : 'calendar'} label={isStaffView ? 'Tasks' : 'Today'} active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {staffCan('shopping') || staffCan('menu') || staffCan('recipes') ? (
           <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
