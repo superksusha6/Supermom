@@ -547,6 +547,16 @@ export async function acceptStaffInvite(token: string): Promise<{ familyId: stri
 
 // A newly-joined staff member writes their own date of birth back to their profile.
 // Uses a security-definer RPC (staff can't update staff_profiles directly via RLS).
+export async function deleteStaffProfileRecord(session: AppSession, staffProfileId: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from('staff_profiles')
+    .delete()
+    .eq('id', staffProfileId)
+    .eq('family_id', session.familyId);
+  if (error) throw error;
+}
+
 export async function setStaffProfileDob(staffProfileId: string, dob: string): Promise<void> {
   const stored = toStorageBirthDate(dob); // "DD.MM.YYYY" -> "YYYY-MM-DD" for the date column
   if (!stored) return;

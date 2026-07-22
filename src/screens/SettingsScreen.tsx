@@ -85,6 +85,7 @@ type Props = {
   onToggleChildProfileSetup: () => void;
   onToggleStaffProfileSetup: () => void;
   onEditStaffProfile: (staffId: string) => void;
+  onDeleteStaffProfile: (staffId: string) => void;
   onInviteStaff: (staffId: string) => void;
   partnerConnectedName?: string | null;
   onInvitePartner: () => void;
@@ -152,6 +153,7 @@ export function SettingsScreen({
   onToggleChildProfileSetup,
   onToggleStaffProfileSetup,
   onEditStaffProfile,
+  onDeleteStaffProfile,
   onInviteStaff,
   partnerConnectedName,
   onInvitePartner,
@@ -939,6 +941,9 @@ export function SettingsScreen({
               </Pressable>
               <Pressable style={styles.secondaryBtn} onPress={() => onEditStaffProfile(profile.id)}>
                 <Text style={styles.secondaryBtnText}>Edit</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryBtn} onPress={() => onDeleteStaffProfile(profile.id)}>
+                <Text style={[styles.secondaryBtnText, { color: '#dc2626' }]}>Delete</Text>
               </Pressable>
             </View>
           </View>

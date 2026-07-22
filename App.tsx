@@ -24,6 +24,7 @@ import {
   createStaffInvite,
   acceptStaffInvite,
   setStaffProfileDob,
+  deleteStaffProfileRecord,
   createPartnerInvite,
   acceptPartnerInvite,
   revokePartnerLink,
@@ -4306,6 +4307,26 @@ function AppShell() {
     }
   }
 
+  async function handleDeleteStaffProfile(staffId: string) {
+    const profile = staffProfiles.find((p) => p.id === staffId);
+    const doDelete = async () => {
+      setStaffProfiles((prev) => prev.filter((p) => p.id !== staffId));
+      if (session && isSupabaseConfigured && !staffId.startsWith('staff-')) {
+        try {
+          await deleteStaffProfileRecord(session, staffId);
+          await refreshLiveStaffProfiles();
+        } catch (error) {
+          setTasksError(error instanceof Error ? error.message : 'Could not delete staff profile.');
+        }
+      }
+    };
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm(`Delete ${profile?.name || 'this staff profile'}? This can't be undone.`)) await doDelete();
+    } else {
+      await doDelete();
+    }
+  }
+
   function openStaffProfileEditor(staffId: string) {
     const profile = staffProfiles.find((item) => item.id === staffId);
     if (!profile) return;
@@ -5217,6 +5238,7 @@ function AppShell() {
       onToggleChildProfileSetup={() => setChildSetupOpen((prev) => !prev)}
       onToggleStaffProfileSetup={() => setStaffSetupOpen((prev) => !prev)}
       onEditStaffProfile={openStaffProfileEditor}
+      onDeleteStaffProfile={handleDeleteStaffProfile}
       onInviteStaff={handleInviteStaff}
       partnerConnectedName={partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || null}
       onInvitePartner={handleInvitePartner}
