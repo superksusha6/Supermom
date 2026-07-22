@@ -468,15 +468,22 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   const user = session?.user;
   if (!user) return null;
 
-  // Prefer an active staff membership (an invited nanny/cook/driver) over a self-owned
-  // family, so a staff user lands in the family that invited them with their granted features.
   const { data: memberships, error: membershipsError } = await client
     .from('family_members')
     .select('family_id, role, features, status, staff_profile_id')
     .eq('user_id', user.id);
   if (membershipsError) throw membershipsError;
 
-  const staffMembership = (memberships || []).find((m) => m.role === 'staff' && m.status === 'active');
+  // The user's own family (created for them on first run).
+  const { data: familyId, error: bootstrapError } = await client.rpc('ensure_user_family');
+  if (bootstrapError) throw bootstrapError;
+
+  // Prefer an active staff membership in ANOTHER family (an invited nanny/cook/driver), so a
+  // staff user lands in the family that invited them. A staff membership in the user's OWN
+  // family is an accidental self-invite — ignore it so the owner is never trapped in staff view.
+  const staffMembership = (memberships || []).find(
+    (m) => m.role === 'staff' && m.status === 'active' && m.family_id !== familyId,
+  );
   if (staffMembership) {
     return {
       userId: user.id,
@@ -487,18 +494,16 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
     };
   }
 
-  // Otherwise ensure the user's own family (mother bootstrap) and read their row.
-  const { data: familyId, error: bootstrapError } = await client.rpc('ensure_user_family');
-  if (bootstrapError) throw bootstrapError;
-
-  const { data: member, error: memberError } = await client
+  const { data: members, error: memberError } = await client
     .from('family_members')
     .select('role, features')
     .eq('family_id', familyId)
-    .eq('user_id', user.id)
-    .single();
+    .eq('user_id', user.id);
 
   if (memberError) throw memberError;
+  // If a stray "staff" row exists in the user's own family (self-invite), prefer the owner row.
+  const member = (members || []).find((m) => m.role !== 'staff') || (members || [])[0];
+  if (!member) throw new Error('No membership found for your family.');
 
   return {
     userId: user.id,

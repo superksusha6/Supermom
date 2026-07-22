@@ -6554,18 +6554,6 @@ function AppShell() {
             ) : null}
             {tasksError ? <Text style={styles.authErrorText}>{tasksError}</Text> : null}
             {authInfo ? <Text style={styles.authInfoText}>{authInfo}</Text> : null}
-            {session && pendingInviteActive ? (
-              <Pressable
-                style={[styles.authBtn, styles.authSecondary]}
-                onPress={() => {
-                  setSignInModalOpen(false);
-                  setPendingInviteActive(false);
-                  consumePendingInvite();
-                }}
-              >
-                <Text style={[styles.authBtnText, styles.authSecondaryText]}>Join with this account</Text>
-              </Pressable>
-            ) : null}
             {authMode === 'signin' ? (
               <Pressable
                 onPress={() => {
