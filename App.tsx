@@ -5510,7 +5510,7 @@ function AppShell() {
   const proteinLeft = Math.max(0, Math.round((macroTargets?.protein || 0) - eatenTodayMacros.protein));
   const carbsLeft = Math.max(0, Math.round((macroTargets?.carbs || 0) - eatenTodayMacros.carbs));
   const fatLeft = Math.max(0, Math.round((macroTargets?.fat || 0) - eatenTodayMacros.fat));
-  const focusCalories = (
+  const focusCalories = isStaffView ? null : (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={calGoal > 0 ? `Calories, ${calRemaining} left. Tap to log food.` : 'Log food'}
@@ -5550,13 +5550,15 @@ function AppShell() {
     <View style={styles.plannerCard}>
       <View style={styles.plannerHead}>
         <Text style={styles.plannerTitle}>Today</Text>
-        <View style={[styles.trackChip, needsYouCount === 0 ? styles.trackChipOk : styles.trackChipWarn]}>
-          <Text style={[styles.trackChipText, needsYouCount === 0 ? styles.trackChipTextOk : styles.trackChipTextWarn]}>
-            {needsYouCount === 0 ? '✓ On track' : `${needsYouCount} needs you`}
-          </Text>
-        </View>
+        {!isStaffView ? (
+          <View style={[styles.trackChip, needsYouCount === 0 ? styles.trackChipOk : styles.trackChipWarn]}>
+            <Text style={[styles.trackChipText, needsYouCount === 0 ? styles.trackChipTextOk : styles.trackChipTextWarn]}>
+              {needsYouCount === 0 ? '✓ On track' : `${needsYouCount} needs you`}
+            </Text>
+          </View>
+        ) : null}
       </View>
-      {cycleDay ? (
+      {cycleDay && !isStaffView ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Cycle day ${cycleDay}. Open calendar.`}
