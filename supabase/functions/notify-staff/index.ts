@@ -40,6 +40,15 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
+    // Cap how often one account can trigger staff pushes (anti-spam / abuse guard).
+    const { data: allowed } = await admin.rpc('bump_rate_limit', {
+      p_user: caller,
+      p_bucket: 'notify-staff',
+      p_limit: 120,
+      p_window_seconds: 3600,
+    });
+    if (allowed === false) return json({ error: 'Too many requests — please slow down.' }, 429);
+
     // Which family does this staff profile belong to?
     const { data: profile } = await admin
       .from('staff_profiles')

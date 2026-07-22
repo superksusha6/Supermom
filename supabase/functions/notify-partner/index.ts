@@ -40,6 +40,16 @@ Deno.serve(async (req) => {
     if (!proposalId) return json({ error: 'proposalId is required.' }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
+
+    // Cap how often one account can trigger partner pushes (anti-spam / abuse guard).
+    const { data: allowed } = await admin.rpc('bump_rate_limit', {
+      p_user: caller,
+      p_bucket: 'notify-partner',
+      p_limit: 120,
+      p_window_seconds: 3600,
+    });
+    if (allowed === false) return json({ error: 'Too many requests — please slow down.' }, 429);
+
     const { data: proposal, error: pErr } = await admin
       .from('calendar_proposals')
       .select('id, from_user_id, from_name, to_user_id, title, starts_at, end_time, status')
