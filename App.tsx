@@ -11912,7 +11912,8 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   newListCard: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 412,
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderRadius: 22,
     paddingHorizontal: 20,
