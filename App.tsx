@@ -2821,6 +2821,10 @@ function AppShell() {
 
   useEffect(() => {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current || !habitsLoadedRef.current) return;
+    // Safety: never wipe the server copy with an empty set. An empty `habits` here is
+    // almost always a transient/reset state, not a deliberate "delete every habit".
+    // Keeping the server copy until there's real data to save prevents accidental loss.
+    if (habits.length === 0) return;
     replaceHabitEntries(session, habits).catch((error) =>
       setTasksError(error instanceof Error ? error.message : 'Could not save habits.'),
     );
