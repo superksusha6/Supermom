@@ -391,6 +391,19 @@ function getTodayKey() {
   return `${year}-${month}-${day}`;
 }
 
+function getYesterdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Streak that reflects consecutive days: completing continues the run if the last tick
+// was yesterday, otherwise it restarts at 1; un-ticking today reverts by one.
+function nextHabitStreak(habit: HabitEntry, completing: boolean): number {
+  if (!completing) return Math.max(0, habit.streak - 1);
+  return habit.completedDate === getYesterdayKey() ? habit.streak + 1 : 1;
+}
+
 function loadLocalDailyCardState(todayKey: string = getTodayKey()): DailyCardLocalState {
   const fallback: DailyCardLocalState = {
     dateKey: todayKey,
@@ -5904,7 +5917,7 @@ function AppShell() {
     setHabits((prev) =>
       prev.map((h) =>
         h.id === id
-          ? { ...h, completedToday: !h.completedToday, completedDate: !h.completedToday ? getTodayKey() : undefined, streak: h.completedToday ? Math.max(0, h.streak - 1) : h.streak + 1 }
+          ? { ...h, completedToday: !h.completedToday, completedDate: !h.completedToday ? getTodayKey() : undefined, streak: nextHabitStreak(h, !h.completedToday) }
           : h,
       ),
     );

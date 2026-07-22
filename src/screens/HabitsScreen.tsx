@@ -13,9 +13,18 @@ type Props = {
 };
 
 // Local date key (YYYY-MM-DD) — must match App's getTodayKey so the daily reset lines up.
-function habitTodayKey(): string {
+function habitDayKey(offset = 0): string {
   const n = new Date();
+  n.setDate(n.getDate() + offset);
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+function habitTodayKey(): string {
+  return habitDayKey(0);
+}
+// Continue the streak if the last tick was yesterday, else restart at 1; revert on un-tick.
+function nextHabitStreak(habit: HabitEntry, completing: boolean): number {
+  if (!completing) return Math.max(0, habit.streak - 1);
+  return habit.completedDate === habitDayKey(-1) ? habit.streak + 1 : 1;
 }
 
 const HABIT_ICON_TITLE_SUGGESTIONS: Record<string, string> = {
@@ -210,7 +219,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                             ...item,
                             completedToday: !item.completedToday,
                             completedDate: !item.completedToday ? habitTodayKey() : undefined,
-                            streak: item.completedToday ? Math.max(0, item.streak - 1) : item.streak + 1,
+                            streak: nextHabitStreak(item, !item.completedToday),
                           }
                         : item,
                     ),
