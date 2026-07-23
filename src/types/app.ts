@@ -197,6 +197,7 @@ export type TaskItem = {
   status: TaskStatus;
   deadline: string;
   needsParentApproval: boolean;
+  createdAt?: string; // ISO — when the task was sent/assigned
 };
 
 export type ApprovalRequest = {

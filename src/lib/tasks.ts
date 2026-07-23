@@ -590,7 +590,7 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
   const { data, error } = await client
     .from('tasks')
-    .select('id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id')
+    .select('id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id, created_at')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
 
@@ -599,6 +599,7 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
   return (data ?? []).map((row) => ({
     id: row.id,
     title: row.title,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     assigneeRole: row.assignee_role as Role,
     assigneeName:
       row.assignee_role === 'mother' || row.assignee_role === 'admin'

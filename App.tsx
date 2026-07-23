@@ -7311,75 +7311,153 @@ function AppShell() {
                       </View>
 
                       {(() => {
-                        const list = tasks.filter((t) => t.assigneeRole === 'staff' && t.staffProfileId === tasksManagerStaffId);
-                        if (list.length === 0) {
+                        const mine = tasks.filter((t) => t.assigneeRole === 'staff' && t.staffProfileId === tasksManagerStaffId);
+                        const staffName = staffProfiles.find((p) => p.id === tasksManagerStaffId)?.name;
+                        const openTasks = mine.filter((t) => t.status !== 'done');
+                        const doneTaskIds = new Set(mine.map((t) => t.id));
+                        const completionByTaskId = new Map(
+                          completedTaskNotifications.filter((n) => n.taskId).map((n) => [n.taskId, n] as const),
+                        );
+                        // History: every completion by this person — task-linked or a daily
+                        // duty — newest first. Shows when it was sent and when/who did it.
+                        const history = [
+                          ...mine
+                            .filter((t) => t.status === 'done')
+                            .map((t) => {
+                              const c = completionByTaskId.get(t.id) || null;
+                              return {
+                                key: t.id,
+                                title: t.title,
+                                sentAt: t.createdAt || null,
+                                doneAt: c?.completedAt || null,
+                                who: c?.staffName || staffName || 'Staff',
+                                comment: c?.comment || null,
+                                photoUrl: c?.photoUrl || null,
+                              };
+                            }),
+                          ...completedTaskNotifications
+                            .filter((n) => n.staffName === staffName && (!n.taskId || !doneTaskIds.has(n.taskId)))
+                            .map((n) => ({
+                              key: n.id,
+                              title: n.taskTitle,
+                              sentAt: null as string | null,
+                              doneAt: n.completedAt || null,
+                              who: n.staffName || staffName || 'Staff',
+                              comment: n.comment || null,
+                              photoUrl: n.photoUrl || null,
+                            })),
+                        ].sort((a, b) => new Date(b.doneAt || 0).getTime() - new Date(a.doneAt || 0).getTime());
+
+                        if (mine.length === 0 && history.length === 0) {
                           return <Text style={[styles.authInfoText, { marginTop: 14 }]}>No tasks yet. Add one above — it lands on this person’s account.</Text>;
                         }
-                        return list.map((task) => (
-                          <View key={task.id} style={styles.taskManageRow}>
-                            <Pressable
-                              accessibilityRole="checkbox"
-                              accessibilityState={{ checked: task.status === 'done' }}
-                              hitSlop={8}
-                              style={[styles.taskCheck, task.status === 'done' && styles.taskCheckDone]}
-                              onPress={() => toggleManagedTaskDone(task)}
-                            >
-                              {task.status === 'done' ? <Text style={styles.taskCheckMark}>✓</Text> : null}
-                            </Pressable>
-                            {editingTaskId === task.id ? (
-                              <View style={styles.taskEditWrap}>
-                                <TextInput
-                                  style={[styles.input, styles.taskAddInput]}
-                                  value={editTaskTitle}
-                                  onChangeText={setEditTaskTitle}
-                                  onSubmitEditing={saveEditTask}
-                                  autoFocus
-                                />
-                                <View style={styles.seg}>
-                                  <Pressable
-                                    style={[styles.roleChip, editTaskPriority === 'non_urgent' && styles.roleChipActive]}
-                                    onPress={() => setEditTaskPriority('non_urgent')}
-                                  >
-                                    <Text style={[styles.roleChipText, editTaskPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
-                                  </Pressable>
-                                  <Pressable
-                                    style={[styles.roleChip, editTaskPriority === 'urgent' && styles.roleChipActive]}
-                                    onPress={() => setEditTaskPriority('urgent')}
-                                  >
-                                    <Text style={[styles.roleChipText, editTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
-                                  </Pressable>
-                                </View>
-                                <View style={styles.taskEditActions}>
-                                  <Pressable style={styles.taskAddBtn} onPress={saveEditTask}>
-                                    <Text style={styles.taskAddBtnText}>Save</Text>
-                                  </Pressable>
-                                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setEditingTaskId(null)}>
-                                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Cancel</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
+                        return (
+                          <>
+                            <Text style={styles.taskSectionLabel}>Waiting{openTasks.length ? ` · ${openTasks.length}` : ''}</Text>
+                            {openTasks.length === 0 ? (
+                              <Text style={styles.taskEmptyLine}>Nothing waiting — all caught up.</Text>
                             ) : (
-                              <>
-                                <Pressable style={styles.taskManageCopy} onPress={() => startEditTask(task)}>
-                                  <Text style={[styles.taskManageTitle, task.status === 'done' && styles.taskManageTitleDone]} numberOfLines={2}>{task.title}</Text>
-                                  <View style={styles.taskManageMeta}>
-                                    <View style={[styles.taskPill, task.priority === 'urgent' ? styles.taskPillUrgent : styles.taskPillNormal]}>
-                                      <Text style={[styles.taskPillText, task.priority === 'urgent' ? styles.taskPillTextUrgent : styles.taskPillTextNormal]}>
-                                        {task.priority === 'urgent' ? 'Urgent' : 'Task'}
-                                      </Text>
+                              openTasks.map((task) => (
+                                <View key={task.id} style={styles.taskManageRow}>
+                                  <Pressable
+                                    accessibilityRole="checkbox"
+                                    accessibilityState={{ checked: false }}
+                                    hitSlop={8}
+                                    style={styles.taskCheck}
+                                    onPress={() => toggleManagedTaskDone(task)}
+                                  />
+                                  {editingTaskId === task.id ? (
+                                    <View style={styles.taskEditWrap}>
+                                      <TextInput
+                                        style={[styles.input, styles.taskAddInput]}
+                                        value={editTaskTitle}
+                                        onChangeText={setEditTaskTitle}
+                                        onSubmitEditing={saveEditTask}
+                                        autoFocus
+                                      />
+                                      <View style={styles.seg}>
+                                        <Pressable
+                                          style={[styles.roleChip, editTaskPriority === 'non_urgent' && styles.roleChipActive]}
+                                          onPress={() => setEditTaskPriority('non_urgent')}
+                                        >
+                                          <Text style={[styles.roleChipText, editTaskPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
+                                        </Pressable>
+                                        <Pressable
+                                          style={[styles.roleChip, editTaskPriority === 'urgent' && styles.roleChipActive]}
+                                          onPress={() => setEditTaskPriority('urgent')}
+                                        >
+                                          <Text style={[styles.roleChipText, editTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
+                                        </Pressable>
+                                      </View>
+                                      <View style={styles.taskEditActions}>
+                                        <Pressable style={styles.taskAddBtn} onPress={saveEditTask}>
+                                          <Text style={styles.taskAddBtnText}>Save</Text>
+                                        </Pressable>
+                                        <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setEditingTaskId(null)}>
+                                          <Text style={[styles.authBtnText, styles.authSecondaryText]}>Cancel</Text>
+                                        </Pressable>
+                                      </View>
                                     </View>
-                                    {task.deadline && task.deadline !== 'No deadline' ? (
-                                      <Text style={styles.taskManageTime}>{task.deadline}</Text>
-                                    ) : null}
-                                  </View>
-                                </Pressable>
-                                <Pressable hitSlop={8} style={styles.taskDeleteBtn} onPress={() => removeManagedTask(task.id)}>
-                                  <Text style={styles.taskDeleteText}>✕</Text>
-                                </Pressable>
-                              </>
+                                  ) : (
+                                    <>
+                                      <Pressable style={styles.taskManageCopy} onPress={() => startEditTask(task)}>
+                                        <Text style={styles.taskManageTitle} numberOfLines={2}>{task.title}</Text>
+                                        <View style={styles.taskManageMeta}>
+                                          <View style={[styles.taskPill, task.priority === 'urgent' ? styles.taskPillUrgent : styles.taskPillNormal]}>
+                                            <Text style={[styles.taskPillText, task.priority === 'urgent' ? styles.taskPillTextUrgent : styles.taskPillTextNormal]}>
+                                              {task.priority === 'urgent' ? 'Urgent' : 'Task'}
+                                            </Text>
+                                          </View>
+                                          {task.createdAt ? (
+                                            <Text style={styles.taskManageTime}>Sent {clockFromIso(task.createdAt)}</Text>
+                                          ) : null}
+                                        </View>
+                                      </Pressable>
+                                      <Pressable hitSlop={8} style={styles.taskDeleteBtn} onPress={() => removeManagedTask(task.id)}>
+                                        <Text style={styles.taskDeleteText}>✕</Text>
+                                      </Pressable>
+                                    </>
+                                  )}
+                                </View>
+                              ))
                             )}
-                          </View>
-                        ));
+
+                            {history.length > 0 ? (
+                              <>
+                                <Text style={[styles.taskSectionLabel, { marginTop: 16 }]}>History</Text>
+                                {history.map((h) => {
+                                  const day = h.doneAt ? completionDayLabel(h.doneAt) : '';
+                                  return (
+                                    <View key={h.key} style={styles.histRow}>
+                                      <View style={styles.histCheck}><Text style={styles.histCheckMark}>✓</Text></View>
+                                      <View style={styles.histBody}>
+                                        <Text style={styles.histTitle} numberOfLines={2}>{h.title}</Text>
+                                        <Text style={styles.histMeta}>
+                                          {h.sentAt ? `Sent ${clockFromIso(h.sentAt)}  ·  ` : ''}
+                                          Done {clockFromIso(h.doneAt)}{day && day !== 'Today' ? ` ${day}` : ''}  ·  {h.who}
+                                        </Text>
+                                        {h.comment || h.photoUrl ? (
+                                          <Pressable
+                                            style={styles.proofChip}
+                                            onPress={() => setProofView({ title: h.title, comment: h.comment, photoUrl: h.photoUrl })}
+                                          >
+                                            {h.photoUrl ? (
+                                              <Image source={{ uri: h.photoUrl }} style={styles.proofChipThumb} />
+                                            ) : (
+                                              <View style={styles.proofChipIcon}><Text style={styles.proofChipIconText}>🖉</Text></View>
+                                            )}
+                                            <Text style={styles.proofChipText} numberOfLines={1}>{h.comment || 'Photo attached'}</Text>
+                                            <Text style={styles.proofChipGo}>›</Text>
+                                          </Pressable>
+                                        ) : null}
+                                      </View>
+                                    </View>
+                                  );
+                                })}
+                              </>
+                            ) : null}
+                          </>
+                        );
                       })()}
                     </>
                   )}
@@ -10443,6 +10521,14 @@ function completionDayLabel(iso: string): string {
   if (key(d) === key(now)) return 'Today';
   if (key(d) === key(yest)) return 'Yesterday';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// "21:32" clock from an ISO/parseable date string ('' if unusable).
+function clockFromIso(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // Minutes-since-midnight for a "9:00 AM" / "14:30" clock string (null if unparseable).
@@ -14060,6 +14146,56 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   taskManageTime: {
     color: colors.subtext,
     fontSize: 12,
+    fontWeight: '600',
+  },
+  taskSectionLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  taskEmptyLine: {
+    color: colors.subtext,
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  histRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: hexToRgba(colors.subtext, 0.12) || colors.border,
+  },
+  histCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginTop: 1,
+    backgroundColor: colors.done,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  histCheckMark: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  histBody: {
+    flex: 1,
+    gap: 2,
+  },
+  histTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  histMeta: {
+    color: colors.subtext,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   taskPill: {
