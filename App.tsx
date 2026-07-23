@@ -8636,7 +8636,7 @@ function AppShell() {
           />
         ) : null}
 
-        {shouldShowDailyCardsModal ? (
+        {shouldShowDailyCardsModal && !isStaffView ? (
           <Modal
             visible
             transparent
@@ -14658,7 +14658,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: 'rgba(255,255,255,0.99)',
     padding: 16,
     gap: 8,
-    maxWidth: 560,
+    // Match the phone frame (frameWidth is capped at 440) so the sign-in window
+    // never sticks out wider than the app itself.
+    maxWidth: 412,
     width: '100%',
     alignSelf: 'center',
     shadowColor: colors.shadow,
