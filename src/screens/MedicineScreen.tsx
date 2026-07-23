@@ -172,6 +172,16 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
   }
 
   const attentionCount = medsNeedAttentionCount(medicines);
+  const { soonCount, expiredCount } = useMemo(() => {
+    let soon = 0;
+    let expired = 0;
+    medicines.forEach((item) => {
+      const status = medExpiryStatus(item.expiry);
+      if (status === 'soon') soon += 1;
+      else if (status === 'expired') expired += 1;
+    });
+    return { soonCount: soon, expiredCount: expired };
+  }, [medicines]);
 
   const sorted = useMemo(() => {
     const order: Record<string, number> = { expired: 0, soon: 1, ok: 2, none: 3 };
@@ -261,12 +271,16 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
     resetDraft();
   }
 
-  const filterChips: { key: FilterKey; label: string }[] = [
-    { key: 'all', label: `All (${medicines.length})` },
-    { key: 'expired', label: 'Expired' },
-    { key: 'soon', label: 'Expiring soon' },
-    ...MED_CATEGORIES.map((c) => ({ key: c.key as FilterKey, label: c.label })),
+  // Prominent status tabs (what needs attention) sit above the plain category chips.
+  const statusTabs: { key: FilterKey; icon: string; label: string; count: number; tone: 'all' | 'soon' | 'expired' }[] = [
+    { key: 'all', icon: '💊', label: 'All', count: medicines.length, tone: 'all' },
+    { key: 'soon', icon: '⏳', label: 'Expiring', count: soonCount, tone: 'soon' },
+    { key: 'expired', icon: '⛔', label: 'Expired', count: expiredCount, tone: 'expired' },
   ];
+  const categoryChips: { key: FilterKey; label: string }[] = MED_CATEGORIES.map((c) => ({
+    key: c.key as FilterKey,
+    label: c.label,
+  }));
 
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -295,8 +309,31 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
           </View>
         ) : null}
 
+        <View style={styles.statusTabsRow}>
+          {statusTabs.map((tab) => {
+            const active = filter === tab.key;
+            const toneTab = tab.tone === 'soon' ? styles.statusTabSoon : tab.tone === 'expired' ? styles.statusTabExpired : styles.statusTabAll;
+            const toneActive =
+              tab.tone === 'soon' ? styles.statusTabSoonActive : tab.tone === 'expired' ? styles.statusTabExpiredActive : styles.statusTabAllActive;
+            const toneText = tab.tone === 'soon' ? styles.statusTabTextSoon : tab.tone === 'expired' ? styles.statusTabTextExpired : styles.statusTabTextAll;
+            return (
+              <Pressable
+                key={tab.key}
+                accessibilityRole="button"
+                accessibilityLabel={`${tab.label}, ${tab.count} item${tab.count === 1 ? '' : 's'}`}
+                style={[styles.statusTab, toneTab, active && styles.statusTabActive, active && toneActive]}
+                onPress={() => setFilter(tab.key)}
+              >
+                <Text style={styles.statusTabIcon}>{tab.icon}</Text>
+                <Text style={[styles.statusTabCount, toneText]}>{tab.count}</Text>
+                <Text style={[styles.statusTabLabel, toneText]}>{tab.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-          {filterChips.map((chip) => {
+          {categoryChips.map((chip) => {
             const active = filter === chip.key;
             return (
               <Pressable key={chip.key} style={[styles.chip, active && styles.chipActive]} onPress={() => setFilter(chip.key)}>
@@ -771,6 +808,52 @@ const createStyles = (colors: ThemeColors, isMobile: boolean) =>
     chipTextActive: {
       color: '#ffffff',
     },
+    statusTabsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 12,
+    },
+    statusTab: {
+      flex: 1,
+      alignItems: 'center',
+      borderRadius: 16,
+      borderWidth: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 6,
+      gap: 1,
+    },
+    statusTabAll: {
+      borderColor: colors.border,
+      backgroundColor: badgeTint(colors.primary, 0.08),
+    },
+    statusTabSoon: {
+      borderColor: badgeTint(statusColor(colors, 'soon'), 0.35),
+      backgroundColor: badgeTint(statusColor(colors, 'soon'), 0.12),
+    },
+    statusTabExpired: {
+      borderColor: badgeTint(statusColor(colors, 'urgent'), 0.35),
+      backgroundColor: badgeTint(statusColor(colors, 'urgent'), 0.1),
+    },
+    statusTabActive: {
+      borderWidth: 2,
+    },
+    statusTabAllActive: { borderColor: colors.primary },
+    statusTabSoonActive: { borderColor: statusColor(colors, 'soon') },
+    statusTabExpiredActive: { borderColor: statusColor(colors, 'urgent') },
+    statusTabIcon: {
+      fontSize: 17,
+    },
+    statusTabCount: {
+      fontSize: 20,
+      fontWeight: '800',
+    },
+    statusTabLabel: {
+      fontSize: 11.5,
+      fontWeight: '700',
+    },
+    statusTabTextAll: { color: colors.primary },
+    statusTabTextSoon: { color: statusColor(colors, 'soon') },
+    statusTabTextExpired: { color: statusColor(colors, 'urgent') },
     emptyState: {
       alignItems: 'center',
       paddingVertical: 32,

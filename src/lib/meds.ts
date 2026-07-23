@@ -20,8 +20,9 @@ export function medCategoryMeta(category: MedicineCategory) {
 
 export type MedExpiryStatus = 'none' | 'ok' | 'soon' | 'expired';
 
-// A medicine is "soon" to expire within this many days.
-export const MED_SOON_DAYS = 60;
+// A medicine is "soon" to expire within this many days — one month ahead, so
+// there's time to replace it before it actually expires.
+export const MED_SOON_DAYS = 30;
 
 // Accept common written forms and normalize to 'YYYY-MM':
 // "07/2026", "07.2026", "7/26", "2026-07", "2026/07". Returns '' if unusable.
