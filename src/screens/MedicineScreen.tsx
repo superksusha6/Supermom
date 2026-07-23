@@ -33,6 +33,11 @@ function newId() {
 
 const FOR_WHOM_OPTIONS = ['Adults', 'Kids', 'Everyone'];
 
+// Тип файла, пришедшего от системного пикера, — это ввод, а не факт. Разрешаем
+// только настоящие форматы изображений и ограничиваем размер кадра.
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const MAX_IMAGE_BASE64 = 8_000_000; // ≈6 МБ исходного файла
+
 function badgeTint(hex: string, alpha: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
   if (!m) return hex;
@@ -116,7 +121,16 @@ export function MedicineScreen({ medicines, onMedicinesChange }: Props) {
       if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.base64) return;
-      const dataUrl = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+      // Не доверяем типу, который пришёл вместе с файлом: подставляем в data-URL
+      // только явно разрешённый формат изображения, остальное — jpeg по умолчанию.
+      const mime = ALLOWED_IMAGE_MIME.includes(asset.mimeType ?? '') ? asset.mimeType! : 'image/jpeg';
+      // Ограничиваем размер: огромный кадр — это и оплата распознавания впустую,
+      // и риск положить запрос. base64 примерно на треть больше исходника.
+      if (asset.base64.length > MAX_IMAGE_BASE64) {
+        Alert.alert('Слишком большое фото', 'Сделай снимок ближе или с меньшим разрешением.');
+        return;
+      }
+      const dataUrl = `data:${mime};base64,${asset.base64}`;
       if (target === 'name') setScanNameImg(dataUrl);
       else setScanExpiryImg(dataUrl);
     } catch {

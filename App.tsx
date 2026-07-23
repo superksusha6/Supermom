@@ -1364,27 +1364,71 @@ function AppShell() {
   // changes it. RLS still limits which rows reach this client.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !session) return;
+    const client = supabase;
     const current = session;
     const timers: Record<string, ReturnType<typeof setTimeout>> = {};
     const bounce = (key: string, fn: () => void) => {
       if (timers[key]) clearTimeout(timers[key]);
-      timers[key] = setTimeout(fn, 350);
+      timers[key] = setTimeout(fn, 250);
     };
-    const pg = 'postgres_changes' as any;
-    const channel = supabase
-      .channel(`famos-live-${current.userId}`)
-      .on(pg, { event: '*', schema: 'public', table: 'events' }, () => bounce('cal', () => refreshLiveCalendar(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'calendar_proposals' }, () => bounce('partner', () => refreshPartner(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'partner_links' }, () => bounce('partner', () => refreshPartner(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'tasks' }, () => bounce('tasks', () => refreshLiveTasks(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'shopping_lists' }, () => bounce('shop', () => refreshLiveShopping(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'shopping_list_items' }, () => bounce('shop', () => refreshLiveShopping(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'completed_task_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
-      .on(pg, { event: '*', schema: 'public', table: 'staff_reminder_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
-      .subscribe();
+    let channel: ReturnType<typeof client.channel> | null = null;
+    let cancelled = false;
+
+    const pullEverythingLive = () => {
+      refreshLiveTasks(current);
+      refreshLiveNotifications(current);
+      refreshLiveShopping(current);
+      refreshLiveCalendar(current);
+      refreshLiveMedicines(current);
+    };
+
+    (async () => {
+      // Realtime must carry the signed-in user's JWT. Without it every
+      // postgres_changes event is filtered out by RLS and nothing ever arrives —
+      // which is what made live updates require a manual reload.
+      try {
+        const { data } = await client.auth.getSession();
+        const token = data.session?.access_token;
+        if (token) client.realtime.setAuth(token);
+      } catch {
+        // Fall through — the polling fallback below still keeps things fresh.
+      }
+      if (cancelled) return;
+
+      const pg = 'postgres_changes' as any;
+      channel = client
+        .channel(`famos-live-${current.userId}`)
+        .on(pg, { event: '*', schema: 'public', table: 'events' }, () => bounce('cal', () => refreshLiveCalendar(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'calendar_proposals' }, () => bounce('partner', () => refreshPartner(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'partner_links' }, () => bounce('partner', () => refreshPartner(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'tasks' }, () => bounce('tasks', () => refreshLiveTasks(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'shopping_lists' }, () => bounce('shop', () => refreshLiveShopping(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'shopping_list_items' }, () => bounce('shop', () => refreshLiveShopping(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'completed_task_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'staff_reminder_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'medicines' }, () => bounce('meds', () => refreshLiveMedicines(current)))
+        .subscribe((status) => {
+          // On (re)connect, pull once so anything missed while offline shows up.
+          if (status === 'SUBSCRIBED') pullEverythingLive();
+        });
+    })();
+
+    // Safety net: if the socket is asleep or blocked, still refresh while the tab
+    // is in the foreground, and immediately when the user comes back to it.
+    const poll = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') pullEverythingLive();
+    }, 15000);
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') pullEverythingLive();
+    };
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+
     return () => {
+      cancelled = true;
+      clearInterval(poll);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
       Object.values(timers).forEach((t) => clearTimeout(t));
-      supabase?.removeChannel(channel);
+      if (channel) client.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.userId, session?.familyId]);
@@ -2131,6 +2175,19 @@ function AppShell() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync staff profiles.';
       setTasksError(message);
+    }
+  }
+
+  // Pull the family medicine cabinet again (called on a realtime change, so the
+  // server is the source of truth here — including someone deleting the last item).
+  async function refreshLiveMedicines(current: AppSession | null = session) {
+    if (!current) return;
+    try {
+      const rows = await listMedicines(current);
+      setMedicines(rows);
+      persistLocalMedicines(rows);
+    } catch {
+      // Table not migrated yet — keep whatever is in local storage.
     }
   }
 
