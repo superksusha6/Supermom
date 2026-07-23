@@ -5916,6 +5916,38 @@ function AppShell() {
     </Pressable>
   ) : null;
 
+  // Where staff task updates land for the owner: completions (with photo/comment
+  // proof) and missed tasks. Unread count shows as a red badge.
+  const staffUpdatesUnread =
+    completedTaskNotifications.filter((n) => !n.read).length + overdueStaffTasks.length;
+  const staffUpdatesTotal = completedTaskNotifications.length + overdueStaffTasks.length;
+  const focusStaffUpdates =
+    role === 'mother' && staffProfiles.length > 0 && staffUpdatesTotal > 0 ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Task updates from staff${staffUpdatesUnread > 0 ? `, ${staffUpdatesUnread} new` : ''}`}
+        style={styles.tasksHubCard}
+        onPress={openTaskNotifications}
+      >
+        <View style={styles.tasksHubIcon}>
+          <Icon name="check" color={colors.primary} size={20} />
+        </View>
+        <View style={styles.tasksHubCopy}>
+          <Text style={styles.tasksHubTitle}>Task updates</Text>
+          <Text style={styles.tasksHubSub} numberOfLines={1}>
+            {staffUpdatesUnread > 0 ? `${staffUpdatesUnread} new · done & missed by staff` : 'Done & missed by staff'}
+          </Text>
+        </View>
+        {staffUpdatesUnread > 0 ? (
+          <View style={styles.tasksHubBadgeAlert}>
+            <Text style={styles.tasksHubBadgeText}>{staffUpdatesUnread}</Text>
+          </View>
+        ) : (
+          <Icon name="chevron" color={colors.subtext} size={16} />
+        )}
+      </Pressable>
+    ) : null;
+
   const myStaffTasks = tasks.filter(
     (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
   );
@@ -6289,6 +6321,7 @@ function AppShell() {
       {focusCalories}
       {focusHabits}
       {focusTasks}
+      {focusStaffUpdates}
       {focusNeeds}
       {focusMiniCal}
     </View>
@@ -6306,6 +6339,7 @@ function AppShell() {
         {focusCalories}
         {focusHabits}
         {focusTasks}
+        {focusStaffUpdates}
       </View>
       <View style={styles.dashRail}>
         {focusMiniCal}
@@ -13929,6 +13963,15 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
+  },
+  tasksHubBadgeAlert: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dc2626',
   },
   tasksHubBadgeText: {
     color: '#ffffff',
