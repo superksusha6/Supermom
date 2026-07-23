@@ -1331,7 +1331,9 @@ function AppShell() {
     if (staffFeatures === null) return true;
     if (targetScreen === 'family') return false;
     if (targetScreen === 'food') return staffCan('shopping') || staffCan('menu') || staffCan('recipes');
-    if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds' || targetScreen === 'wellness') return staffCan('fixit');
+    // Habits/wellness is the owner's personal tracker — never part of a staff grant.
+    if (targetScreen === 'wellness') return false;
+    if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds') return staffCan('fixit');
     return staffCan('schedule') || staffCan('tasks');
   };
   // Re-check partner slots/replies whenever the tab regains focus, so a sent slot
@@ -7820,14 +7822,14 @@ function AppShell() {
                 <Icon name="chevron" color={colors.subtext} size={18} />
               </Pressable>
             ) : null}
-            {habitsEnabled ? (
+            {habitsEnabled && !isStaffView ? (
               <Pressable accessibilityRole="button" accessibilityLabel="Habits and wellness" style={styles.foodShopBtn} onPress={() => setScreen('wellness')}>
                 <View style={styles.foodShopIcon}><Icon name="heart" color={colors.primary} size={20} /></View>
                 <Text style={styles.foodShopText}>Habits</Text>
                 <Icon name="chevron" color={colors.subtext} size={18} />
               </Pressable>
             ) : null}
-            {!medsEnabled && !habitsEnabled ? (
+            {!medsEnabled && !habitsEnabled && !isStaffView ? (
               <Text style={styles.foodDiaryLinkText}>Enable more home tools (Meds, Habits) in Settings → Modules.</Text>
             ) : null}
           </View>
