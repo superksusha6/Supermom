@@ -4601,6 +4601,16 @@ function AppShell() {
     setEditingTaskId(null);
     setNewStaffTaskTitle('');
     setNewStaffTaskPriority('non_urgent');
+    // Opening the manager = reviewing what staff did, so clear the unread badge.
+    if (completedTaskNotifications.some((n) => !n.read)) {
+      if (session && isSupabaseConfigured) {
+        markCompletedTaskNotificationsRead(session)
+          .then(() => refreshLiveNotifications())
+          .catch(() => {});
+      } else {
+        setCompletedTaskNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      }
+    }
     setTasksManagerOpen(true);
   }
 
@@ -5889,64 +5899,44 @@ function AppShell() {
     />
   );
 
+  // One merged "Staff tasks" card (Variant 2 — blue pill badge). Shows how many
+  // completions are unread + missed ("N new", red if anything is overdue) and how
+  // many are still waiting. Tap opens the manager (Waiting + History + add) and
+  // clears the unread badge.
   const openStaffTaskCount = tasks.filter((t) => t.assigneeRole === 'staff' && t.status !== 'done').length;
+  const staffUnreadDone = completedTaskNotifications.filter((n) => !n.read).length;
+  const overdueCount = overdueStaffTasks.length;
+  const staffNewCount = staffUnreadDone + overdueCount; // needs your attention now
+  const staffWaitingCount = Math.max(0, openStaffTaskCount - overdueCount); // on-track pending
   const focusTasks = staffProfiles.length > 0 && role === 'mother' ? (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Staff tasks${openStaffTaskCount > 0 ? `, ${openStaffTaskCount} open` : ''}`}
+      accessibilityLabel={`Staff tasks${staffNewCount > 0 ? `, ${staffNewCount} new` : ''}${staffWaitingCount > 0 ? `, ${staffWaitingCount} waiting` : ''}`}
       style={styles.tasksHubCard}
       onPress={openTasksManager}
     >
       <View style={styles.tasksHubIcon}>
         <Icon name="chores" color={colors.primary} size={20} />
       </View>
-      <View style={styles.tasksHubCopy}>
+      <View style={styles.staffHubBody}>
         <Text style={styles.tasksHubTitle}>Staff tasks</Text>
-        <Text style={styles.tasksHubSub} numberOfLines={1}>
-          {openStaffTaskCount > 0 ? `${openStaffTaskCount} open · tap to assign or edit` : 'Assign & send tasks to staff'}
-        </Text>
+        <View style={styles.staffHubGrow} />
+        {staffNewCount > 0 ? (
+          <View style={[styles.staffHubPill, overdueCount > 0 && styles.staffHubPillAlert]}>
+            <Text style={styles.staffHubPillNum}>{staffNewCount}</Text>
+            <Text style={styles.staffHubPillLbl}>{overdueCount > 0 ? 'late' : 'new'}</Text>
+          </View>
+        ) : null}
+        {staffWaitingCount > 0 ? (
+          <Text style={styles.staffHubWaiting}>{staffWaitingCount} waiting</Text>
+        ) : staffNewCount === 0 ? (
+          <Text style={styles.staffHubClear}>All caught up</Text>
+        ) : null}
       </View>
-      {openStaffTaskCount > 0 ? (
-        <View style={styles.tasksHubBadge}>
-          <Text style={styles.tasksHubBadgeText}>{openStaffTaskCount}</Text>
-        </View>
-      ) : (
-        <Icon name="chevron" color={colors.subtext} size={16} />
-      )}
+      <Icon name="chevron" color={colors.subtext} size={16} />
     </Pressable>
   ) : null;
-
-  // Where staff task updates land for the owner: completions (with photo/comment
-  // proof) and missed tasks. Unread count shows as a red badge.
-  const staffUpdatesUnread =
-    completedTaskNotifications.filter((n) => !n.read).length + overdueStaffTasks.length;
-  const staffUpdatesTotal = completedTaskNotifications.length + overdueStaffTasks.length;
-  const focusStaffUpdates =
-    role === 'mother' && staffProfiles.length > 0 && staffUpdatesTotal > 0 ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Task updates from staff${staffUpdatesUnread > 0 ? `, ${staffUpdatesUnread} new` : ''}`}
-        style={styles.tasksHubCard}
-        onPress={openTaskNotifications}
-      >
-        <View style={styles.tasksHubIcon}>
-          <Icon name="check" color={colors.primary} size={20} />
-        </View>
-        <View style={styles.tasksHubCopy}>
-          <Text style={styles.tasksHubTitle}>Task updates</Text>
-          <Text style={styles.tasksHubSub} numberOfLines={1}>
-            {staffUpdatesUnread > 0 ? `${staffUpdatesUnread} new · done & missed by staff` : 'Done & missed by staff'}
-          </Text>
-        </View>
-        {staffUpdatesUnread > 0 ? (
-          <View style={styles.tasksHubBadgeAlert}>
-            <Text style={styles.tasksHubBadgeText}>{staffUpdatesUnread}</Text>
-          </View>
-        ) : (
-          <Icon name="chevron" color={colors.subtext} size={16} />
-        )}
-      </Pressable>
-    ) : null;
+  const focusStaffUpdates = null;
 
   const myStaffTasks = tasks.filter(
     (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
@@ -14058,6 +14048,48 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#dc2626',
+  },
+  staffHubBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  staffHubGrow: {
+    flex: 1,
+  },
+  staffHubPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary,
+    borderRadius: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  staffHubPillAlert: {
+    backgroundColor: '#dc2626',
+  },
+  staffHubPillNum: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  staffHubPillLbl: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.9,
+  },
+  staffHubWaiting: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  staffHubClear: {
+    color: colors.done,
+    fontSize: 13,
+    fontWeight: '700',
   },
   tasksHubBadgeText: {
     color: '#ffffff',
