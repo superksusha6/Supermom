@@ -28,4 +28,6 @@ begin
   update public.staff_profiles set photo_uri = p_photo where id = p_staff_profile_id;
 end;
 $$;
+-- Postgres grants EXECUTE to PUBLIC by default — close that so only signed-in users can call it.
+revoke execute on function public.set_staff_profile_photo(text, text) from public, anon;
 grant execute on function public.set_staff_profile_photo(text, text) to authenticated;
