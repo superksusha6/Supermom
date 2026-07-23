@@ -4664,8 +4664,8 @@ function AppShell() {
   }
 
   // Staff picks their own avatar photo → optimistic update + persist via RPC.
-  async function pickStaffAvatar() {
-    const staffId = currentStaffProfileId;
+  async function pickStaffAvatar(forStaffId?: string) {
+    const staffId = forStaffId || currentStaffProfileId;
     if (!staffId) return;
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -5310,10 +5310,35 @@ function AppShell() {
   // Staff get a light Settings panel (not the family's personal/nutrition/cycle screens).
   const settingsStaffId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
   const settingsStaffName = staffProfiles.find((p) => p.id === settingsStaffId)?.name || 'You';
+  const settingsStaffProfile = staffProfiles.find((p) => p.id === settingsStaffId) || null;
+  const settingsStaffInitials =
+    settingsStaffName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'S';
   const staffSettingsNode = (
     <View style={styles.staffSettingsWrap}>
       <Text style={styles.staffSettingsTitle}>Settings</Text>
       <Text style={styles.staffSettingsSub}>{settingsStaffName}</Text>
+      <View style={styles.staffSettingsCard}>
+        <Text style={styles.staffSettingsSectionLabel}>Your photo</Text>
+        <View style={styles.staffSettingsAvatarRow}>
+          <Pressable style={styles.staffHeaderAvatar} onPress={() => pickStaffAvatar(settingsStaffId || undefined)}>
+            {settingsStaffProfile?.photoUri ? (
+              <Image source={{ uri: settingsStaffProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
+            ) : (
+              <Text style={styles.staffHeaderAvatarText}>{settingsStaffInitials}</Text>
+            )}
+          </Pressable>
+          <Pressable style={styles.staffToggle} onPress={() => pickStaffAvatar(settingsStaffId || undefined)}>
+            <Text style={styles.staffToggleText}>{settingsStaffProfile?.photoUri ? 'Change photo' : 'Add a photo'}</Text>
+          </Pressable>
+        </View>
+      </View>
       <View style={styles.staffSettingsCard}>
         <Text style={styles.staffSettingsSectionLabel}>Notifications</Text>
         {pushState === 'unsupported' ? (
@@ -5920,7 +5945,7 @@ function AppShell() {
   const staffHeaderDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
   const focusStaffHeader = isStaffView && currentStaffProfile ? (
     <View style={styles.staffHeaderCard}>
-      <Pressable style={styles.staffHeaderAvatar} onPress={pickStaffAvatar} accessibilityRole="button" accessibilityLabel="Change your photo">
+      <Pressable style={styles.staffHeaderAvatar} onPress={() => pickStaffAvatar()} accessibilityRole="button" accessibilityLabel="Change your photo">
         {currentStaffProfile.photoUri ? (
           <Image source={{ uri: currentStaffProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
         ) : (
@@ -6257,7 +6282,13 @@ function AppShell() {
       <View style={styles.topBar}>
         <View style={styles.brandWrap}>
           <Text style={styles.brandTitle}>FamOs</Text>
-          <Text style={styles.brandSubtitle}>{screen === 'calendar' ? dashboardGreeting : 'your family operating system'}</Text>
+          <Text style={styles.brandSubtitle}>
+            {isStaffView
+              ? 'your family operating system'
+              : screen === 'calendar'
+                ? dashboardGreeting
+                : 'your family operating system'}
+          </Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable
@@ -12870,6 +12901,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   staffHeaderCopy: {
     flex: 1,
+  },
+  staffSettingsAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   staffHeaderHi: {
     color: colors.text,
