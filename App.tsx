@@ -1465,7 +1465,7 @@ function AppShell() {
           id: `overdue-${task.id}`,
           kind: 'not_completed' as const,
           title: task.title,
-          staffName: task.assigneeName,
+          staffName: staffNameForTask(task),
           happenedAt: parseTaskDeadline(task.deadline)?.toISOString() ?? new Date().toISOString(),
           deadline: task.deadline,
           taskId: task.id,
@@ -4558,7 +4558,7 @@ function AppShell() {
           await createCompletedTaskNotification(session, {
             taskId,
             taskTitle: task.title,
-            staffName: task.assigneeName,
+            staffName: staffNameForTask(task),
             completedAt,
             read: false,
           });
@@ -4576,7 +4576,7 @@ function AppShell() {
           id: `completed-${Date.now()}`,
           taskId,
           taskTitle: task.title,
-          staffName: task.assigneeName,
+          staffName: staffNameForTask(task),
           completedAt,
           read: false,
         },
@@ -4685,9 +4685,23 @@ function AppShell() {
     }
   }
 
-  function myStaffName(task: TaskItem) {
+  // The actual person a staff task belongs to — never the generic "Staff" label,
+  // so completions and reminders are attributed by name.
+  function staffNameForTask(task: TaskItem) {
     return (
-      staffProfiles.find((p) => p.id === activeStaffProfileId)?.name ||
+      staffProfiles.find((p) => p.id === task.staffProfileId)?.name ||
+      (task.assigneeName && task.assigneeName !== 'Staff' ? task.assigneeName : 'Staff')
+    );
+  }
+
+  function myStaffName(task: TaskItem) {
+    // In a real staff session the profile comes from the session; activeStaffProfileId
+    // is only set when the owner previews a staff view. Using the wrong one recorded
+    // completions as the generic "Staff" instead of the person's name.
+    const myProfileId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
+    return (
+      staffProfiles.find((p) => p.id === myProfileId)?.name ||
+      staffProfiles.find((p) => p.id === task.staffProfileId)?.name ||
       (task.assigneeName && task.assigneeName !== 'Staff' ? task.assigneeName : 'Staff')
     );
   }
@@ -4907,7 +4921,7 @@ function AppShell() {
       upsertStaffReminderNotification(session, {
         taskId: task.id,
         taskTitle: task.title,
-        staffName: task.assigneeName,
+        staffName: staffNameForTask(task),
         sentAt,
       })
         .then(() => refreshLiveNotifications())
@@ -4923,7 +4937,7 @@ function AppShell() {
         {
           taskId: task.id,
           taskTitle: task.title,
-          staffName: task.assigneeName,
+          staffName: staffNameForTask(task),
           sentAt,
         },
         ...prev,
@@ -7320,7 +7334,8 @@ function AppShell() {
                                 title: t.title,
                                 sentAt: t.createdAt || null,
                                 doneAt: c?.completedAt || null,
-                                who: c?.staffName || staffName || 'Staff',
+                                // Older records stored the generic label — show the person instead.
+                                who: (c?.staffName && c.staffName !== 'Staff' ? c.staffName : staffName) || 'Staff',
                                 comment: c?.comment || null,
                                 photoUrl: c?.photoUrl || null,
                               };
