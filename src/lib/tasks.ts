@@ -1656,20 +1656,85 @@ export async function createShoppingList(
   return data.id as string;
 }
 
+// A row someone else inserted moments ago won't be in our snapshot. Never treat such
+// a row as "the user deleted it" — a shared list must not lose a just-added item.
+const CONCURRENT_INSERT_GRACE_MS = 60 * 1000;
+
+function shoppingItemRow(listId: string, item: ShoppingItem, index: number) {
+  return {
+    list_id: listId,
+    item_name: item.name,
+    quantity: item.quantity,
+    category: item.category || null,
+    comment: item.comment || null,
+    purchased: item.purchased,
+    sort_order: index,
+    added_by_name: item.addedBy || null,
+    added_at: item.addedAt || null,
+  };
+}
+
+const CATEGORY_MIGRATION_MESSAGE =
+  'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.';
+
+// Sync the list by ITEM IDENTITY instead of wiping and re-inserting it.
+// The old delete-everything-then-reinsert approach gave every item a brand-new id on
+// each save, so two people editing the same list overwrote each other, in-flight
+// toggles hit deleted rows, and the list was briefly empty (which other devices could
+// see and auto-remove).
 export async function updateShoppingListItems(session: AppSession, listId: string, items: ShoppingItem[]) {
   const client = requireClient();
-  const { error: deleteError } = await client.from('shopping_list_items').delete().eq('list_id', listId);
-  if (deleteError) throw deleteError;
 
-  if (items.length === 0) return;
+  const { data: existingRows, error: readError } = await client
+    .from('shopping_list_items')
+    .select('id, created_at')
+    .eq('list_id', listId);
+  if (readError) throw readError;
 
-  const extendedInsert = await insertShoppingItemRows(client, listId, items);
-  if (isMissingShoppingListItemCategoryColumnError(extendedInsert.error)) {
-    throw new Error(
-      'Shopping item categories are not enabled in Supabase yet. Run /Users/ksu/promom/smart-mom-app/supabase/shopping_item_categories.sql in the Supabase SQL Editor, then save the list again.',
-    );
+  const existing = new Map((existingRows ?? []).map((row) => [String(row.id), String(row.created_at || '')]));
+
+  const updates: Array<Record<string, unknown>> = [];
+  const inserts: Array<Record<string, unknown>> = [];
+  items.forEach((item, index) => {
+    const row = shoppingItemRow(listId, item, index);
+    if (item.id && existing.has(String(item.id))) updates.push({ id: item.id, ...row });
+    else inserts.push(row);
+  });
+
+  // Delete only rows this client knew about and the user actually removed.
+  const keptIds = new Set(updates.map((row) => String(row.id)));
+  const cutoff = Date.now() - CONCURRENT_INSERT_GRACE_MS;
+  const removedIds = [...existing.entries()]
+    .filter(([id, createdAt]) => {
+      if (keptIds.has(id)) return false;
+      const created = Date.parse(createdAt);
+      return Number.isNaN(created) || created < cutoff;
+    })
+    .map(([id]) => id);
+  if (removedIds.length > 0) {
+    const { error } = await client.from('shopping_list_items').delete().in('id', removedIds);
+    if (error) throw error;
   }
-  if (extendedInsert.error) throw extendedInsert.error;
+
+  if (updates.length > 0) {
+    let { error } = await client.from('shopping_list_items').upsert(updates, { onConflict: 'id' });
+    if (isMissingShoppingItemAttributionColumnError(error)) {
+      const stripped = updates.map(({ added_by_name, added_at, ...rest }) => rest);
+      ({ error } = await client.from('shopping_list_items').upsert(stripped, { onConflict: 'id' }));
+    }
+    if (isMissingShoppingListItemCategoryColumnError(error)) throw new Error(CATEGORY_MIGRATION_MESSAGE);
+    if (error) throw error;
+  }
+
+  if (inserts.length > 0) {
+    let result = await client.from('shopping_list_items').insert(inserts);
+    if (isMissingShoppingItemAttributionColumnError(result.error)) {
+      const stripped = inserts.map(({ added_by_name, added_at, ...rest }) => rest);
+      result = await client.from('shopping_list_items').insert(stripped);
+    }
+    if (isMissingShoppingListItemCategoryColumnError(result.error)) throw new Error(CATEGORY_MIGRATION_MESSAGE);
+    if (result.error) throw result.error;
+  }
 }
 
 export async function deleteShoppingList(session: AppSession, listId: string) {
@@ -2182,13 +2247,34 @@ function isMissingUserPreferencesColumnError(error: unknown) {
   );
 }
 
+const HABIT_BASE_COLUMNS =
+  'id, title, icon, color, target_text, enabled, built_in, mark_style, reminder_mode, reminder_time, completed_today, streak';
+
+function isMissingHabitCompletedDateError(error: { message?: string } | null): boolean {
+  return !!error && String(error.message || '').toLowerCase().includes('completed_date');
+}
+
 export async function listHabitEntries(session: AppSession): Promise<HabitEntry[]> {
   const client = requireClient();
-  const { data, error } = await client
+  // completed_date tells us which day the tick belongs to. Retry without it if the
+  // column hasn't been migrated yet (supabase/habit_completed_date.sql).
+  const withDate = await client
     .from('habit_entries')
-    .select('id, title, icon, color, target_text, enabled, built_in, mark_style, reminder_mode, reminder_time, completed_today, streak')
+    .select(`${HABIT_BASE_COLUMNS}, completed_date`)
     .eq('user_id', session.userId)
     .order('created_at', { ascending: false });
+
+  let data: any[] | null = withDate.data;
+  let error = withDate.error;
+  if (isMissingHabitCompletedDateError(error)) {
+    const fallback = await client
+      .from('habit_entries')
+      .select(HABIT_BASE_COLUMNS)
+      .eq('user_id', session.userId)
+      .order('created_at', { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (isMissingHabitEntriesTableError(error)) {
     throw new Error('Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then refresh.');
   }
@@ -2205,6 +2291,7 @@ export async function listHabitEntries(session: AppSession): Promise<HabitEntry[
     reminderMode: row.reminder_mode || 'off',
     reminderTime: row.reminder_time || '',
     completedToday: !!row.completed_today,
+    completedDate: 'completed_date' in row && row.completed_date ? String(row.completed_date) : undefined,
     streak: Number(row.streak) || 0,
   }));
 }
@@ -2217,26 +2304,32 @@ export async function replaceHabitEntries(session: AppSession, habits: HabitEntr
   }
   if (deleteError) throw deleteError;
   if (habits.length === 0) return;
-  const { error } = await client.from('habit_entries').upsert(
-    habits.map((habit) => ({
-      id: habit.id,
-      user_id: session.userId,
-      family_id: session.familyId,
-      title: habit.title,
-      icon: habit.icon,
-      color: habit.color,
-      target_text: habit.targetText,
-      enabled: !!habit.enabled,
-      built_in: !!habit.builtIn,
-      mark_style: habit.markStyle || 'circle',
-      reminder_mode: habit.reminderMode || 'off',
-      reminder_time: habit.reminderTime || null,
-      completed_today: !!habit.completedToday,
-      streak: habit.streak || 0,
-      updated_at: new Date().toISOString(),
-    })),
-    { onConflict: 'id' },
-  );
+  const baseRows = habits.map((habit) => ({
+    id: habit.id,
+    user_id: session.userId,
+    family_id: session.familyId,
+    title: habit.title,
+    icon: habit.icon,
+    color: habit.color,
+    target_text: habit.targetText,
+    enabled: !!habit.enabled,
+    built_in: !!habit.builtIn,
+    mark_style: habit.markStyle || 'circle',
+    reminder_mode: habit.reminderMode || 'off',
+    reminder_time: habit.reminderTime || null,
+    completed_today: !!habit.completedToday,
+    streak: habit.streak || 0,
+    updated_at: new Date().toISOString(),
+  }));
+  const withDateRows = baseRows.map((row, index) => ({
+    ...row,
+    completed_date: habits[index].completedDate || null,
+  }));
+  let { error } = await client.from('habit_entries').upsert(withDateRows, { onConflict: 'id' });
+  if (isMissingHabitCompletedDateError(error)) {
+    // Column not migrated yet — save everything else rather than failing the write.
+    ({ error } = await client.from('habit_entries').upsert(baseRows, { onConflict: 'id' }));
+  }
   if (isMissingHabitEntriesTableError(error)) {
     throw new Error('Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
   }

@@ -219,6 +219,10 @@ type DailyCardLocalState = {
 const LEGACY_LOCAL_SHOPPING_LISTS_KEY = 'smartmom.shoppingLists.v1';
 const LOCAL_SHOPPING_LISTS_KEY = 'smartmom.shoppingLists.v2';
 const LOCAL_SHOPPING_BOOTSTRAP_KEY = 'smartmom.shoppingBootstrap.v1';
+// How long an active shopping list must stay empty before it is auto-removed.
+// Long enough that a list someone just created, or one being re-saved by another
+// device, is never mistaken for an abandoned empty one.
+const EMPTY_LIST_GRACE_MS = 2 * 60 * 1000;
 const LOCAL_SHOPPING_INSIGHTS_KEY = 'smartmom.shoppingInsights.v1';
 const LOCAL_FRIDGE_ITEMS_KEY = 'smartmom.fridgeItems.v1';
 const LOCAL_CHILDREN_KEY = 'smartmom.children.v1';
@@ -1026,11 +1030,16 @@ function AppShell() {
   const choresSaveInFlightRef = useRef(false);
   const choresNeedsResaveRef = useRef(false);
   const fridgeLoadedRef = useRef(false);
+  // Snapshot of what the server last gave us, so a refresh never triggers a save.
+  const lastFridgeSyncRef = useRef<string>('');
   const fridgeSaveInFlightRef = useRef(false);
   const fridgePendingSaveRef = useRef<FridgeItem[] | null>(null);
   const fridgeSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualThemeSelectionRef = useRef(false);
   const latestPersonalProfileRef = useRef<PersonalProfile>(loadLocalPersonalProfile());
+  // True once the server profile (incl. cycle history) has been fetched. Cycle writes
+  // replace the whole history, so they must never run against a not-yet-loaded profile.
+  const personalProfileLoadedRef = useRef(false);
   const savedPersonalFullNameRef = useRef('');
   const savedPersonalDateOfBirthRef = useRef('');
 
@@ -1255,6 +1264,8 @@ function AppShell() {
 
   const sessionRef = useRef<AppSession | null>(null);
   const shoppingBootstrapCompleteRef = useRef(loadShoppingBootstrapComplete());
+  // listId -> when we first saw it empty, so we only prune persistently-empty lists.
+  const emptyListSinceRef = useRef<Record<string, number>>({});
   const latestChildrenRef = useRef<ChildProfile[]>(loadLocalChildren());
   const latestHabitsRef = useRef<HabitEntry[]>(loadLocalHabits());
   const latestFridgeItemsRef = useRef<FridgeItem[]>([]);
@@ -1677,7 +1688,21 @@ function AppShell() {
   // you're filling doesn't vanish under you.
   useEffect(() => {
     const viewingListId = screen === 'food' && foodTab === 'shopping' ? selectedShoppingListId : null;
-    const strays = activeShoppingLists.filter((list) => list.items.length === 0 && list.id !== viewingListId);
+    const now = Date.now();
+    const seenEmptySince = emptyListSinceRef.current;
+    const stillEmpty: Record<string, number> = {};
+    const strays: typeof activeShoppingLists = [];
+    activeShoppingLists.forEach((list) => {
+      if (list.items.length > 0 || list.id === viewingListId) return;
+      const since = seenEmptySince[list.id] ?? now;
+      stillEmpty[list.id] = since;
+      // Only prune a list that has STAYED empty for a while. A snapshot can be empty
+      // for innocent reasons — someone on another device just created it and hasn't
+      // typed yet, or their save is mid-flight (items are rewritten, not patched).
+      // Deleting on the first empty reading destroyed other people's lists.
+      if (now - since >= EMPTY_LIST_GRACE_MS) strays.push(list);
+    });
+    emptyListSinceRef.current = stillEmpty;
     if (strays.length === 0) return;
     const strayIds = new Set(strays.map((list) => list.id));
     setShoppingLists((prev) => prev.filter((list) => !strayIds.has(list.id)));
@@ -2251,6 +2276,7 @@ function AppShell() {
         cycleEntries: nextCycleEntries.length ? nextCycleEntries : currentProfile.cycleEntries || [],
       };
       latestPersonalProfileRef.current = nextProfile;
+      personalProfileLoadedRef.current = true;
       setPersonalProfile(nextProfile);
       setSavedPersonalFullName(nextFullName);
       setSavedPersonalDateOfBirth(nextDateOfBirth);
@@ -2274,16 +2300,23 @@ function AppShell() {
         listShoppingShares(current.familyId),
         listPurchaseRequests(current.familyId),
       ]);
-      if (!shoppingBootstrapCompleteRef.current) {
-        setShoppingLists([]);
-        if (liveLists.length > 0) {
-          await Promise.all(liveLists.map((list) => deleteShoppingList(current, list.id).catch(() => null)));
-        }
-      } else {
-        setShoppingLists(liveLists);
+      if (!shoppingBootstrapCompleteRef.current && liveLists.length > 0) {
+        // The bootstrap flag lives in localStorage, but shopping lists are shared by the
+        // whole family and live on the server. A fresh device / incognito window / cleared
+        // cache must NEVER be read as "this family has no lists yet" — adopt what the
+        // server already has and heal the flag instead of deleting everyone's lists.
+        markShoppingBootstrapComplete();
       }
+      setShoppingLists(liveLists);
+      // Prefer the local copy only on the very first load (it may hold items this
+      // device hasn't uploaded yet). Afterwards the server is authoritative — otherwise
+      // every refresh resurrected our stale copy and re-uploaded it, silently undoing
+      // another family member's edits and deletions in a loop.
       const localFridgeItems = latestFridgeItemsRef.current.length > 0 ? latestFridgeItemsRef.current : loadLocalFridgeItems();
-      const mergedFridgeItems = mergeFridgeItemsPreferLocal(liveFridgeItems, localFridgeItems);
+      const mergedFridgeItems = fridgeLoadedRef.current
+        ? liveFridgeItems
+        : mergeFridgeItemsPreferLocal(liveFridgeItems, localFridgeItems);
+      lastFridgeSyncRef.current = JSON.stringify(mergedFridgeItems);
       setFridgeItems(mergedFridgeItems);
       setShoppingShares(liveShares);
       setPurchaseRequests(livePurchaseRequests);
@@ -2560,11 +2593,12 @@ function AppShell() {
         .catch(() => {
           // Tables may not be migrated yet — keep the section usable locally; the
           // migration hint surfaces when the user first tries to save.
+          // Do NOT mark this as loaded: a failed read must never be mistaken for
+          // "the family has none", or the next save deletes every existing row.
           homeIssuesRef.current = [];
           homeProvidersRef.current = [];
           setHomeIssues([]);
           setHomeProviders([]);
-          homeFixitLoadedRef.current = true;
         }),
       listChores(ctx)
         .then((rows) => {
@@ -2573,9 +2607,10 @@ function AppShell() {
           choresLoadedRef.current = true;
         })
         .catch(() => {
+          // Same rule as home fix-it: a failed read is not proof of an empty list,
+          // so leave choresLoadedRef false and let the save path stay disabled.
           choresRef.current = [];
           setChores([]);
-          choresLoadedRef.current = true;
         }),
       listMedicines(ctx)
         .then((rows) => {
@@ -2899,6 +2934,12 @@ function AppShell() {
 
   useEffect(() => {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current || !fridgeLoadedRef.current) return;
+    // Only save real user edits. A refresh hands us a fresh array with identical
+    // contents; saving that back re-ran a delete-and-reinsert every 15s and could
+    // clobber a change another member made in between.
+    const signature = JSON.stringify(fridgeItems);
+    if (signature === lastFridgeSyncRef.current) return;
+    lastFridgeSyncRef.current = signature;
     queueFridgeSave(fridgeItems, session);
   }, [session, fridgeItems]);
 
@@ -5209,6 +5250,13 @@ function AppShell() {
     const month = Number(monthText);
     const day = Number(dayText);
     if (!year || !month || !day) return;
+    // Saving replaces the whole cycle history, so refuse to write before the server
+    // profile has loaded — otherwise a tap on a fresh device wipes the real history.
+    if (session && isSupabaseConfigured && !personalProfileLoadedRef.current) {
+      setPersonalProfileStatus(null);
+      setPersonalProfileError('Still loading your profile — try again in a moment.');
+      return;
+    }
 
     const normalizedProfile: PersonalProfile = {
       ...personalProfile,
@@ -5276,6 +5324,11 @@ function AppShell() {
   }
 
   async function handleRemoveCycleEntry(dateKey: string) {
+    if (session && isSupabaseConfigured && !personalProfileLoadedRef.current) {
+      setPersonalProfileStatus(null);
+      setPersonalProfileError('Still loading your profile — try again in a moment.');
+      return;
+    }
     const nextEntries = (personalProfile.cycleEntries || []).filter((item) => item.date !== dateKey);
 
     const normalizedProfile: PersonalProfile = {
