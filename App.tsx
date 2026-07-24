@@ -60,6 +60,7 @@ import {
   listShoppingShares,
   listStaffProfiles,
   listStaffConnections,
+  setStaffAccess,
   setStaffProfilePhoto,
   listStaffReminderNotifications,
   listTasks,
@@ -1340,12 +1341,19 @@ function AppShell() {
   const staffCan = (feature: StaffFeature) => staffFeatures === null || staffFeatures.includes(feature);
   const staffScreenAllowed = (targetScreen: string) => {
     if (staffFeatures === null) return true;
+    // Everyone needs their own settings — it holds sign-out, change-password and the
+    // push toggle. Without this a staff member granted only e.g. shopping was bounced
+    // out of Settings and could never sign out of the app.
+    if (targetScreen === 'settings') return true;
     if (targetScreen === 'family') return false;
     if (targetScreen === 'food') return staffCan('shopping') || staffCan('menu') || staffCan('recipes');
     // Habits/wellness is the owner's personal tracker — never part of a staff grant.
     if (targetScreen === 'wellness') return false;
     if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds') return staffCan('fixit');
-    return staffCan('schedule') || staffCan('tasks');
+    if (targetScreen === 'calendar') return staffCan('schedule') || staffCan('tasks');
+    // Anything not listed above is denied: a screen added later must be granted
+    // explicitly rather than defaulting to visible for staff.
+    return false;
   };
   // Re-check partner slots/replies whenever the tab regains focus, so a sent slot
   // and its confirmation surface without a full reload.
@@ -4549,6 +4557,9 @@ function AppShell() {
         );
         await Promise.all([refreshLiveStaffProfiles(), refreshLiveTasks(), refreshLiveCalendar()]);
         setStaffGrants((prev) => ({ ...prev, [staffId]: staffGrant }));
+        // Push the grants to the person's actual account too. Harmless (and a no-op)
+        // if they haven't accepted their invite yet.
+        await setStaffAccess(staffId, staffGrant.roles, staffGrant.features).catch(() => {});
         setStaffEnabled(true);
         // Stay in the admin (parent) view after saving — don't drop into the staff's preview.
         setStaffDraftName('');
@@ -6005,9 +6016,14 @@ function AppShell() {
   ) : null;
   const focusStaffUpdates = null;
 
-  const myStaffTasks = tasks.filter(
-    (t) => t.assigneeRole === 'staff' && (isStaffPreview ? t.staffProfileId === activeStaffProfileId : true),
-  );
+  // Only this person's own tasks. Previously a real staff session had no per-person
+  // filter at all, so the nanny saw the cook's and driver's assignments too.
+  const myStaffTasks = tasks.filter((t) => {
+    if (t.assigneeRole !== 'staff') return false;
+    const myProfileId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
+    if (!myProfileId) return !isRealStaffSession;
+    return t.staffProfileId === myProfileId;
+  });
   const myOpenStaffTasks = myStaffTasks.filter((t) => t.status !== 'done');
   const myStaffTaskIds = new Set(myStaffTasks.map((t) => t.id));
 
@@ -7730,12 +7746,16 @@ function AppShell() {
 
         {screen === 'food' && foodTab === 'today' ? (
           <View style={styles.dashWrap}>
+            {/* Tonight leads into the weekly menu / a recipe — only offer it to someone
+                who was actually granted those. Staff with just shopping used to land in
+                the full meal planner through this card. */}
+            {staffCan('menu') || staffCan('recipes') ? (
             <View style={styles.foodTonightCard}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={tonightMeal ? `Tonight, ${tonightMeal.title}` : 'Plan tonight'}
                 style={styles.foodTonightBody}
-                onPress={() => setFoodTab('plan')}
+                onPress={() => setFoodTab(staffCan('menu') ? 'plan' : 'recipes')}
               >
                 <Text style={styles.foodTonightLabel}>TONIGHT · {formatShortDate(todayDateKey)}</Text>
                 <Text style={styles.foodTonightName}>{tonightMeal?.title || 'No dinner planned yet'}</Text>
@@ -7750,12 +7770,17 @@ function AppShell() {
               <Pressable
                 accessibilityRole="button"
                 style={styles.foodTonightBtn}
-                onPress={() => (tonightMeal ? setFoodTab('recipes') : setFoodTab('plan'))}
+                onPress={() =>
+                  tonightMeal && staffCan('recipes') ? setFoodTab('recipes') : setFoodTab(staffCan('menu') ? 'plan' : 'recipes')
+                }
               >
                 <Icon name="meal" color="#ffffff" size={17} />
-                <Text style={styles.foodTonightBtnText}>{tonightMeal ? 'Open recipe' : 'Plan tonight'}</Text>
+                <Text style={styles.foodTonightBtnText}>
+                  {tonightMeal && staffCan('recipes') ? 'Open recipe' : staffCan('menu') ? 'Plan tonight' : 'Recipes'}
+                </Text>
               </Pressable>
             </View>
+            ) : null}
 
             {!isStaffView ? (
             <Pressable
@@ -7890,7 +7915,7 @@ function AppShell() {
           </View>
         ) : null}
 
-        {screen === 'food' && foodTab === 'diary' ? (
+        {screen === 'food' && foodTab === 'diary' && !isStaffView ? (
             <NutritionScreen
               personalProfile={personalProfile}
               nutritionGoal={nutritionGoal}
@@ -7913,7 +7938,7 @@ function AppShell() {
             />
         ) : null}
 
-        {screen === 'family' ? (
+        {screen === 'family' && !isStaffView ? (
           <ChildrenScreen
             children={children}
             onDeleteChild={handleDeleteChildDirect}
@@ -8008,7 +8033,7 @@ function AppShell() {
           />
         ) : null}
 
-        {screen === 'food' && foodTab === 'recipes' ? (
+        {screen === 'food' && foodTab === 'recipes' && staffCan('recipes') ? (
           <RecipesScreen
             recipes={recipes}
             fridgeItems={fridgeItems}
@@ -8018,11 +8043,12 @@ function AppShell() {
             onRecipeCreate={handleRecipeCreate}
             onRecipeUpdate={handleRecipeUpdate}
             onRecipeDelete={handleRecipeDelete}
-            onNutritionEntriesChange={handleNutritionEntriesChange}
+            // Calorie logging is the owner's personal tracker — never offer it to staff.
+            onNutritionEntriesChange={isStaffView ? undefined : handleNutritionEntriesChange}
           />
         ) : null}
 
-        {screen === 'food' && foodTab === 'plan' ? (
+        {screen === 'food' && foodTab === 'plan' && staffCan('menu') ? (
           <MealPlannerScreen
             recipes={recipes}
             weeklyPlan={weeklyMealPlan}
@@ -8069,7 +8095,7 @@ function AppShell() {
           </Pressable>
         ) : null}
 
-        {screen === 'wellness' && habitsEnabled ? (
+        {screen === 'wellness' && habitsEnabled && !isStaffView ? (
           <HabitsScreen
             habits={habits}
             onHabitsChange={setHabits}
@@ -8092,7 +8118,7 @@ function AppShell() {
           <MedicineScreen medicines={medicines} onMedicinesChange={handleMedicinesChange} />
         ) : null}
 
-        {screen === 'food' && foodTab === 'shopping' ? (
+        {screen === 'food' && foodTab === 'shopping' && staffCan('shopping') ? (
           <ShoppingScreen
             lists={shoppingLists}
             selectedListId={selectedShoppingListId}

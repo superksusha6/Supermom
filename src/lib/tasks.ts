@@ -566,6 +566,23 @@ export async function setStaffProfileDob(staffProfileId: string, dob: string): P
   if (error) throw error;
 }
 
+// Push edited role/feature checkboxes to an already-connected staff account.
+// Without this the grants only ever reached the server inside the invite token,
+// so changing them later had no effect on the person's actual access.
+export async function setStaffAccess(
+  staffProfileId: string,
+  roles: StaffRolePreset[],
+  features: StaffFeature[],
+): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('set_staff_access', {
+    p_staff_profile_id: staffProfileId,
+    p_roles: roles,
+    p_features: features,
+  });
+  if (error) throw error;
+}
+
 // Which staff profiles in this family have a real, activated account linked to them.
 // Returns the set of staff_profile_ids that an invited user has actually joined with,
 // so the admin can see "Connected ✓" vs "Not connected yet" on each profile.
