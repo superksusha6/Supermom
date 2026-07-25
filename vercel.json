@@ -1,4 +1,8 @@
 {
   "buildCommand": "npm run build:web",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "functions": {
+    "api/recipe-photo.js": { "maxDuration": 60 },
+    "api/scan-medicine.js": { "maxDuration": 60 }
+  }
 }

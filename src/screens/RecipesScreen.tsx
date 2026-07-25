@@ -440,6 +440,10 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     if (!title || photoLoading) return;
     setPhotoLoading(true);
     setPhotoError('');
+    // Image generation can take 20–40s; give it room but still fail cleanly instead
+    // of spinning forever if the phone's connection drops mid-request.
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), 75000) : null;
     try {
       const onLocalhost =
         typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
@@ -448,18 +452,21 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, mealType: draftMealType }),
+        signal: controller?.signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.image) {
-        setPhotoError(data.error || 'Could not generate the photo right now.');
+        setPhotoError(data.error || 'The photo service is busy — please try again.');
         return;
       }
       const compact = await shrinkDataUrl(data.image);
       setDraftPhotoUri(compact);
       setDraftPhotoCredit(undefined);
-    } catch {
-      setPhotoError('Could not reach the photo service. Please try again.');
+    } catch (err) {
+      const aborted = err instanceof Error && err.name === 'AbortError';
+      setPhotoError(aborted ? 'Took too long — check your connection and try again.' : 'Could not reach the photo service. Please try again.');
     } finally {
+      if (timeout) clearTimeout(timeout);
       setPhotoLoading(false);
     }
   }
