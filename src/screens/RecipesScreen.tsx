@@ -1172,6 +1172,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                       <>
                         <ActivityIndicator color={colors.primary} />
                         <Text style={styles.coverLoadingText}>Creating a photo…</Text>
+                        <Text style={styles.coverLoadingSub}>This usually takes 30–40 seconds. Please keep this screen open.</Text>
                       </>
                     ) : (
                       <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
@@ -1198,7 +1199,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                 <Text style={styles.autoCoverHint}>
                   {!draftTitle.trim()
                     ? 'Add a recipe title first, then generate a photo in the app’s clean, light style.'
-                    : 'The photo is created by AI in the app’s clean, light style to match the other recipes.'}
+                    : 'AI draws a photo in the app’s clean, light style — it takes about 30–40 seconds, so give it a moment.'}
                 </Text>
               </View>
             </View>
@@ -2299,6 +2300,14 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '700',
       color: colors.subtext,
+    },
+    coverLoadingSub: {
+      marginTop: 4,
+      fontSize: 11.5,
+      lineHeight: 15,
+      color: colors.subtext,
+      textAlign: 'center',
+      paddingHorizontal: 18,
     },
     autoCoverHint: {
       fontSize: 12.5,
