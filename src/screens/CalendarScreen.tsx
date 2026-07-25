@@ -1,7 +1,7 @@
 import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native';
-import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, Role, TaskItem } from '@/types/app';
+import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, Role, TaskItem } from '@/types/app';
 import { SectionCard } from '@/components/SectionCard';
 import { cleanNutritionNumber, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
@@ -29,6 +29,7 @@ type Props = {
   desiredWeight: string;
   nutritionPace: NutritionPace;
   calorieOverride: string;
+  physiqueGoal: PhysiqueGoal;
   nutritionEntries: NutritionFoodEntry[];
   onNutritionEntriesChange: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
   children: ChildProfile[];
@@ -115,6 +116,7 @@ export function CalendarScreen({
   desiredWeight,
   nutritionPace,
   calorieOverride,
+  physiqueGoal,
   nutritionEntries,
   onNutritionEntriesChange,
   children,
@@ -344,8 +346,9 @@ export function CalendarScreen({
         desiredWeightKg: desiredWeight,
         pace: nutritionPace,
         calorieOverride,
+        physiqueGoal,
       }),
-    [personalDateOfBirth, personalHeightCm, personalWeightKg, nutritionGoal, activityLevel, nutritionSex, desiredWeight, nutritionPace, calorieOverride],
+    [personalDateOfBirth, personalHeightCm, personalWeightKg, nutritionGoal, activityLevel, nutritionSex, desiredWeight, nutritionPace, calorieOverride, physiqueGoal],
   );
   const activeStaffProfile = useMemo(() => {
     if (!activeOwnerFilter.startsWith('staff:')) return null;

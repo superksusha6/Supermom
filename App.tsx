@@ -2494,6 +2494,7 @@ function AppShell() {
       if (typeof preferences?.desiredWeight === 'string') setDesiredWeight(preferences.desiredWeight);
       if (preferences?.nutritionPace) setNutritionPace(preferences.nutritionPace);
       if (typeof preferences?.calorieOverride === 'string') setCalorieOverride(preferences.calorieOverride);
+      if (preferences?.physiqueGoal) setPhysiqueGoal(preferences.physiqueGoal);
       if (typeof preferences?.periodRemindersEnabled === 'boolean') setPeriodRemindersEnabled(preferences.periodRemindersEnabled);
       if (typeof preferences?.periodReminderLeadDays === 'number' && preferences.periodReminderLeadDays >= 1 && preferences.periodReminderLeadDays <= 3) {
         setPeriodReminderLeadDays(preferences.periodReminderLeadDays);
@@ -2915,6 +2916,7 @@ function AppShell() {
       desiredWeight,
       nutritionPace,
       calorieOverride,
+      physiqueGoal,
       periodRemindersEnabled,
       periodReminderLeadDays,
     }).catch((error) =>
@@ -2932,6 +2934,7 @@ function AppShell() {
     desiredWeight,
     nutritionPace,
     calorieOverride,
+    physiqueGoal,
     periodRemindersEnabled,
     periodReminderLeadDays,
   ]);
@@ -7025,6 +7028,7 @@ function AppShell() {
         onNutritionPaceChange={setNutritionPace}
         calorieOverride={calorieOverride}
         onCalorieOverrideChange={setCalorieOverride}
+        physiqueGoal={physiqueGoal}
         nutritionEntries={nutritionEntries}
         onNutritionEntriesChange={handleNutritionEntriesChange}
         customFoodPresets={customNutritionFoods}
@@ -7600,6 +7604,7 @@ function AppShell() {
               desiredWeight={desiredWeight}
               nutritionPace={nutritionPace}
               calorieOverride={calorieOverride}
+              physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               children={children}
@@ -7937,6 +7942,7 @@ function AppShell() {
               onNutritionPaceChange={setNutritionPace}
               calorieOverride={calorieOverride}
               onCalorieOverrideChange={setCalorieOverride}
+              physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               customFoodPresets={customNutritionFoods}

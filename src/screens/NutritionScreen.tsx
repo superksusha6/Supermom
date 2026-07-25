@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/SectionCard';
 import { buildMacroMessage, cleanNutritionNumber, customNutritionFoodToPreset, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, nutritionPresetToCustomFood, recipeToPreset, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { lookupNutritionBarcode, normalizeNutritionSearchText, searchNutritionCatalog } from '@/lib/nutritionCatalog';
 import { analyzeMealPhoto, estimateMealByText } from '@/lib/mealVision';
-import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, Recipe } from '@/types/app';
+import { ActivityLevel, CustomNutritionFood, NutritionEntrySource, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PersonalProfile, PhysiqueGoal, Recipe } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 type Props = {
@@ -24,6 +24,7 @@ type Props = {
   onNutritionPaceChange: Dispatch<SetStateAction<NutritionPace>>;
   calorieOverride: string;
   onCalorieOverrideChange: Dispatch<SetStateAction<string>>;
+  physiqueGoal: PhysiqueGoal;
   nutritionEntries: NutritionFoodEntry[];
   onNutritionEntriesChange: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
   customFoodPresets: CustomNutritionFood[];
@@ -83,6 +84,7 @@ export function NutritionScreen({
   onNutritionPaceChange,
   calorieOverride,
   onCalorieOverrideChange,
+  physiqueGoal,
   nutritionEntries,
   onNutritionEntriesChange,
   customFoodPresets,
@@ -162,6 +164,7 @@ export function NutritionScreen({
     desiredWeightKg: desiredWeight,
     pace: nutritionPace,
     calorieOverride,
+    physiqueGoal,
   });
 
   const selectedDateEntries = useMemo(() => nutritionEntries.filter((entry) => entry.date === selectedDateKey), [nutritionEntries, selectedDateKey]);

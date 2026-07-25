@@ -2160,6 +2160,7 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
     desired_weight?: string | number | null;
     nutrition_pace?: NutritionPace | null;
     calorie_override?: string | number | null;
+    physique_goal?: PhysiqueGoal | null;
     active_meal_plan_profile?: string | null;
     period_reminders_enabled?: boolean | null;
     period_reminder_lead_days?: number | null;
@@ -2176,6 +2177,7 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
     desiredWeight: record.desired_weight != null ? String(record.desired_weight) : undefined,
     nutritionPace: record.nutrition_pace || undefined,
     calorieOverride: record.calorie_override != null ? String(record.calorie_override) : undefined,
+    physiqueGoal: record.physique_goal || undefined,
     activeMealPlanProfile: record.active_meal_plan_profile || undefined,
     periodRemindersEnabled: typeof record.period_reminders_enabled === 'boolean' ? record.period_reminders_enabled : undefined,
     periodReminderLeadDays:
@@ -2204,15 +2206,23 @@ export async function upsertUserPreferences(
     ...('desiredWeight' in payload ? { desired_weight: payload.desiredWeight || null } : {}),
     ...('nutritionPace' in payload ? { nutrition_pace: payload.nutritionPace || null } : {}),
     ...('calorieOverride' in payload ? { calorie_override: payload.calorieOverride || null } : {}),
+    ...('physiqueGoal' in payload ? { physique_goal: payload.physiqueGoal || null } : {}),
     ...('activeMealPlanProfile' in payload ? { active_meal_plan_profile: payload.activeMealPlanProfile || null } : {}),
     ...('periodRemindersEnabled' in payload ? { period_reminders_enabled: !!payload.periodRemindersEnabled } : {}),
     ...('periodReminderLeadDays' in payload ? { period_reminder_lead_days: payload.periodReminderLeadDays || null } : {}),
   };
 
-  const { error } = await client.from('user_preferences').upsert(
+  let { error } = await client.from('user_preferences').upsert(
     fullPayload,
     { onConflict: 'user_id' },
   );
+
+  // If only the newer physique_goal column is missing, retry WITHOUT it rather than
+  // dropping to the minimal fallback — so all the other preferences still save.
+  if (error && 'physique_goal' in fullPayload && isMissingUserPreferencesColumnError(error)) {
+    const { physique_goal, ...rest } = fullPayload;
+    ({ error } = await client.from('user_preferences').upsert(rest, { onConflict: 'user_id' }));
+  }
 
   if (isMissingUserPreferencesColumnError(error)) {
     const { error: fallbackError } = await client.from('user_preferences').upsert(

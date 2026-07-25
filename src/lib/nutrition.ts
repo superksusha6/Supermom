@@ -431,14 +431,17 @@ export function calcAge(dateOfBirth?: string) {
   return Math.max(0, age);
 }
 
-// Target physique → protein per kg of bodyweight + a small calorie nudge (fraction of maintenance).
-// Default 'toned' keeps the previous behaviour (1.8 g/kg, no nudge).
+// Protein posture → protein per kg of bodyweight. This ONLY changes the macro split
+// (protein; carbs are the remainder) — never calories. Calories are owned entirely by
+// the Goal + target weight + pace, so the two controls can't contradict each other.
+// Only two are offered in the UI now — Balanced (=toned, 1.6 g/kg) and Higher protein
+// (=strong, 1.8 g/kg); the legacy keys map into that safe 1.6–1.8 g/kg band.
 const PHYSIQUE_TUNING: Record<PhysiqueGoal, { proteinPerKg: number; caloriePct: number }> = {
-  lean: { proteinPerKg: 1.6, caloriePct: -0.06 },
-  toned: { proteinPerKg: 1.8, caloriePct: 0 },
-  athletic: { proteinPerKg: 1.9, caloriePct: 0.03 },
-  curvy: { proteinPerKg: 1.5, caloriePct: 0 },
-  strong: { proteinPerKg: 2.1, caloriePct: 0.08 },
+  lean: { proteinPerKg: 1.6, caloriePct: 0 },
+  toned: { proteinPerKg: 1.6, caloriePct: 0 },
+  athletic: { proteinPerKg: 1.8, caloriePct: 0 },
+  curvy: { proteinPerKg: 1.6, caloriePct: 0 },
+  strong: { proteinPerKg: 1.8, caloriePct: 0 },
 };
 
 export function getNutritionPlan({
