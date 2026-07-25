@@ -1,5 +1,5 @@
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
 import { FridgeItem, NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
@@ -337,6 +337,19 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   const [draftPhotoCredit, setDraftPhotoCredit] = useState<{ name: string; url: string; source: string } | undefined>(undefined);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  // The image API gives no real progress, so ease a bar toward ~92% over the typical
+  // ~35s wait; it jumps to 100% the moment the photo actually arrives.
+  const photoProgress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (photoLoading) {
+      photoProgress.setValue(0);
+      Animated.timing(photoProgress, { toValue: 0.92, duration: 35000, useNativeDriver: false }).start();
+    } else {
+      Animated.timing(photoProgress, { toValue: 1, duration: 250, useNativeDriver: false }).start(() => {
+        photoProgress.setValue(0);
+      });
+    }
+  }, [photoLoading, photoProgress]);
   const [draftMealType, setDraftMealType] = useState<RecipeMealType>('breakfast');
   const [draftCookTime, setDraftCookTime] = useState('');
   const [draftServings, setDraftServings] = useState('');
@@ -1172,6 +1185,14 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                       <>
                         <ActivityIndicator color={colors.primary} />
                         <Text style={styles.coverLoadingText}>Creating a photo…</Text>
+                        <View style={styles.photoProgressTrack}>
+                          <Animated.View
+                            style={[
+                              styles.photoProgressFill,
+                              { width: photoProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+                            ]}
+                          />
+                        </View>
                         <Text style={styles.coverLoadingSub}>This usually takes 30–40 seconds. Please keep this screen open.</Text>
                       </>
                     ) : (
@@ -2302,12 +2323,25 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.subtext,
     },
     coverLoadingSub: {
-      marginTop: 4,
+      marginTop: 6,
       fontSize: 11.5,
       lineHeight: 15,
       color: colors.subtext,
       textAlign: 'center',
       paddingHorizontal: 18,
+    },
+    photoProgressTrack: {
+      marginTop: 10,
+      width: '68%',
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      overflow: 'hidden',
+    },
+    photoProgressFill: {
+      height: '100%',
+      borderRadius: 3,
+      backgroundColor: colors.primary,
     },
     autoCoverHint: {
       fontSize: 12.5,
