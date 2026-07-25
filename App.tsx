@@ -1606,7 +1606,7 @@ function AppShell() {
     )));
   }, [shoppingLists]);
 
-  const parentDisplayName = personalProfile.nickname?.trim() || personalProfile.fullName?.trim() || parentLabel;
+  const parentDisplayName = personalProfile.fullName?.trim() || parentLabel;
   const birthdayEvents = useMemo(
     () =>
       buildBirthdayEvents({

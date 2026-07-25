@@ -343,14 +343,6 @@ export function SettingsScreen({
           onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, fullName: text }))}
         />
 
-        <Text style={styles.label}>Nickname</Text>
-        <TextInput
-          placeholder="Nickname"
-          style={styles.input}
-          value={personalProfile.nickname || ''}
-          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, nickname: text }))}
-        />
-
         <Text style={styles.label}>Date of Birth</Text>
         <TextInput
           placeholder="DD.MM.YYYY"
