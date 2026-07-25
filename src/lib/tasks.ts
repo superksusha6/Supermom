@@ -2313,14 +2313,16 @@ export async function listHabitEntries(session: AppSession): Promise<HabitEntry[
   }));
 }
 
+const HABITS_TABLE_MISSING_MSG =
+  'Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.';
+
 export async function replaceHabitEntries(session: AppSession, habits: HabitEntry[]) {
   const client = requireClient();
-  const { error: deleteError } = await client.from('habit_entries').delete().eq('user_id', session.userId);
-  if (isMissingHabitEntriesTableError(deleteError)) {
-    throw new Error('Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
-  }
-  if (deleteError) throw deleteError;
+  // Never wipe: an empty set here is a transient/reset state, not a deliberate
+  // "delete every habit" — and this function used to delete-all-then-reinsert on
+  // EVERY change (even ticking a box), so an interrupted save emptied the server.
   if (habits.length === 0) return;
+
   const baseRows = habits.map((habit) => ({
     id: habit.id,
     user_id: session.userId,
@@ -2342,15 +2344,28 @@ export async function replaceHabitEntries(session: AppSession, habits: HabitEntr
     ...row,
     completed_date: habits[index].completedDate || null,
   }));
+
+  // 1) Upsert the current habits FIRST. If anything interrupts us after this, the
+  //    latest data is already saved — the worst case is a stale row lingering.
   let { error } = await client.from('habit_entries').upsert(withDateRows, { onConflict: 'id' });
   if (isMissingHabitCompletedDateError(error)) {
-    // Column not migrated yet — save everything else rather than failing the write.
     ({ error } = await client.from('habit_entries').upsert(baseRows, { onConflict: 'id' }));
   }
-  if (isMissingHabitEntriesTableError(error)) {
-    throw new Error('Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
-  }
+  if (isMissingHabitEntriesTableError(error)) throw new Error(HABITS_TABLE_MISSING_MSG);
   if (error) throw error;
+
+  // 2) Then remove only the rows the user actually deleted. Best-effort: if this
+  //    read/delete fails, the save above still stands.
+  const keepIds = new Set(habits.map((h) => h.id));
+  const { data: existing, error: readError } = await client
+    .from('habit_entries')
+    .select('id')
+    .eq('user_id', session.userId);
+  if (readError) return;
+  const removeIds = (existing ?? []).map((row) => String(row.id)).filter((id) => !keepIds.has(id));
+  if (removeIds.length > 0) {
+    await client.from('habit_entries').delete().in('id', removeIds);
+  }
 }
 
 export async function listNutritionEntries(session: AppSession): Promise<NutritionFoodEntry[]> {

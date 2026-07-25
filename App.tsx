@@ -2558,22 +2558,29 @@ function AppShell() {
       refreshUserPreferences(ctx),
       listHabitEntries(ctx)
         .then(async (liveHabits) => {
+          // Server wins when it has data: a fresh browser (e.g. the 2nd test URL) seeds
+          // local defaults, and letting those merge in either polluted the real list or
+          // — on a delete-others save — wiped the server. Only fall back to local when
+          // the server genuinely has nothing yet, then push it up.
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
-          const mergedHabits = normalizeHabitsForToday(mergeHabitsPreferLocal(liveHabits, localHabits));
+          const mergedHabits =
+            liveHabits.length > 0 ? normalizeHabitsForToday(liveHabits) : normalizeHabitsForToday(localHabits);
           latestHabitsRef.current = mergedHabits;
           setHabits(mergedHabits);
           habitsLoadedRef.current = true;
-          if (!areHabitsEqual(mergedHabits, liveHabits)) {
+          if (liveHabits.length === 0 && mergedHabits.length > 0) {
             await replaceHabitEntries(ctx, mergedHabits).catch((error) => {
               setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
             });
           }
         })
         .catch((error) => {
+          // Show local habits, but do NOT mark loaded: if the server read failed we
+          // must never let the save effect run, or it would overwrite the (unread)
+          // server habits with this device's local copy and delete the rest.
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
           latestHabitsRef.current = localHabits;
           setHabits(localHabits);
-          habitsLoadedRef.current = true;
           setTasksError(error instanceof Error ? error.message : 'Could not load habits.');
         }),
       listNutritionEntries(ctx).then((entries) => {
