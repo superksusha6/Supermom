@@ -10614,14 +10614,19 @@ function mergeChildrenPreferLocal(serverChildren: ChildProfile[], localChildren:
   if (serverChildren.length === 0) return localChildren;
   if (localChildren.length === 0) return serverChildren;
 
-  const merged = new Map<string, ChildProfile>();
-  serverChildren.forEach((child) => {
-    merged.set(child.id, child);
+  const localById = new Map(localChildren.map((c) => [c.id, c]));
+  const serverIds = new Set(serverChildren.map((c) => c.id));
+  // Start from the server rows (source of truth) and overlay local-only fields such as
+  // per-weekday activity times, but ALWAYS keep the server photo when it has one — a
+  // photoless local copy from another browser/device must never wipe a saved photo.
+  const mergedServer = serverChildren.map((s) => {
+    const l = localById.get(s.id);
+    if (!l) return s;
+    return { ...l, photoUri: s.photoUri || l.photoUri };
   });
-  localChildren.forEach((child) => {
-    merged.set(child.id, child);
-  });
-  return [...merged.values()];
+  // Children created locally but not yet persisted (their id still starts with 'child-').
+  const localOnly = localChildren.filter((c) => !serverIds.has(c.id));
+  return [...mergedServer, ...localOnly];
 }
 
 function loadHabitsSeeded(): boolean {

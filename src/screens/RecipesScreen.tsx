@@ -413,7 +413,10 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   }
 
   function addDraftIngredientRow() {
-    setDraftIngredientRows((prev) => [createDraftIngredientRow(), ...prev]);
+    // Append at the END so filled-in ingredients keep their order and the new empty
+    // row appears below — previously new rows were pushed to the top, shoving the
+    // ones you'd already filled downward.
+    setDraftIngredientRows((prev) => [...prev, createDraftIngredientRow()]);
   }
 
   function removeDraftIngredientRow(rowId: string) {
@@ -1286,31 +1289,23 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                         onFocus={() => updateDraftIngredientRow(row.id, (current) => (current.grams === '0' ? { ...current, grams: '' } : current))}
                         onChangeText={(text) => updateDraftIngredientRow(row.id, (current) => ({ ...current, grams: cleanNutritionNumber(text) }))}
                       />
-                      <Pressable
-                        style={[styles.unitSelectBox, isMobile && styles.unitSelectBoxMobile]}
-                        onPress={() => setUnitPickerOpenFor((current) => (current === row.id ? null : row.id))}
-                      >
-                        <Text style={styles.unitSelectText}>{INGREDIENT_UNITS.find((unit) => unit.key === row.unit)?.label || row.unit}</Text>
-                        {unitPickerOpenFor === row.id ? (
-                          <View style={styles.unitFloatingMenu}>
-                            {INGREDIENT_UNITS.map((unit) => {
-                              const active = row.unit === unit.key;
-                              return (
-                                <Pressable
-                                  key={`${row.id}-${unit.key}`}
-                                  style={[styles.unitFloatingItem, active && styles.unitFloatingItemActive]}
-                                  onPress={() => {
-                                    updateDraftIngredientRow(row.id, (current) => ({ ...current, unit: unit.key }));
-                                    setUnitPickerOpenFor(null);
-                                  }}
-                                >
-                                  <Text style={[styles.unitFloatingItemText, active && styles.unitFloatingItemTextActive]}>{unit.label}</Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        ) : null}
-                      </Pressable>
+                    </View>
+
+                    {/* Units as an always-visible chip row — no floating dropdown that
+                        overlapped the nutrition card on phones. */}
+                    <View style={styles.unitChipsRow}>
+                      {INGREDIENT_UNITS.map((unit) => {
+                        const active = row.unit === unit.key;
+                        return (
+                          <Pressable
+                            key={`${row.id}-${unit.key}`}
+                            style={[styles.unitChip, active && styles.unitChipActive]}
+                            onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, unit: unit.key }))}
+                          >
+                            <Text style={[styles.unitChipText, active && styles.unitChipTextActive]}>{unit.label}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
 
                     {suggestions.length > 0 ? (
@@ -2547,6 +2542,33 @@ const createStyles = (colors: ThemeColors) =>
     ingredientBuilderCardOpen: {
       zIndex: 100,
       elevation: 30,
+    },
+    unitChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 2,
+      marginBottom: 10,
+    },
+    unitChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      backgroundColor: 'rgba(255,255,255,0.72)',
+    },
+    unitChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    unitChipText: {
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: colors.subtext,
+    },
+    unitChipTextActive: {
+      color: '#ffffff',
     },
     productSuggestionMenu: {
       borderWidth: 1,
