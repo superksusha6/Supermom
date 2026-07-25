@@ -704,8 +704,11 @@ export function ShoppingScreen({
       ),
     [activeList?.id, nonBaseLists],
   );
-  const needsBasketOnboarding = !baseList;
-  const canStartFromBasket = !!baseList && !activeList;
+  // Staff (nanny) get a stripped shopping screen: just the live list(s) to add to and
+  // check off — no "usual basket" setup and no Inventory tab (those are the owner's job).
+  const isStaffShopper = currentRole === 'staff';
+  const needsBasketOnboarding = !baseList && !isStaffShopper;
+  const canStartFromBasket = !!baseList && !activeList && !isStaffShopper;
   const fridgeActionLabel = currentRole === 'staff' ? 'Send request' : 'Add to list';
   const recipeCatalog = useReactMemo(
     () => [...recipes, ...STARTER_RECIPE_LIBRARY.filter((recipe) => !recipes.some((saved) => saved.id === recipe.id))],
@@ -1476,6 +1479,7 @@ export function ShoppingScreen({
       ) : null}
 
       <View style={[styles.shoppingListSection, isMobile && styles.shoppingListSectionMobile]}>
+        {isStaffShopper ? null : (
         <View style={styles.shoppingTopTabs}>
           <Pressable
             style={[styles.shoppingTopTab, shoppingView === 'list' && styles.shoppingTopTabActive]}
@@ -1490,8 +1494,9 @@ export function ShoppingScreen({
             <Text style={[styles.shoppingTopTabText, shoppingView === 'fridge' && styles.shoppingTopTabTextActive]}>Inventory</Text>
           </Pressable>
         </View>
+        )}
 
-        {shoppingView === 'list' ? (
+        {shoppingView === 'list' || isStaffShopper ? (
         <>
         {moreOpen || shareOpen ? (
           <Pressable
@@ -1546,14 +1551,10 @@ export function ShoppingScreen({
                     : `${purchasedShoppingItemsCount} purchased`}
             </Text>
           </View>
-          {needsBasketOnboarding || canStartFromBasket ? (
-            <Pressable
-              style={styles.shoppingPrimaryBtn}
-              onPress={needsBasketOnboarding ? () => openAddComposer('basket') : onStartFromBaseList}
-            >
-              <Text style={styles.shoppingPrimaryBtnText}>
-                {needsBasketOnboarding ? 'Create basket' : 'Use basket'}
-              </Text>
+          {/* Onboarding gets its single CTA from the card below — don't duplicate it here. */}
+          {canStartFromBasket ? (
+            <Pressable style={styles.shoppingPrimaryBtn} onPress={onStartFromBaseList}>
+              <Text style={styles.shoppingPrimaryBtnText}>Use basket</Text>
             </Pressable>
           ) : null}
         </View>
