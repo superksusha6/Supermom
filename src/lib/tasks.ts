@@ -136,6 +136,14 @@ export type UserPreferencesRecord = {
   activeMealPlanProfile?: string;
   periodRemindersEnabled?: boolean;
   periodReminderLeadDays?: number;
+  medsEnabled?: boolean;
+  habitsEnabled?: boolean;
+  habitRemindersEnabled?: boolean;
+  quietHoursEnabled?: boolean;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  eventRemindersEnabled?: boolean;
+  eventReminderLead?: string;
 };
 
 export type MealPlanProfileRecord = {
@@ -2187,10 +2195,28 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
     active_meal_plan_profile?: string | null;
     period_reminders_enabled?: boolean | null;
     period_reminder_lead_days?: number | null;
+    meds_enabled?: boolean | null;
+    habits_enabled?: boolean | null;
+    habit_reminders_enabled?: boolean | null;
+    quiet_hours_enabled?: boolean | null;
+    quiet_hours_start?: string | null;
+    quiet_hours_end?: string | null;
+    event_reminders_enabled?: boolean | null;
+    event_reminder_lead?: string | null;
   };
+
+  const boolOrUndef = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
 
   return {
     parentLabel: record.parent_label,
+    medsEnabled: boolOrUndef(record.meds_enabled),
+    habitsEnabled: boolOrUndef(record.habits_enabled),
+    habitRemindersEnabled: boolOrUndef(record.habit_reminders_enabled),
+    quietHoursEnabled: boolOrUndef(record.quiet_hours_enabled),
+    quietHoursStart: record.quiet_hours_start || undefined,
+    quietHoursEnd: record.quiet_hours_end || undefined,
+    eventRemindersEnabled: boolOrUndef(record.event_reminders_enabled),
+    eventReminderLead: record.event_reminder_lead || undefined,
     themeName: record.theme_name || undefined,
     dailyCardDate: record.daily_card_date || undefined,
     dailyCardId: record.daily_card_id || undefined,
@@ -2233,6 +2259,14 @@ export async function upsertUserPreferences(
     ...('activeMealPlanProfile' in payload ? { active_meal_plan_profile: payload.activeMealPlanProfile || null } : {}),
     ...('periodRemindersEnabled' in payload ? { period_reminders_enabled: !!payload.periodRemindersEnabled } : {}),
     ...('periodReminderLeadDays' in payload ? { period_reminder_lead_days: payload.periodReminderLeadDays || null } : {}),
+    ...('medsEnabled' in payload ? { meds_enabled: !!payload.medsEnabled } : {}),
+    ...('habitsEnabled' in payload ? { habits_enabled: !!payload.habitsEnabled } : {}),
+    ...('habitRemindersEnabled' in payload ? { habit_reminders_enabled: !!payload.habitRemindersEnabled } : {}),
+    ...('quietHoursEnabled' in payload ? { quiet_hours_enabled: !!payload.quietHoursEnabled } : {}),
+    ...('quietHoursStart' in payload ? { quiet_hours_start: payload.quietHoursStart || null } : {}),
+    ...('quietHoursEnd' in payload ? { quiet_hours_end: payload.quietHoursEnd || null } : {}),
+    ...('eventRemindersEnabled' in payload ? { event_reminders_enabled: !!payload.eventRemindersEnabled } : {}),
+    ...('eventReminderLead' in payload ? { event_reminder_lead: payload.eventReminderLead || null } : {}),
   };
 
   let { error } = await client.from('user_preferences').upsert(
@@ -2240,10 +2274,24 @@ export async function upsertUserPreferences(
     { onConflict: 'user_id' },
   );
 
-  // If only the newer physique_goal column is missing, retry WITHOUT it rather than
-  // dropping to the minimal fallback — so all the other preferences still save.
-  if (error && 'physique_goal' in fullPayload && isMissingUserPreferencesColumnError(error)) {
-    const { physique_goal, ...rest } = fullPayload;
+  // If a NEWER optional column isn't migrated yet, retry WITHOUT those columns rather
+  // than dropping to the minimal fallback — so all the established preferences still save.
+  if (error && isMissingUserPreferencesColumnError(error)) {
+    const OPTIONAL_NEW_COLS = [
+      'physique_goal',
+      'meds_enabled',
+      'habits_enabled',
+      'habit_reminders_enabled',
+      'quiet_hours_enabled',
+      'quiet_hours_start',
+      'quiet_hours_end',
+      'event_reminders_enabled',
+      'event_reminder_lead',
+    ];
+    const rest: Record<string, unknown> = {};
+    Object.entries(fullPayload).forEach(([k, v]) => {
+      if (!OPTIONAL_NEW_COLS.includes(k)) rest[k] = v;
+    });
     ({ error } = await client.from('user_preferences').upsert(rest, { onConflict: 'user_id' }));
   }
 
@@ -2348,6 +2396,14 @@ export async function listHabitEntries(session: AppSession): Promise<HabitEntry[
 
 const HABITS_TABLE_MISSING_MSG =
   'Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.';
+
+// Delete one habit by id. replaceHabitEntries never wipes to empty (transient-empty
+// guard), so deleting the LAST habit needs an explicit per-id delete to reach the server.
+export async function deleteHabitEntry(session: AppSession, id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from('habit_entries').delete().eq('user_id', session.userId).eq('id', id);
+  if (error && !isMissingHabitEntriesTableError(error)) throw error;
+}
 
 export async function replaceHabitEntries(session: AppSession, habits: HabitEntry[]) {
   const client = requireClient();

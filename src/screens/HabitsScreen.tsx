@@ -63,6 +63,7 @@ function HabitMedal({ tier, size = 24 }: { tier: 'week' | 'month'; size?: number
 type Props = {
   habits: HabitEntry[];
   onHabitsChange: Dispatch<SetStateAction<HabitEntry[]>>;
+  onDeleteHabit?: (id: string) => void;
   challenges: HabitChallenge[];
   habitRemindersEnabled: boolean;
   quickActionRequest?: { type: 'create-habit'; token: number } | null;
@@ -140,7 +141,7 @@ const HABIT_SMART_REMINDER_TIMES: Record<string, string> = {
   '❤️': '20:30',
 };
 
-export function HabitsScreen({ habits, onHabitsChange, challenges, habitRemindersEnabled, quickActionRequest }: Props) {
+export function HabitsScreen({ habits, onHabitsChange, onDeleteHabit, challenges, habitRemindersEnabled, quickActionRequest }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const activeHabits = habits.filter((item) => item.enabled);
@@ -456,6 +457,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                 disabled={creatingHabit}
                 onPress={() => {
                   if (creatingHabit) return;
+                  if (editingHabitId) onDeleteHabit?.(editingHabitId);
                   onHabitsChange((prev) => prev.filter((item) => item.id !== editingHabitId));
                   setEditingHabitId(null);
                 }}

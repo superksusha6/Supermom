@@ -74,6 +74,7 @@ import {
   replaceHomeProviders,
   replaceFridgeItems,
   replaceHabitEntries,
+  deleteHabitEntry,
   replaceNutritionEntries,
   replaceGeneratedStaffSchedule,
   sendPasswordResetEmail,
@@ -115,7 +116,6 @@ import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon, IconName } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
-import { MiniCalendar } from '@/components/MiniCalendar';
 import { WeekStrip } from '@/components/WeekStrip';
 import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
@@ -2538,6 +2538,15 @@ function AppShell() {
       if (typeof preferences?.periodReminderLeadDays === 'number' && preferences.periodReminderLeadDays >= 1 && preferences.periodReminderLeadDays <= 3) {
         setPeriodReminderLeadDays(preferences.periodReminderLeadDays);
       }
+      // Notification + module preferences — now server-synced so they survive a new device.
+      if (typeof preferences?.medsEnabled === 'boolean') setMedsEnabled(preferences.medsEnabled);
+      if (typeof preferences?.habitsEnabled === 'boolean') setHabitsEnabled(preferences.habitsEnabled);
+      if (typeof preferences?.habitRemindersEnabled === 'boolean') setHabitRemindersEnabled(preferences.habitRemindersEnabled);
+      if (typeof preferences?.quietHoursEnabled === 'boolean') setQuietHoursEnabled(preferences.quietHoursEnabled);
+      if (preferences?.quietHoursStart) setQuietHoursStart(preferences.quietHoursStart);
+      if (preferences?.quietHoursEnd) setQuietHoursEnd(preferences.quietHoursEnd);
+      if (typeof preferences?.eventRemindersEnabled === 'boolean') setEventRemindersEnabled(preferences.eventRemindersEnabled);
+      if (preferences?.eventReminderLead) setEventReminderLead(preferences.eventReminderLead);
       const nextActiveMealPlanProfile = preferences?.activeMealPlanProfile || 'family';
       if (nextActiveMealPlanProfile) {
         activeMealPlanProfileKeyRef.current = nextActiveMealPlanProfile;
@@ -2958,6 +2967,14 @@ function AppShell() {
       physiqueGoal,
       periodRemindersEnabled,
       periodReminderLeadDays,
+      medsEnabled,
+      habitsEnabled,
+      habitRemindersEnabled,
+      quietHoursEnabled,
+      quietHoursStart,
+      quietHoursEnd,
+      eventRemindersEnabled,
+      eventReminderLead,
     }).catch((error) =>
       setTasksError(error instanceof Error ? error.message : 'Could not save preferences.'),
     );
@@ -2976,6 +2993,14 @@ function AppShell() {
     physiqueGoal,
     periodRemindersEnabled,
     periodReminderLeadDays,
+    medsEnabled,
+    habitsEnabled,
+    habitRemindersEnabled,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
+    eventRemindersEnabled,
+    eventReminderLead,
   ]);
 
   useEffect(() => {
@@ -6125,10 +6150,18 @@ function AppShell() {
       <View style={styles.staffHubBody}>
         <Text style={styles.tasksHubTitle}>Staff tasks</Text>
         <View style={styles.staffHubGrow} />
-        {staffNewCount > 0 ? (
-          <View style={[styles.staffHubPill, overdueCount > 0 && styles.staffHubPillAlert]}>
-            <Text style={styles.staffHubPillNum}>{staffNewCount}</Text>
-            <Text style={styles.staffHubPillLbl}>{overdueCount > 0 ? 'late' : 'new'}</Text>
+        {/* Distinct, accurate labels: red "late" for overdue, blue "new" for
+            unreviewed completions — no more calling a mix of both "late". */}
+        {overdueCount > 0 ? (
+          <View style={[styles.staffHubPill, styles.staffHubPillAlert]}>
+            <Text style={styles.staffHubPillNum}>{overdueCount}</Text>
+            <Text style={styles.staffHubPillLbl}>late</Text>
+          </View>
+        ) : null}
+        {staffUnreadDone > 0 ? (
+          <View style={[styles.staffHubPill, overdueCount > 0 && { marginLeft: 6 }]}>
+            <Text style={styles.staffHubPillNum}>{staffUnreadDone}</Text>
+            <Text style={styles.staffHubPillLbl}>new</Text>
           </View>
         ) : null}
         {staffWaitingCount > 0 ? (
@@ -6140,7 +6173,6 @@ function AppShell() {
       <Icon name="chevron" color={colors.subtext} size={16} />
     </Pressable>
   ) : null;
-  const focusStaffUpdates = null;
 
   // This person's own tasks. Hide ANOTHER named staff member's tasks, but never hide a
   // task just because we can't resolve the profile — that regressed to "nothing shows".
@@ -6528,7 +6560,6 @@ function AppShell() {
       {focusCalories}
       {focusHabits}
       {focusTasks}
-      {focusStaffUpdates}
       {focusNeeds}
       {focusMiniCal}
     </View>
@@ -6546,7 +6577,6 @@ function AppShell() {
         {focusCalories}
         {focusHabits}
         {focusTasks}
-        {focusStaffUpdates}
       </View>
       <View style={styles.dashRail}>
         {focusMiniCal}
@@ -8272,6 +8302,9 @@ function AppShell() {
           <HabitsScreen
             habits={habits}
             onHabitsChange={setHabits}
+            onDeleteHabit={(id) => {
+              if (session && isSupabaseConfigured) deleteHabitEntry(session, id).catch(() => {});
+            }}
             challenges={habitChallenges}
             habitRemindersEnabled={habitRemindersEnabled}
             quickActionRequest={dashboardWellnessQuickAction}
