@@ -234,16 +234,14 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                 style={[styles.boardCard, habit.completedToday && styles.boardCardDone]}
                 onPress={() =>
                   onHabitsChange((prev) =>
-                    prev.map((item) =>
-                      item.id === habit.id
-                        ? {
-                            ...item,
-                            completedToday: !item.completedToday,
-                            completedDate: !item.completedToday ? habitTodayKey() : undefined,
-                            streak: nextHabitStreak(item, !item.completedToday),
-                          }
-                        : item,
-                    ),
+                    prev.map((item) => {
+                      if (item.id !== habit.id) return item;
+                      const nextStreak = nextHabitStreak(item, !item.completedToday);
+                      // Keep completedDate at yesterday on un-tick so re-ticking continues
+                      // the streak instead of resetting it to 1.
+                      const nextDate = !item.completedToday ? habitTodayKey() : nextStreak > 0 ? habitDayKey(-1) : undefined;
+                      return { ...item, completedToday: !item.completedToday, completedDate: nextDate, streak: nextStreak };
+                    }),
                   )
                 }
               >

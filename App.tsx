@@ -1406,6 +1406,11 @@ function AppShell() {
       refreshLiveShopping(current);
       refreshLiveCalendar(current);
       refreshLiveMedicines(current);
+      // Not in the realtime channel — keep their snapshots fresh so the delete-not-in-
+      // snapshot save paths can't clobber another device's additions.
+      refreshLiveChores(current);
+      refreshLiveHomeFixit(current);
+      refreshLiveWeeklyMealPlan(current);
     };
 
     (async () => {
@@ -2231,6 +2236,33 @@ function AppShell() {
     }
   }
 
+  // These tables aren't in the realtime channel and their save path deletes rows not in
+  // the local snapshot; keep the snapshot fresh (poll) so a stale copy can't delete what
+  // another device just added. Only refresh once the initial load actually succeeded.
+  async function refreshLiveChores(current: AppSession | null = session) {
+    if (!current || !choresLoadedRef.current) return;
+    try {
+      const rows = await listChores(current);
+      choresRef.current = rows;
+      setChores(rows);
+    } catch {
+      // keep current
+    }
+  }
+
+  async function refreshLiveHomeFixit(current: AppSession | null = session) {
+    if (!current || !homeFixitLoadedRef.current) return;
+    try {
+      const [issues, provs] = await Promise.all([listHomeIssues(current), listHomeProviders(current)]);
+      homeIssuesRef.current = issues;
+      homeProvidersRef.current = provs;
+      setHomeIssues(issues);
+      setHomeProviders(provs);
+    } catch {
+      // keep current
+    }
+  }
+
   async function refreshMyPersonalProfile(current: AppSession | null = session) {
     if (!current) return;
     try {
@@ -2501,7 +2533,7 @@ function AppShell() {
       if (typeof preferences?.desiredWeight === 'string') setDesiredWeight(preferences.desiredWeight);
       if (preferences?.nutritionPace) setNutritionPace(preferences.nutritionPace);
       if (typeof preferences?.calorieOverride === 'string') setCalorieOverride(preferences.calorieOverride);
-      if (preferences?.physiqueGoal) setPhysiqueGoal(preferences.physiqueGoal);
+      if (preferences?.physiqueGoal) setPhysiqueGoal(normalizePhysiqueGoal(preferences.physiqueGoal));
       if (typeof preferences?.periodRemindersEnabled === 'boolean') setPeriodRemindersEnabled(preferences.periodRemindersEnabled);
       if (typeof preferences?.periodReminderLeadDays === 'number' && preferences.periodReminderLeadDays >= 1 && preferences.periodReminderLeadDays <= 3) {
         setPeriodReminderLeadDays(preferences.periodReminderLeadDays);
@@ -4575,8 +4607,15 @@ function AppShell() {
         await Promise.all([refreshLiveStaffProfiles(), refreshLiveTasks(), refreshLiveCalendar()]);
         setStaffGrants((prev) => ({ ...prev, [staffId]: staffGrant }));
         // Push the grants to the person's actual account too. Harmless (and a no-op)
-        // if they haven't accepted their invite yet.
-        await setStaffAccess(staffId, staffGrant.roles, staffGrant.features).catch(() => {});
+        // if they haven't accepted their invite yet. Surface a failure — a silently
+        // dropped access change means a revoked feature isn't actually revoked.
+        await setStaffAccess(staffId, staffGrant.roles, staffGrant.features).catch((error) => {
+          setTasksError(
+            error instanceof Error && /set_staff_access/.test(error.message)
+              ? 'Access saved on this device, but the server update needs the staff_access_update migration.'
+              : 'Could not update the staff member’s access on their account. Please try again.',
+          );
+        });
         setStaffEnabled(true);
         // Stay in the admin (parent) view after saving — don't drop into the staff's preview.
         setStaffDraftName('');
@@ -5377,6 +5416,14 @@ function AppShell() {
 
   async function handleSaveCycleEntry(entry: CycleDayEntry) {
     if (!entry.date) return;
+    // Saving replaces the whole cycle history (delete-all-then-insert on the server),
+    // so refuse to write before the server profile has loaded — otherwise the first
+    // tap on a fresh device wipes the real history.
+    if (session && isSupabaseConfigured && !personalProfileLoadedRef.current) {
+      setPersonalProfileStatus(null);
+      setPersonalProfileError('Still loading your profile — try again in a moment.');
+      return;
+    }
 
     const nextEntries = [
       ...(personalProfile.cycleEntries || []).filter((item) => item.date !== entry.date),
@@ -6342,7 +6389,13 @@ function AppShell() {
     setHabits((prev) =>
       prev.map((h) =>
         h.id === id
-          ? { ...h, completedToday: !h.completedToday, completedDate: !h.completedToday ? getTodayKey() : undefined, streak: nextHabitStreak(h, !h.completedToday) }
+          ? (() => {
+              const nextStreak = nextHabitStreak(h, !h.completedToday);
+              // On un-tick, keep completedDate at yesterday when a streak remains, so
+              // re-ticking continues it instead of resetting to 1.
+              const nextDate = !h.completedToday ? getTodayKey() : nextStreak > 0 ? getYesterdayKey() : undefined;
+              return { ...h, completedToday: !h.completedToday, completedDate: nextDate, streak: nextStreak };
+            })()
           : h,
       ),
     );
@@ -10616,16 +10669,17 @@ function mergeChildrenPreferLocal(serverChildren: ChildProfile[], localChildren:
 
   const localById = new Map(localChildren.map((c) => [c.id, c]));
   const serverIds = new Set(serverChildren.map((c) => c.id));
-  // Start from the server rows (source of truth) and overlay local-only fields such as
-  // per-weekday activity times, but ALWAYS keep the server photo when it has one — a
-  // photoless local copy from another browser/device must never wipe a saved photo.
+  // Keep the local copy as the base (it may hold local-only activity per-day times),
+  // but ALWAYS take the server photo when it has one — a photoless local copy from
+  // another browser/device must never wipe a saved photo.
   const mergedServer = serverChildren.map((s) => {
     const l = localById.get(s.id);
     if (!l) return s;
     return { ...l, photoUri: s.photoUri || l.photoUri };
   });
-  // Children created locally but not yet persisted (their id still starts with 'child-').
-  const localOnly = localChildren.filter((c) => !serverIds.has(c.id));
+  // Keep ONLY genuinely-unsynced local rows (temp 'child-' ids). A real id missing from
+  // the server means it was deleted elsewhere — do not resurrect it.
+  const localOnly = localChildren.filter((c) => !serverIds.has(c.id) && c.id.startsWith('child-'));
   return [...mergedServer, ...localOnly];
 }
 
@@ -10864,13 +10918,17 @@ function loadLocalHabitsEnabled(): boolean {
   }
 }
 
+// The picker now offers only Balanced (toned) and Higher protein (strong). Collapse the
+// legacy 5 values so the shown label always matches the computed protein: the two
+// higher-protein ones → strong, the rest → toned.
+function normalizePhysiqueGoal(value: unknown): PhysiqueGoal {
+  return value === 'strong' || value === 'athletic' ? 'strong' : 'toned';
+}
+
 function loadLocalPhysiqueGoal(): PhysiqueGoal {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return 'toned';
   try {
-    const value = globalThis.localStorage.getItem(LOCAL_PHYSIQUE_GOAL_KEY);
-    return (['lean', 'toned', 'athletic', 'curvy', 'strong'] as PhysiqueGoal[]).includes(value as PhysiqueGoal)
-      ? (value as PhysiqueGoal)
-      : 'toned';
+    return normalizePhysiqueGoal(globalThis.localStorage.getItem(LOCAL_PHYSIQUE_GOAL_KEY));
   } catch {
     return 'toned';
   }
