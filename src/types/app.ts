@@ -198,6 +198,7 @@ export type TaskItem = {
   deadline: string;
   needsParentApproval: boolean;
   createdAt?: string; // ISO — when the task was sent/assigned
+  notes?: string; // optional instructions/details for the assignee
 };
 
 export type ApprovalRequest = {

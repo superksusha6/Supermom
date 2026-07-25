@@ -985,6 +985,13 @@ function AppShell() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskPriority, setEditTaskPriority] = useState<TaskPriority>('non_urgent');
+  // Per-task detail sheet (title + priority + free-text instructions/notes).
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [taskDetailId, setTaskDetailId] = useState<string | null>(null); // null = creating
+  const [taskDetailTitle, setTaskDetailTitle] = useState('');
+  const [taskDetailPriority, setTaskDetailPriority] = useState<TaskPriority>('non_urgent');
+  const [taskDetailNotes, setTaskDetailNotes] = useState('');
+  const [taskDetailBusy, setTaskDetailBusy] = useState(false);
   const [completedTaskNotifications, setCompletedTaskNotifications] = useState<CompletedTaskNotification[]>([]);
   // Staff task completion sheet: attach a photo of the result + an optional note.
   const [completeTask, setCompleteTask] = useState<TaskItem | null>(null);
@@ -4717,6 +4724,68 @@ function AppShell() {
     setEditTaskPriority(task.priority);
   }
 
+  // Open the detail sheet for an existing task (edit) or a brand-new one (create).
+  function openTaskDetail(task: TaskItem | null) {
+    setTaskDetailId(task ? task.id : null);
+    setTaskDetailTitle(task ? task.title : newStaffTaskTitle.trim());
+    setTaskDetailPriority(task ? task.priority : newStaffTaskPriority);
+    setTaskDetailNotes(task ? task.notes || '' : '');
+    setTaskDetailBusy(false);
+    setTaskDetailOpen(true);
+  }
+
+  async function saveTaskDetail() {
+    const title = taskDetailTitle.trim();
+    const staff = staffProfiles.find((p) => p.id === tasksManagerStaffId);
+    if (!title || taskDetailBusy) return;
+    const notes = taskDetailNotes.trim();
+    setTaskDetailBusy(true);
+    try {
+      if (taskDetailId) {
+        setTasks((prev) =>
+          prev.map((item) => (item.id === taskDetailId ? { ...item, title, priority: taskDetailPriority, notes: notes || undefined } : item)),
+        );
+        if (session && isSupabaseConfigured) {
+          await updateTask(taskDetailId, { title, priority: taskDetailPriority, notes: notes || null });
+          await refreshLiveTasks();
+        }
+      } else {
+        if (!staff) {
+          setTaskDetailBusy(false);
+          return;
+        }
+        setNewStaffTaskTitle('');
+        setNewStaffTaskPriority('non_urgent');
+        if (session && isSupabaseConfigured) {
+          await createTask(session, { title, assigneeRole: 'staff', priority: taskDetailPriority, staffProfileId: staff.id, notes: notes || undefined });
+          notifyStaffTask(staff.id, title);
+          await refreshLiveTasks();
+        } else {
+          setTasks((prev) => [
+            {
+              id: `t-manual-${Date.now()}`,
+              title,
+              assigneeRole: 'staff',
+              assigneeName: staff.name,
+              staffProfileId: staff.id,
+              priority: taskDetailPriority,
+              status: 'new',
+              deadline: 'No deadline',
+              needsParentApproval: false,
+              notes: notes || undefined,
+            },
+            ...prev,
+          ]);
+        }
+      }
+      setTaskDetailOpen(false);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not save task.');
+    } finally {
+      setTaskDetailBusy(false);
+    }
+  }
+
   async function saveEditTask() {
     const id = editingTaskId;
     const title = editTaskTitle.trim();
@@ -6026,12 +6095,13 @@ function AppShell() {
   ) : null;
   const focusStaffUpdates = null;
 
-  // Only this person's own tasks. Previously a real staff session had no per-person
-  // filter at all, so the nanny saw the cook's and driver's assignments too.
+  // This person's own tasks. Hide ANOTHER named staff member's tasks, but never hide a
+  // task just because we can't resolve the profile — that regressed to "nothing shows".
   const myStaffTasks = tasks.filter((t) => {
     if (t.assigneeRole !== 'staff') return false;
     const myProfileId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
-    if (!myProfileId) return !isRealStaffSession;
+    if (!myProfileId) return true; // can't tell whose it is → show it rather than lose it
+    if (!t.staffProfileId) return true; // unassigned staff task → visible to any staff
     return t.staffProfileId === myProfileId;
   });
   const myOpenStaffTasks = myStaffTasks.filter((t) => t.status !== 'done');
@@ -6163,6 +6233,7 @@ function AppShell() {
               </Pressable>
               <View style={styles.taskManageCopy}>
                 <Text style={[styles.taskManageTitle, task.status === 'done' && styles.taskManageTitleDone]} numberOfLines={2}>{task.title}</Text>
+                {task.notes ? <Text style={styles.taskManageNote}>📝 {task.notes}</Text> : null}
                 <View style={styles.taskManageMeta}>
                   {task.priority === 'urgent' ? (
                     <View style={[styles.taskPill, styles.taskPillUrgent]}>
@@ -7393,6 +7464,10 @@ function AppShell() {
                           <Text style={[styles.roleChipText, newStaffTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
                         </Pressable>
                       </View>
+                      <Pressable style={styles.addWithNoteLink} onPress={() => openTaskDetail(null)}>
+                        <Icon name="plus" color={colors.primary} size={14} />
+                        <Text style={styles.addWithNoteText}>Add with a note / instructions</Text>
+                      </Pressable>
 
                       {(() => {
                         const mine = tasks.filter((t) => t.assigneeRole === 'staff' && t.staffProfileId === tasksManagerStaffId);
@@ -7451,58 +7526,26 @@ function AppShell() {
                                     style={styles.taskCheck}
                                     onPress={() => toggleManagedTaskDone(task)}
                                   />
-                                  {editingTaskId === task.id ? (
-                                    <View style={styles.taskEditWrap}>
-                                      <TextInput
-                                        style={[styles.input, styles.taskAddInput]}
-                                        value={editTaskTitle}
-                                        onChangeText={setEditTaskTitle}
-                                        onSubmitEditing={saveEditTask}
-                                        autoFocus
-                                      />
-                                      <View style={styles.seg}>
-                                        <Pressable
-                                          style={[styles.roleChip, editTaskPriority === 'non_urgent' && styles.roleChipActive]}
-                                          onPress={() => setEditTaskPriority('non_urgent')}
-                                        >
-                                          <Text style={[styles.roleChipText, editTaskPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
-                                        </Pressable>
-                                        <Pressable
-                                          style={[styles.roleChip, editTaskPriority === 'urgent' && styles.roleChipActive]}
-                                          onPress={() => setEditTaskPriority('urgent')}
-                                        >
-                                          <Text style={[styles.roleChipText, editTaskPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
-                                        </Pressable>
+                                  <Pressable style={styles.taskManageCopy} onPress={() => openTaskDetail(task)}>
+                                    <Text style={styles.taskManageTitle} numberOfLines={2}>{task.title}</Text>
+                                    {task.notes ? (
+                                      <Text style={styles.taskManageNote} numberOfLines={2}>📝 {task.notes}</Text>
+                                    ) : null}
+                                    <View style={styles.taskManageMeta}>
+                                      <View style={[styles.taskPill, task.priority === 'urgent' ? styles.taskPillUrgent : styles.taskPillNormal]}>
+                                        <Text style={[styles.taskPillText, task.priority === 'urgent' ? styles.taskPillTextUrgent : styles.taskPillTextNormal]}>
+                                          {task.priority === 'urgent' ? 'Urgent' : 'Task'}
+                                        </Text>
                                       </View>
-                                      <View style={styles.taskEditActions}>
-                                        <Pressable style={styles.taskAddBtn} onPress={saveEditTask}>
-                                          <Text style={styles.taskAddBtnText}>Save</Text>
-                                        </Pressable>
-                                        <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setEditingTaskId(null)}>
-                                          <Text style={[styles.authBtnText, styles.authSecondaryText]}>Cancel</Text>
-                                        </Pressable>
-                                      </View>
+                                      {task.createdAt ? (
+                                        <Text style={styles.taskManageTime}>Sent {clockFromIso(task.createdAt)}</Text>
+                                      ) : null}
+                                      <Text style={styles.taskManageTime}>· tap to edit</Text>
                                     </View>
-                                  ) : (
-                                    <>
-                                      <Pressable style={styles.taskManageCopy} onPress={() => startEditTask(task)}>
-                                        <Text style={styles.taskManageTitle} numberOfLines={2}>{task.title}</Text>
-                                        <View style={styles.taskManageMeta}>
-                                          <View style={[styles.taskPill, task.priority === 'urgent' ? styles.taskPillUrgent : styles.taskPillNormal]}>
-                                            <Text style={[styles.taskPillText, task.priority === 'urgent' ? styles.taskPillTextUrgent : styles.taskPillTextNormal]}>
-                                              {task.priority === 'urgent' ? 'Urgent' : 'Task'}
-                                            </Text>
-                                          </View>
-                                          {task.createdAt ? (
-                                            <Text style={styles.taskManageTime}>Sent {clockFromIso(task.createdAt)}</Text>
-                                          ) : null}
-                                        </View>
-                                      </Pressable>
-                                      <Pressable hitSlop={8} style={styles.taskDeleteBtn} onPress={() => removeManagedTask(task.id)}>
-                                        <Text style={styles.taskDeleteText}>✕</Text>
-                                      </Pressable>
-                                    </>
-                                  )}
+                                  </Pressable>
+                                  <Pressable hitSlop={8} style={styles.taskDeleteBtn} onPress={() => removeManagedTask(task.id)}>
+                                    <Text style={styles.taskDeleteText}>✕</Text>
+                                  </Pressable>
                                 </View>
                               ))
                             )}
@@ -7546,6 +7589,70 @@ function AppShell() {
                       })()}
                     </>
                   )}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+          ) : null}
+
+          {taskDetailOpen ? (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setTaskDetailOpen(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.childEditorModalCard}>
+                <View style={styles.childEditorHeader}>
+                  <Text style={styles.authTitle}>{taskDetailId ? 'Edit task' : 'New task'}</Text>
+                  <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setTaskDetailOpen(false)}>
+                    <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
+                  <Text style={styles.createHint}>Task for {staffProfiles.find((p) => p.id === tasksManagerStaffId)?.name || 'staff'}</Text>
+                  <TextInput
+                    placeholder="Task title"
+                    style={styles.input}
+                    value={taskDetailTitle}
+                    onChangeText={setTaskDetailTitle}
+                  />
+                  <Text style={styles.createHint}>Note / instructions (optional)</Text>
+                  <TextInput
+                    placeholder="Describe it in detail — e.g. how to cook it, what to buy, where things are…"
+                    style={[styles.input, styles.taskNotesInput]}
+                    value={taskDetailNotes}
+                    onChangeText={setTaskDetailNotes}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                  <View style={styles.seg}>
+                    <Pressable
+                      style={[styles.roleChip, taskDetailPriority === 'non_urgent' && styles.roleChipActive]}
+                      onPress={() => setTaskDetailPriority('non_urgent')}
+                    >
+                      <Text style={[styles.roleChipText, taskDetailPriority === 'non_urgent' && styles.roleChipTextActive]}>Non-urgent</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.roleChip, taskDetailPriority === 'urgent' && styles.roleChipActive]}
+                      onPress={() => setTaskDetailPriority('urgent')}
+                    >
+                      <Text style={[styles.roleChipText, taskDetailPriority === 'urgent' && styles.roleChipTextActive]}>Urgent</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.authActions}>
+                    <Pressable style={[styles.authBtn, (!taskDetailTitle.trim() || taskDetailBusy) && styles.authBtnDimmed]} onPress={saveTaskDetail}>
+                      <Text style={styles.authBtnText}>{taskDetailBusy ? 'Saving…' : taskDetailId ? 'Save' : 'Send task'}</Text>
+                    </Pressable>
+                    {taskDetailId ? (
+                      <Pressable
+                        style={[styles.authBtn, styles.authSecondary]}
+                        onPress={() => {
+                          const id = taskDetailId;
+                          setTaskDetailOpen(false);
+                          if (id) removeManagedTask(id);
+                        }}
+                      >
+                        <Text style={[styles.authBtnText, styles.activityRemoveText]}>Delete</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </ScrollView>
               </View>
             </View>
@@ -14271,6 +14378,28 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 14.5,
     fontWeight: '700',
     lineHeight: 19,
+  },
+  taskManageNote: {
+    color: colors.subtext,
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  addWithNoteLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 4,
+  },
+  addWithNoteText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  taskNotesInput: {
+    minHeight: 88,
+    paddingTop: 10,
   },
   taskManageTitleDone: {
     color: colors.subtext,

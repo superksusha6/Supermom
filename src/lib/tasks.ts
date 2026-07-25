@@ -55,13 +55,19 @@ type TaskInsert = {
   priority: TaskPriority;
   deadlineAt?: string;
   staffProfileId?: string;
+  notes?: string;
 };
+
+function isMissingTaskDetailsColumnError(error: { message?: string } | null): boolean {
+  return !!error && String(error.message || '').toLowerCase().includes('details');
+}
 
 export type TaskPatch = {
   title?: string;
   priority?: TaskPriority;
   status?: TaskStatus;
   deadlineAt?: string | null;
+  notes?: string | null;
 };
 
 type CalendarInsert = {
@@ -605,17 +611,27 @@ export async function listStaffConnections(session: AppSession): Promise<string[
 
 export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
-  const { data, error } = await client
+  const baseCols = 'id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id, created_at';
+  const withDetails = await client
     .from('tasks')
-    .select('id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id, created_at')
+    .select(`${baseCols}, details`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
+
+  let data: any[] | null = withDetails.data;
+  let error = withDetails.error;
+  if (isMissingTaskDetailsColumnError(error)) {
+    const fallback = await client.from('tasks').select(baseCols).eq('family_id', familyId).order('created_at', { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
 
   return (data ?? []).map((row) => ({
     id: row.id,
     title: row.title,
+    notes: 'details' in row && row.details ? String(row.details) : undefined,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     assigneeRole: row.assignee_role as Role,
     assigneeName:
@@ -635,23 +651,24 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
 export async function createTask(session: AppSession, payload: TaskInsert): Promise<string> {
   const client = requireClient();
 
-  const { data, error } = await client
-    .from('tasks')
-    .insert({
-      family_id: session.familyId,
-      title: payload.title,
-      assignee_role: payload.assigneeRole,
-      priority: payload.priority,
-      deadline_at: payload.deadlineAt || null,
-      requires_parent_approval: payload.assigneeRole === 'child',
-      source_profile_id: payload.staffProfileId ?? null,
-      created_by: session.userId,
-    })
-    .select('id')
-    .single();
+  const base = {
+    family_id: session.familyId,
+    title: payload.title,
+    assignee_role: payload.assigneeRole,
+    priority: payload.priority,
+    deadline_at: payload.deadlineAt || null,
+    requires_parent_approval: payload.assigneeRole === 'child',
+    source_profile_id: payload.staffProfileId ?? null,
+    created_by: session.userId,
+  };
 
-  if (error) throw error;
-  return (data as { id: string }).id;
+  // Include the notes/details if provided; retry without it if the column isn't migrated.
+  let res = await client.from('tasks').insert({ ...base, details: payload.notes || null }).select('id').single();
+  if (isMissingTaskDetailsColumnError(res.error)) {
+    res = await client.from('tasks').insert(base).select('id').single();
+  }
+  if (res.error) throw res.error;
+  return (res.data as { id: string }).id;
 }
 
 export async function updateTask(taskId: string, patch: TaskPatch) {
@@ -661,8 +678,14 @@ export async function updateTask(taskId: string, patch: TaskPatch) {
   if (patch.priority !== undefined) update.priority = patch.priority;
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.deadlineAt !== undefined) update.deadline_at = patch.deadlineAt;
+  if (patch.notes !== undefined) update.details = patch.notes || null;
   if (Object.keys(update).length === 0) return;
-  const { error } = await client.from('tasks').update(update).eq('id', taskId);
+  let { error } = await client.from('tasks').update(update).eq('id', taskId);
+  if (isMissingTaskDetailsColumnError(error) && 'details' in update) {
+    const { details, ...rest } = update;
+    if (Object.keys(rest).length === 0) return;
+    ({ error } = await client.from('tasks').update(rest).eq('id', taskId));
+  }
   if (error) throw error;
 }
 
