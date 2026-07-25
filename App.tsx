@@ -983,8 +983,6 @@ function AppShell() {
   const [newStaffTaskTitle, setNewStaffTaskTitle] = useState('');
   const [newStaffTaskPriority, setNewStaffTaskPriority] = useState<TaskPriority>('non_urgent');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTaskTitle, setEditTaskTitle] = useState('');
-  const [editTaskPriority, setEditTaskPriority] = useState<TaskPriority>('non_urgent');
   // Per-task detail sheet (title + priority + free-text instructions/notes).
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
   const [taskDetailId, setTaskDetailId] = useState<string | null>(null); // null = creating
@@ -4782,12 +4780,6 @@ function AppShell() {
     ]);
   }
 
-  function startEditTask(task: TaskItem) {
-    setEditingTaskId(task.id);
-    setEditTaskTitle(task.title);
-    setEditTaskPriority(task.priority);
-  }
-
   // Open the detail sheet for an existing task (edit) or a brand-new one (create).
   function openTaskDetail(task: TaskItem | null) {
     setTaskDetailId(task ? task.id : null);
@@ -4850,22 +4842,6 @@ function AppShell() {
     }
   }
 
-  async function saveEditTask() {
-    const id = editingTaskId;
-    const title = editTaskTitle.trim();
-    if (!id || !title) return;
-    const priority = editTaskPriority;
-    setEditingTaskId(null);
-    setTasks((prev) => prev.map((item) => (item.id === id ? { ...item, title, priority } : item)));
-    if (session && isSupabaseConfigured) {
-      try {
-        await updateTask(id, { title, priority });
-        await refreshLiveTasks();
-      } catch (error) {
-        setTasksError(error instanceof Error ? error.message : 'Could not update task.');
-      }
-    }
-  }
 
   async function toggleManagedTaskDone(task: TaskItem) {
     const nextStatus: TaskStatus = task.status === 'done' ? 'new' : 'done';
