@@ -1,8 +1,64 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { SectionCard } from '@/components/SectionCard';
 import { HabitChallenge, HabitEntry, HabitReminderMode } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
+
+// Reward medals: a week of streak earns a gold medal; every 4 of them (a month)
+// are exchanged for a trophy. Derived from the current streak so it reflects momentum.
+function habitMedalTally(streak: number) {
+  const weeks = Math.floor(streak / 7);
+  const trophies = Math.floor(weeks / 4);
+  const medals = weeks % 4;
+  const daysToNext = streak % 7 === 0 ? 7 : 7 - (streak % 7);
+  return { weeks, trophies, medals, daysToNext };
+}
+
+// A small gold medal (disc + red ribbon) or a gold trophy, drawn to resemble a real award.
+function HabitMedal({ tier, size = 24 }: { tier: 'week' | 'month'; size?: number }) {
+  const gradId = `medalGold-${tier}`;
+  if (tier === 'month') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Defs>
+          <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#fbe08a" />
+            <Stop offset="0.5" stopColor="#e9b830" />
+            <Stop offset="1" stopColor="#c8901a" />
+          </LinearGradient>
+        </Defs>
+        {/* cup */}
+        <Path d="M7 3.5h10v3.2a5 5 0 0 1-10 0V3.5z" fill={`url(#${gradId})`} stroke="#a9760f" strokeWidth="0.6" />
+        {/* handles */}
+        <Path d="M7 4.4H4.3v1.6A2.7 2.7 0 0 0 7 8.7" fill="none" stroke="#cf9a1e" strokeWidth="1.2" />
+        <Path d="M17 4.4h2.7v1.6A2.7 2.7 0 0 1 17 8.7" fill="none" stroke="#cf9a1e" strokeWidth="1.2" />
+        {/* stem + base */}
+        <Rect x="11" y="11.4" width="2" height="4.2" fill="#cf9a1e" />
+        <Path d="M7.5 20.5h9l-1.4-4h-6.2z" fill={`url(#${gradId})`} stroke="#a9760f" strokeWidth="0.6" />
+        <Rect x="6.5" y="20.2" width="11" height="1.8" rx="0.9" fill="#cf9a1e" />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={size} height={size * 1.28} viewBox="0 0 24 30">
+      <Defs>
+        <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#fbe08a" />
+          <Stop offset="0.5" stopColor="#eebb34" />
+          <Stop offset="1" stopColor="#c8901a" />
+        </LinearGradient>
+      </Defs>
+      {/* ribbons */}
+      <Path d="M7 14h4.2v13.5L9 25.4 6.8 27.5V14z" fill="#d1283a" stroke="#a71d2c" strokeWidth="0.5" />
+      <Path d="M12.8 14H17v13.5l-2.2-2.1-2.2 2.1V14z" fill="#e23b4c" stroke="#a71d2c" strokeWidth="0.5" />
+      {/* disc */}
+      <Circle cx="12" cy="10.5" r="9" fill={`url(#${gradId})`} stroke="#a9760f" strokeWidth="0.7" />
+      <Circle cx="12" cy="10.5" r="6.2" fill="none" stroke="#b9861a" strokeWidth="1" opacity="0.65" />
+      <Circle cx="9.4" cy="7.8" r="2" fill="#fff3cf" opacity="0.6" />
+    </Svg>
+  );
+}
 
 type Props = {
   habits: HabitEntry[];
@@ -55,11 +111,6 @@ const HABIT_ICON_TITLE_SUGGESTIONS: Record<string, string> = {
   '❤️': 'Self love',
 };
 
-const HABIT_MEDAL_MILESTONES = [
-  { days: 7, label: '7d', tone: '#f59e0b' },
-  { days: 14, label: '14d', tone: '#a78bfa' },
-  { days: 30, label: '30d', tone: '#22c55e' },
-] as const;
 
 const HABIT_SMART_REMINDER_TIMES: Record<string, string> = {
   '💧': '14:00',
@@ -103,10 +154,6 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
   const [draftReminderTime, setDraftReminderTime] = useState('');
   const [draftStreak, setDraftStreak] = useState('0');
 
-  const completedCount = activeHabits.filter((item) => item.completedToday).length;
-  const completionPercent = activeHabits.length ? Math.round((completedCount / activeHabits.length) * 100) : 0;
-  const totalStreak = activeHabits.reduce((sum, item) => sum + item.streak, 0);
-  const heroMarks = buildMarks(Math.max(1, Math.min(30, totalStreak)));
   const habitIconOptions = [
     '💧', '🛏️', '🧘', '🥗', '🚶', '🏋️', '🤸', '🏃', '🚴', '📖', '📝', '🧠', '🎹', '🎯', '⏰', '💻', '✅', '🧹', '🧺', '🍳', '🪥', '😊', '🙏', '📱', '❤️',
   ];
@@ -163,36 +210,7 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.heroCard}>
-        <View style={styles.heroGlowLarge} />
-        <View style={styles.heroGlowSmall} />
-        <Text style={styles.heroEyebrow}>Habit Ritual</Text>
-        <Text style={styles.heroTitle}>30 Day Reset</Text>
-        <Text style={styles.heroText}>A softer tracker for consistency, small promises to yourself, and visible momentum.</Text>
-
-        <View style={styles.heroStatsRow}>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{completedCount}</Text>
-            <Text style={styles.heroStatLabel}>done today</Text>
-          </View>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{completionPercent}%</Text>
-            <Text style={styles.heroStatLabel}>daily score</Text>
-          </View>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{totalStreak}</Text>
-            <Text style={styles.heroStatLabel}>streak sum</Text>
-          </View>
-        </View>
-
-        <View style={styles.heroMarksGrid}>
-          {heroMarks.map((filled, index) => (
-            <View key={`hero-${index}`} style={[styles.heroMark, filled && styles.heroMarkFilled]} />
-          ))}
-        </View>
-      </View>
-
-      <SectionCard title="30 Day Boards">
+      <SectionCard title="Habits">
         <View style={styles.sectionTopRow}>
           <Text style={styles.emptyText}>
             {activeHabits.length === 0 ? 'Add your first habit here. You no longer need to go into Settings.' : 'Tap a habit to mark it done or edit it from the menu.'}
@@ -252,6 +270,28 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                   </View>
                 </View>
 
+                {(() => {
+                  const tally = habitMedalTally(habit.streak);
+                  return (
+                    <View style={styles.medalStrip}>
+                      {Array.from({ length: tally.trophies }).map((_, i) => (
+                        <HabitMedal key={`t-${i}`} tier="month" size={26} />
+                      ))}
+                      {Array.from({ length: tally.medals }).map((_, i) => (
+                        <HabitMedal key={`m-${i}`} tier="week" size={22} />
+                      ))}
+                      {tally.weeks === 0 ? (
+                        <>
+                          <View style={styles.medalGhost} />
+                          <Text style={styles.medalHint}>{tally.daysToNext}d to first medal</Text>
+                        </>
+                      ) : (
+                        <Text style={styles.medalHint}>{tally.daysToNext}d to next</Text>
+                      )}
+                    </View>
+                  );
+                })()}
+
                 <View style={styles.boardMarksGrid}>
                   {marks.map((filled, index) => (
                     <View key={`${habit.id}-${index}`} style={styles.boardMarkWrap}>
@@ -263,43 +303,6 @@ export function HabitsScreen({ habits, onHabitsChange, challenges, habitReminder
                       })}
                     </View>
                   ))}
-                </View>
-
-                <View style={styles.medalsSection}>
-                  <Text style={styles.medalsLabel}>Reward medals</Text>
-                  <View style={styles.medalsRow}>
-                    {HABIT_MEDAL_MILESTONES.map((medal) => {
-                      const earned = habit.streak >= medal.days;
-                      return (
-                        <View key={`${habit.id}-${medal.days}`} style={styles.medalWrap}>
-                          <View style={[styles.medalRibbonLeft, { backgroundColor: earned ? medal.tone : colors.glassSoft }]} />
-                          <View style={[styles.medalRibbonRight, { backgroundColor: earned ? medal.tone : colors.glassSoft }]} />
-                          <View
-                            style={[
-                              styles.medalOuter,
-                              {
-                                borderColor: earned ? medal.tone : colors.border,
-                                backgroundColor: earned ? `${medal.tone}18` : colors.glassSoft,
-                              },
-                            ]}
-                          >
-                            <View
-                              style={[
-                                styles.medalInner,
-                                {
-                                  borderColor: earned ? medal.tone : colors.border,
-                                  backgroundColor: earned ? `${habit.color}18` : colors.glassStrong,
-                                },
-                              ]}
-                            >
-                              <Text style={[styles.medalIcon, { color: earned ? habit.color : colors.subtext }]}>{habit.icon}</Text>
-                            </View>
-                          </View>
-                          <Text style={[styles.medalCaption, earned && styles.medalCaptionEarned]}>{medal.label}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
                 </View>
 
                 <View style={styles.boardFooter}>
@@ -837,77 +840,27 @@ const createStyles = (colors: ThemeColors) =>
     boardFooter: {
       gap: 8,
     },
-    medalsSection: {
-      gap: 8,
+    medalStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 3,
+      minHeight: 30,
+      marginTop: 2,
     },
-    medalsLabel: {
+    medalGhost: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+    },
+    medalHint: {
       color: colors.subtext,
       fontSize: 11,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: 0.7,
-    },
-    medalsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 8,
-    },
-    medalWrap: {
-      width: 64,
-      alignItems: 'center',
-      position: 'relative',
-      paddingBottom: 2,
-    },
-    medalRibbonLeft: {
-      position: 'absolute',
-      bottom: 20,
-      left: 14,
-      width: 14,
-      height: 20,
-      borderBottomLeftRadius: 4,
-      borderBottomRightRadius: 4,
-      transform: [{ rotate: '10deg' }],
-      opacity: 0.95,
-    },
-    medalRibbonRight: {
-      position: 'absolute',
-      bottom: 20,
-      right: 14,
-      width: 14,
-      height: 20,
-      borderBottomLeftRadius: 4,
-      borderBottomRightRadius: 4,
-      transform: [{ rotate: '-10deg' }],
-      opacity: 0.95,
-    },
-    medalOuter: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      borderWidth: 2,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1,
-    },
-    medalInner: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      borderWidth: 1.5,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    medalIcon: {
-      fontSize: 15,
-    },
-    medalCaption: {
-      marginTop: 6,
-      color: colors.subtext,
-      fontSize: 10,
-      fontWeight: '700',
-    },
-    medalCaptionEarned: {
-      color: colors.text,
+      fontWeight: '600',
+      marginLeft: 4,
     },
     boardFooterText: {
       color: colors.subtext,
