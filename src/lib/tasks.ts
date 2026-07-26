@@ -1342,24 +1342,25 @@ export async function listRecipes(familyId: string): Promise<Recipe[]> {
   const client = requireClient();
   const baseColumns =
     'id, title, description, meal_type, cuisine, cook_time_minutes, servings, tags_json, classifiers_json, nutrition_per_serving_json, ingredients_json, steps_json, suitable_for_children, suitable_for_family';
-  // Include photo_url so saved photos survive a reload. If the column hasn't
-  // been added yet, retry without it instead of failing the whole list.
-  const withPhoto = await client
-    .from('recipes')
-    .select(`${baseColumns}, photo_url`)
-    .eq('family_id', familyId)
-    .order('created_at', { ascending: false });
-
-  let data: any[] | null = withPhoto.data;
-  let error = withPhoto.error;
-  if (isMissingRecipePhotoColumnError(error)) {
-    const fallback = await client
+  // Include photo_url (saved photos) and meal_types_json (multi-section recipes)
+  // so both survive a reload. If a column hasn't been added yet, drop just that
+  // column and retry instead of failing the whole list.
+  const optionalColumns = ['photo_url', 'meal_types_json'];
+  let data: any[] | null = null;
+  let error: any = null;
+  let cols = [...optionalColumns];
+  for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
+    const select = cols.length ? `${baseColumns}, ${cols.join(', ')}` : baseColumns;
+    const res = await client
       .from('recipes')
-      .select(baseColumns)
+      .select(select)
       .eq('family_id', familyId)
       .order('created_at', { ascending: false });
-    data = fallback.data;
-    error = fallback.error;
+    data = res.data;
+    error = res.error;
+    const missing = cols.find((c) => isMissingRecipeColumnError(error, c));
+    if (!missing) break;
+    cols = cols.filter((c) => c !== missing);
   }
 
   if (error) throw error;
@@ -1369,6 +1370,10 @@ export async function listRecipes(familyId: string): Promise<Recipe[]> {
     title: row.title,
     description: row.description || 'Custom recipe',
     mealType: row.meal_type as RecipeMealType,
+    mealTypes:
+      Array.isArray(row.meal_types_json) && row.meal_types_json.length
+        ? (row.meal_types_json as RecipeMealType[])
+        : [row.meal_type as RecipeMealType],
     cuisine: row.cuisine || undefined,
     cookTimeMinutes: row.cook_time_minutes || 0,
     servings: row.servings || 1,
@@ -1386,51 +1391,17 @@ export async function listRecipes(familyId: string): Promise<Recipe[]> {
   }));
 }
 
-export async function createRecipe(session: AppSession, recipe: Recipe) {
-  const client = requireClient();
-  const basePayload = {
+// Columns that may not exist yet on older databases. On a "missing column"
+// error we drop just the offending optional column and retry.
+const OPTIONAL_RECIPE_COLUMNS = ['photo_url', 'meal_types_json'];
+
+function recipePayload(session: AppSession, recipe: Recipe) {
+  return {
     family_id: session.familyId,
     title: recipe.title,
     description: recipe.description,
     meal_type: recipe.mealType,
-    cuisine: recipe.cuisine || null,
-    cook_time_minutes: recipe.cookTimeMinutes,
-    servings: recipe.servings,
-    tags_json: recipe.tags,
-    classifiers_json: recipe.classifiers,
-    nutrition_per_serving_json: recipe.nutritionPerServing,
-    ingredients_json: recipe.ingredients,
-    steps_json: recipe.steps,
-    suitable_for_children: !!recipe.suitableForChildren,
-    suitable_for_family: !!recipe.suitableForFamily,
-    created_by: session.userId,
-  };
-  const { data, error } = await client
-    .from('recipes')
-    .insert({
-      ...basePayload,
-      photo_url: recipe.photoUri || null,
-    })
-    .select('id')
-    .single();
-
-  if (isMissingRecipePhotoColumnError(error)) {
-    const { data: fallbackData, error: fallbackError } = await client.from('recipes').insert(basePayload).select('id').single();
-    if (fallbackError) throw fallbackError;
-    return fallbackData.id as string;
-  }
-
-  if (error) throw error;
-  return data.id as string;
-}
-
-export async function updateRecipe(session: AppSession, recipe: Recipe) {
-  const client = requireClient();
-  const basePayload = {
-    family_id: session.familyId,
-    title: recipe.title,
-    description: recipe.description,
-    meal_type: recipe.mealType,
+    meal_types_json: recipe.mealTypes && recipe.mealTypes.length ? recipe.mealTypes : [recipe.mealType],
     cuisine: recipe.cuisine || null,
     cook_time_minutes: recipe.cookTimeMinutes,
     servings: recipe.servings,
@@ -1442,35 +1413,33 @@ export async function updateRecipe(session: AppSession, recipe: Recipe) {
     suitable_for_children: !!recipe.suitableForChildren,
     suitable_for_family: !!recipe.suitableForFamily,
     photo_url: recipe.photoUri || null,
-  };
-  const { error } = await client.from('recipes').update(basePayload).eq('id', recipe.id).eq('family_id', session.familyId);
+  } as Record<string, unknown>;
+}
 
-  if (isMissingRecipePhotoColumnError(error)) {
-    const { error: fallbackError } = await client
-      .from('recipes')
-      .update({
-        family_id: session.familyId,
-        title: recipe.title,
-        description: recipe.description,
-        meal_type: recipe.mealType,
-        cuisine: recipe.cuisine || null,
-        cook_time_minutes: recipe.cookTimeMinutes,
-        servings: recipe.servings,
-        tags_json: recipe.tags,
-        classifiers_json: recipe.classifiers,
-        nutrition_per_serving_json: recipe.nutritionPerServing,
-        ingredients_json: recipe.ingredients,
-        steps_json: recipe.steps,
-        suitable_for_children: !!recipe.suitableForChildren,
-        suitable_for_family: !!recipe.suitableForFamily,
-      })
-      .eq('id', recipe.id)
-      .eq('family_id', session.familyId);
-    if (fallbackError) throw fallbackError;
-    return;
+export async function createRecipe(session: AppSession, recipe: Recipe) {
+  const client = requireClient();
+  const payload: Record<string, unknown> = { ...recipePayload(session, recipe), created_by: session.userId };
+  for (let attempt = 0; attempt < OPTIONAL_RECIPE_COLUMNS.length + 1; attempt += 1) {
+    const { data, error } = await client.from('recipes').insert(payload).select('id').single();
+    if (!error) return data.id as string;
+    const missing = OPTIONAL_RECIPE_COLUMNS.find((c) => c in payload && isMissingRecipeColumnError(error, c));
+    if (!missing) throw error;
+    delete payload[missing];
   }
+  throw new Error('Could not save recipe');
+}
 
-  if (error) throw error;
+export async function updateRecipe(session: AppSession, recipe: Recipe) {
+  const client = requireClient();
+  const payload: Record<string, unknown> = recipePayload(session, recipe);
+  for (let attempt = 0; attempt < OPTIONAL_RECIPE_COLUMNS.length + 1; attempt += 1) {
+    const { error } = await client.from('recipes').update(payload).eq('id', recipe.id).eq('family_id', session.familyId);
+    if (!error) return;
+    const missing = OPTIONAL_RECIPE_COLUMNS.find((c) => c in payload && isMissingRecipeColumnError(error, c));
+    if (!missing) throw error;
+    delete payload[missing];
+  }
+  throw new Error('Could not update recipe');
 }
 
 export async function deleteRecipe(session: AppSession, recipeId: string) {
@@ -1479,10 +1448,10 @@ export async function deleteRecipe(session: AppSession, recipeId: string) {
   if (error) throw error;
 }
 
-function isMissingRecipePhotoColumnError(error: unknown) {
+function isMissingRecipeColumnError(error: unknown, column: string) {
   if (!error || typeof error !== 'object') return false;
   const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
-  return message.includes('photo_url') && (message.includes('does not exist') || message.includes('Could not find') || message.includes('schema cache'));
+  return message.includes(column) && (message.includes('does not exist') || message.includes('Could not find') || message.includes('schema cache'));
 }
 
 export async function getWeeklyMealPlanRecord(familyId: string): Promise<WeeklyMealPlanRecord> {

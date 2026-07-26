@@ -419,6 +419,10 @@ export type Recipe = {
   title: string;
   description: string;
   mealType: RecipeMealType;
+  // A recipe can belong to several sections at once (e.g. snack + breakfast).
+  // `mealType` stays the primary section (first entry) for display/placeholder
+  // and back-compat; `mealTypes` is the full set used for filtering.
+  mealTypes?: RecipeMealType[];
   mealSlot?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' | 'snack';
   subtype?: string;
   cuisine?: string;

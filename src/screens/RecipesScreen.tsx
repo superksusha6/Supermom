@@ -363,7 +363,9 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       });
     }
   }, [photoLoading, photoProgress]);
-  const [draftMealType, setDraftMealType] = useState<RecipeMealType>('breakfast');
+  // A recipe can sit in several sections (e.g. snack + breakfast). The first
+  // selected is the primary `mealType`; the whole set drives filtering.
+  const [draftMealTypes, setDraftMealTypes] = useState<RecipeMealType[]>(['breakfast']);
   const [draftCookTime, setDraftCookTime] = useState('');
   const [draftServings, setDraftServings] = useState('');
   const [draftSteps, setDraftSteps] = useState('');
@@ -480,7 +482,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       const res = await fetch(`${base}/api/recipe-photo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, mealType: draftMealType }),
+        body: JSON.stringify({ title, mealType: draftMealTypes[0] || 'breakfast' }),
         signal: controller?.signal,
       });
       const data = await res.json().catch(() => ({}));
@@ -521,7 +523,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     setDraftPhotoCredit(undefined);
     setPhotoLoading(false);
     setPhotoError('');
-    setDraftMealType('breakfast');
+    setDraftMealTypes(['breakfast']);
     setDraftCookTime('');
     setDraftServings('');
     setDraftSteps('');
@@ -545,7 +547,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     setDraftPhotoCredit(recipe.photoCredit);
     setPhotoLoading(false);
     setPhotoError('');
-    setDraftMealType(recipe.mealType);
+    setDraftMealTypes(recipe.mealTypes && recipe.mealTypes.length ? recipe.mealTypes : [recipe.mealType]);
     setDraftCookTime(recipe.cookTimeMinutes ? String(recipe.cookTimeMinutes) : '');
     setDraftServings(recipe.servings ? String(recipe.servings) : '1');
     setDraftSteps(recipe.steps.map((step) => step.text).join('\n'));
@@ -612,7 +614,8 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       id: editingRecipeId || `recipe-${Date.now()}`,
       title,
       description: stepLines[0] || 'Custom recipe',
-      mealType: draftMealType,
+      mealType: draftMealTypes[0] || 'breakfast',
+      mealTypes: draftMealTypes.length ? draftMealTypes : ['breakfast'],
       cuisine: 'Home',
       cookTimeMinutes: Number.parseInt(draftCookTime.trim() || '0', 10) || 0,
       servings: Number.parseInt(draftServings.trim() || '1', 10) || 1,
@@ -709,7 +712,10 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   const filteredRecipes = useMemo(() => {
     const query = search.trim().toLowerCase();
     return catalogRecipes.filter((recipe) => {
-      if (mealFilter !== 'all' && recipe.mealType !== mealFilter) return false;
+      if (mealFilter !== 'all') {
+        const sections = recipe.mealTypes && recipe.mealTypes.length ? recipe.mealTypes : [recipe.mealType];
+        if (!sections.includes(mealFilter)) return false;
+      }
       if (classifierFilter !== 'all' && !recipe.classifiers.includes(classifierFilter)) return false;
       if (cookFilter !== 'all' && matchByRecipe.get(recipe.id)?.status !== cookFilter) return false;
       if (!query) return true;
@@ -1228,7 +1234,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                 {draftPhotoUri ? (
                   <Image source={{ uri: draftPhotoUri }} style={styles.coverPreviewImg} resizeMode="cover" />
                 ) : (
-                  <View style={[styles.coverPreviewImg, styles.coverPreviewEmoji, { backgroundColor: getRecipePlaceholderTone(draftMealType).bg }]}>
+                  <View style={[styles.coverPreviewImg, styles.coverPreviewEmoji, { backgroundColor: getRecipePlaceholderTone(draftMealTypes[0] || 'breakfast').bg }]}>
                     {photoLoading ? (
                       <>
                         <ActivityIndicator color={colors.primary} />
@@ -1244,7 +1250,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                         <Text style={styles.coverLoadingSub}>This usually takes 30–40 seconds. Please keep this screen open.</Text>
                       </>
                     ) : (
-                      <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealType })}</Text>
+                      <Text style={styles.coverPreviewEmojiText}>{getRecipeEmoji({ title: draftTitle, mealType: draftMealTypes[0] || 'breakfast' })}</Text>
                     )}
                   </View>
                 )}
@@ -1520,12 +1526,26 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
 
             <View style={styles.builderSectionCard}>
               <Text style={styles.builderSectionTitle}>4. Recipe type</Text>
-              <Text style={styles.builderMiniLabel}>Section</Text>
+              <Text style={styles.builderMiniLabel}>Section — pick one or more</Text>
               <View style={styles.filterRow}>
                 {RECIPE_SECTION_FILTERS.filter((item) => item.key !== 'all').map((filter) => {
-                  const active = draftMealType === filter.key;
+                  const key = filter.key as RecipeMealType;
+                  const active = draftMealTypes.includes(key);
                   return (
-                    <Pressable key={`draft-${filter.key}`} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setDraftMealType(filter.key as RecipeMealType)}>
+                    <Pressable
+                      key={`draft-${filter.key}`}
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() =>
+                        setDraftMealTypes((prev) => {
+                          if (prev.includes(key)) {
+                            // keep at least one section selected
+                            const next = prev.filter((item) => item !== key);
+                            return next.length ? next : prev;
+                          }
+                          return [...prev, key];
+                        })
+                      }
+                    >
                       <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter.label}</Text>
                     </Pressable>
                   );
