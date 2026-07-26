@@ -1035,6 +1035,17 @@ function AppShell() {
   const filtersHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const preferencesLoadedRef = useRef(false);
   const habitsLoadedRef = useRef(false);
+  // True only after the USER edits/ticks/adds/deletes a habit. Hydrate and live
+  // polls set `habits` too, but those must NEVER be pushed back to the server —
+  // otherwise a device that shows the local starter defaults (e.g. a fresh phone
+  // reading an empty/transient list) resurrects them for every device.
+  const habitsDirtyRef = useRef(false);
+  // Every USER-initiated habit change goes through this so the save effect knows
+  // this is real data to persist (vs. a hydrate/poll that must not be re-saved).
+  const setHabitsByUser: typeof setHabits = (updater) => {
+    habitsDirtyRef.current = true;
+    setHabits(updater);
+  };
   const nutritionLoadedRef = useRef(false);
   const customNutritionFoodsLoadedRef = useRef(false);
   const homeFixitLoadedRef = useRef(false);
@@ -2635,6 +2646,7 @@ function AppShell() {
       setActiveOwnerFilter(`staff:${ctx.staffProfileId}`);
     }
     habitsLoadedRef.current = false;
+    habitsDirtyRef.current = false;
     personalProfileLoadedRef.current = false;
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;
@@ -2654,21 +2666,17 @@ function AppShell() {
       refreshUserPreferences(ctx),
       listHabitEntries(ctx)
         .then(async (liveHabits) => {
-          // Server wins when it has data: a fresh browser (e.g. the 2nd test URL) seeds
-          // local defaults, and letting those merge in either polluted the real list or
-          // — on a delete-others save — wiped the server. Only fall back to local when
-          // the server genuinely has nothing yet, then push it up.
+          // Server is authoritative when it has data. When it's empty we show the
+          // local starter defaults for display ONLY — we must NOT push them to the
+          // server, or a fresh device reading an empty/transient list would
+          // resurrect the starter habits for everyone. They persist only once the
+          // user actually engages with a habit (setHabitsByUser → dirty → save).
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
-          const mergedHabits =
+          const nextHabits =
             liveHabits.length > 0 ? normalizeHabitsForToday(liveHabits) : normalizeHabitsForToday(localHabits);
-          latestHabitsRef.current = mergedHabits;
-          setHabits(mergedHabits);
+          latestHabitsRef.current = nextHabits;
+          setHabits(nextHabits);
           habitsLoadedRef.current = true;
-          if (liveHabits.length === 0 && mergedHabits.length > 0) {
-            await replaceHabitEntries(ctx, mergedHabits).catch((error) => {
-              setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
-            });
-          }
         })
         .catch((error) => {
           // Show local habits, but do NOT mark loaded: if the server read failed we
@@ -3065,10 +3073,15 @@ function AppShell() {
 
   useEffect(() => {
     if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current || !habitsLoadedRef.current) return;
+    // Only persist USER edits. Hydrate and live polls also set `habits`, but re-saving
+    // those (especially the local starter defaults shown when the server is empty) is
+    // what resurrected deleted habits across devices.
+    if (!habitsDirtyRef.current) return;
     // Safety: never wipe the server copy with an empty set. An empty `habits` here is
     // almost always a transient/reset state, not a deliberate "delete every habit".
     // Keeping the server copy until there's real data to save prevents accidental loss.
     if (habits.length === 0) return;
+    habitsDirtyRef.current = false;
     replaceHabitEntries(session, habits).catch((error) =>
       setTasksError(error instanceof Error ? error.message : 'Could not save habits.'),
     );
@@ -3175,6 +3188,7 @@ function AppShell() {
     nutritionEntriesRef.current = [];
     customNutritionFoodsRef.current = [];
     habitsLoadedRef.current = false;
+    habitsDirtyRef.current = false;
     personalProfileLoadedRef.current = false;
     setMedicines([]);
     persistLocalMedicines([]);
@@ -5667,7 +5681,7 @@ function AppShell() {
       calorieOverride={calorieOverride}
       onCalorieOverrideChange={setCalorieOverride}
       habits={habits}
-      onHabitsChange={setHabits}
+      onHabitsChange={setHabitsByUser}
       habitsEnabled={habitsEnabled}
       onHabitsEnabledChange={setHabitsEnabled}
       habitRemindersEnabled={habitRemindersEnabled}
@@ -6585,7 +6599,7 @@ function AppShell() {
   const activeHabits = habits.filter((h) => h.enabled);
   const habitsDoneToday = activeHabits.filter((h) => h.completedToday).length;
   const toggleHabitToday = (id: string) =>
-    setHabits((prev) =>
+    setHabitsByUser((prev) =>
       prev.map((h) =>
         h.id === id
           ? (() => {
@@ -8483,7 +8497,7 @@ function AppShell() {
         {screen === 'wellness' && habitsEnabled && !isStaffView ? (
           <HabitsScreen
             habits={habits}
-            onHabitsChange={setHabits}
+            onHabitsChange={setHabitsByUser}
             onDeleteHabit={(id) => {
               if (session && isSupabaseConfigured) deleteHabitEntry(session, id).catch(() => {});
             }}
