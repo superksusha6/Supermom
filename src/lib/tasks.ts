@@ -2596,6 +2596,33 @@ export async function listCustomNutritionFoods(session: AppSession): Promise<Cus
   }));
 }
 
+// custom_nutrition_foods.id is a uuid column, but foods cached from a barcode/USDA
+// search carry ids like "off-<barcode>" / "usda-<fdcId>". Writing those made the WHOLE
+// batch upsert fail (invalid uuid), so NONE of the user's typed products persisted and
+// everything vanished on reload. Coerce any non-uuid id to a STABLE uuid (deterministic
+// from the original string) so it saves, doesn't duplicate on re-save, and reads back fine.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function coerceToUuid(id: string): string {
+  if (id && UUID_RE.test(id)) return id;
+  // FNV-1a over the string into four 32-bit words → 32 hex chars → UUID (v5-style bits).
+  const words: number[] = [];
+  for (let seed = 0; seed < 4; seed += 1) {
+    let h = 0x811c9dc5 ^ (seed * 0x01000193);
+    const s = `${seed}:${id}`;
+    for (let i = 0; i < s.length; i += 1) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    words.push(h >>> 0);
+  }
+  const hex = words.map((w) => w.toString(16).padStart(8, '0')).join('');
+  const b = hex.split('');
+  b[12] = '5'; // version
+  b[16] = ((parseInt(b[16], 16) & 0x3) | 0x8).toString(16); // variant
+  const h = b.join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
 export async function replaceCustomNutritionFoods(session: AppSession, foods: CustomNutritionFood[]) {
   const client = requireClient();
   if (foods.length === 0) {
@@ -2607,10 +2634,10 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
     return;
   }
 
-  const nextIds = new Set(foods.map((food) => food.id));
+  const nextIds = new Set(foods.map((food) => coerceToUuid(food.id)));
   const buildRow = (food: CustomNutritionFood, omit: Set<string>) => {
     const row: Record<string, unknown> = {
-      id: food.id,
+      id: coerceToUuid(food.id),
       user_id: session.userId,
       family_id: session.familyId,
       name: food.name,
@@ -2653,14 +2680,23 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
 
   const { data: existingRows, error: existingError } = await client
     .from('custom_nutrition_foods')
-    .select('id')
+    .select('id, created_at')
     .eq('user_id', session.userId);
   if (isMissingCustomNutritionFoodsTableError(existingError)) {
     throw new Error('Supabase custom nutrition foods table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/custom_nutrition_foods.sql in the Supabase SQL Editor, then try again.');
   }
   if (existingError) throw existingError;
 
-  const staleIds = (existingRows ?? []).map((row) => row.id).filter((id) => !nextIds.has(id));
+  // Only delete rows this snapshot knew about. A product another device added seconds ago
+  // won't be in our list — the grace window keeps it from being deleted by a stale save.
+  const cutoff = Date.now() - CONCURRENT_INSERT_GRACE_MS;
+  const staleIds = (existingRows ?? [])
+    .filter((row) => {
+      if (nextIds.has(row.id)) return false;
+      const created = Date.parse(String((row as { created_at?: string }).created_at || ''));
+      return Number.isNaN(created) || created < cutoff;
+    })
+    .map((row) => row.id);
   if (!staleIds.length) return;
 
   const { error: staleDeleteError } = await client.from('custom_nutrition_foods').delete().eq('user_id', session.userId).in('id', staleIds);
@@ -2706,14 +2742,23 @@ export async function replaceNutritionEntries(session: AppSession, entries: Nutr
 
   const { data: existingRows, error: existingError } = await client
     .from('nutrition_entries')
-    .select('id')
+    .select('id, created_at')
     .eq('user_id', session.userId);
   if (isMissingNutritionEntriesTableError(existingError)) {
     throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then try again.');
   }
   if (existingError) throw existingError;
 
-  const staleIds = (existingRows ?? []).map((row) => row.id).filter((id) => !nextIds.has(id));
+  // Grace window so a diary entry another device logged seconds ago isn't deleted by this
+  // (possibly stale) snapshot.
+  const cutoff = Date.now() - CONCURRENT_INSERT_GRACE_MS;
+  const staleIds = (existingRows ?? [])
+    .filter((row) => {
+      if (nextIds.has(row.id)) return false;
+      const created = Date.parse(String((row as { created_at?: string }).created_at || ''));
+      return Number.isNaN(created) || created < cutoff;
+    })
+    .map((row) => row.id);
   if (!staleIds.length) return;
 
   const { error: staleDeleteError } = await client.from('nutrition_entries').delete().eq('user_id', session.userId).in('id', staleIds);

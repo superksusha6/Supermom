@@ -1429,6 +1429,8 @@ function AppShell() {
       refreshLiveChores(current);
       refreshLiveHomeFixit(current);
       refreshLiveWeeklyMealPlan(current);
+      refreshLiveNutrition(current);
+      refreshLiveCustomFoods(current);
     };
 
     (async () => {
@@ -2281,6 +2283,30 @@ function AppShell() {
     }
   }
 
+  // Nutrition diary + saved products save delete-not-in-snapshot and aren't in realtime;
+  // keep their snapshots fresh so a stale second device can't delete rows the other added.
+  async function refreshLiveNutrition(current: AppSession | null = session) {
+    if (!current || !nutritionLoadedRef.current) return;
+    try {
+      const rows = await listNutritionEntries(current);
+      nutritionEntriesRef.current = rows;
+      setNutritionEntries(rows);
+    } catch {
+      // keep current
+    }
+  }
+
+  async function refreshLiveCustomFoods(current: AppSession | null = session) {
+    if (!current || !customNutritionFoodsLoadedRef.current) return;
+    try {
+      const rows = await listCustomNutritionFoods(current);
+      customNutritionFoodsRef.current = rows;
+      setCustomNutritionFoods(rows);
+    } catch {
+      // keep current
+    }
+  }
+
   async function refreshMyPersonalProfile(current: AppSession | null = session) {
     if (!current) return;
     try {
@@ -2587,11 +2613,13 @@ function AppShell() {
         setDailyCardPromptShown(localDailyCardState.promptShown || !!preferredDailyCardId);
         setDailyCardsModalOpen(false);
       }
+      // Only mark preferences loaded on SUCCESS — a failed read must not let the save
+      // effect fire and overwrite the real server prefs with in-memory defaults.
+      preferencesLoadedRef.current = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync preferences.';
       setTasksError(message);
     } finally {
-      preferencesLoadedRef.current = true;
       setDailyCardsReady(true);
       setDailyCardsPrefsReady(true);
     }
@@ -2607,6 +2635,7 @@ function AppShell() {
       setActiveOwnerFilter(`staff:${ctx.staffProfileId}`);
     }
     habitsLoadedRef.current = false;
+    personalProfileLoadedRef.current = false;
     nutritionLoadedRef.current = false;
     customNutritionFoodsLoadedRef.current = false;
     homeFixitLoadedRef.current = false;
@@ -3146,6 +3175,9 @@ function AppShell() {
     nutritionEntriesRef.current = [];
     customNutritionFoodsRef.current = [];
     habitsLoadedRef.current = false;
+    personalProfileLoadedRef.current = false;
+    setMedicines([]);
+    persistLocalMedicines([]);
     setShoppingShares([]);
     setPurchaseRequests([]);
     setRequests([]);
@@ -4719,13 +4751,13 @@ function AppShell() {
         // Push the grants to the person's actual account too. Harmless (and a no-op)
         // if they haven't accepted their invite yet. Surface a failure — a silently
         // dropped access change means a revoked feature isn't actually revoked.
-        await setStaffAccess(staffId, staffGrant.roles, staffGrant.features).catch((error) => {
-          setTasksError(
+        const accessError = await setStaffAccess(staffId, staffGrant.roles, staffGrant.features).then(
+          () => null,
+          (error) =>
             error instanceof Error && /set_staff_access/.test(error.message)
               ? 'Access saved on this device, but the server update needs the staff_access_update migration.'
               : 'Could not update the staff member’s access on their account. Please try again.',
-          );
-        });
+        );
         setStaffEnabled(true);
         // Stay in the admin (parent) view after saving — don't drop into the staff's preview.
         setStaffDraftName('');
@@ -4733,7 +4765,8 @@ function AppShell() {
         setStaffDraftTasks([createDefaultStaffDraftTask()]);
         setEditingStaffId(null);
         setStaffSetupOpen(false);
-        setTasksError(null);
+        // Keep a real access-update failure visible instead of clearing it below.
+        setTasksError(accessError);
         return;
       } catch (error) {
         setTasksError(error instanceof Error ? error.message : 'Could not save staff profile.');
@@ -10803,14 +10836,11 @@ function mergeFridgeItemsPreferLocal(serverItems: FridgeItem[], localItems: Frid
   if (serverItems.length === 0) return localItems;
   if (localItems.length === 0) return serverItems;
 
-  const merged = new Map<string, FridgeItem>();
-  serverItems.forEach((item) => {
-    merged.set(item.id, item);
-  });
-  localItems.forEach((item) => {
-    merged.set(item.id, item);
-  });
-  return [...merged.values()];
+  // Server is the base; keep ONLY genuinely-unsynced local rows (temp 'fridge-' ids). A
+  // real id missing from the server means it was deleted elsewhere — don't resurrect it.
+  const serverIds = new Set(serverItems.map((item) => item.id));
+  const localOnly = localItems.filter((item) => !serverIds.has(item.id) && item.id.startsWith('fridge-'));
+  return [...serverItems, ...localOnly];
 }
 
 function loadLocalChildren(): ChildProfile[] {
