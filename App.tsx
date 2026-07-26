@@ -23,6 +23,10 @@ import {
   getOrCreateSessionContext,
   createStaffInvite,
   acceptStaffInvite,
+  createChildInvite,
+  acceptChildInvite,
+  setChildAccess,
+  listChildConnections,
   setStaffProfileDob,
   deleteStaffProfileRecord,
   createPartnerInvite,
@@ -122,7 +126,7 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeMode, ThemeName, ThemeProvider, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, ChildFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
@@ -882,6 +886,7 @@ function AppShell() {
   const [authEmail, setAuthEmail] = useState('');
   const [staffInviteName, setStaffInviteName] = useState<string | null>(null);
   const [staffInviteProfileId, setStaffInviteProfileId] = useState<string | null>(null);
+  const [childInviteName, setChildInviteName] = useState<string | null>(null);
   const [authStaffDob, setAuthStaffDob] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
@@ -906,6 +911,7 @@ function AppShell() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const inviteRetryRef = useRef<(() => void) | null>(null);
   const pendingInviteTokenRef = useRef<string | null>(null);
+  const pendingChildTokenRef = useRef<string | null>(null);
   // Partner calendar: send a time slot to your partner; they confirm → event in both.
   const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
   const [partnerProposals, setPartnerProposals] = useState<CalendarProposal[]>([]);
@@ -1338,6 +1344,13 @@ function AppShell() {
   const isRealStaffSession = session?.role === 'staff';
   const isStaffPreview = !isRealStaffSession && role === 'staff' && !!activeStaffProfileId;
   const isStaffView = isRealStaffSession || isStaffPreview;
+  // Invited child with their own login. (Owner "child preview" via activeChildRoleId is
+  // separate and not treated as a real child session.)
+  const isChildView = session?.role === 'child';
+  const childFeatures = isChildView ? session?.childFeatures ?? [] : null;
+  const childCan = (feature: ChildFeature) => !!childFeatures && childFeatures.includes(feature);
+  const currentChildProfile = isChildView ? children.find((c) => c.id === session?.childProfileId) || null : null;
+  const childFirstName = (currentChildProfile?.name || childInviteName || '').trim().split(/\s+/)[0] || 'there';
   const staffFeatures = useMemo<StaffFeature[] | null>(() => {
     if (isRealStaffSession) return session?.allowedFeatures ?? [];
     if (isStaffPreview && activeStaffProfileId) return staffGrants[activeStaffProfileId]?.features ?? [];
@@ -2718,6 +2731,16 @@ function AppShell() {
         }
         if (sp) setStaffInviteProfileId(sp);
       }
+      const childToken = searchParams.get('child');
+      if (childToken) {
+        pendingChildTokenRef.current = childToken;
+        setPendingInviteActive(true);
+        const cn = searchParams.get('cn');
+        if (cn) {
+          setChildInviteName(cn);
+          setAuthName(cn); // pre-fill their name
+        }
+      }
       const partnerToken = searchParams.get('partner');
       if (partnerToken) pendingPartnerTokenRef.current = partnerToken;
     }
@@ -2729,16 +2752,19 @@ function AppShell() {
         if (cancelled) return;
         if (ctx) {
           await hydrateSessionContext(ctx);
-          if (pendingInviteTokenRef.current) {
+          if (pendingInviteTokenRef.current || pendingChildTokenRef.current) {
             // An invite link is for a NEW person — show registration instead of silently
-            // joining with whatever account is already signed in on this browser. A signed-in
-            // person can still tap "Join with this account" in the modal.
-            setAuthInfo('Register a new account (email + password) to join as staff — or join with your current account.');
+            // joining with whatever account is already signed in on this browser.
+            setAuthInfo(
+              pendingChildTokenRef.current
+                ? 'Register a new account (email + password) for your child to join.'
+                : 'Register a new account (email + password) to join as staff — or join with your current account.',
+            );
             setAuthMode('signup');
             setSignInModalOpen(true);
           }
           if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
-        } else if (pendingInviteTokenRef.current) {
+        } else if (pendingInviteTokenRef.current || pendingChildTokenRef.current) {
           // Not signed in yet — let them create their own account to join.
           setAuthInfo('Create your account (email + password) to join the family.');
           setAuthMode('signup');
@@ -4378,6 +4404,41 @@ function AppShell() {
     }
   }
 
+  // Invite a child to their own account (own login, like staff). Phase 1 grants the full
+  // set of child functions; per-child toggles come later.
+  async function handleInviteChild(childId: string) {
+    const current = session || sessionRef.current;
+    const child = children.find((c) => c.id === childId);
+    inviteRetryRef.current = () => handleInviteChild(childId);
+    setInviteStaffName(child?.name || 'your child');
+    setInviteLink('');
+    setInviteCopied(false);
+    setInviteError(null);
+    setInviteBusy(true);
+    setInviteModalOpen(true);
+    if (!current || !isSupabaseConfigured) {
+      setInviteBusy(false);
+      setInviteError('You need to be signed in to create an invite link. Try reopening the app.');
+      return;
+    }
+    if (childId.startsWith('child-')) {
+      setInviteBusy(false);
+      setInviteError('Save this child’s profile first, then create the invite link.');
+      return;
+    }
+    try {
+      const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition'];
+      const { token } = await createChildInvite(current, childId, features);
+      const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
+      const q = `child=${token}&cn=${encodeURIComponent(child?.name || '')}&cp=${encodeURIComponent(childId)}`;
+      setInviteLink(`${origin}/?${q}`);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Could not create the invite link. Please try again.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   function copyInviteLink(link: string) {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(link);
@@ -4408,6 +4469,25 @@ function AppShell() {
       const ctx = await getOrCreateSessionContext();
       if (ctx) await hydrateSessionContext(ctx);
       setAuthInfo('You’ve joined the family. Here is your access.');
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not accept the invite.');
+    }
+  }
+
+  // Consume a pending ?child= token: join the family as a child and re-resolve the session.
+  async function consumePendingChildInvite() {
+    const token = pendingChildTokenRef.current;
+    if (!token || !isSupabaseConfigured) return;
+    pendingChildTokenRef.current = null;
+    setPendingInviteActive(false);
+    try {
+      await acceptChildInvite(token);
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      const ctx = await getOrCreateSessionContext();
+      if (ctx) await hydrateSessionContext(ctx);
+      setAuthInfo('You’ve joined the family. Here is your space.');
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not accept the invite.');
     }
@@ -5030,6 +5110,11 @@ function AppShell() {
         await consumePendingInvite();
         return;
       }
+      if (pendingChildTokenRef.current) {
+        setSignInModalOpen(false);
+        await consumePendingChildInvite();
+        return;
+      }
       if (pendingPartnerTokenRef.current) {
         setSignInModalOpen(false);
         const ctx = await getOrCreateSessionContext();
@@ -5155,6 +5240,11 @@ function AppShell() {
             // Sync their date of birth to the staff profile so the family sees it. Non-fatal.
             await setStaffProfileDob(staffInviteProfileId, authStaffDob.trim()).catch(() => {});
           }
+          return;
+        }
+        if (pendingChildTokenRef.current) {
+          setSignInModalOpen(false);
+          await consumePendingChildInvite();
           return;
         }
         const ctx = await getOrCreateSessionContext();
@@ -5594,6 +5684,67 @@ function AppShell() {
       .slice(0, 2)
       .join('')
       .toUpperCase() || 'S';
+  // Phase 1 child landing: greeting + which functions the parent turned on. The real
+  // day-plan / shopping / habits / nutrition views arrive in Phase 2.
+  const childGreetTime = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  })();
+  const childGrantedList = ([
+    { key: 'dayplan', label: 'My day', icon: 'calendar' },
+    { key: 'shopping', label: 'Shopping list', icon: 'cart' },
+    { key: 'habits', label: 'My habits', icon: 'heart' },
+    { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
+  ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childCan(f.key));
+  const childHomeNode = (
+    <View style={styles.dashWrap}>
+      <View style={styles.staffHeaderCard}>
+        <View style={styles.staffHeaderAvatar}>
+          <Text style={styles.staffHeaderAvatarText}>
+            {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.staffHeaderCopy}>
+          <Text style={styles.staffHeaderHi}>{childGreetTime}, {childFirstName} 👋</Text>
+          <Text style={styles.staffHeaderSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+        </View>
+      </View>
+      {childGrantedList.length > 0 ? (
+        childGrantedList.map((f) => (
+          <View key={f.key} style={styles.tasksHubCard}>
+            <View style={styles.tasksHubIcon}>
+              <Icon name={f.icon} color={colors.primary} size={20} />
+            </View>
+            <View style={styles.tasksHubCopy}>
+              <Text style={styles.tasksHubTitle}>{f.label}</Text>
+              <Text style={styles.tasksHubSub} numberOfLines={1}>Coming soon in your space</Text>
+            </View>
+          </View>
+        ))
+      ) : (
+        <View style={styles.tasksHubCard}>
+          <View style={styles.tasksHubCopy}>
+            <Text style={styles.tasksHubTitle}>Your space is being set up</Text>
+            <Text style={styles.tasksHubSub}>Ask a parent to turn on what you can see.</Text>
+          </View>
+        </View>
+      )}
+      <Pressable
+        style={[styles.authBtn, styles.authSecondary, { marginTop: 8 }]}
+        onPress={() => {
+          signOut()
+            .then(() => {
+              resetSignedOutState();
+              setScreen('calendar');
+            })
+            .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
+        }}
+      >
+        <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
+      </Pressable>
+    </View>
+  );
+
   const staffSettingsNode = (
     <View style={styles.staffSettingsWrap}>
       <Text style={styles.staffSettingsTitle}>Settings</Text>
@@ -6926,8 +7077,8 @@ function AppShell() {
             <View style={styles.signInModalCard}>
             <Text style={styles.authTitle}>
               {authMode === 'signup'
-                ? staffInviteName
-                  ? `Hi, ${staffInviteName} 👋`
+                ? staffInviteName || childInviteName
+                  ? `Hi, ${staffInviteName || childInviteName} 👋`
                   : 'Create Account'
                 : authMode === 'reset'
                   ? 'Reset Password'
@@ -6937,6 +7088,9 @@ function AppShell() {
             </Text>
             {authMode === 'signup' && staffInviteName ? (
               <Text style={styles.authInfoText}>You’ve been invited to join as staff. Fill in your details to get your own private screen.</Text>
+            ) : null}
+            {authMode === 'signup' && childInviteName ? (
+              <Text style={styles.authInfoText}>You’ve been invited to join the family. Create your account to get your own space.</Text>
             ) : null}
             {authMode === 'signup' ? (
               <>
@@ -7738,8 +7892,9 @@ function AppShell() {
           <Text style={styles.calBackText}>{foodEntryOrigin === 'home' ? 'Back to Today' : 'Back to Food'}</Text>
         </Pressable>
       ) : null}
-        {screen === 'settings' ? settingsScreenContent : null}
-        {screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
+        {screen === 'settings' && !isChildView ? settingsScreenContent : null}
+        {isChildView ? childHomeNode : null}
+        {!isChildView && screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
             <Icon name="chevron" color={colors.primary} size={16} />
@@ -8122,6 +8277,7 @@ function AppShell() {
             children={children}
             onDeleteChild={handleDeleteChildDirect}
             onEditChild={openChildActivitiesEditor}
+            onInviteChild={handleInviteChild}
             todayPlansByChild={childTodayPlans}
             onSetChildPhoto={(childId, photoUri) => {
               setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)));
@@ -9207,6 +9363,7 @@ function AppShell() {
         ) : null}
       </ScrollView>
 
+      {isChildView ? null : (
       <View style={styles.tabBar}>
         {staffCan('schedule') || staffCan('tasks') ? (
           <TabButton icon={isStaffView ? 'chores' : 'calendar'} label={isStaffView ? 'Tasks' : 'Today'} active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
@@ -9222,6 +9379,7 @@ function AppShell() {
         ) : null}
         <TabButton icon="settings" label="Settings" active={settingsPanelOpen} onPress={() => setSettingsPanelOpen(true)} styles={styles} colors={colors} />
       </View>
+      )}
 
       <Modal visible={completedTasksOpen} transparent animationType="fade" onRequestClose={() => setCompletedTasksOpen(false)}>
         <View style={styles.modalBackdrop}>

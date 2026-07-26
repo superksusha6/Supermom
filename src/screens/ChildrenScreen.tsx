@@ -85,6 +85,7 @@ type Props = {
   onDeleteActivity: (childId: string, activityId: string) => void;
   onDeleteChild: (childId: string) => void;
   onEditChild: (childId: string) => void;
+  onInviteChild?: (childId: string) => void;
   onAddChild: () => void;
   onSetChildPhoto: (childId: string, photoUri: string) => void;
   chores: Chore[];
@@ -102,6 +103,7 @@ export function ChildrenScreen({
   onDeleteActivity,
   onDeleteChild,
   onEditChild,
+  onInviteChild,
   onAddChild,
   onSetChildPhoto,
   chores,
@@ -466,6 +468,14 @@ export function ChildrenScreen({
             <Pressable style={styles.menuRow} onPress={() => { setChildMenuOpen(false); onEditChild(child.id); }}>
               <Text style={styles.menuRowText}>Edit child</Text>
             </Pressable>
+            {onInviteChild ? (
+              <>
+                <View style={styles.menuDivider} />
+                <Pressable style={styles.menuRow} onPress={() => { setChildMenuOpen(false); onInviteChild(child.id); }}>
+                  <Text style={styles.menuRowText}>Invite to their own account</Text>
+                </Pressable>
+              </>
+            ) : null}
             <View style={styles.menuDivider} />
             <Pressable style={styles.menuRow} onPress={() => { setChildMenuOpen(false); onDeleteChild(child.id); }}>
               <Text style={[styles.menuRowText, styles.menuRowDanger]}>Delete child</Text>

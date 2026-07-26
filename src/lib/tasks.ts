@@ -22,6 +22,7 @@ import {
   PersonalProfile,
   PurchaseRequest,
   StaffFeature,
+  ChildFeature,
   StaffRolePreset,
   Recipe,
   RecipeClassifier,
@@ -47,6 +48,8 @@ export type AppSession = {
   role: Role;
   allowedFeatures: StaffFeature[];
   staffProfileId?: string;
+  childProfileId?: string;
+  childFeatures?: ChildFeature[];
 };
 
 type TaskInsert = {
@@ -485,7 +488,7 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
 
   const { data: memberships, error: membershipsError } = await client
     .from('family_members')
-    .select('family_id, role, features, status, staff_profile_id')
+    .select('family_id, role, features, status, staff_profile_id, linked_child_profile_id')
     .eq('user_id', user.id);
   if (membershipsError) throw membershipsError;
 
@@ -506,6 +509,23 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
       role: 'staff',
       allowedFeatures: normalizeStaffFeatures(staffMembership.features),
       staffProfileId: (staffMembership.staff_profile_id as string | null) ?? undefined,
+    };
+  }
+
+  // Same idea for an invited child: prefer a child membership in ANOTHER family so the
+  // kid lands in the family that invited them (a child row in their own family is a
+  // self-invite anomaly — ignored so the account isn't trapped in child view).
+  const childMembership = (memberships || []).find(
+    (m) => m.role === 'child' && m.status === 'active' && m.family_id !== familyId,
+  );
+  if (childMembership) {
+    return {
+      userId: user.id,
+      familyId: childMembership.family_id as string,
+      role: 'child',
+      allowedFeatures: [],
+      childProfileId: (childMembership.linked_child_profile_id as string | null) ?? undefined,
+      childFeatures: normalizeChildFeatures(childMembership.features),
     };
   }
 
@@ -532,6 +552,57 @@ const STAFF_FEATURE_VALUES: StaffFeature[] = ['tasks', 'shopping', 'menu', 'reci
 function normalizeStaffFeatures(value: unknown): StaffFeature[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is StaffFeature => typeof v === 'string' && STAFF_FEATURE_VALUES.includes(v as StaffFeature));
+}
+
+const CHILD_FEATURE_VALUES: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition'];
+function normalizeChildFeatures(value: unknown): ChildFeature[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is ChildFeature => typeof v === 'string' && CHILD_FEATURE_VALUES.includes(v as ChildFeature));
+}
+
+// A family admin mints a child invite carrying the granted functions; the child accepts it.
+export async function createChildInvite(
+  session: AppSession,
+  childProfileId: string,
+  features: ChildFeature[],
+): Promise<{ token: string; expiresAt: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('create_child_invite', {
+    p_family_id: session.familyId,
+    p_child_profile_id: childProfileId,
+    p_features: features,
+  });
+  if (error) throw error;
+  return { token: (data as { token: string }).token, expiresAt: (data as { expires_at: string }).expires_at };
+}
+
+export async function acceptChildInvite(token: string): Promise<{ familyId: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('accept_child_invite', { p_token: token });
+  if (error) throw error;
+  return { familyId: (data as { family_id: string }).family_id };
+}
+
+// The owner changes an already-connected child's granted functions.
+export async function setChildAccess(childProfileId: string, features: ChildFeature[]): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.rpc('set_child_access', { p_child_profile_id: childProfileId, p_features: features });
+  if (error) throw error;
+}
+
+// Which child profiles have an activated, linked account (invite accepted).
+export async function listChildConnections(session: AppSession): Promise<string[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('family_members')
+    .select('linked_child_profile_id, role, status')
+    .eq('family_id', session.familyId)
+    .eq('role', 'child')
+    .eq('status', 'active');
+  if (error) return [];
+  return (data || [])
+    .map((row) => (row.linked_child_profile_id as string | null) || '')
+    .filter((id): id is string => Boolean(id));
 }
 
 // A family admin mints a staff invite carrying the granted roles + features.

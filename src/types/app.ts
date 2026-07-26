@@ -1,6 +1,8 @@
 export type Role = 'mother' | 'child' | 'staff' | 'admin';
 // Which app functions a staff member (nanny / cook / driver) may access.
 export type StaffFeature = 'tasks' | 'shopping' | 'menu' | 'recipes' | 'schedule' | 'fixit';
+// Functions a parent can grant an invited child (each opt-in "по запросу").
+export type ChildFeature = 'dayplan' | 'shopping' | 'habits' | 'nutrition';
 // A staff member can hold several roles at once (e.g. nanny who also cooks + drives).
 export type StaffRolePreset = 'nanny' | 'housekeeper' | 'cook' | 'driver' | 'assistant';
 export type StaffGrant = { roles: StaffRolePreset[]; features: StaffFeature[] };
