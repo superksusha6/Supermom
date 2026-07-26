@@ -472,7 +472,15 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.image) {
-        setPhotoError(data.error || 'The photo service is busy — please try again.');
+        // Map the AI provider's billing/quota errors to a calm user message instead of
+        // leaking "Billing hard limit reached" — it's an account setting, not an app bug.
+        const raw = String(data.error || '').toLowerCase();
+        const isQuota = raw.includes('billing') || raw.includes('quota') || raw.includes('limit') || raw.includes('insufficient');
+        setPhotoError(
+          isQuota
+            ? 'Photo generation is paused for now — you can add your own photo or use the auto cover.'
+            : data.error || 'The photo service is busy — please try again.',
+        );
         return;
       }
       const compact = await shrinkDataUrl(data.image);
