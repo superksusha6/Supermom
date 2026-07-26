@@ -833,6 +833,13 @@ function AppShell() {
     [],
   );
   const [screen, setScreen] = useState<Screen>('calendar');
+  // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
+  // wherever the user opened it from, so Back goes back, not always to Home.
+  const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
+  const openSubScreen = (target: Screen) => {
+    setSubScreenBack(screen);
+    setScreen(target);
+  };
   const [role, setRole] = useState<UiRole>('mother');
   const [staffEnabled, setStaffEnabled] = useState(false);
 
@@ -1967,7 +1974,7 @@ function AppShell() {
       .forEach((c) => items.push({ label: `Verify ${c.title}`, go: () => { setScreen('family'); setFamilyTab('chores'); } }));
     homeIssues
       .filter((i) => i.urgency === 'urgent' && i.status !== 'done')
-      .forEach((i) => items.push({ label: i.title || 'Urgent home issue', go: () => setScreen('fixit') }));
+      .forEach((i) => items.push({ label: i.title || 'Urgent home issue', go: () => openSubScreen('fixit') }));
     purchaseRequests
       .filter((r) => r.status === 'new')
       .forEach((r) => items.push({ label: `Approve “${r.itemName}”`, go: () => setScreen('family') }));
@@ -5634,7 +5641,7 @@ function AppShell() {
       onHabitRemindersEnabledChange={setHabitRemindersEnabled}
       medsEnabled={medsEnabled}
       onToggleMeds={() => setMedsEnabled((prev) => !prev)}
-      onOpenMeds={() => { setSettingsPanelOpen(false); setMedsEnabled(true); setScreen('meds'); }}
+      onOpenMeds={() => { setSettingsPanelOpen(false); setMedsEnabled(true); openSubScreen('meds'); }}
       periodRemindersEnabled={periodRemindersEnabled}
       onPeriodRemindersEnabledChange={setPeriodRemindersEnabled}
       periodReminderLeadDays={periodReminderLeadDays}
@@ -5941,7 +5948,7 @@ function AppShell() {
           accessibilityRole="button"
           accessibilityLabel={`Meds, ${medsNeedAttentionCount(medicines)} need attention`}
           style={[styles.statChip, !isMobile && styles.statChipGrid]}
-          onPress={() => setScreen('meds')}
+          onPress={() => openSubScreen('meds')}
         >
           <Icon name="pill" color={statusColor(colors, 'soon')} size={18} />
           <View style={styles.statCopy}>
@@ -6179,12 +6186,12 @@ function AppShell() {
         <Icon name="cart" color={colors.primary} size={18} />
         <Text style={styles.quickChipText}>Shopping</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.quickChip} onPress={() => setScreen('fixit')}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.quickChip} onPress={() => openSubScreen('fixit')}>
         <Icon name="wrench" color={colors.primary} size={18} />
         <Text style={styles.quickChipText}>Fix it</Text>
       </Pressable>
       {medsEnabled ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => setScreen('meds')}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.quickChip} onPress={() => openSubScreen('meds')}>
           <Icon name="pill" color={colors.primary} size={18} />
           <Text style={styles.quickChipText} numberOfLines={1}>Meds</Text>
         </Pressable>
@@ -6564,7 +6571,7 @@ function AppShell() {
         accessibilityRole="button"
         accessibilityLabel={`Habits, ${habitsDoneToday} of ${activeHabits.length} done today. Open tracker.`}
         style={styles.habitsDashHeader}
-        onPress={() => setScreen('wellness')}
+        onPress={() => openSubScreen('wellness')}
       >
         <View style={styles.habitsDashTitleWrap}>
           <Icon name="check" color={colors.primary} size={17} />
@@ -8398,20 +8405,20 @@ function AppShell() {
 
         {screen === 'household' ? (
           <View style={styles.dashWrap}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.foodShopBtn} onPress={() => setScreen('fixit')}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Fix it, home repairs" style={styles.foodShopBtn} onPress={() => openSubScreen('fixit')}>
               <View style={styles.foodShopIcon}><Icon name="wrench" color={colors.primary} size={20} /></View>
               <Text style={styles.foodShopText}>Fix it</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
             {medsEnabled ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.foodShopBtn} onPress={() => setScreen('meds')}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Medicine cabinet" style={styles.foodShopBtn} onPress={() => openSubScreen('meds')}>
                 <View style={styles.foodShopIcon}><Icon name="pill" color={colors.primary} size={20} /></View>
                 <Text style={styles.foodShopText}>Meds</Text>
                 <Icon name="chevron" color={colors.subtext} size={18} />
               </Pressable>
             ) : null}
             {habitsEnabled && !isStaffView ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Habits and wellness" style={styles.foodShopBtn} onPress={() => setScreen('wellness')}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Habits and wellness" style={styles.foodShopBtn} onPress={() => openSubScreen('wellness')}>
                 <View style={styles.foodShopIcon}><Icon name="heart" color={colors.primary} size={20} /></View>
                 <Text style={styles.foodShopText}>Habits</Text>
                 <Icon name="chevron" color={colors.subtext} size={18} />
@@ -8424,9 +8431,15 @@ function AppShell() {
         ) : null}
 
         {screen === 'fixit' || screen === 'meds' || (screen === 'wellness' && habitsEnabled) ? (
-          <Pressable style={styles.calBackBtn} onPress={() => setScreen('household')}>
+          <Pressable
+            style={styles.calBackBtn}
+            onPress={() => {
+              setScreen(subScreenBack);
+              if (subScreenBack === 'calendar') setHomeTab('today');
+            }}
+          >
             <Icon name="chevron" color={colors.primary} size={16} />
-            <Text style={styles.calBackText}>Back to Home</Text>
+            <Text style={styles.calBackText}>{subScreenBack === 'calendar' ? 'Back' : 'Back to Home'}</Text>
           </Pressable>
         ) : null}
 
