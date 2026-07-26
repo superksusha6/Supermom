@@ -8387,6 +8387,10 @@ function AppShell() {
             onRecipeDelete={handleRecipeDelete}
             // Calorie logging is the owner's personal tracker — never offer it to staff.
             onNutritionEntriesChange={isStaffView ? undefined : handleNutritionEntriesChange}
+            customFoods={customNutritionFoods}
+            onSaveCustomFood={
+              isStaffView ? undefined : (food) => handleCustomNutritionFoodsChange((prev) => [food, ...prev])
+            }
           />
         ) : null}
 

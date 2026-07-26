@@ -2,9 +2,9 @@ import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from '
 import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
-import { FridgeItem, NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
+import { CustomNutritionFood, FridgeItem, NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
 import { buildInventoryIndex, matchRecipeToInventory, RecipeMatch } from '@/lib/recipeMatch';
-import { cleanNutritionNumber, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
+import { cleanNutritionNumber, customNutritionFoodToPreset, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { computeRecipeNutritionForSelection, resolveRecipeIngredients, type RecipeSelection } from '@/lib/recipeNutrition';
 import { RECIPE_IMAGES } from '@/lib/generated/recipeImageMap';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
@@ -19,6 +19,10 @@ type Props = {
   onRecipeUpdate: (recipe: Recipe) => Promise<Recipe> | Recipe;
   onRecipeDelete: (recipeId: string) => Promise<void> | void;
   onNutritionEntriesChange?: Dispatch<SetStateAction<NutritionFoodEntry[]>>;
+  // The user's own saved products, so recipe ingredients can reuse them; and a callback
+  // to add a newly-typed custom product to that database.
+  customFoods?: CustomNutritionFood[];
+  onSaveCustomFood?: (food: CustomNutritionFood) => void;
 };
 
 const LOG_MEAL_TYPES: NutritionMealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -85,7 +89,10 @@ function customHasValues(custom?: CustomIngredientNutrition) {
   return [custom.calories, custom.protein, custom.fat, custom.carbs].some((v) => (Number(String(v).replace(',', '.')) || 0) > 0);
 }
 
-function createDraftIngredientRowFromRecipe(ingredient: Recipe['ingredients'][number]): DraftIngredientRow {
+function createDraftIngredientRowFromRecipe(
+  ingredient: Recipe['ingredients'][number],
+  presets: NutritionFoodPreset[] = NUTRITION_FOOD_PRESETS,
+): DraftIngredientRow {
   const amountMatch = ingredient.amount.trim().match(/^(\d+(?:[.,]\d+)?)\s*(g|ml|pc|pcs|tbsp|tsp)$/i);
   const normalizedUnit = (amountMatch?.[2] || 'g').toLowerCase();
   const unit: IngredientUnit =
@@ -99,7 +106,7 @@ function createDraftIngredientRowFromRecipe(ingredient: Recipe['ingredients'][nu
             ? 'tsp'
             : 'g';
   const preset =
-    NUTRITION_FOOD_PRESETS.find((item) => item.name.trim().toLowerCase() === ingredient.name.trim().toLowerCase()) || null;
+    presets.find((item) => item.name.trim().toLowerCase() === ingredient.name.trim().toLowerCase()) || null;
 
   return {
     id: `draft-ingredient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -316,7 +323,13 @@ function formatIngredientLine(ingredient: { amount: string; name: string; option
   return ingredient.optional ? `${base} (optional)` : base;
 }
 
-export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], cookNowToken, onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange }: Props) {
+export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], cookNowToken, onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange, customFoods = [], onSaveCustomFood }: Props) {
+  // Built-in foods + the user's own saved products, searched together in the ingredient
+  // picker so a product typed once (with its macros) can be reused in any recipe.
+  const allFoodPresets = useMemo(
+    () => [...customFoods.map(customNutritionFoodToPreset), ...NUTRITION_FOOD_PRESETS],
+    [customFoods],
+  );
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
@@ -538,7 +551,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     setDraftSteps(recipe.steps.map((step) => step.text).join('\n'));
     setDraftClassifiers(recipe.classifiers);
     const rows = recipe.ingredients.length
-      ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient))
+      ? recipe.ingredients.map((ingredient) => createDraftIngredientRowFromRecipe(ingredient, allFoodPresets))
       : [createDraftIngredientRow()];
     setDraftIngredientRows(rows);
     // If the saved nutrition differs from what the ingredients produce, it was
@@ -624,6 +637,30 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       suitableForChildren: draftClassifiers.includes('kids'),
       suitableForFamily: draftClassifiers.includes('family'),
     };
+
+    // Save any newly-typed custom product (with its own macros) to the user's food
+    // database so it persists and can be reused in other recipes and the diary.
+    if (onSaveCustomFood) {
+      draftIngredientRows.forEach((row) => {
+        if (row.preset || !customHasValues(row.custom) || !row.custom) return;
+        const name = row.query.trim();
+        if (!name) return;
+        const known =
+          customFoods.some((f) => f.name.trim().toLowerCase() === name.toLowerCase()) ||
+          NUTRITION_FOOD_PRESETS.some((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+        if (known) return;
+        onSaveCustomFood({
+          id: createRecipeLogId(),
+          name,
+          baseMode: '100g',
+          baseQuantity: 100,
+          calories: Number(row.custom.calories.replace(',', '.')) || 0,
+          protein: Number(row.custom.protein.replace(',', '.')) || 0,
+          fat: Number(row.custom.fat.replace(',', '.')) || 0,
+          carbs: Number(row.custom.carbs.replace(',', '.')) || 0,
+        });
+      });
+    }
 
     try {
       setBuilderSaving(true);
@@ -1259,12 +1296,12 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                 const presetChosen = !!row.preset && row.preset.name.toLowerCase() === q;
                 const rank = (name: string) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
                 const suggestions = queryText && !presetChosen
-                  ? NUTRITION_FOOD_PRESETS.filter((item) => {
+                  ? allFoodPresets.filter((item) => {
                       if (item.name.toLowerCase().includes(q)) return true;
                       return (item.aliases || []).some((alias) => alias.toLowerCase().includes(q));
                     })
                       .sort((a, b) => rank(a.name.toLowerCase()) - rank(b.name.toLowerCase()))
-                      .slice(0, 6)
+                      .slice(0, 8)
                   : [];
                 const ingredientNutrition = getIngredientNutrition(row);
                 const calculationGrams = getIngredientCalculationGrams(row);
