@@ -673,7 +673,15 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       setBuilderOpen(false);
       resetBuilder();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not save recipe.';
+      // Supabase errors are plain objects, not Error instances — pull the real
+      // message/details out so the user (and we) see WHY a save failed.
+      let message = 'Could not save recipe.';
+      if (error instanceof Error && error.message) {
+        message = error.message;
+      } else if (error && typeof error === 'object') {
+        const e = error as { message?: string; details?: string; hint?: string };
+        message = e.message || e.details || e.hint || message;
+      }
       setBuilderError(
         message.includes("Could not find the table 'public.recipes'")
           ? 'Supabase recipes table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/recipes.sql in Supabase SQL Editor, then save again.'
@@ -2192,7 +2200,7 @@ const createStyles = (colors: ThemeColors) =>
     modalCard: {
       maxHeight: '88%',
       width: '100%',
-      maxWidth: 440,
+      maxWidth: 620,
       alignSelf: 'center',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
