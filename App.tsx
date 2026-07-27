@@ -5923,7 +5923,7 @@ function AppShell() {
       </View>
       {childGrantedList.length > 0 ? (
         childGrantedList.map((f) => {
-          const ready = f.key === 'habits' || f.key === 'nutrition'; // functions wired so far
+          const ready = f.key === 'habits' || f.key === 'nutrition' || f.key === 'shopping'; // functions wired so far
           return (
             <Pressable
               key={f.key}
@@ -5995,6 +5995,9 @@ function AppShell() {
   const childScreenNode =
     childTab === 'settings' ? (
       childSettingsNode
+    ) : childScreen === 'shopping' && childCan('shopping') ? (
+      // Rendered by the shared ShoppingScreen block below (with a Back bar).
+      null
     ) : childScreen === 'habits' && childCan('habits') ? (
       <View style={styles.dashWrap}>
         {childBackBar('My habits')}
@@ -8814,7 +8817,10 @@ function AppShell() {
           <MedicineScreen medicines={medicines} onMedicinesChange={handleMedicinesChange} />
         ) : null}
 
-        {screen === 'food' && foodTab === 'shopping' && staffCan('shopping') ? (
+        {(screen === 'food' && foodTab === 'shopping' && staffCan('shopping')) ||
+        (isChildView && childTab === 'home' && childScreen === 'shopping' && childCan('shopping')) ? (
+          <>
+          {isChildView && childScreen === 'shopping' ? childBackBar('Shopping list') : null}
           <ShoppingScreen
             lists={shoppingLists}
             selectedListId={selectedShoppingListId}
@@ -9583,6 +9589,7 @@ function AppShell() {
             }}
             quickActionRequest={dashboardShoppingQuickAction}
           />
+          </>
         ) : null}
 
         {shouldShowDailyCardsModal && !isStaffView ? (
