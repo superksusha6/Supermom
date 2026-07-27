@@ -1455,6 +1455,7 @@ function AppShell() {
       refreshLiveWeeklyMealPlan(current);
       refreshLiveNutrition(current);
       refreshLiveCustomFoods(current);
+      refreshLiveHabits(current);
     };
 
     (async () => {
@@ -2326,6 +2327,25 @@ function AppShell() {
       const rows = await listCustomNutritionFoods(current);
       customNutritionFoodsRef.current = rows;
       setCustomNutritionFoods(rows);
+    } catch {
+      // keep current
+    }
+  }
+
+  async function refreshLiveHabits(current: AppSession | null = session) {
+    // Habits weren't in the live poll, so a tick/edit on one device never reached
+    // the other without a full reload. Pull the server copy so changes propagate.
+    if (!current || !habitsLoadedRef.current) return;
+    // Don't clobber an edit this device just made and hasn't finished saving.
+    if (habitsDirtyRef.current) return;
+    try {
+      const rows = await listHabitEntries(current);
+      // Server empty = nothing saved yet (or a transient RLS/auth miss). Keep the
+      // local list so we never wipe habits that are still waiting to migrate up.
+      if (rows.length === 0) return;
+      const next = normalizeHabitsForToday(rows);
+      latestHabitsRef.current = next;
+      setHabits(next);
     } catch {
       // keep current
     }
