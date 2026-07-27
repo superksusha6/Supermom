@@ -2441,7 +2441,8 @@ const HABITS_TABLE_MISSING_MSG =
 // guard), so deleting the LAST habit needs an explicit per-id delete to reach the server.
 export async function deleteHabitEntry(session: AppSession, id: string): Promise<void> {
   const client = requireClient();
-  const { error } = await client.from('habit_entries').delete().eq('user_id', session.userId).eq('id', id);
+  // Habit ids like 'seed-water' aren't UUIDs; the server stores their coerced form.
+  const { error } = await client.from('habit_entries').delete().eq('user_id', session.userId).eq('id', coerceToUuid(id));
   if (error && !isMissingHabitEntriesTableError(error)) throw error;
 }
 
@@ -2452,8 +2453,13 @@ export async function replaceHabitEntries(session: AppSession, habits: HabitEntr
   // EVERY change (even ticking a box), so an interrupted save emptied the server.
   if (habits.length === 0) return;
 
+  // Habit ids can be non-UUID strings (the starter defaults are 'seed-water',
+  // 'seed-exercise', …). The `id` column is uuid, so writing the raw id makes the
+  // WHOLE upsert fail and nothing persists — which is why the server stayed empty
+  // and habits only ever lived in this device's localStorage. Coerce to a stable
+  // deterministic UUID (same string → same UUID) so saves succeed and don't dupe.
   const baseRows = habits.map((habit) => ({
-    id: habit.id,
+    id: coerceToUuid(habit.id),
     user_id: session.userId,
     family_id: session.familyId,
     title: habit.title,
@@ -2485,7 +2491,7 @@ export async function replaceHabitEntries(session: AppSession, habits: HabitEntr
 
   // 2) Then remove only the rows the user actually deleted. Best-effort: if this
   //    read/delete fails, the save above still stands.
-  const keepIds = new Set(habits.map((h) => h.id));
+  const keepIds = new Set(habits.map((h) => coerceToUuid(h.id)));
   const { data: existing, error: readError } = await client
     .from('habit_entries')
     .select('id')

@@ -242,6 +242,19 @@ const DEFAULT_HABITS: HabitEntry[] = [
   { id: 'seed-reading', title: 'Reading', icon: '📖', color: '#f472b6', targetText: '10 pages', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
   { id: 'seed-sleep', title: 'Sleep 8h', icon: '🛌', color: '#818cf8', targetText: '8 hours', enabled: true, builtIn: true, markStyle: 'circle', reminderMode: 'off', reminderTime: '', completedToday: false, streak: 0 },
 ];
+// True when a habit list looks like the user has actually been using it — any
+// streak/progress, or a set that differs from the pristine starter defaults.
+// Used to migrate a device's real habits to an empty server WITHOUT resurrecting
+// a fresh device's untouched starter set.
+function habitsLookUserModified(habits: HabitEntry[]): boolean {
+  if (habits.length === 0) return false;
+  if (habits.length !== DEFAULT_HABITS.length) return true;
+  const defaultIds = new Set(DEFAULT_HABITS.map((h) => h.id));
+  return habits.some(
+    (h) => !defaultIds.has(h.id) || (h.streak || 0) > 0 || h.completedToday || !!h.completedDate,
+  );
+}
+
 const LOCAL_HABIT_REMINDERS_KEY = 'smartmom.habitRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDERS_KEY = 'smartmom.periodRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDER_LEAD_DAYS_KEY = 'smartmom.periodReminderLeadDays.v1';
@@ -2667,16 +2680,22 @@ function AppShell() {
       listHabitEntries(ctx)
         .then(async (liveHabits) => {
           // Server is authoritative when it has data. When it's empty we show the
-          // local starter defaults for display ONLY — we must NOT push them to the
-          // server, or a fresh device reading an empty/transient list would
-          // resurrect the starter habits for everyone. They persist only once the
-          // user actually engages with a habit (setHabitsByUser → dirty → save).
+          // local starter defaults for display ONLY — pushing untouched defaults up
+          // would resurrect the starter habits on every fresh device.
+          // BUT if this device holds habits the user has really been using (streaks,
+          // progress, or a changed set — e.g. the desktop's list), migrate those up
+          // once so they sync to the phone. The pristine starter set is never pushed.
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
           const nextHabits =
             liveHabits.length > 0 ? normalizeHabitsForToday(liveHabits) : normalizeHabitsForToday(localHabits);
           latestHabitsRef.current = nextHabits;
           setHabits(nextHabits);
           habitsLoadedRef.current = true;
+          if (liveHabits.length === 0 && habitsLookUserModified(nextHabits)) {
+            await replaceHabitEntries(ctx, nextHabits).catch((error) => {
+              setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
+            });
+          }
         })
         .catch((error) => {
           // Show local habits, but do NOT mark loaded: if the server read failed we
