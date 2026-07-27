@@ -850,6 +850,8 @@ function AppShell() {
     [],
   );
   const [screen, setScreen] = useState<Screen>('calendar');
+  // Child's own navigation: 'home' is the dashboard; the rest are granted functions.
+  const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -5919,17 +5921,26 @@ function AppShell() {
         </View>
       </View>
       {childGrantedList.length > 0 ? (
-        childGrantedList.map((f) => (
-          <View key={f.key} style={styles.tasksHubCard}>
-            <View style={styles.tasksHubIcon}>
-              <Icon name={f.icon} color={colors.primary} size={20} />
-            </View>
-            <View style={styles.tasksHubCopy}>
-              <Text style={styles.tasksHubTitle}>{f.label}</Text>
-              <Text style={styles.tasksHubSub} numberOfLines={1}>Coming soon in your space</Text>
-            </View>
-          </View>
-        ))
+        childGrantedList.map((f) => {
+          const ready = f.key === 'habits'; // functions wired so far
+          return (
+            <Pressable
+              key={f.key}
+              style={styles.tasksHubCard}
+              disabled={!ready}
+              onPress={() => ready && setChildScreen(f.key as typeof childScreen)}
+            >
+              <View style={styles.tasksHubIcon}>
+                <Icon name={f.icon} color={colors.primary} size={20} />
+              </View>
+              <View style={styles.tasksHubCopy}>
+                <Text style={styles.tasksHubTitle}>{f.label}</Text>
+                <Text style={styles.tasksHubSub} numberOfLines={1}>{ready ? 'Tap to open' : 'Coming soon in your space'}</Text>
+              </View>
+              {ready ? <Icon name="chevron" color={colors.subtext} size={16} /> : null}
+            </Pressable>
+          );
+        })
       ) : (
         <View style={styles.tasksHubCard}>
           <View style={styles.tasksHubCopy}>
@@ -5953,6 +5964,36 @@ function AppShell() {
       </Pressable>
     </View>
   );
+
+  // A granted child function, opened from the dashboard. Habits/nutrition are
+  // per-user so they reuse the same screens the parent uses — on the child's own data.
+  const childBackBar = (title: string) => (
+    <View style={styles.childSubHeader}>
+      <Pressable style={styles.childBackBtn} onPress={() => setChildScreen('home')}>
+        <Icon name="chevron" color={colors.primary} size={16} />
+        <Text style={styles.childBackText}>Back</Text>
+      </Pressable>
+      <Text style={styles.childSubTitle}>{title}</Text>
+    </View>
+  );
+  const childScreenNode =
+    childScreen === 'habits' && childCan('habits') ? (
+      <View style={styles.dashWrap}>
+        {childBackBar('My habits')}
+        <HabitsScreen
+          habits={habits}
+          onHabitsChange={setHabitsByUser}
+          onDeleteHabit={(id) => {
+            if (session && isSupabaseConfigured) deleteHabitEntry(session, id).catch(() => {});
+          }}
+          challenges={habitChallenges}
+          habitRemindersEnabled={habitRemindersEnabled}
+          quickActionRequest={undefined}
+        />
+      </View>
+    ) : (
+      childHomeNode
+    );
 
   const staffSettingsNode = (
     <View style={styles.staffSettingsWrap}>
@@ -8157,7 +8198,7 @@ function AppShell() {
         </Pressable>
       ) : null}
         {screen === 'settings' && !isChildView ? settingsScreenContent : null}
-        {isChildView ? childHomeNode : null}
+        {isChildView ? childScreenNode : null}
         {!isChildView && screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
@@ -13731,6 +13772,29 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     marginBottom: 20,
     width: '100%',
     gap: 12,
+  },
+  childSubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  childBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingRight: 6,
+  },
+  childBackText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  childSubTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
   },
   dashDesktop: {
     flexDirection: 'row',
