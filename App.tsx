@@ -14,6 +14,7 @@ import {
   createPurchaseRequest,
   createShoppingList,
   createShoppingShare,
+  listFamilyShoppers,
   createTask,
   deleteCalendarEvent,
   deleteChildProfile,
@@ -902,6 +903,8 @@ function AppShell() {
   const [eventRemindersEnabled, setEventRemindersEnabled] = useState(() => readLocalBool(LOCAL_EVENT_REMINDERS_KEY, true));
   const [eventReminderLead, setEventReminderLead] = useState(() => readLocalString(LOCAL_EVENT_LEAD_KEY, '30 min'));
   const [shoppingShares, setShoppingShares] = useState<ShoppingShare[]>([]);
+  // People a list can be sent to (co-parents by user id + connected shopping staff).
+  const [familyShoppers, setFamilyShoppers] = useState<Array<{ key: string; label: string }>>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [session, setSession] = useState<AppSession | null>(null);
@@ -1353,19 +1356,21 @@ function AppShell() {
   );
   const shouldShowDailyCardsModal = screen === 'calendar' && dailyCardsReady && dailyCardsModalOpen;
   const canDismissDailyCardsModal = !!selectedDailyCard && !revealingDailyCardId;
-  const shoppingShareTargets = useMemo(
-    () => [
-      { key: 'parent:Mom', label: 'Mom' },
-      { key: 'parent:Dad', label: 'Dad' },
-      ...staffProfiles.map((profile) => ({ key: `staff:${profile.id}`, label: profile.name })),
-    ],
-    [staffProfiles],
-  );
+  // Who I can send a list to = the family shoppers from the server (co-parents keyed
+  // by user id + connected staff), minus myself.
   const activeShoppingRecipientKey = useMemo(() => {
     if (role === 'child' && activeChildRoleId) return `child:${activeChildRoleId}`;
-    if (role === 'staff' && activeStaffProfileId) return `staff:${activeStaffProfileId}`;
+    if (role === 'staff') {
+      const sid = session?.staffProfileId || activeStaffProfileId;
+      if (sid) return `staff:${sid}`;
+    }
+    if (session?.userId) return `user:${session.userId}`;
     return `parent:${parentLabel}`;
-  }, [activeChildRoleId, activeStaffProfileId, parentLabel, role]);
+  }, [activeChildRoleId, activeStaffProfileId, parentLabel, role, session?.staffProfileId, session?.userId]);
+  const shoppingShareTargets = useMemo(
+    () => familyShoppers.filter((t) => t.key !== activeShoppingRecipientKey),
+    [familyShoppers, activeShoppingRecipientKey],
+  );
   const visibleShoppingShares = useMemo(
     () => shoppingShares.filter((share) => share.recipientKey === activeShoppingRecipientKey),
     [activeShoppingRecipientKey, shoppingShares],
@@ -1487,6 +1492,7 @@ function AppShell() {
         .on(pg, { event: '*', schema: 'public', table: 'tasks' }, () => bounce('tasks', () => refreshLiveTasks(current)))
         .on(pg, { event: '*', schema: 'public', table: 'shopping_lists' }, () => bounce('shop', () => refreshLiveShopping(current)))
         .on(pg, { event: '*', schema: 'public', table: 'shopping_list_items' }, () => bounce('shop', () => refreshLiveShopping(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'shopping_shares' }, () => bounce('shop', () => refreshLiveShopping(current)))
         .on(pg, { event: '*', schema: 'public', table: 'completed_task_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
         .on(pg, { event: '*', schema: 'public', table: 'staff_reminder_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
         .on(pg, { event: '*', schema: 'public', table: 'medicines' }, () => bounce('meds', () => refreshLiveMedicines(current)))
@@ -2265,6 +2271,7 @@ function AppShell() {
         return;
       }
       listStaffConnections(current).then(setStaffConnectedIds).catch(() => {});
+      refreshFamilyShoppers(current);
       setStaffProfiles(
         liveStaffProfiles.map((profile) => ({
           id: profile.id,
@@ -2281,6 +2288,15 @@ function AppShell() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync staff profiles.';
       setTasksError(message);
+    }
+  }
+
+  async function refreshFamilyShoppers(current: AppSession | null = session) {
+    if (!current || !isSupabaseConfigured) return;
+    try {
+      setFamilyShoppers(await listFamilyShoppers(current));
+    } catch {
+      // keep whatever we had; the send picker just won't list new people
     }
   }
 
@@ -2711,6 +2727,7 @@ function AppShell() {
       refreshLiveCalendar(ctx),
       refreshLiveChildren(ctx),
       refreshLiveStaffProfiles(ctx),
+      refreshFamilyShoppers(ctx),
       refreshMyPersonalProfile(ctx),
       refreshLiveShopping(ctx),
       refreshLiveRecipes(ctx),
@@ -9317,7 +9334,7 @@ function AppShell() {
                       ? children.find((child) => child.id === activeChildRoleId)?.name || 'Child profile'
                       : role === 'staff'
                         ? staffProfiles.find((profile) => profile.id === activeStaffProfileId)?.name || 'Staff profile'
-                        : parentLabel,
+                        : personalProfile.fullName?.trim() || parentLabel,
                   recipientKey,
                   recipientLabel: target.label,
                   items: sourceList.items.map((item) => ({ ...item })),
@@ -9337,7 +9354,7 @@ function AppShell() {
                       ? children.find((child) => child.id === activeChildRoleId)?.name || 'Child profile'
                       : role === 'staff'
                         ? staffProfiles.find((profile) => profile.id === activeStaffProfileId)?.name || 'Staff profile'
-                        : parentLabel,
+                        : personalProfile.fullName?.trim() || parentLabel,
                   recipientKey,
                   recipientLabel: target.label,
                   items: sourceList.items.map((item) => ({ ...item })),

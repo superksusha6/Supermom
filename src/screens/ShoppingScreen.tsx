@@ -1401,6 +1401,28 @@ export function ShoppingScreen({
 
   return (
     <>
+      {sharedInbox.length > 0 ? (
+        <View style={styles.toBuyBanner}>
+          {sharedInbox.slice(0, 3).map((share) => (
+            <View key={`tobuy-${share.id}`} style={styles.toBuyRow}>
+              <Text style={styles.toBuyEmoji}>🛒</Text>
+              <View style={styles.toBuyTextWrap}>
+                <Text style={styles.toBuyTitle} numberOfLines={1}>To buy: {share.title}</Text>
+                <Text style={styles.toBuyMeta} numberOfLines={1}>
+                  from {share.senderLabel} · {share.items.length} item{share.items.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <Pressable style={styles.toBuyBtn} onPress={() => onImportSharedList(share.id)}>
+                <Text style={styles.toBuyBtnText}>Open</Text>
+              </Pressable>
+              <Pressable hitSlop={8} style={styles.toBuyDismiss} onPress={() => onDismissSharedList(share.id)}>
+                <Text style={styles.toBuyDismissText}>✕</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       {currentRole === 'mother' && visiblePurchaseRequests.length > 0 ? (
         <SectionCard title="Requested By Staff">
           <View style={styles.requestListWrap}>
@@ -5266,6 +5288,59 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    toBuyBanner: {
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 18,
+      backgroundColor: 'rgba(59,130,246,0.10)',
+      padding: 8,
+      marginBottom: 12,
+      gap: 6,
+    },
+    toBuyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 4,
+      paddingHorizontal: 4,
+    },
+    toBuyEmoji: {
+      fontSize: 20,
+    },
+    toBuyTextWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    toBuyTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    toBuyMeta: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    toBuyBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+    },
+    toBuyBtnText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    toBuyDismiss: {
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+    },
+    toBuyDismissText: {
+      color: colors.subtext,
+      fontSize: 16,
+      fontWeight: '700',
     },
     sharedInboxTextWrap: {
       flex: 1,

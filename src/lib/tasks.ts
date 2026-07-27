@@ -2070,6 +2070,19 @@ export async function listShoppingShares(familyId: string): Promise<ShoppingShar
   }));
 }
 
+// Who a shopping list can be sent to: the other co-parents (keyed by user id so two
+// parents never collide) + connected staff with shopping access.
+export type FamilyShopper = { key: string; label: string };
+export async function listFamilyShoppers(session: AppSession): Promise<FamilyShopper[]> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('list_family_shoppers', { p_family_id: session.familyId });
+  if (error) throw error;
+  return ((data as Array<{ kind: string; target_id: string; name: string }>) ?? []).map((row) => ({
+    key: row.kind === 'staff' ? `staff:${row.target_id}` : `user:${row.target_id}`,
+    label: row.name || (row.kind === 'staff' ? 'Staff' : 'Parent'),
+  }));
+}
+
 export async function createShoppingShare(
   session: AppSession,
   payload: Omit<ShoppingShare, 'id' | 'createdAt'>,
