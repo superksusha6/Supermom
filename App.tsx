@@ -1530,12 +1530,21 @@ function AppShell() {
   }, [isStaffView, screen, staffFeatures]);
   const overdueStaffTasks = useMemo(
     () =>
-      tasks.filter((task) => task.assigneeRole === 'staff' && task.status !== 'done' && isTaskOverdue(task.deadline)).sort((a, b) => {
-        const aTime = parseTaskDeadline(a.deadline)?.getTime() ?? 0;
-        const bTime = parseTaskDeadline(b.deadline)?.getTime() ?? 0;
-        return bTime - aTime;
-      }),
-    [tasks],
+      tasks
+        .filter(
+          (task) =>
+            task.assigneeRole === 'staff' &&
+            task.status !== 'done' &&
+            isTaskOverdue(task.deadline) &&
+            // Each parent only manages the staff tasks THEY assigned.
+            (!session || !task.createdBy || task.createdBy === session.userId),
+        )
+        .sort((a, b) => {
+          const aTime = parseTaskDeadline(a.deadline)?.getTime() ?? 0;
+          const bTime = parseTaskDeadline(b.deadline)?.getTime() ?? 0;
+          return bTime - aTime;
+        }),
+    [tasks, session],
   );
   const taskNotificationsCutoff = useMemo(
     () => getTaskHistoryCutoff(taskHistoryFilter, taskHistoryDaysInput, taskHistoryDateInput),
@@ -6442,8 +6451,19 @@ function AppShell() {
   // completions are unread + missed ("N new", red if anything is overdue) and how
   // many are still waiting. Tap opens the manager (Waiting + History + add) and
   // clears the unread badge.
-  const openStaffTaskCount = tasks.filter((t) => t.assigneeRole === 'staff' && t.status !== 'done').length;
-  const staffUnreadDone = completedTaskNotifications.filter((n) => !n.read).length;
+  const openStaffTaskCount = tasks.filter(
+    (t) => t.assigneeRole === 'staff' && t.status !== 'done' && (!session || !t.createdBy || t.createdBy === session.userId),
+  ).length;
+  const staffUnreadDone = completedTaskNotifications.filter((n) => {
+    if (n.read) return false;
+    // Keep the badge consistent with the per-parent history: hide legacy completions
+    // whose underlying task the OTHER parent assigned.
+    if (n.taskId && session) {
+      const t = tasks.find((x) => x.id === n.taskId);
+      if (t && t.createdBy && t.createdBy !== session.userId) return false;
+    }
+    return true;
+  }).length;
   const overdueCount = overdueStaffTasks.length;
   const staffNewCount = staffUnreadDone + overdueCount; // needs your attention now
   const staffWaitingCount = Math.max(0, openStaffTaskCount - overdueCount); // on-track pending
@@ -7893,7 +7913,13 @@ function AppShell() {
                       </Pressable>
 
                       {(() => {
-                        const mine = tasks.filter((t) => t.assigneeRole === 'staff' && t.staffProfileId === tasksManagerStaffId);
+                        const mine = tasks.filter(
+                          (t) =>
+                            t.assigneeRole === 'staff' &&
+                            t.staffProfileId === tasksManagerStaffId &&
+                            // Each parent sees only the tasks THEY assigned to this person.
+                            (!session || !t.createdBy || t.createdBy === session.userId),
+                        );
                         const staffName = staffProfiles.find((p) => p.id === tasksManagerStaffId)?.name;
                         const openTasks = mine.filter((t) => t.status !== 'done');
                         const doneTaskIds = new Set(mine.map((t) => t.id));
@@ -7919,7 +7945,18 @@ function AppShell() {
                               };
                             }),
                           ...completedTaskNotifications
-                            .filter((n) => n.staffName === staffName && (!n.taskId || !doneTaskIds.has(n.taskId)))
+                            .filter((n) => {
+                              if (n.staffName !== staffName) return false;
+                              if (n.taskId && doneTaskIds.has(n.taskId)) return false;
+                              // Legacy completions (created before per-parent routing) have no
+                              // target — resolve the task's real assigner and hide it if the
+                              // OTHER parent assigned it.
+                              if (n.taskId && session) {
+                                const t = tasks.find((x) => x.id === n.taskId);
+                                if (t && t.createdBy && t.createdBy !== session.userId) return false;
+                              }
+                              return true;
+                            })
                             .map((n) => ({
                               key: n.id,
                               title: n.taskTitle,
