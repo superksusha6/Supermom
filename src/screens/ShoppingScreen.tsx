@@ -661,6 +661,7 @@ export function ShoppingScreen({
   const [editTargetListId, setEditTargetListId] = useState<string | null>(null);
   const [editTargetListTitle, setEditTargetListTitle] = useState('Shopping List');
   const [shareOpen, setShareOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const [requestItemName, setRequestItemName] = useState('');
   const [requestQuantity, setRequestQuantity] = useState('1 pcs');
   const [requestComment, setRequestComment] = useState('');
@@ -1578,8 +1579,44 @@ export function ShoppingScreen({
             <Pressable style={styles.shoppingPrimaryBtn} onPress={onStartFromBaseList}>
               <Text style={styles.shoppingPrimaryBtnText}>Use basket</Text>
             </Pressable>
+          ) : activeList && activeList.items.length > 0 && shareTargets.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send this list to a shopper"
+              style={styles.shoppingSendBtn}
+              onPress={() => setSendOpen(true)}
+            >
+              <Text style={styles.shoppingSendBtnText}>🛒 Send</Text>
+            </Pressable>
           ) : null}
         </View>
+
+        <Modal visible={sendOpen} transparent animationType="fade" onRequestClose={() => setSendOpen(false)}>
+          <Pressable style={styles.sendBackdrop} onPress={() => setSendOpen(false)}>
+            <Pressable style={styles.sendCard} onPress={(e) => e.stopPropagation?.()}>
+              <Text style={styles.sendTitle} numberOfLines={1}>Send “{activeList?.title || 'list'}” to</Text>
+              <Text style={styles.sendSub}>They’ll get it instantly with a “to buy” banner.</Text>
+              {shareTargets
+                .filter((target) => target.key !== activeRecipientKey)
+                .map((target) => (
+                  <Pressable
+                    key={`send-${target.key}`}
+                    style={styles.sendRow}
+                    onPress={() => {
+                      if (activeList) onShareListToProfile(activeList.id, target.key);
+                      setSendOpen(false);
+                    }}
+                  >
+                    <Text style={styles.sendRowText}>Send to {target.label}</Text>
+                    <Text style={styles.sendRowArrow}>→</Text>
+                  </Pressable>
+                ))}
+              <Pressable style={styles.sendCancel} onPress={() => setSendOpen(false)}>
+                <Text style={styles.sendCancelText}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {needsBasketOnboarding ? (
           <View style={styles.basketOnboardingCard}>
@@ -1781,22 +1818,6 @@ export function ShoppingScreen({
                   <Pressable style={styles.shareMenuItem} onPress={() => shareListToApps('apps')}>
                     <Text style={styles.shareMenuItemText}>Other apps</Text>
                   </Pressable>
-                  <View style={styles.shareMenuDivider} />
-                  {shareTargets
-                    .filter((target) => target.key !== activeRecipientKey)
-                    .map((target) => (
-                      <Pressable
-                        key={target.key}
-                        style={styles.shareMenuItem}
-                        onPress={() => {
-                          if (!activeList) return;
-                          onShareListToProfile(activeList.id, target.key);
-                          closeShareMenu();
-                        }}
-                      >
-                        <Text style={styles.shareMenuItemText}>Send to {target.label}</Text>
-                      </Pressable>
-                    ))}
                 </View>
               ) : null}
 
@@ -5288,6 +5309,75 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    shoppingSendBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      alignSelf: 'flex-start',
+    },
+    shoppingSendBtnText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    sendBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(15,23,42,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    sendCard: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      padding: 18,
+      gap: 4,
+    },
+    sendTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    sendSub: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '600',
+      marginBottom: 8,
+    },
+    sendRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: 'rgba(148,163,184,0.35)',
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      marginTop: 8,
+    },
+    sendRowText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    sendRowArrow: {
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    sendCancel: {
+      alignItems: 'center',
+      paddingVertical: 12,
+      marginTop: 6,
+    },
+    sendCancelText: {
+      color: colors.subtext,
+      fontSize: 14,
+      fontWeight: '700',
     },
     toBuyBanner: {
       borderWidth: 1,
