@@ -852,6 +852,7 @@ function AppShell() {
   const [screen, setScreen] = useState<Screen>('calendar');
   // Child's own navigation: 'home' is the dashboard; the rest are granted functions.
   const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
+  const [childTab, setChildTab] = useState<'home' | 'settings'>('home');
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -5922,7 +5923,7 @@ function AppShell() {
       </View>
       {childGrantedList.length > 0 ? (
         childGrantedList.map((f) => {
-          const ready = f.key === 'habits'; // functions wired so far
+          const ready = f.key === 'habits' || f.key === 'nutrition'; // functions wired so far
           return (
             <Pressable
               key={f.key}
@@ -5949,19 +5950,6 @@ function AppShell() {
           </View>
         </View>
       )}
-      <Pressable
-        style={[styles.authBtn, styles.authSecondary, { marginTop: 8 }]}
-        onPress={() => {
-          signOut()
-            .then(() => {
-              resetSignedOutState();
-              setScreen('calendar');
-            })
-            .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
-        }}
-      >
-        <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
-      </Pressable>
     </View>
   );
 
@@ -5976,8 +5964,38 @@ function AppShell() {
       <Text style={styles.childSubTitle}>{title}</Text>
     </View>
   );
+  const childSignOut = () => {
+    signOut()
+      .then(() => {
+        resetSignedOutState();
+        setChildTab('home');
+        setChildScreen('home');
+        setScreen('calendar');
+      })
+      .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
+  };
+  const childSettingsNode = (
+    <View style={styles.dashWrap}>
+      <View style={styles.staffHeaderCard}>
+        <View style={styles.staffHeaderAvatar}>
+          <Text style={styles.staffHeaderAvatarText}>
+            {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.staffHeaderCopy}>
+          <Text style={styles.staffHeaderHi}>{childFirstName}</Text>
+          <Text style={styles.staffHeaderSub}>Your account</Text>
+        </View>
+      </View>
+      <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={childSignOut}>
+        <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
+      </Pressable>
+    </View>
+  );
   const childScreenNode =
-    childScreen === 'habits' && childCan('habits') ? (
+    childTab === 'settings' ? (
+      childSettingsNode
+    ) : childScreen === 'habits' && childCan('habits') ? (
       <View style={styles.dashWrap}>
         {childBackBar('My habits')}
         <HabitsScreen
@@ -5989,6 +6007,31 @@ function AppShell() {
           challenges={habitChallenges}
           habitRemindersEnabled={habitRemindersEnabled}
           quickActionRequest={undefined}
+        />
+      </View>
+    ) : childScreen === 'nutrition' && childCan('nutrition') ? (
+      <View style={styles.dashWrap}>
+        {childBackBar('Food & energy')}
+        <NutritionScreen
+          personalProfile={personalProfile}
+          nutritionGoal={nutritionGoal}
+          onNutritionGoalChange={setNutritionGoal}
+          activityLevel={activityLevel}
+          onActivityLevelChange={setActivityLevel}
+          nutritionSex={nutritionSex}
+          onNutritionSexChange={setNutritionSex}
+          desiredWeight={desiredWeight}
+          onDesiredWeightChange={setDesiredWeight}
+          nutritionPace={nutritionPace}
+          onNutritionPaceChange={setNutritionPace}
+          calorieOverride={calorieOverride}
+          onCalorieOverrideChange={setCalorieOverride}
+          physiqueGoal={physiqueGoal}
+          nutritionEntries={nutritionEntries}
+          onNutritionEntriesChange={handleNutritionEntriesChange}
+          customFoodPresets={customNutritionFoods}
+          onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
+          recipes={recipes}
         />
       </View>
     ) : (
@@ -9678,7 +9721,12 @@ function AppShell() {
         ) : null}
       </ScrollView>
 
-      {isChildView ? null : (
+      {isChildView ? (
+      <View style={styles.tabBar}>
+        <TabButton icon="home" label="Home" active={childTab === 'home'} onPress={() => { setChildTab('home'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        <TabButton icon="settings" label="Settings" active={childTab === 'settings'} onPress={() => setChildTab('settings')} styles={styles} colors={colors} />
+      </View>
+      ) : (
       <View style={styles.tabBar}>
         {staffCan('schedule') || staffCan('tasks') ? (
           <TabButton icon={isStaffView ? 'chores' : 'calendar'} label={isStaffView ? 'Tasks' : 'Today'} active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
