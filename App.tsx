@@ -4968,7 +4968,11 @@ function AppShell() {
 
   // ---- Staff Tasks manager (dashboard) ----
   function openTasksManager() {
-    setTasksManagerStaffId((prev) => prev || staffProfiles[0]?.id || null);
+    // Default to a staff member who actually has a connected account — assigning to
+    // an unconnected profile means the task reaches no one.
+    setTasksManagerStaffId(
+      (prev) => prev || staffProfiles.find((p) => staffConnectedIds.includes(p.id))?.id || staffProfiles[0]?.id || null,
+    );
     setEditingTaskId(null);
     setNewStaffTaskTitle('');
     setNewStaffTaskPriority('non_urgent');
@@ -7824,18 +7828,28 @@ function AppShell() {
                           <View style={styles.dropdownChipWrap}>
                             {staffProfiles.map((p) => {
                               const on = p.id === tasksManagerStaffId;
+                              const connected = staffConnectedIds.includes(p.id);
                               return (
                                 <Pressable
                                   key={`taskmgr-staff-${p.id}`}
                                   style={[styles.dropdownChip, on && styles.dropdownChipActive]}
                                   onPress={() => { setTasksManagerStaffId(p.id); setEditingTaskId(null); }}
                                 >
-                                  <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>{p.name}</Text>
+                                  <Text style={[styles.dropdownChipText, on && styles.dropdownChipTextActive]}>
+                                    {p.name}{connected ? ' ✓' : ' · not joined'}
+                                  </Text>
                                 </Pressable>
                               );
                             })}
                           </View>
                         </>
+                      ) : null}
+                      {tasksManagerStaffId && !staffConnectedIds.includes(tasksManagerStaffId) ? (
+                        <Text style={styles.taskAssignWarn}>
+                          {staffProfiles.find((p) => p.id === tasksManagerStaffId)?.name || 'This staff member'} hasn’t joined
+                          yet — tasks you add won’t reach anyone until they accept an invite (Settings → Family &amp; Access →
+                          Invite).
+                        </Text>
                       ) : null}
 
                       <View style={styles.taskAddRow}>
@@ -12517,6 +12531,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   createHint: {
     color: colors.subtext,
     fontWeight: '600',
+  },
+  taskAssignWarn: {
+    color: '#b45309',
+    backgroundColor: '#fef3c7',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
   },
   clockBtn: {
     width: 40,
