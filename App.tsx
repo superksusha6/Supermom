@@ -184,6 +184,7 @@ type CompletedTaskNotification = {
   read: boolean;
   comment?: string | null;
   photoUrl?: string | null;
+  notifyUserId?: string | null; // the parent to notify (task creator); null = show to all
 };
 type StaffReminderNotification = {
   taskId: string;
@@ -2584,16 +2585,21 @@ function AppShell() {
         listStaffReminderNotifications(current.familyId),
       ]);
       setCompletedTaskNotifications(
-        liveCompleted.map((item) => ({
-          id: item.id,
-          taskId: item.taskId,
-          taskTitle: item.taskTitle,
-          staffName: item.staffName,
-          completedAt: item.completedAt,
-          read: item.read,
-          comment: item.comment ?? null,
-          photoUrl: item.photoUrl ?? null,
-        })),
+        liveCompleted
+          // Each parent is notified only about completions of tasks THEY assigned.
+          // Legacy rows (no target) are shown to every owner as a safe fallback.
+          .filter((item) => !item.notifyUserId || item.notifyUserId === current.userId)
+          .map((item) => ({
+            id: item.id,
+            taskId: item.taskId,
+            taskTitle: item.taskTitle,
+            staffName: item.staffName,
+            completedAt: item.completedAt,
+            read: item.read,
+            comment: item.comment ?? null,
+            photoUrl: item.photoUrl ?? null,
+            notifyUserId: item.notifyUserId ?? null,
+          })),
       );
       setStaffReminderNotifications(
         liveReminders.map((item) => ({
@@ -4932,6 +4938,7 @@ function AppShell() {
             staffName: staffNameForTask(task),
             completedAt,
             read: false,
+            notifyUserId: task.createdBy ?? null,
           });
           await Promise.all([refreshLiveTasks(), refreshLiveNotifications()]);
           return;
@@ -5212,6 +5219,7 @@ function AppShell() {
           read: false,
           comment,
           photoUrl,
+          notifyUserId: task.createdBy ?? null,
         });
         await Promise.all([refreshLiveTasks(), refreshLiveNotifications()]);
       } catch (error) {

@@ -113,6 +113,9 @@ export type CompletedTaskNotificationRecord = {
   read: boolean;
   comment?: string | null;
   photoUrl?: string | null;
+  // The parent who assigned the task = who should be notified it's done. Null on
+  // legacy rows (shown to every owner as a safe fallback).
+  notifyUserId?: string | null;
 };
 
 export type StaffReminderNotificationRecord = {
@@ -720,7 +723,7 @@ export async function listStaffConnections(session: AppSession): Promise<string[
 
 export async function listTasks(familyId: string): Promise<TaskItem[]> {
   const client = requireClient();
-  const baseCols = 'id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id, created_at';
+  const baseCols = 'id, title, assignee_role, priority, status, deadline_at, requires_parent_approval, source_profile_id, created_at, created_by';
   const withDetails = await client
     .from('tasks')
     .select(`${baseCols}, details`)
@@ -742,6 +745,7 @@ export async function listTasks(familyId: string): Promise<TaskItem[]> {
     title: row.title,
     notes: 'details' in row && row.details ? String(row.details) : undefined,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    createdBy: row.created_by ?? undefined,
     assigneeRole: row.assignee_role as Role,
     assigneeName:
       row.assignee_role === 'mother' || row.assignee_role === 'admin'
@@ -2137,7 +2141,7 @@ export async function listCompletedTaskNotifications(familyId: string): Promise<
   const client = requireClient();
   const { data, error } = await client
     .from('completed_task_notifications')
-    .select('id, task_id, task_title, staff_name, completed_at, read, staff_comment, photo_url')
+    .select('id, task_id, task_title, staff_name, completed_at, read, staff_comment, photo_url, notify_user_id')
     .eq('family_id', familyId)
     .order('completed_at', { ascending: false });
   // Resilient if the proof columns haven't been migrated yet: retry without them.
@@ -2157,6 +2161,7 @@ export async function listCompletedTaskNotifications(familyId: string): Promise<
       read: row.read,
       comment: null,
       photoUrl: null,
+      notifyUserId: null,
     }));
   }
 
@@ -2169,6 +2174,7 @@ export async function listCompletedTaskNotifications(familyId: string): Promise<
     read: row.read,
     comment: (row as { staff_comment?: string | null }).staff_comment ?? null,
     photoUrl: (row as { photo_url?: string | null }).photo_url ?? null,
+    notifyUserId: (row as { notify_user_id?: string | null }).notify_user_id ?? null,
   }));
 }
 
@@ -2185,6 +2191,7 @@ export async function createCompletedTaskNotification(
     completed_at: payload.completedAt,
     read: payload.read,
     created_by: session.userId,
+    notify_user_id: payload.notifyUserId ?? null,
   };
   const { error } = await client
     .from('completed_task_notifications')
@@ -2198,11 +2205,22 @@ export async function createCompletedTaskNotification(
 
 export async function markCompletedTaskNotificationsRead(session: AppSession) {
   const client = requireClient();
-  const { error } = await client
+  // Only clear notifications meant for THIS owner (their assigned tasks) plus legacy
+  // untargeted ones — never the other parent's, so their unread badge is left intact.
+  let { error } = await client
     .from('completed_task_notifications')
     .update({ read: true })
     .eq('family_id', session.familyId)
-    .eq('read', false);
+    .eq('read', false)
+    .or(`notify_user_id.eq.${session.userId},notify_user_id.is.null`);
+  // Resilient if the notify_user_id column isn't migrated yet: fall back to family-wide.
+  if (error) {
+    ({ error } = await client
+      .from('completed_task_notifications')
+      .update({ read: true })
+      .eq('family_id', session.familyId)
+      .eq('read', false));
+  }
   if (error) throw error;
 }
 
