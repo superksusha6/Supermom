@@ -82,6 +82,7 @@ type Props = {
   partnerConnectedName?: string | null;
   onInvitePartner: () => void;
   onRemovePartner: () => void;
+  onInviteCoparent: () => void;
   pushState: 'unsupported' | 'default' | 'denied' | 'enabled' | 'error';
   onTogglePush: () => void;
 };
@@ -150,6 +151,7 @@ export function SettingsScreen({
   partnerConnectedName,
   onInvitePartner,
   onRemovePartner,
+  onInviteCoparent,
   pushState,
   onTogglePush,
 }: Props) {
@@ -949,6 +951,14 @@ export function SettingsScreen({
             </View>
           </View>
         ))}
+
+        <Text style={styles.label}>Second parent</Text>
+        <Text style={styles.emptyText}>
+          Invite your partner as a second parent. They sign in with their own account and share this exact household — the same tasks, staff, calendar, shopping and everything you see. Both of you are full owners.
+        </Text>
+        <Pressable style={styles.secondaryBtn} onPress={onInviteCoparent}>
+          <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite second parent</Text>
+        </Pressable>
 
         <Text style={styles.label}>Partner calendar</Text>
         <Text style={styles.emptyText}>

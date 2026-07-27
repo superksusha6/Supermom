@@ -25,6 +25,8 @@ import {
   acceptStaffInvite,
   createChildInvite,
   acceptChildInvite,
+  createCoparentInvite,
+  acceptCoparentInvite,
   setChildAccess,
   listChildConnections,
   setStaffProfileDob,
@@ -907,6 +909,8 @@ function AppShell() {
   const [staffInviteName, setStaffInviteName] = useState<string | null>(null);
   const [staffInviteProfileId, setStaffInviteProfileId] = useState<string | null>(null);
   const [childInviteName, setChildInviteName] = useState<string | null>(null);
+  const [coparentInviteFamily, setCoparentInviteFamily] = useState<string | null>(null);
+  const [coparentInvitePending, setCoparentInvitePending] = useState(false);
   const [authStaffDob, setAuthStaffDob] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
@@ -932,6 +936,8 @@ function AppShell() {
   const inviteRetryRef = useRef<(() => void) | null>(null);
   const pendingInviteTokenRef = useRef<string | null>(null);
   const pendingChildTokenRef = useRef<string | null>(null);
+  // Co-parent (second parent): joins the family as a full owner (admin).
+  const pendingCoparentTokenRef = useRef<string | null>(null);
   // Partner calendar: send a time slot to your partner; they confirm → event in both.
   const [partnerLinks, setPartnerLinks] = useState<PartnerLink[]>([]);
   const [partnerProposals, setPartnerProposals] = useState<CalendarProposal[]>([]);
@@ -2824,6 +2830,14 @@ function AppShell() {
           setAuthName(cn); // pre-fill their name
         }
       }
+      const coparentToken = searchParams.get('coparent');
+      if (coparentToken) {
+        pendingCoparentTokenRef.current = coparentToken;
+        setPendingInviteActive(true);
+        setCoparentInvitePending(true);
+        const pn = searchParams.get('pn');
+        if (pn) setCoparentInviteFamily(pn);
+      }
       const partnerToken = searchParams.get('partner');
       if (partnerToken) pendingPartnerTokenRef.current = partnerToken;
     }
@@ -2835,19 +2849,21 @@ function AppShell() {
         if (cancelled) return;
         if (ctx) {
           await hydrateSessionContext(ctx);
-          if (pendingInviteTokenRef.current || pendingChildTokenRef.current) {
+          if (pendingInviteTokenRef.current || pendingChildTokenRef.current || pendingCoparentTokenRef.current) {
             // An invite link is for a NEW person — show registration instead of silently
             // joining with whatever account is already signed in on this browser.
             setAuthInfo(
-              pendingChildTokenRef.current
+              pendingCoparentTokenRef.current
+                ? 'Sign in with your own account (or create one) to join the family as a second parent — you’ll share the same household.'
+                : pendingChildTokenRef.current
                 ? 'Register a new account (email + password) for your child to join.'
                 : 'Register a new account (email + password) to join as staff — or join with your current account.',
             );
-            setAuthMode('signup');
+            setAuthMode(pendingCoparentTokenRef.current ? 'signin' : 'signup');
             setSignInModalOpen(true);
           }
           if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
-        } else if (pendingInviteTokenRef.current || pendingChildTokenRef.current) {
+        } else if (pendingInviteTokenRef.current || pendingChildTokenRef.current || pendingCoparentTokenRef.current) {
           // Not signed in yet — let them create their own account to join.
           setAuthInfo('Create your account (email + password) to join the family.');
           setAuthMode('signup');
@@ -4531,6 +4547,36 @@ function AppShell() {
     }
   }
 
+  // Invite a second parent (co-parent). They join the SAME family as a full owner
+  // (admin), so they get the exact same view — including staff tasks, calendar and
+  // everything the first parent sees. One shared household, two owners.
+  async function handleInviteCoparent() {
+    const current = session || sessionRef.current;
+    inviteRetryRef.current = handleInviteCoparent;
+    setInviteStaffName('your co-parent');
+    setInviteLink('');
+    setInviteCopied(false);
+    setInviteError(null);
+    setInviteBusy(true);
+    setInviteModalOpen(true);
+    if (!current || !isSupabaseConfigured) {
+      setInviteBusy(false);
+      setInviteError('You need to be signed in to create an invite link. Try reopening the app.');
+      return;
+    }
+    try {
+      const { token } = await createCoparentInvite(current);
+      const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
+      const pn = personalProfile.fullName?.trim() || 'your family';
+      const q = `coparent=${token}&pn=${encodeURIComponent(pn)}`;
+      setInviteLink(`${origin}/?${q}`);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Could not create the invite link. Please try again.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   function copyInviteLink(link: string) {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(link);
@@ -4580,6 +4626,27 @@ function AppShell() {
       const ctx = await getOrCreateSessionContext();
       if (ctx) await hydrateSessionContext(ctx);
       setAuthInfo('You’ve joined the family. Here is your space.');
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not accept the invite.');
+    }
+  }
+
+  // Consume a pending ?coparent= token: join the family as a full owner (admin) and
+  // re-resolve the session into the shared household (same view as the other parent).
+  async function consumePendingCoparentInvite() {
+    const token = pendingCoparentTokenRef.current;
+    if (!token || !isSupabaseConfigured) return;
+    pendingCoparentTokenRef.current = null;
+    setPendingInviteActive(false);
+    setCoparentInvitePending(false);
+    try {
+      await acceptCoparentInvite(token);
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      const ctx = await getOrCreateSessionContext();
+      if (ctx) await hydrateSessionContext(ctx);
+      setAuthInfo('You’ve joined the family as a second parent — you now share the same household.');
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not accept the invite.');
     }
@@ -5208,6 +5275,11 @@ function AppShell() {
         await consumePendingChildInvite();
         return;
       }
+      if (pendingCoparentTokenRef.current) {
+        setSignInModalOpen(false);
+        await consumePendingCoparentInvite();
+        return;
+      }
       if (pendingPartnerTokenRef.current) {
         setSignInModalOpen(false);
         const ctx = await getOrCreateSessionContext();
@@ -5338,6 +5410,11 @@ function AppShell() {
         if (pendingChildTokenRef.current) {
           setSignInModalOpen(false);
           await consumePendingChildInvite();
+          return;
+        }
+        if (pendingCoparentTokenRef.current) {
+          setSignInModalOpen(false);
+          await consumePendingCoparentInvite();
           return;
         }
         const ctx = await getOrCreateSessionContext();
@@ -5754,6 +5831,7 @@ function AppShell() {
       onInviteStaff={handleInviteStaff}
       partnerConnectedName={partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || null}
       onInvitePartner={handleInvitePartner}
+      onInviteCoparent={handleInviteCoparent}
       onRemovePartner={() => {
         const link = partnerLinks.find((l) => l.status === 'accepted');
         if (link) handleRemovePartner(link.id);
@@ -7185,6 +7263,11 @@ function AppShell() {
             {authMode === 'signup' && childInviteName ? (
               <Text style={styles.authInfoText}>You’ve been invited to join the family. Create your account to get your own space.</Text>
             ) : null}
+            {coparentInvitePending ? (
+              <Text style={styles.authInfoText}>
+                You’ve been invited to join {coparentInviteFamily ? `${coparentInviteFamily}’s` : 'the'} family as a second parent. Sign in with your own account — you’ll share the same household.
+              </Text>
+            ) : null}
             {authMode === 'signup' ? (
               <>
                 <TextInput
@@ -7289,6 +7372,18 @@ function AppShell() {
             ) : null}
             {tasksError ? <Text style={styles.authErrorText}>{tasksError}</Text> : null}
             {authInfo ? <Text style={styles.authInfoText}>{authInfo}</Text> : null}
+            {coparentInvitePending && session ? (
+              <Pressable
+                style={[styles.authBtn, authLoading && styles.authBtnDisabled]}
+                onPress={() => {
+                  setSignInModalOpen(false);
+                  consumePendingCoparentInvite();
+                }}
+                disabled={authLoading}
+              >
+                <Text style={styles.authBtnText}>Join as second parent with this account</Text>
+              </Pressable>
+            ) : null}
             {authMode === 'signin' ? (
               <Pressable
                 onPress={() => {

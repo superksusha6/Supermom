@@ -529,6 +529,20 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
     };
   }
 
+  // A co-parent joined ANOTHER family as a full owner (role 'admin'). Land them in
+  // that shared family (where the staff/tasks/calendar live), not their own empty one.
+  const coparentMembership = (memberships || []).find(
+    (m) => m.role === 'admin' && m.status === 'active' && m.family_id !== familyId,
+  );
+  if (coparentMembership) {
+    return {
+      userId: user.id,
+      familyId: coparentMembership.family_id as string,
+      role: 'admin',
+      allowedFeatures: [],
+    };
+  }
+
   const { data: members, error: memberError } = await client
     .from('family_members')
     .select('role, features')
@@ -579,6 +593,22 @@ export async function createChildInvite(
 export async function acceptChildInvite(token: string): Promise<{ familyId: string }> {
   const client = requireClient();
   const { data, error } = await client.rpc('accept_child_invite', { p_token: token });
+  if (error) throw error;
+  return { familyId: (data as { family_id: string }).family_id };
+}
+
+// A family owner mints a co-parent invite: the invitee joins as a full owner (admin).
+export async function createCoparentInvite(session: AppSession): Promise<{ token: string; expiresAt: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('create_coparent_invite', { p_family_id: session.familyId });
+  if (error) throw error;
+  return { token: (data as { token: string }).token, expiresAt: (data as { expires_at: string }).expires_at };
+}
+
+// The invitee consumes a co-parent token and becomes a full owner of that family.
+export async function acceptCoparentInvite(token: string): Promise<{ familyId: string }> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('accept_coparent_invite', { p_token: token });
   if (error) throw error;
   return { familyId: (data as { family_id: string }).family_id };
 }
