@@ -1122,7 +1122,24 @@ export function CalendarScreen({
     setTimeDraft('');
   }
 
+  // Commit whatever is being typed in the currently-edited field. On web, tapping the
+  // OTHER field (Start→End) doesn't reliably fire the first field's onEndEditing, so a
+  // typed start time was silently discarded and Start snapped back to its old value.
+  function commitPendingEdit() {
+    if (!editingTimeField) return;
+    const target = editingTimeField;
+    const raw = (timeDraft ?? '').trim();
+    setEditingTimeField(null);
+    if (raw && isValidTimeText(raw)) {
+      applyTimeSelection(target, normalizeTimeText(raw));
+    }
+  }
+
   function beginEditTimeField(target: 'create_start' | 'create_end' | 'edit_start' | 'edit_end') {
+    // Save the field we're leaving first, so switching focus never loses a typed time.
+    if (editingTimeField && editingTimeField !== target) commitPendingEdit();
+    // Don't leave the other field's dropdown hanging open under this one.
+    if (openTimeField && openTimeField !== target) setOpenTimeField(null);
     setEditingTimeField(target);
     setTimeDraft(currentTimeFieldValue(target));
   }
@@ -1165,7 +1182,10 @@ export function CalendarScreen({
           />
           <Pressable
             style={styles.timeChevronBtn}
-            onPress={() => setOpenTimeField((prev) => (prev === target ? null : target))}
+            onPress={() => {
+              if (editingTimeField && editingTimeField !== target) commitPendingEdit();
+              setOpenTimeField((prev) => (prev === target ? null : target));
+            }}
           >
             <Text style={styles.timeChevronText}>⌄</Text>
           </Pressable>
