@@ -5242,7 +5242,7 @@ function AppShell() {
       if (!perm.granted) return;
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web', // web doesn't support the native crop — it breaks the picker
         aspect: [1, 1],
         quality: 0.4,
         base64: true,
