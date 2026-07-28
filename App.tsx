@@ -121,6 +121,8 @@ import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
 import { FixItScreen } from '@/screens/FixItScreen';
 import { ChildrenScreen, PhotoCropper } from '@/screens/ChildrenScreen';
+import { Pet3D } from '@/components/Pet3D';
+import { Asset } from 'expo-asset';
 import { HabitsScreen } from '@/screens/HabitsScreen';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
@@ -264,14 +266,16 @@ function habitsLookUserModified(habits: HabitEntry[]): boolean {
   );
 }
 
-// Child pet monsters (emoji placeholders — swap in real art later). key is persisted.
-const PET_OPTIONS: { key: string; emoji: string; name: string }[] = [
+// Child pet monsters. `model` (a bundled .glb URI) renders in real 3D; the rest are
+// emoji placeholders until more models are added.
+const GREEN_PET_URI = Asset.fromModule(require('./assets/pets/green.glb')).uri;
+const PET_OPTIONS: { key: string; emoji: string; name: string; model?: string }[] = [
+  { key: 'green', emoji: '🟢', name: 'Пушистик', model: GREEN_PET_URI },
   { key: 'dragon', emoji: '🐲', name: 'Дракоша' },
   { key: 'alien', emoji: '👾', name: 'Пиксель' },
   { key: 'ogre', emoji: '👹', name: 'Рогги' },
   { key: 'ghost', emoji: '👻', name: 'Бу' },
   { key: 'octo', emoji: '🐙', name: 'Осьмик' },
-  { key: 'dino', emoji: '🦖', name: 'Рекс' },
 ];
 
 const LOCAL_HABIT_REMINDERS_KEY = 'smartmom.habitRemindersEnabled.v1';
@@ -6302,10 +6306,15 @@ function AppShell() {
       const now = new Date();
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
+    const stage3d = Math.min(160 + fed * 8, 300); // 3D pet grows with feeding
     return (
       <View style={styles.dashWrap}>
         <View style={styles.petStage}>
-          <Text style={{ fontSize: size }}>{pet.emoji}</Text>
+          {pet.model ? (
+            <Pet3D uri={pet.model} size={stage3d} />
+          ) : (
+            <Text style={{ fontSize: size }}>{pet.emoji}</Text>
+          )}
         </View>
         <Text style={styles.petName}>{pet.name}</Text>
         <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
