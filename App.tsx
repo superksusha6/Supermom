@@ -6058,11 +6058,6 @@ function AppShell() {
         </View>
       </View>
 
-      {/* TEMP diagnostic — remove once fixed */}
-      <Text style={{ fontSize: 11, color: '#94a3b8', paddingHorizontal: 4 }}>
-        dbg · role={String(session?.role)} · pid={String(session?.childProfileId)} · kids={children.length} · names={children.map((c) => c.name).join(',') || '—'}
-      </Text>
-
       {/* Week strip — same one the parent dashboard uses */}
       <WeekStrip
         eventColors={eventColorsByDate}

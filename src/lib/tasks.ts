@@ -548,7 +548,7 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
 
   const { data: members, error: memberError } = await client
     .from('family_members')
-    .select('role, features')
+    .select('role, features, linked_child_profile_id')
     .eq('family_id', familyId)
     .eq('user_id', user.id);
 
@@ -556,6 +556,20 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   // If a stray "staff" row exists in the user's own family (self-invite), prefer the owner row.
   const member = (members || []).find((m) => m.role !== 'staff') || (members || [])[0];
   if (!member) throw new Error('No membership found for your family.');
+
+  // A child whose only membership is in this family (ensure_user_family returned it,
+  // because they have no separate own family) reaches here — carry their profile link
+  // + granted features so childProfileId isn't lost (which broke name/photo/chores).
+  if (member.role === 'child') {
+    return {
+      userId: user.id,
+      familyId,
+      role: 'child',
+      allowedFeatures: [],
+      childProfileId: (member.linked_child_profile_id as string | null) ?? undefined,
+      childFeatures: normalizeChildFeatures(member.features),
+    };
+  }
 
   return {
     userId: user.id,
