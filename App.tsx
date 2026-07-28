@@ -5237,7 +5237,7 @@ function AppShell() {
   // A child sets their OWN photo (from the Me tab or by tapping their dashboard avatar).
   // Web: open a plain <input type=file> synchronously inside the click (expo-image-picker
   // is unreliable here), read + downscale the image to a compact data URL.
-  function pickImageFileWeb(maxSize = 400, quality = 0.65): Promise<string | null> {
+  function pickImageFileWeb(): Promise<string | null> {
     return new Promise((resolve) => {
       if (typeof document === 'undefined') return resolve(null);
       const input = document.createElement('input');
@@ -5248,45 +5248,21 @@ function AppShell() {
       input.style.left = '-9999px';
       input.style.opacity = '0';
       document.body.appendChild(input);
-      const cleanup = () => {
-        try {
-          document.body.removeChild(input);
-        } catch {
-          /* already gone */
-        }
-      };
       input.onchange = () => {
         const file = input.files && input.files[0];
-        if (!file) {
-          cleanup();
-          return resolve(null);
-        }
-        cleanup();
-        const reader = new FileReader();
-        reader.onload = () => {
-          const src = String(reader.result || '');
-          const img = new (window as any).Image();
-          img.onload = () => {
-            const scale = Math.min(1, maxSize / Math.max(img.width || 1, img.height || 1));
-            const w = Math.max(1, Math.round((img.width || 1) * scale));
-            const h = Math.max(1, Math.round((img.height || 1) * scale));
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return resolve(src);
-            ctx.drawImage(img, 0, 0, w, h);
-            try {
-              resolve(canvas.toDataURL('image/jpeg', quality));
-            } catch {
-              resolve(src);
-            }
-          };
-          img.onerror = () => resolve(src);
-          img.src = src;
+        const done = (val: string | null) => {
+          try {
+            document.body.removeChild(input);
+          } catch {
+            /* already gone */
+          }
+          resolve(val);
         };
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
+        if (!file) return done(null);
+        const reader = new FileReader();
+        reader.onload = () => done(reader.result ? String(reader.result) : null);
+        reader.onerror = () => done(null);
+        reader.readAsDataURL(file); // raw data URL — the cropper handles sizing/crop
       };
       input.click();
     });
