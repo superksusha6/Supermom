@@ -5234,27 +5234,70 @@ function AppShell() {
   }
 
   // A child sets their OWN photo (from the Me tab or by tapping their dashboard avatar).
+  // Web: open a plain <input type=file> synchronously inside the click (expo-image-picker
+  // is unreliable here), read + downscale the image to a compact data URL.
+  function pickImageFileWeb(maxSize = 400, quality = 0.65): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (typeof document === 'undefined') return resolve(null);
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        const file = input.files && input.files[0];
+        if (!file) return resolve(null);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const src = String(reader.result || '');
+          const img = new (window as any).Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width || 1, img.height || 1));
+            const w = Math.max(1, Math.round((img.width || 1) * scale));
+            const h = Math.max(1, Math.round((img.height || 1) * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(src);
+            ctx.drawImage(img, 0, 0, w, h);
+            try {
+              resolve(canvas.toDataURL('image/jpeg', quality));
+            } catch {
+              resolve(src);
+            }
+          };
+          img.onerror = () => resolve(src);
+          img.src = src;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    });
+  }
+
   async function pickChildAvatar() {
     const childId = session?.childProfileId;
     if (!childId) return;
     try {
-      // On web (esp. Safari) the file dialog must open synchronously inside the click —
-      // an awaited permission request first would break the user-gesture and block it.
-      if (Platform.OS !== 'web') {
+      let uri: string | null = null;
+      if (Platform.OS === 'web') {
+        uri = await pickImageFileWeb();
+      } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) return;
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.4,
+          base64: true,
+        });
+        if (res.canceled || !res.assets?.length) return;
+        const asset = res.assets[0];
+        uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: Platform.OS !== 'web', // web doesn't support the native crop — it breaks the picker
-        aspect: [1, 1],
-        quality: 0.4,
-        base64: true,
-      });
-      if (res.canceled || !res.assets?.length) return;
-      const asset = res.assets[0];
-      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-      setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: uri } : c)));
+      if (!uri) return;
+      setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: uri as string } : c)));
       try {
         if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, uri);
       } catch (error) {
