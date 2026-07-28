@@ -5242,9 +5242,25 @@ function AppShell() {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
+      // Some browsers won't open the dialog for a detached input — attach it (hidden).
+      input.style.position = 'fixed';
+      input.style.left = '-9999px';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      const cleanup = () => {
+        try {
+          document.body.removeChild(input);
+        } catch {
+          /* already gone */
+        }
+      };
       input.onchange = () => {
         const file = input.files && input.files[0];
-        if (!file) return resolve(null);
+        if (!file) {
+          cleanup();
+          return resolve(null);
+        }
+        cleanup();
         const reader = new FileReader();
         reader.onload = () => {
           const src = String(reader.result || '');
