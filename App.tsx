@@ -6000,6 +6000,14 @@ function AppShell() {
         </View>
       </View>
 
+      {/* Week strip — same one the parent dashboard uses */}
+      <WeekStrip
+        eventColors={eventColorsByDate}
+        today={todayDateKey}
+        onOpenDay={(dateKey) => openDaySheet(dateKey)}
+        onOpenMonth={() => setChildTab('calendar')}
+      />
+
       {/* Today's plan */}
       <View style={styles.childCard}>
         <Text style={styles.childCardTitle}>Today</Text>
