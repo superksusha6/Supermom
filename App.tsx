@@ -852,7 +852,7 @@ function AppShell() {
   const [screen, setScreen] = useState<Screen>('calendar');
   // Child's own navigation: 'home' is the dashboard; the rest are granted functions.
   const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
-  const [childTab, setChildTab] = useState<'home' | 'settings'>('home');
+  const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -5968,7 +5968,7 @@ function AppShell() {
     signOut()
       .then(() => {
         resetSignedOutState();
-        setChildTab('home');
+        setChildTab('today');
         setChildScreen('home');
         setScreen('calendar');
       })
@@ -5992,9 +5992,23 @@ function AppShell() {
       </Pressable>
     </View>
   );
+  const childComingSoon = (title: string, sub: string) => (
+    <View style={styles.dashWrap}>
+      <View style={styles.staffHeaderCard}>
+        <View style={styles.staffHeaderCopy}>
+          <Text style={styles.staffHeaderHi}>{title}</Text>
+          <Text style={styles.staffHeaderSub}>{sub}</Text>
+        </View>
+      </View>
+    </View>
+  );
   const childScreenNode =
-    childTab === 'settings' ? (
+    childTab === 'me' ? (
       childSettingsNode
+    ) : childTab === 'calendar' ? (
+      childComingSoon('Calendar', 'Your week and day plan — coming soon.')
+    ) : childTab === 'pet' ? (
+      childComingSoon('Your pet', 'Do your chores to earn fruit and feed your pet — coming soon.')
     ) : childScreen === 'shopping' && childCan('shopping') ? (
       // Rendered by the shared ShoppingScreen block below (with a Back bar).
       null
@@ -8818,7 +8832,7 @@ function AppShell() {
         ) : null}
 
         {(screen === 'food' && foodTab === 'shopping' && staffCan('shopping')) ||
-        (isChildView && childTab === 'home' && childScreen === 'shopping' && childCan('shopping')) ? (
+        (isChildView && childTab === 'today' && childScreen === 'shopping' && childCan('shopping')) ? (
           <>
           {isChildView && childScreen === 'shopping' ? childBackBar('Shopping list') : null}
           <ShoppingScreen
@@ -9730,8 +9744,10 @@ function AppShell() {
 
       {isChildView ? (
       <View style={styles.tabBar}>
-        <TabButton icon="home" label="Home" active={childTab === 'home'} onPress={() => { setChildTab('home'); setChildScreen('home'); }} styles={styles} colors={colors} />
-        <TabButton icon="settings" label="Settings" active={childTab === 'settings'} onPress={() => setChildTab('settings')} styles={styles} colors={colors} />
+        <TabButton icon="calendar" label="Today" active={childTab === 'today'} onPress={() => { setChildTab('today'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        <TabButton icon="calendar" label="Calendar" active={childTab === 'calendar'} onPress={() => { setChildTab('calendar'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        <TabButton icon="heart" label="Pet" active={childTab === 'pet'} onPress={() => { setChildTab('pet'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        <TabButton icon="settings" label="Me" active={childTab === 'me'} onPress={() => { setChildTab('me'); setChildScreen('home'); }} styles={styles} colors={colors} />
       </View>
       ) : (
       <View style={styles.tabBar}>
