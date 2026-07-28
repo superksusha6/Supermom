@@ -117,7 +117,7 @@ import { choreStatus, choreTodayKey } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
 import { FixItScreen } from '@/screens/FixItScreen';
-import { ChildrenScreen } from '@/screens/ChildrenScreen';
+import { ChildrenScreen, PhotoCropper } from '@/screens/ChildrenScreen';
 import { HabitsScreen } from '@/screens/HabitsScreen';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
@@ -856,6 +856,7 @@ function AppShell() {
   const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
+  const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -5313,19 +5314,26 @@ function AppShell() {
         uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       }
       if (!uri) return;
-      const childId = session?.childProfileId || currentChildProfile?.id;
-      if (!childId) {
-        setTasksError('Your profile isn’t linked yet — ask a parent to re-add you, then try again.');
-        return;
-      }
-      setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: uri as string } : c)));
-      try {
-        if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, uri);
-      } catch (error) {
-        setTasksError(error instanceof Error ? error.message : 'Could not save your photo yet.');
-      }
+      // Let the child zoom/position the crop before saving (reuses the owner's cropper).
+      setChildCropSrc(uri);
     } catch {
       // ignore picker failures
+    }
+  }
+
+  // Save the cropped avatar the child chose.
+  async function saveCroppedChildAvatar(dataUrl: string) {
+    setChildCropSrc(null);
+    const childId = session?.childProfileId || currentChildProfile?.id;
+    if (!childId) {
+      setTasksError('Your profile isn’t linked yet — ask a parent to re-add you, then try again.');
+      return;
+    }
+    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: dataUrl } : c)));
+    try {
+      if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, dataUrl);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not save your photo yet.');
     }
   }
 
@@ -8463,6 +8471,14 @@ function AppShell() {
       ) : null}
         {screen === 'settings' && !isChildView ? settingsScreenContent : null}
         {isChildView ? childScreenNode : null}
+        {childCropSrc ? (
+          <PhotoCropper
+            src={childCropSrc}
+            colors={colors}
+            onCancel={() => setChildCropSrc(null)}
+            onDone={saveCroppedChildAvatar}
+          />
+        ) : null}
         {!isChildView && screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>

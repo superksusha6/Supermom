@@ -657,7 +657,7 @@ export function ChildrenScreen({
 const CROP_VIEWPORT = 280;
 const CROP_OUT = 512;
 
-function PhotoCropper({
+export function PhotoCropper({
   src,
   colors,
   onCancel,
