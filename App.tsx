@@ -5305,7 +5305,13 @@ function AppShell() {
       setTasksError('Your profile isn’t linked yet — ask a parent to re-add you, then try again.');
       return;
     }
-    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: dataUrl } : c)));
+    setChildren((prev) => {
+      if (prev.some((c) => c.id === childId)) {
+        return prev.map((c) => (c.id === childId ? { ...c, photoUri: dataUrl } : c));
+      }
+      // Profile row wasn't loaded yet — add a minimal entry so the avatar shows now.
+      return [{ id: childId, name: currentChildProfile?.name || childFirstName, age: 0, activities: [], photoUri: dataUrl }, ...prev];
+    });
     try {
       if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, dataUrl);
     } catch (error) {

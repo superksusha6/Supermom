@@ -907,11 +907,21 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
 
 export async function listChildProfiles(familyId: string): Promise<ChildProfile[]> {
   const client = requireClient();
-  const { data, error } = await client
+  const activities = 'child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)';
+  let { data, error } = await client
     .from('child_profiles')
-    .select('id, name, age, date_of_birth, photo_uri, about, child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)')
+    .select(`id, name, age, date_of_birth, photo_uri, about, ${activities}`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
+  // The `about` column may not be migrated on every project — never let it break the
+  // whole profile load (which would leave a child with no profile, name or photo).
+  if (error && String((error as { message?: string }).message || '').includes('about')) {
+    ({ data, error } = await client
+      .from('child_profiles')
+      .select(`id, name, age, date_of_birth, photo_uri, ${activities}`)
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: true }));
+  }
 
   if (error) throw error;
 
