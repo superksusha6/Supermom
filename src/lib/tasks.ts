@@ -909,7 +909,7 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
   const client = requireClient();
   const { data, error } = await client
     .from('child_profiles')
-    .select('id, name, age, date_of_birth, photo_uri, child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)')
+    .select('id, name, age, date_of_birth, photo_uri, about, child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
 
@@ -921,6 +921,7 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
     age: typeof row.age === 'number' ? row.age : 0,
     dateOfBirth: normalizeBirthDateValue(row.date_of_birth),
     photoUri: 'photo_uri' in row && row.photo_uri ? String(row.photo_uri) : undefined,
+    about: 'about' in row && row.about ? String(row.about) : undefined,
     includeInMotherCalendar: true,
     activities: (row.child_activities ?? []).map((activity) => ({
       id: activity.id,
@@ -941,6 +942,17 @@ export async function updateChildPhoto(session: AppSession, childId: string, pho
   const { error } = await client
     .from('child_profiles')
     .update({ photo_uri: photoUri || null })
+    .eq('family_id', session.familyId)
+    .eq('id', childId);
+  if (error) throw error;
+}
+
+// A child (or parent) writes the child's "about me". RLS lets a child edit only their own.
+export async function updateChildAbout(session: AppSession, childId: string, about: string | null): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from('child_profiles')
+    .update({ about: about || null })
     .eq('family_id', session.familyId)
     .eq('id', childId);
   if (error) throw error;

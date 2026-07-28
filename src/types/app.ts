@@ -35,6 +35,7 @@ export type ChildProfile = {
   dateOfBirth?: string;
   includeInMotherCalendar?: boolean;
   photoUri?: string;
+  about?: string;
   activities: ChildActivity[];
 };
 

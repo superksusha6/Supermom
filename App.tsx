@@ -100,6 +100,7 @@ import {
   updateCalendarEvent,
   upsertChildProfileRecord,
   updateChildPhoto,
+  updateChildAbout,
   upsertMyProfile,
   upsertStaffProfileRecord,
   upsertStaffReminderNotification,
@@ -854,6 +855,7 @@ function AppShell() {
   // Child's own navigation: 'home' is the dashboard; the rest are granted functions.
   const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
+  const [childAboutDraft, setChildAboutDraft] = useState('');
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -1398,6 +1400,10 @@ function AppShell() {
   const childCan = (feature: ChildFeature) => !!childFeatures && childFeatures.includes(feature);
   const currentChildProfile = isChildView ? children.find((c) => c.id === session?.childProfileId) || null : null;
   const childFirstName = (currentChildProfile?.name || childInviteName || '').trim().split(/\s+/)[0] || 'there';
+  const currentChildAbout = currentChildProfile?.about || '';
+  useEffect(() => {
+    setChildAboutDraft(currentChildAbout);
+  }, [currentChildAbout]);
   const staffFeatures = useMemo<StaffFeature[] | null>(() => {
     if (isRealStaffSession) return session?.allowedFeatures ?? [];
     if (isStaffPreview && activeStaffProfileId) return staffGrants[activeStaffProfileId]?.features ?? [];
@@ -5227,6 +5233,46 @@ function AppShell() {
     }
   }
 
+  // A child sets their OWN photo (from the Me tab or by tapping their dashboard avatar).
+  async function pickChildAvatar() {
+    const childId = session?.childProfileId;
+    if (!childId) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.4,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: uri } : c)));
+      try {
+        if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, uri);
+      } catch (error) {
+        setTasksError(error instanceof Error ? error.message : 'Could not save your photo yet.');
+      }
+    } catch {
+      // ignore picker failures
+    }
+  }
+
+  function saveChildAbout() {
+    const childId = session?.childProfileId;
+    if (!childId) return;
+    const value = childAboutDraft.trim();
+    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, about: value || undefined } : c)));
+    if (session && isSupabaseConfigured) {
+      updateChildAbout(session, childId, value || null).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not save.'),
+      );
+    }
+  }
+
   // Staff confirms the proof sheet → mark done and report completion (time + note + photo) to the family.
   async function submitMyTaskCompletion() {
     const task = completeTask;
@@ -5936,7 +5982,7 @@ function AppShell() {
   const childHomeNode = (
     <View style={styles.dashWrap}>
       <View style={styles.staffHeaderCard}>
-        <View style={styles.staffHeaderAvatar}>
+        <Pressable style={styles.staffHeaderAvatar} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
           {currentChildProfile?.photoUri ? (
             <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
           ) : (
@@ -5944,7 +5990,7 @@ function AppShell() {
               {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
             </Text>
           )}
-        </View>
+        </Pressable>
         <View style={styles.staffHeaderCopy}>
           <Text style={styles.staffHeaderHi}>{childGreetTime}, {childFirstName} 👋</Text>
           <Text style={styles.staffHeaderSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
@@ -6028,16 +6074,46 @@ function AppShell() {
   const childSettingsNode = (
     <View style={styles.dashWrap}>
       <View style={styles.staffHeaderCard}>
-        <View style={styles.staffHeaderAvatar}>
-          <Text style={styles.staffHeaderAvatarText}>
-            {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <Pressable style={styles.staffHeaderAvatar} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
+          {currentChildProfile?.photoUri ? (
+            <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
+          ) : (
+            <Text style={styles.staffHeaderAvatarText}>
+              {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+            </Text>
+          )}
+        </Pressable>
         <View style={styles.staffHeaderCopy}>
-          <Text style={styles.staffHeaderHi}>{childFirstName}</Text>
+          <Text style={styles.staffHeaderHi}>{currentChildProfile?.name || childFirstName}</Text>
           <Text style={styles.staffHeaderSub}>Your account</Text>
         </View>
       </View>
+
+      <View style={styles.childCard}>
+        <Text style={styles.childCardTitle}>My photo</Text>
+        <Pressable style={[styles.authBtn, styles.authSecondary, { alignSelf: 'flex-start' }]} onPress={pickChildAvatar}>
+          <Text style={[styles.authBtnText, styles.authSecondaryText]}>
+            {currentChildProfile?.photoUri ? 'Change photo' : 'Choose a photo'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.childCard}>
+        <Text style={styles.childCardTitle}>About me</Text>
+        <TextInput
+          style={styles.childAboutInput}
+          placeholder="Write something about you — what you like, your hobbies…"
+          placeholderTextColor={colors.subtext}
+          value={childAboutDraft}
+          onChangeText={setChildAboutDraft}
+          onBlur={saveChildAbout}
+          multiline
+        />
+        <Pressable style={[styles.authBtn, { alignSelf: 'flex-start' }]} onPress={saveChildAbout}>
+          <Text style={styles.authBtnText}>Save</Text>
+        </Pressable>
+      </View>
+
       <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={childSignOut}>
         <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
       </Pressable>
@@ -14000,6 +14076,16 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   childChoreFruit: {
     fontSize: 16,
+  },
+  childAboutInput: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    borderRadius: 12,
+    padding: 12,
+    color: colors.text,
+    fontSize: 15,
+    textAlignVertical: 'top',
   },
   dashDesktop: {
     flexDirection: 'row',
