@@ -1,41 +1,18 @@
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import '@google/model-viewer'; // registers the <model-viewer> custom element (web only file)
 
-// Web: render Google's <model-viewer> custom element directly via React (react-dom).
-// Loads the library lazily, then shows the 3D pet — drag to rotate, gentle auto-spin.
+// Web: render Google's <model-viewer> for a .glb pet. Auto-frames the model, drag to
+// rotate, gentle auto-spin. Rendered via React.createElement so the custom element upgrades.
 export function Pet3D({ uri, size }: { uri: string; size: number }) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    import('@google/model-viewer')
-      .then(() => {
-        if (!cancelled) setReady(true);
-      })
-      .catch(() => {
-        /* leave placeholder */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!ready) {
-    return React.createElement('div', { style: { width: size, height: size } });
-  }
-
   return React.createElement('model-viewer', {
     src: uri,
+    alt: 'pet',
     style: { width: size, height: size, backgroundColor: 'transparent' },
-    'camera-controls': true,
-    'auto-rotate': true,
-    'auto-rotate-delay': 0,
-    'rotation-per-second': '20deg',
-    'disable-zoom': true,
+    'camera-controls': '',
+    'auto-rotate': '',
+    'disable-zoom': '',
     'interaction-prompt': 'none',
-    'shadow-intensity': '0.6',
-    exposure: '1.1',
-    'field-of-view': '32deg',
-    'camera-orbit': '0deg 85deg auto',
+    exposure: '1',
+    'shadow-intensity': '0.5',
   });
 }
