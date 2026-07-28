@@ -3166,6 +3166,18 @@ export async function replaceChores(session: AppSession, chores: Chore[]) {
   if (deleteError && !isMissingHomeTableError(deleteError, 'chores')) throw deleteError;
 }
 
+// A child marks ONE of their own chores done/undone. Single-row update (their RLS
+// allows updating their own chore; they have no bulk/insert rights, so replaceChores
+// can't be used from a child session).
+export async function setChoreDone(session: AppSession, choreId: string, doneDate: string | null) {
+  const client = requireClient();
+  const { error } = await client
+    .from('chores')
+    .update({ last_done_date: doneDate, updated_at: new Date().toISOString() })
+    .eq('id', choreId);
+  if (error && !isMissingHomeTableError(error, 'chores')) throw error;
+}
+
 const MEDICINES_MIGRATION_HINT =
   'Supabase medicines table is missing. Run smart-mom-app/supabase/medicines.sql in the Supabase SQL Editor, then try again.';
 

@@ -76,6 +76,7 @@ import {
   replaceGeneratedChildEvents,
   replaceCycleEntries,
   replaceChores,
+  setChoreDone,
   replaceCustomNutritionFoods,
   replaceHomeIssues,
   replaceHomeProviders,
@@ -2733,6 +2734,7 @@ function AppShell() {
       refreshFamilyShoppers(ctx),
       refreshMyPersonalProfile(ctx),
       refreshLiveShopping(ctx),
+      refreshLiveChores(ctx),
       refreshLiveRecipes(ctx),
       refreshLiveWeeklyMealPlan(ctx),
       refreshLiveNotifications(ctx),
@@ -5902,54 +5904,103 @@ function AppShell() {
     const h = new Date().getHours();
     return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   })();
+  // Cards for the granted extras (habits / food / shopping). "My day" is the Today
+  // screen itself, so it's not a card.
   const childGrantedList = ([
-    { key: 'dayplan', label: 'My day', icon: 'calendar' },
     { key: 'shopping', label: 'Shopping list', icon: 'cart' },
     { key: 'habits', label: 'My habits', icon: 'heart' },
     { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
   ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childCan(f.key));
+  const childProfileId = session?.childProfileId;
+  const childTodayEvents = isChildView
+    ? events
+        .filter((e) => e.date === todayDateKey && (!e.ownerChildProfileId || e.ownerChildProfileId === childProfileId))
+        .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+    : [];
+  const childChores = isChildView ? chores.filter((c) => !c.childId || c.childId === childProfileId) : [];
+  const childActiveHabits = habits.filter((h) => h.enabled);
+  // A "fruit" for each chore/habit finished today — the reward currency for the pet.
+  const childFruits =
+    childChores.filter((c) => choreStatus(c) !== 'todo').length + childActiveHabits.filter((h) => h.completedToday).length;
+  const toggleChildChore = (choreId: string) => {
+    const chore = chores.find((c) => c.id === choreId);
+    if (!chore) return;
+    const nextDate = choreStatus(chore) === 'todo' ? choreTodayKey() : null;
+    setChores((prev) => prev.map((c) => (c.id === choreId ? { ...c, lastDoneDate: nextDate || undefined } : c)));
+    if (session && isSupabaseConfigured) {
+      setChoreDone(session, choreId, nextDate).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not update your chore.'),
+      );
+    }
+  };
   const childHomeNode = (
     <View style={styles.dashWrap}>
       <View style={styles.staffHeaderCard}>
         <View style={styles.staffHeaderAvatar}>
-          <Text style={styles.staffHeaderAvatarText}>
-            {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
-          </Text>
+          {currentChildProfile?.photoUri ? (
+            <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
+          ) : (
+            <Text style={styles.staffHeaderAvatarText}>
+              {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+            </Text>
+          )}
         </View>
         <View style={styles.staffHeaderCopy}>
           <Text style={styles.staffHeaderHi}>{childGreetTime}, {childFirstName} 👋</Text>
           <Text style={styles.staffHeaderSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
         </View>
-      </View>
-      {childGrantedList.length > 0 ? (
-        childGrantedList.map((f) => {
-          const ready = f.key === 'habits' || f.key === 'nutrition' || f.key === 'shopping'; // functions wired so far
-          return (
-            <Pressable
-              key={f.key}
-              style={styles.tasksHubCard}
-              disabled={!ready}
-              onPress={() => ready && setChildScreen(f.key as typeof childScreen)}
-            >
-              <View style={styles.tasksHubIcon}>
-                <Icon name={f.icon} color={colors.primary} size={20} />
-              </View>
-              <View style={styles.tasksHubCopy}>
-                <Text style={styles.tasksHubTitle}>{f.label}</Text>
-                <Text style={styles.tasksHubSub} numberOfLines={1}>{ready ? 'Tap to open' : 'Coming soon in your space'}</Text>
-              </View>
-              {ready ? <Icon name="chevron" color={colors.subtext} size={16} /> : null}
-            </Pressable>
-          );
-        })
-      ) : (
-        <View style={styles.tasksHubCard}>
-          <View style={styles.tasksHubCopy}>
-            <Text style={styles.tasksHubTitle}>Your space is being set up</Text>
-            <Text style={styles.tasksHubSub}>Ask a parent to turn on what you can see.</Text>
-          </View>
+        <View style={styles.childFruitPill}>
+          <Text style={styles.childFruitText}>🍎 {childFruits}</Text>
         </View>
-      )}
+      </View>
+
+      {/* Today's plan */}
+      <View style={styles.childCard}>
+        <Text style={styles.childCardTitle}>Today</Text>
+        {childTodayEvents.length > 0 ? (
+          childTodayEvents.map((e) => (
+            <View key={`ct-${e.id}`} style={styles.childPlanRow}>
+              <Text style={styles.childPlanTime}>{e.time || '—'}</Text>
+              <Text style={styles.childPlanTitle} numberOfLines={1}>{e.title}</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.childEmptyText}>Nothing planned today 🎉</Text>
+        )}
+      </View>
+
+      {/* Chores the child ticks off */}
+      {childChores.length > 0 ? (
+        <View style={styles.childCard}>
+          <Text style={styles.childCardTitle}>My chores</Text>
+          {childChores.map((c) => {
+            const done = choreStatus(c) !== 'todo';
+            return (
+              <Pressable key={`cc-${c.id}`} style={styles.childChoreRow} onPress={() => toggleChildChore(c.id)}>
+                <View style={[styles.childCheck, done && styles.childCheckDone]}>
+                  {done ? <Text style={styles.childCheckMark}>✓</Text> : null}
+                </View>
+                <Text style={[styles.childChoreText, done && styles.childChoreTextDone]} numberOfLines={2}>{c.title}</Text>
+                {done ? <Text style={styles.childChoreFruit}>🍎</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* Granted extras */}
+      {childGrantedList.map((f) => (
+        <Pressable key={f.key} style={styles.tasksHubCard} onPress={() => setChildScreen(f.key as typeof childScreen)}>
+          <View style={styles.tasksHubIcon}>
+            <Icon name={f.icon} color={colors.primary} size={20} />
+          </View>
+          <View style={styles.tasksHubCopy}>
+            <Text style={styles.tasksHubTitle}>{f.label}</Text>
+            <Text style={styles.tasksHubSub} numberOfLines={1}>Tap to open</Text>
+          </View>
+          <Icon name="chevron" color={colors.subtext} size={16} />
+        </Pressable>
+      ))}
     </View>
   );
 
@@ -13866,6 +13917,89 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 18,
     fontWeight: '800',
+  },
+  childFruitPill: {
+    backgroundColor: 'rgba(34,197,94,0.14)',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  childFruitText: {
+    color: '#16a34a',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  childCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+    padding: 14,
+    gap: 8,
+  },
+  childCardTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  childEmptyText: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  childPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  childPlanTime: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    width: 64,
+  },
+  childPlanTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  childChoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  childCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childCheckDone: {
+    backgroundColor: '#22c55e',
+    borderColor: '#22c55e',
+  },
+  childCheckMark: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  childChoreText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  childChoreTextDone: {
+    color: colors.subtext,
+    textDecorationLine: 'line-through',
+  },
+  childChoreFruit: {
+    fontSize: 16,
   },
   dashDesktop: {
     flexDirection: 'row',
