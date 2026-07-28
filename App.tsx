@@ -5276,9 +5276,9 @@ function AppShell() {
   }
 
   async function pickChildAvatar() {
-    const childId = session?.childProfileId;
-    if (!childId) return;
     try {
+      // Always OPEN the picker (don't gate on childProfileId — that made the tap a
+      // silent no-op when a child's profile link was missing). Guard the SAVE instead.
       let uri: string | null = null;
       if (Platform.OS === 'web') {
         uri = await pickImageFileWeb();
@@ -5297,6 +5297,11 @@ function AppShell() {
         uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       }
       if (!uri) return;
+      const childId = session?.childProfileId || currentChildProfile?.id;
+      if (!childId) {
+        setTasksError('Your profile isn’t linked yet — ask a parent to re-add you, then try again.');
+        return;
+      }
       setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri: uri as string } : c)));
       try {
         if (session && isSupabaseConfigured) await updateChildPhoto(session, childId, uri);
