@@ -7251,6 +7251,7 @@ function AppShell() {
       ) : (
         <View pointerEvents="none" style={styles.bgGrain} />
       )}
+      {isChildView ? null : (
       <View style={styles.topBar}>
         <View style={styles.brandWrap}>
           <Text style={styles.brandTitle}>FamOs</Text>
@@ -7271,6 +7272,7 @@ function AppShell() {
           </Pressable>
         </View>
       </View>
+      )}
       {isStaffPreview ? (
         <Pressable style={styles.staffPreviewBanner} onPress={() => selectCalendarProfile('mother')}>
           <Text style={styles.staffPreviewText}>
