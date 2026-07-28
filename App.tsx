@@ -6133,7 +6133,8 @@ function AppShell() {
     childTab === 'me' ? (
       childSettingsNode
     ) : childTab === 'calendar' ? (
-      childComingSoon('Calendar', 'Your week and day plan — coming soon.')
+      // Rendered by the shared CalendarScreen block below (child sees only their events).
+      null
     ) : childTab === 'pet' ? (
       childComingSoon('Your pet', 'Do your chores to earn fruit and feed your pet — coming soon.')
     ) : childScreen === 'shopping' && childCan('shopping') ? (
@@ -8393,9 +8394,10 @@ function AppShell() {
             <Text style={styles.calBackText}>Back to home</Text>
           </Pressable>
         ) : null}
-        {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
+        {(screen === 'calendar' && homeTab === 'calendar' && !isStaffView && !isChildView) ||
+        (isChildView && childTab === 'calendar') ? (
             <CalendarScreen
-              isActive={screen === 'calendar'}
+              isActive={screen === 'calendar' || isChildView}
               parentLabel={parentLabel}
               currentRole={role}
               personalDateOfBirth={personalProfile.dateOfBirth}
