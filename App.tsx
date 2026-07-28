@@ -103,6 +103,7 @@ import {
   upsertChildProfileRecord,
   updateChildPhoto,
   updateChildAbout,
+  updateChildPet,
   upsertMyProfile,
   upsertStaffProfileRecord,
   upsertStaffReminderNotification,
@@ -262,6 +263,16 @@ function habitsLookUserModified(habits: HabitEntry[]): boolean {
     (h) => !defaultIds.has(h.id) || (h.streak || 0) > 0 || h.completedToday || !!h.completedDate,
   );
 }
+
+// Child pet monsters (emoji placeholders — swap in real art later). key is persisted.
+const PET_OPTIONS: { key: string; emoji: string; name: string }[] = [
+  { key: 'dragon', emoji: '🐲', name: 'Дракоша' },
+  { key: 'alien', emoji: '👾', name: 'Пиксель' },
+  { key: 'ogre', emoji: '👹', name: 'Рогги' },
+  { key: 'ghost', emoji: '👻', name: 'Бу' },
+  { key: 'octo', emoji: '🐙', name: 'Осьмик' },
+  { key: 'dino', emoji: '🦖', name: 'Рекс' },
+];
 
 const LOCAL_HABIT_REMINDERS_KEY = 'smartmom.habitRemindersEnabled.v1';
 const LOCAL_PERIOD_REMINDERS_KEY = 'smartmom.periodRemindersEnabled.v1';
@@ -6234,6 +6245,87 @@ function AppShell() {
       </View>
     </View>
   );
+
+  // ---- Pet (tamagotchi): pick a monster, feed it earned fruit, it grows. Age = months
+  // the child has used the app. Emoji art for now — swap in real images later. ----
+  const choosePet = (petType: string) => {
+    const childId = session?.childProfileId || currentChildProfile?.id;
+    if (!childId) return;
+    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, petType } : c)));
+    if (session && isSupabaseConfigured) {
+      updateChildPet(session, childId, { petType }).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not pick your pet.'),
+      );
+    }
+  };
+  const feedPet = () => {
+    const childId = session?.childProfileId || currentChildProfile?.id;
+    if (!childId || !currentChildProfile) return;
+    const fedTodayNow = currentChildProfile.petFedDate === todayDateKey ? currentChildProfile.petFedToday || 0 : 0;
+    if (childFruits - fedTodayNow <= 0) return; // no earned fruit left to give today
+    const nextFed = (currentChildProfile.petFed || 0) + 1;
+    const nextFedToday = fedTodayNow + 1;
+    setChildren((prev) =>
+      prev.map((c) => (c.id === childId ? { ...c, petFed: nextFed, petFedToday: nextFedToday, petFedDate: todayDateKey } : c)),
+    );
+    if (session && isSupabaseConfigured) {
+      updateChildPet(session, childId, { petFed: nextFed, petFedToday: nextFedToday, petFedDate: todayDateKey }).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not feed your pet.'),
+      );
+    }
+  };
+  const childPetNode = (() => {
+    const pet = PET_OPTIONS.find((p) => p.key === currentChildProfile?.petType);
+    if (!pet) {
+      return (
+        <View style={styles.dashWrap}>
+          <Text style={styles.childSubTitle}>Choose your pet</Text>
+          <Text style={styles.childEmptyText}>Pick a monster. Do your day → earn 🍎 → feed it → it grows!</Text>
+          <View style={styles.petPickerGrid}>
+            {PET_OPTIONS.map((p) => (
+              <Pressable key={p.key} style={styles.petPickCard} onPress={() => choosePet(p.key)}>
+                <Text style={styles.petPickEmoji}>{p.emoji}</Text>
+                <Text style={styles.petPickName}>{p.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      );
+    }
+    const fed = currentChildProfile?.petFed || 0;
+    const size = Math.min(72 + fed * 6, 220); // starts small, grows with feeding
+    const fedTodayNow = currentChildProfile?.petFedDate === todayDateKey ? currentChildProfile?.petFedToday || 0 : 0;
+    const available = Math.max(0, childFruits - fedTodayNow);
+    const months = (() => {
+      if (!currentChildProfile?.createdAt) return 0;
+      const start = new Date(currentChildProfile.createdAt);
+      const now = new Date();
+      return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
+    })();
+    return (
+      <View style={styles.dashWrap}>
+        <View style={styles.petStage}>
+          <Text style={{ fontSize: size }}>{pet.emoji}</Text>
+        </View>
+        <Text style={styles.petName}>{pet.name}</Text>
+        <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
+          {months} month{months === 1 ? '' : 's'} old · fed {fed} time{fed === 1 ? '' : 's'}
+        </Text>
+        <View style={styles.childCard}>
+          <Text style={styles.childCardTitle}>🍎 {available} to give today</Text>
+          <Pressable
+            style={[styles.authBtn, available <= 0 && styles.authBtnDisabled]}
+            disabled={available <= 0}
+            onPress={feedPet}
+          >
+            <Text style={styles.authBtnText}>Feed 🍎</Text>
+          </Pressable>
+          {available <= 0 ? <Text style={styles.childEmptyText}>Tick off your chores & plan to earn fruit!</Text> : null}
+        </View>
+      </View>
+    );
+  })();
+
   const childScreenNode =
     childTab === 'me' ? (
       childSettingsNode
@@ -6241,7 +6333,7 @@ function AppShell() {
       // Rendered by the shared CalendarScreen block below (child sees only their events).
       null
     ) : childTab === 'pet' ? (
-      childComingSoon('Your pet', 'Do your chores to earn fruit and feed your pet — coming soon.')
+      childPetNode
     ) : childScreen === 'shopping' && childCan('shopping') ? (
       // Rendered by the shared ShoppingScreen block below (with a Back bar).
       null
@@ -14220,6 +14312,42 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   childChoreFruit: {
     fontSize: 16,
+  },
+  petPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+  },
+  petPickCard: {
+    width: '31%',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.25)',
+    paddingVertical: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  petPickEmoji: {
+    fontSize: 44,
+  },
+  petPickName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  petStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    minHeight: 180,
+  },
+  petName: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   childAboutInput: {
     minHeight: 80,

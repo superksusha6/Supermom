@@ -922,19 +922,20 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
 export async function listChildProfiles(familyId: string): Promise<ChildProfile[]> {
   const client = requireClient();
   const activities = 'child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)';
-  const withAbout = await client
+  const extended = 'about, created_at, pet_type, pet_fed, pet_fed_today, pet_fed_date';
+  const full = await client
     .from('child_profiles')
-    .select(`id, name, age, date_of_birth, photo_uri, about, ${activities}`)
+    .select(`id, name, age, date_of_birth, photo_uri, ${extended}, ${activities}`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
-  let data: any[] | null = withAbout.data;
-  let error: any = withAbout.error;
-  // The `about` column may not be migrated on every project — never let it break the
-  // whole profile load (which would leave a child with no profile, name or photo).
-  if (error && String(error?.message || '').includes('about')) {
+  let data: any[] | null = full.data;
+  let error: any = full.error;
+  // Newer columns (about / pet_*) may not be migrated on every project — never let them
+  // break the whole profile load (which would leave a child with no profile/name/photo).
+  if (error && /about|pet_/.test(String(error?.message || ''))) {
     const fallback = await client
       .from('child_profiles')
-      .select(`id, name, age, date_of_birth, photo_uri, ${activities}`)
+      .select(`id, name, age, date_of_birth, photo_uri, created_at, ${activities}`)
       .eq('family_id', familyId)
       .order('created_at', { ascending: true });
     data = fallback.data;
@@ -950,6 +951,11 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
     dateOfBirth: normalizeBirthDateValue(row.date_of_birth),
     photoUri: 'photo_uri' in row && row.photo_uri ? String(row.photo_uri) : undefined,
     about: 'about' in row && row.about ? String(row.about) : undefined,
+    createdAt: row.created_at ? String(row.created_at) : undefined,
+    petType: 'pet_type' in row && row.pet_type ? String(row.pet_type) : undefined,
+    petFed: 'pet_fed' in row && typeof row.pet_fed === 'number' ? row.pet_fed : 0,
+    petFedToday: 'pet_fed_today' in row && typeof row.pet_fed_today === 'number' ? row.pet_fed_today : 0,
+    petFedDate: 'pet_fed_date' in row && row.pet_fed_date ? String(row.pet_fed_date) : undefined,
     includeInMotherCalendar: true,
     activities: (row.child_activities ?? []).map((activity: any) => ({
       id: activity.id,
@@ -972,6 +978,23 @@ export async function updateChildPhoto(session: AppSession, childId: string, pho
     .update({ photo_uri: photoUri || null })
     .eq('family_id', session.familyId)
     .eq('id', childId);
+  if (error) throw error;
+}
+
+// A child updates their own pet (choice / feeding). RLS lets a child edit only their own row.
+export async function updateChildPet(
+  session: AppSession,
+  childId: string,
+  fields: { petType?: string; petFed?: number; petFedToday?: number; petFedDate?: string | null },
+): Promise<void> {
+  const client = requireClient();
+  const patch: Record<string, unknown> = {};
+  if (fields.petType !== undefined) patch.pet_type = fields.petType;
+  if (fields.petFed !== undefined) patch.pet_fed = fields.petFed;
+  if (fields.petFedToday !== undefined) patch.pet_fed_today = fields.petFedToday;
+  if (fields.petFedDate !== undefined) patch.pet_fed_date = fields.petFedDate;
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await client.from('child_profiles').update(patch).eq('family_id', session.familyId).eq('id', childId);
   if (error) throw error;
 }
 

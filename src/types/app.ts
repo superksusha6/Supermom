@@ -36,6 +36,11 @@ export type ChildProfile = {
   includeInMotherCalendar?: boolean;
   photoUri?: string;
   about?: string;
+  createdAt?: string; // ISO — when the child profile was created (for pet age in months)
+  petType?: string; // chosen monster
+  petFed?: number; // total fruits fed = growth
+  petFedToday?: number;
+  petFedDate?: string; // YYYY-MM-DD of the last feed
   activities: ChildActivity[];
 };
 
