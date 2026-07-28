@@ -876,6 +876,7 @@ function AppShell() {
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
+  const [petPickerOpen, setPetPickerOpen] = useState(false);
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -6255,6 +6256,7 @@ function AppShell() {
   const choosePet = (petType: string) => {
     const childId = session?.childProfileId || currentChildProfile?.id;
     if (!childId) return;
+    setPetPickerOpen(false);
     setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, petType } : c)));
     if (session && isSupabaseConfigured) {
       updateChildPet(session, childId, { petType }).catch((error) =>
@@ -6280,7 +6282,7 @@ function AppShell() {
   };
   const childPetNode = (() => {
     const pet = PET_OPTIONS.find((p) => p.key === currentChildProfile?.petType);
-    if (!pet) {
+    if (!pet || petPickerOpen) {
       return (
         <View style={styles.dashWrap}>
           <Text style={styles.childSubTitle}>Choose your pet</Text>
@@ -6288,11 +6290,20 @@ function AppShell() {
           <View style={styles.petPickerGrid}>
             {PET_OPTIONS.map((p) => (
               <Pressable key={p.key} style={styles.petPickCard} onPress={() => choosePet(p.key)}>
-                <Text style={styles.petPickEmoji}>{p.emoji}</Text>
-                <Text style={styles.petPickName}>{p.name}</Text>
+                {p.model ? (
+                  <Pet3D uri={p.model} size={90} />
+                ) : (
+                  <Text style={styles.petPickEmoji}>{p.emoji}</Text>
+                )}
+                <Text style={styles.petPickName}>{p.name}{p.model ? '  ·  3D' : ''}</Text>
               </Pressable>
             ))}
           </View>
+          {pet ? (
+            <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setPetPickerOpen(false)}>
+              <Text style={[styles.authBtnText, styles.authSecondaryText]}>Keep {pet.name}</Text>
+            </Pressable>
+          ) : null}
         </View>
       );
     }
@@ -6331,6 +6342,9 @@ function AppShell() {
           </Pressable>
           {available <= 0 ? <Text style={styles.childEmptyText}>Tick off your chores & plan to earn fruit!</Text> : null}
         </View>
+        <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setPetPickerOpen(true)}>
+          <Text style={[styles.authBtnText, styles.authSecondaryText]}>Change pet</Text>
+        </Pressable>
       </View>
     );
   })();
