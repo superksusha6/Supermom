@@ -9884,7 +9884,7 @@ function AppShell() {
         <TabButton icon="calendar" label="Today" active={childTab === 'today'} onPress={() => { setChildTab('today'); setChildScreen('home'); }} styles={styles} colors={colors} />
         <TabButton icon="calendar" label="Calendar" active={childTab === 'calendar'} onPress={() => { setChildTab('calendar'); setChildScreen('home'); }} styles={styles} colors={colors} />
         <TabButton icon="heart" label="Pet" active={childTab === 'pet'} onPress={() => { setChildTab('pet'); setChildScreen('home'); }} styles={styles} colors={colors} />
-        <TabButton icon="settings" label="Me" active={childTab === 'me'} onPress={() => { setChildTab('me'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        <TabButton icon="settings" label="Settings" active={childTab === 'me'} onPress={() => { setChildTab('me'); setChildScreen('home'); }} styles={styles} colors={colors} />
       </View>
       ) : (
       <View style={styles.tabBar}>
