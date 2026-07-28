@@ -5238,8 +5238,12 @@ function AppShell() {
     const childId = session?.childProfileId;
     if (!childId) return;
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return;
+      // On web (esp. Safari) the file dialog must open synchronously inside the click —
+      // an awaited permission request first would break the user-gesture and block it.
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) return;
+      }
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: Platform.OS !== 'web', // web doesn't support the native crop — it breaks the picker
