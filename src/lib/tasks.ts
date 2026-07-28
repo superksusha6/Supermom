@@ -908,19 +908,23 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
 export async function listChildProfiles(familyId: string): Promise<ChildProfile[]> {
   const client = requireClient();
   const activities = 'child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)';
-  let { data, error } = await client
+  const withAbout = await client
     .from('child_profiles')
     .select(`id, name, age, date_of_birth, photo_uri, about, ${activities}`)
     .eq('family_id', familyId)
     .order('created_at', { ascending: true });
+  let data: any[] | null = withAbout.data;
+  let error: any = withAbout.error;
   // The `about` column may not be migrated on every project — never let it break the
   // whole profile load (which would leave a child with no profile, name or photo).
-  if (error && String((error as { message?: string }).message || '').includes('about')) {
-    ({ data, error } = await client
+  if (error && String(error?.message || '').includes('about')) {
+    const fallback = await client
       .from('child_profiles')
       .select(`id, name, age, date_of_birth, photo_uri, ${activities}`)
       .eq('family_id', familyId)
-      .order('created_at', { ascending: true }));
+      .order('created_at', { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
   }
 
   if (error) throw error;
@@ -933,7 +937,7 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
     photoUri: 'photo_uri' in row && row.photo_uri ? String(row.photo_uri) : undefined,
     about: 'about' in row && row.about ? String(row.about) : undefined,
     includeInMotherCalendar: true,
-    activities: (row.child_activities ?? []).map((activity) => ({
+    activities: (row.child_activities ?? []).map((activity: any) => ({
       id: activity.id,
       name: activity.activity_name,
       timesPerWeek: activity.times_per_week,
