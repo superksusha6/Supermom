@@ -77,6 +77,8 @@ import {
   replaceCycleEntries,
   replaceChores,
   setChoreDone,
+  listChildEventChecks,
+  setChildEventDone,
   replaceCustomNutritionFoods,
   replaceHomeIssues,
   replaceHomeProviders,
@@ -857,6 +859,8 @@ function AppShell() {
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
+  // Event ids the child has ticked done today (their day-plan check-offs).
+  const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -1479,6 +1483,7 @@ function AppShell() {
       refreshLiveNutrition(current);
       refreshLiveCustomFoods(current);
       refreshLiveHabits(current);
+      refreshChildEventChecks(current);
     };
 
     (async () => {
@@ -2302,6 +2307,16 @@ function AppShell() {
     }
   }
 
+  async function refreshChildEventChecks(current: AppSession | null = session) {
+    if (!current || current.role !== 'child' || !isSupabaseConfigured) return;
+    try {
+      const ids = await listChildEventChecks(current, toDateKey(new Date()));
+      setChildEventChecks(new Set(ids));
+    } catch {
+      // keep what we have
+    }
+  }
+
   async function refreshFamilyShoppers(current: AppSession | null = session) {
     if (!current || !isSupabaseConfigured) return;
     try {
@@ -2739,6 +2754,7 @@ function AppShell() {
       refreshLiveChildren(ctx),
       refreshLiveStaffProfiles(ctx),
       refreshFamilyShoppers(ctx),
+      refreshChildEventChecks(ctx),
       refreshMyPersonalProfile(ctx),
       refreshLiveShopping(ctx),
       refreshLiveChores(ctx),
@@ -6023,9 +6039,25 @@ function AppShell() {
     : [];
   const childChores = isChildView ? chores.filter((c) => !c.childId || c.childId === childProfileId) : [];
   const childActiveHabits = habits.filter((h) => h.enabled);
-  // A "fruit" for each chore/habit finished today — the reward currency for the pet.
+  // A "fruit" for each chore/habit/plan-item finished today — the pet's currency.
   const childFruits =
-    childChores.filter((c) => choreStatus(c) !== 'todo').length + childActiveHabits.filter((h) => h.completedToday).length;
+    childChores.filter((c) => choreStatus(c) !== 'todo').length +
+    childActiveHabits.filter((h) => h.completedToday).length +
+    childEventChecks.size;
+  const toggleChildEvent = (eventId: string) => {
+    const nextDone = !childEventChecks.has(eventId);
+    setChildEventChecks((prev) => {
+      const next = new Set(prev);
+      if (nextDone) next.add(eventId);
+      else next.delete(eventId);
+      return next;
+    });
+    if (session && isSupabaseConfigured) {
+      setChildEventDone(session, eventId, todayDateKey, nextDone).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not update.'),
+      );
+    }
+  };
   const toggleChildChore = (choreId: string) => {
     const chore = chores.find((c) => c.id === choreId);
     if (!chore) return;
@@ -6070,12 +6102,19 @@ function AppShell() {
       <View style={styles.childCard}>
         <Text style={styles.childCardTitle}>Today</Text>
         {childTodayEvents.length > 0 ? (
-          childTodayEvents.map((e) => (
-            <View key={`ct-${e.id}`} style={styles.childPlanRow}>
-              <Text style={styles.childPlanTime}>{e.time || '—'}</Text>
-              <Text style={styles.childPlanTitle} numberOfLines={1}>{e.title}</Text>
-            </View>
-          ))
+          childTodayEvents.map((e) => {
+            const done = childEventChecks.has(e.id);
+            return (
+              <Pressable key={`ct-${e.id}`} style={styles.childPlanRow} onPress={() => toggleChildEvent(e.id)}>
+                <View style={[styles.childCheck, done && styles.childCheckDone]}>
+                  {done ? <Text style={styles.childCheckMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.childPlanTime}>{e.time || '—'}</Text>
+                <Text style={[styles.childPlanTitle, done && styles.childChoreTextDone]} numberOfLines={1}>{e.title}</Text>
+                {done ? <Text style={styles.childChoreFruit}>🍎</Text> : null}
+              </Pressable>
+            );
+          })
         ) : (
           <Text style={styles.childEmptyText}>Nothing planned today 🎉</Text>
         )}

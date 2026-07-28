@@ -3206,6 +3206,46 @@ export async function replaceChores(session: AppSession, chores: Chore[]) {
   if (deleteError && !isMissingHomeTableError(deleteError, 'chores')) throw deleteError;
 }
 
+// Which of the child's day-plan events they've ticked done on a given date.
+export async function listChildEventChecks(session: AppSession, doneDate: string): Promise<string[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('child_event_checks')
+    .select('event_id')
+    .eq('family_id', session.familyId)
+    .eq('done_date', doneDate);
+  if (error) {
+    if (isMissingHomeTableError(error, 'child_event_checks')) return [];
+    throw error;
+  }
+  return (data ?? []).map((r) => String((r as { event_id: string }).event_id));
+}
+
+// A child ticks / un-ticks one of their day-plan events for a date.
+export async function setChildEventDone(session: AppSession, eventId: string, doneDate: string, done: boolean): Promise<void> {
+  const client = requireClient();
+  const childId = session.childProfileId;
+  if (!childId) return;
+  if (done) {
+    const { error } = await client
+      .from('child_event_checks')
+      .upsert(
+        { family_id: session.familyId, child_profile_id: childId, event_id: eventId, done_date: doneDate },
+        { onConflict: 'child_profile_id,event_id,done_date' },
+      );
+    if (error && !isMissingHomeTableError(error, 'child_event_checks')) throw error;
+  } else {
+    const { error } = await client
+      .from('child_event_checks')
+      .delete()
+      .eq('family_id', session.familyId)
+      .eq('child_profile_id', childId)
+      .eq('event_id', eventId)
+      .eq('done_date', doneDate);
+    if (error && !isMissingHomeTableError(error, 'child_event_checks')) throw error;
+  }
+}
+
 // A child marks ONE of their own chores done/undone. Single-row update (their RLS
 // allows updating their own chore; they have no bulk/insert rights, so replaceChores
 // can't be used from a child session).
