@@ -6039,7 +6039,7 @@ function AppShell() {
   };
   const childHomeNode = (
     <View style={styles.dashWrap}>
-      <View style={styles.staffHeaderCard}>
+      <View style={styles.childHeaderPlain}>
         <Pressable style={styles.childAvatarCircle} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
           {currentChildProfile?.photoUri ? (
             <Image source={{ uri: currentChildProfile.photoUri }} style={styles.childAvatarImg} />
@@ -14069,6 +14069,14 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 18,
     fontWeight: '800',
+  },
+  childHeaderPlain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginBottom: 2,
   },
   childAvatarCircle: {
     width: 48,
