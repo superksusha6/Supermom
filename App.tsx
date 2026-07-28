@@ -5982,9 +5982,9 @@ function AppShell() {
   const childHomeNode = (
     <View style={styles.dashWrap}>
       <View style={styles.staffHeaderCard}>
-        <Pressable style={styles.staffHeaderAvatar} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
+        <Pressable style={styles.childAvatarCircle} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
           {currentChildProfile?.photoUri ? (
-            <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
+            <Image source={{ uri: currentChildProfile.photoUri }} style={styles.childAvatarImg} />
           ) : (
             <Text style={styles.staffHeaderAvatarText}>
               {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
@@ -5992,7 +5992,7 @@ function AppShell() {
           )}
         </Pressable>
         <View style={styles.staffHeaderCopy}>
-          <Text style={styles.staffHeaderHi}>{childGreetTime}, {childFirstName} 👋</Text>
+          <Text style={styles.childHiSmall}>Hi, {childFirstName}</Text>
           <Text style={styles.staffHeaderSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
         </View>
         <View style={styles.childFruitPill}>
@@ -14003,6 +14003,25 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.text,
     fontSize: 18,
     fontWeight: '800',
+  },
+  childAvatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(59,130,246,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  childHiSmall: {
+    color: colors.subtext,
+    fontSize: 14,
+    fontWeight: '700',
   },
   childFruitPill: {
     backgroundColor: 'rgba(34,197,94,0.14)',
