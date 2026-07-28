@@ -30,6 +30,8 @@
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
     "@types/react": "~19.0.10",
     "babel-plugin-module-resolver": "^5.0.2",
     "typescript": "~5.8.3"

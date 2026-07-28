@@ -6317,7 +6317,7 @@ function AppShell() {
       const now = new Date();
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
-    const stage3d = Math.min(160 + fed * 8, 300); // 3D pet grows with feeding
+    const stage3d = Math.min(230 + fed * 8, 360); // 3D pet grows with feeding
     return (
       <View style={styles.dashWrap}>
         <View style={styles.petStage}>
@@ -14363,8 +14363,8 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   petStage: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    minHeight: 180,
+    paddingVertical: 8,
+    minHeight: 260,
   },
   petName: {
     color: colors.text,
