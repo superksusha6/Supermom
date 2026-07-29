@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { categorizeItem } from '@/lib/shopping';
@@ -875,9 +875,26 @@ function AppShell() {
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
-  const [childEditOpen, setChildEditOpen] = useState(false);
   const [childNameDraft, setChildNameDraft] = useState('');
   const [childDobDraft, setChildDobDraft] = useState('');
+  const [childSavedFlash, setChildSavedFlash] = useState(false);
+  // Child can show/hide functions the PARENT granted (a personal display choice; the
+  // parent grant + RLS remain the source of truth for what's available at all).
+  const [childHiddenFeatures, setChildHiddenFeatures] = useState<Set<string>>(() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.childHidden.v1');
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [childRemindersOn, setChildRemindersOn] = useState<boolean>(() => {
+    try {
+      return globalThis.localStorage?.getItem('smartmom.childReminders.v1') !== '0';
+    } catch {
+      return true;
+    }
+  });
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   const [petPickerOpen, setPetPickerOpen] = useState(false);
@@ -1435,12 +1452,22 @@ function AppShell() {
   const isChildView = session?.role === 'child';
   const childFeatures = isChildView ? session?.childFeatures ?? [] : null;
   const childCan = (feature: ChildFeature) => !!childFeatures && childFeatures.includes(feature);
+  // childCan = parent granted it; childShows = granted AND the child hasn't hidden it.
+  const childShows = (feature: ChildFeature) => childCan(feature) && !childHiddenFeatures.has(feature);
   const currentChildProfile = isChildView ? children.find((c) => c.id === session?.childProfileId) || null : null;
   const childFirstName = (currentChildProfile?.name || childInviteName || '').trim().split(/\s+/)[0] || 'there';
   const currentChildAbout = currentChildProfile?.about || '';
+  const currentChildName = currentChildProfile?.name || '';
+  const currentChildDob = currentChildProfile?.dateOfBirth || '';
   useEffect(() => {
     setChildAboutDraft(currentChildAbout);
   }, [currentChildAbout]);
+  useEffect(() => {
+    setChildNameDraft(currentChildName);
+  }, [currentChildName]);
+  useEffect(() => {
+    setChildDobDraft(currentChildDob);
+  }, [currentChildDob]);
   const staffFeatures = useMemo<StaffFeature[] | null>(() => {
     if (isRealStaffSession) return session?.allowedFeatures ?? [];
     if (isStaffPreview && activeStaffProfileId) return staffGrants[activeStaffProfileId]?.features ?? [];
@@ -5367,18 +5394,30 @@ function AppShell() {
     }
   }
 
-  function openChildEditor() {
-    setChildNameDraft(currentChildProfile?.name || '');
-    setChildDobDraft(currentChildProfile?.dateOfBirth || '');
-    setChildAboutDraft(currentChildProfile?.about || '');
-    setChildEditOpen(true);
-  }
+  const toggleChildFeature = (feature: string) => {
+    setChildHiddenFeatures((prev) => {
+      const next = new Set(prev);
+      if (next.has(feature)) next.delete(feature);
+      else next.add(feature);
+      try {
+        globalThis.localStorage?.setItem('smartmom.childHidden.v1', JSON.stringify([...next]));
+      } catch {
+        /* best-effort */
+      }
+      return next;
+    });
+  };
+  const toggleChildReminders = (on: boolean) => {
+    setChildRemindersOn(on);
+    try {
+      globalThis.localStorage?.setItem('smartmom.childReminders.v1', on ? '1' : '0');
+    } catch {
+      /* best-effort */
+    }
+  };
   function saveChildDetails() {
     const childId = session?.childProfileId || currentChildProfile?.id;
-    if (!childId) {
-      setChildEditOpen(false);
-      return;
-    }
+    if (!childId) return;
     const name = childNameDraft.trim();
     const about = childAboutDraft.trim() || null;
     const dobRaw = childDobDraft.trim();
@@ -5392,7 +5431,8 @@ function AppShell() {
         setTasksError(error instanceof Error ? error.message : 'Could not save.'),
       );
     }
-    setChildEditOpen(false);
+    setChildSavedFlash(true);
+    setTimeout(() => setChildSavedFlash(false), 1500);
   }
   function saveChildAbout() {
     const childId = session?.childProfileId;
@@ -6089,7 +6129,7 @@ function AppShell() {
     { key: 'shopping', label: 'Shopping list', icon: 'cart' },
     { key: 'habits', label: 'My habits', icon: 'heart' },
     { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
-  ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childCan(f.key));
+  ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childShows(f.key));
   const childProfileId = session?.childProfileId;
   const childTodayEvents = isChildView
     ? events
@@ -6235,90 +6275,108 @@ function AppShell() {
       })
       .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
   };
+  const childToolRows = [
+    { key: 'dayplan' as ChildFeature, label: 'Day plan & snacks', icon: 'calendar' as IconName },
+    { key: 'shopping' as ChildFeature, label: 'Shopping', icon: 'cart' as IconName },
+    { key: 'habits' as ChildFeature, label: 'Habits', icon: 'heart' as IconName },
+    { key: 'nutrition' as ChildFeature, label: 'Food & energy', icon: 'meal' as IconName },
+  ];
   const childSettingsNode = (
     <View style={styles.dashWrap}>
-      {/* Tap the card to edit personal data: photo, name, date of birth, about. */}
-      <Pressable style={styles.staffHeaderCard} onPress={openChildEditor} accessibilityLabel="Edit your profile">
-        <View style={styles.staffHeaderAvatar}>
-          {currentChildProfile?.photoUri ? (
-            <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
-          ) : (
-            <Text style={styles.staffHeaderAvatarText}>
-              {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
-            </Text>
-          )}
+      {/* YOU — inline personal data, autosave-style Save */}
+      <Text style={styles.childSectionLabel}>YOU</Text>
+      <View style={styles.childCard}>
+        <View style={styles.childProfileRow}>
+          <Pressable style={styles.childAvatarCircle} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
+            {currentChildProfile?.photoUri ? (
+              <Image source={{ uri: currentChildProfile.photoUri }} style={styles.childAvatarImg} />
+            ) : (
+              <Text style={styles.staffHeaderAvatarText}>
+                {(childNameDraft || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+              </Text>
+            )}
+          </Pressable>
+          <Pressable onPress={pickChildAvatar}>
+            <Text style={[styles.childBackText, { fontSize: 14 }]}>{currentChildProfile?.photoUri ? 'Change photo' : 'Add photo'}</Text>
+          </Pressable>
         </View>
-        <View style={styles.staffHeaderCopy}>
-          <Text style={styles.staffHeaderHi}>{currentChildProfile?.name || childFirstName}</Text>
-          <Text style={styles.staffHeaderSub}>Your account · tap to edit</Text>
+
+        <Text style={styles.childFieldLabel}>Name</Text>
+        <TextInput
+          style={[styles.input, styles.authField]}
+          placeholder="Your name"
+          placeholderTextColor={colors.subtext}
+          value={childNameDraft}
+          onChangeText={setChildNameDraft}
+          onBlur={saveChildDetails}
+        />
+
+        <Text style={styles.childFieldLabel}>Date of birth</Text>
+        <TextInput
+          style={[styles.input, styles.authField]}
+          placeholder="DD.MM.YYYY"
+          placeholderTextColor={colors.subtext}
+          value={childDobDraft}
+          onChangeText={setChildDobDraft}
+          onBlur={saveChildDetails}
+        />
+
+        <Text style={styles.childFieldLabel}>About me</Text>
+        <TextInput
+          style={styles.childAboutInput}
+          placeholder="What you like, your hobbies…"
+          placeholderTextColor={colors.subtext}
+          value={childAboutDraft}
+          onChangeText={setChildAboutDraft}
+          onBlur={saveChildDetails}
+          multiline
+        />
+        <View style={styles.childSaveRow}>
+          {childSavedFlash ? <Text style={styles.childSavedFlash}>Saved ✓</Text> : null}
+          <Pressable style={[styles.authBtn, { alignSelf: 'flex-start' }]} onPress={saveChildDetails}>
+            <Text style={styles.authBtnText}>Save</Text>
+          </Pressable>
         </View>
-        <Icon name="chevron" color={colors.subtext} size={16} />
-      </Pressable>
+      </View>
 
-      <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={childSignOut}>
-        <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
-      </Pressable>
-
-      <Modal visible={childEditOpen} transparent animationType="fade" onRequestClose={() => setChildEditOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.childEditorModalCard}>
-            <View style={styles.childEditorHeader}>
-              <Text style={styles.authTitle}>Your profile</Text>
-              <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setChildEditOpen(false)}>
-                <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
-              </Pressable>
+      {/* YOUR TOOLS — show/hide the functions a parent turned on */}
+      <Text style={styles.childSectionLabel}>YOUR TOOLS</Text>
+      <View style={styles.childCard}>
+        {childToolRows.map((row) => {
+          const granted = childCan(row.key);
+          return (
+            <View key={`tool-${row.key}`} style={styles.childToolRow}>
+              <View style={styles.tasksHubIcon}>
+                <Icon name={row.icon} color={granted ? colors.primary : colors.subtext} size={18} />
+              </View>
+              <Text style={[styles.childToolLabel, !granted && { color: colors.subtext }]}>{row.label}</Text>
+              {granted ? (
+                <Switch value={!childHiddenFeatures.has(row.key)} onValueChange={() => toggleChildFeature(row.key)} />
+              ) : (
+                <Text style={styles.childToolLocked}>🔒 Ask a parent</Text>
+              )}
             </View>
-            <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
-              <Pressable style={[styles.childAvatarCircle, { width: 84, height: 84, borderRadius: 42, alignSelf: 'center' }]} onPress={pickChildAvatar}>
-                {currentChildProfile?.photoUri ? (
-                  <Image source={{ uri: currentChildProfile.photoUri }} style={{ width: 84, height: 84, borderRadius: 42 }} />
-                ) : (
-                  <Text style={styles.staffHeaderAvatarText}>
-                    {(childNameDraft || childFirstName || 'K').trim().charAt(0).toUpperCase()}
-                  </Text>
-                )}
-              </Pressable>
-              <Pressable style={[styles.authBtn, styles.authSecondary, { alignSelf: 'center' }]} onPress={pickChildAvatar}>
-                <Text style={[styles.authBtnText, styles.authSecondaryText]}>
-                  {currentChildProfile?.photoUri ? 'Change photo' : 'Choose a photo'}
-                </Text>
-              </Pressable>
+          );
+        })}
+      </View>
 
-              <Text style={styles.childFieldLabel}>Name</Text>
-              <TextInput
-                style={[styles.input, styles.authField]}
-                placeholder="Your name"
-                placeholderTextColor={colors.subtext}
-                value={childNameDraft}
-                onChangeText={setChildNameDraft}
-              />
-
-              <Text style={styles.childFieldLabel}>Date of birth</Text>
-              <TextInput
-                style={[styles.input, styles.authField]}
-                placeholder="DD.MM.YYYY"
-                placeholderTextColor={colors.subtext}
-                value={childDobDraft}
-                onChangeText={setChildDobDraft}
-              />
-
-              <Text style={styles.childFieldLabel}>About me</Text>
-              <TextInput
-                style={styles.childAboutInput}
-                placeholder="What you like, your hobbies…"
-                placeholderTextColor={colors.subtext}
-                value={childAboutDraft}
-                onChangeText={setChildAboutDraft}
-                multiline
-              />
-
-              <Pressable style={[styles.authBtn, { marginTop: 14 }]} onPress={saveChildDetails}>
-                <Text style={styles.authBtnText}>Save</Text>
-              </Pressable>
-            </ScrollView>
+      {/* NOTIFICATIONS — the child's own */}
+      <Text style={styles.childSectionLabel}>NOTIFICATIONS</Text>
+      <View style={styles.childCard}>
+        <View style={styles.childToolRow}>
+          <View style={styles.tasksHubIcon}>
+            <Icon name="heart" color={colors.primary} size={18} />
           </View>
+          <Text style={styles.childToolLabel}>Reminders</Text>
+          <Switch value={childRemindersOn} onValueChange={toggleChildReminders} />
         </View>
-      </Modal>
+      </View>
+
+      {/* ACCOUNT */}
+      <Text style={styles.childSectionLabel}>ACCOUNT</Text>
+      <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={childSignOut}>
+        <Text style={[styles.authBtnText, styles.authSecondaryText, { color: '#dc2626' }]}>Sign out</Text>
+      </Pressable>
     </View>
   );
   const childComingSoon = (title: string, sub: string) => (
@@ -6461,10 +6519,10 @@ function AppShell() {
       null
     ) : childTab === 'pet' ? (
       childPetNode
-    ) : childScreen === 'shopping' && childCan('shopping') ? (
+    ) : childScreen === 'shopping' && childShows('shopping') ? (
       // Rendered by the shared ShoppingScreen block below (with a Back bar).
       null
-    ) : childScreen === 'habits' && childCan('habits') ? (
+    ) : childScreen === 'habits' && childShows('habits') ? (
       <View style={styles.dashWrap}>
         {childBackBar('My habits')}
         <HabitsScreen
@@ -6478,7 +6536,7 @@ function AppShell() {
           quickActionRequest={undefined}
         />
       </View>
-    ) : childScreen === 'nutrition' && childCan('nutrition') ? (
+    ) : childScreen === 'nutrition' && childShows('nutrition') ? (
       <View style={styles.dashWrap}>
         {childBackBar('Food & energy')}
         <NutritionScreen
@@ -9295,7 +9353,7 @@ function AppShell() {
         ) : null}
 
         {(screen === 'food' && foodTab === 'shopping' && staffCan('shopping')) ||
-        (isChildView && childTab === 'today' && childScreen === 'shopping' && childCan('shopping')) ? (
+        (isChildView && childTab === 'today' && childScreen === 'shopping' && childShows('shopping')) ? (
           <>
           {isChildView && childScreen === 'shopping' ? childBackBar('Shopping list') : null}
           <ShoppingScreen
@@ -14500,6 +14558,48 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '700',
     marginTop: 12,
     marginBottom: 4,
+  },
+  childSectionLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginTop: 6,
+    marginBottom: 2,
+    marginLeft: 4,
+  },
+  childProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  childSaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  childSavedFlash: {
+    color: '#16a34a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  childToolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  childToolLabel: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  childToolLocked: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '600',
   },
   childAboutInput: {
     minHeight: 80,
