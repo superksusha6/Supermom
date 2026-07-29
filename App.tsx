@@ -878,7 +878,17 @@ function AppShell() {
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const petScaleAnim = useRef(new Animated.Value(1)).current; // squash/bounce on feed
-  const petTiltAnim = useRef(new Animated.Value(0)).current; // shake when hungry
+  const petIdleAnim = useRef(new Animated.Value(0)).current; // continuous idle bob ("breathing")
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(petIdleAnim, { toValue: 1, duration: 1300, useNativeDriver: true }),
+        Animated.timing(petIdleAnim, { toValue: 0, duration: 1300, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [petIdleAnim]);
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -6336,7 +6346,15 @@ function AppShell() {
           {hungry ? '😖 Покорми меня!' : fed > 0 ? '😋 Ням!' : '👋 Привет!'}
         </Text>
         <View style={styles.petStage}>
-          <Animated.View style={{ transform: [{ scale: petScaleAnim }] }}>
+          <Animated.View
+            style={{
+              transform: [
+                { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [8, -8] }) },
+                { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.03] })) },
+                { rotate: hungry ? '-4deg' : '0deg' },
+              ],
+            }}
+          >
             {pet.model ? (
               <Pet3D uri={pet.model} size={stage3d} />
             ) : (
