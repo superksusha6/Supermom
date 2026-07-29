@@ -1009,6 +1009,28 @@ export async function updateChildAbout(session: AppSession, childId: string, abo
   if (error) throw error;
 }
 
+// A child edits their own personal details (name / date of birth / about). RLS scopes it
+// to their own row. `about` may not be migrated everywhere — retry without it.
+export async function updateChildDetails(
+  session: AppSession,
+  childId: string,
+  fields: { name?: string; dateOfBirth?: string | null; about?: string | null },
+): Promise<void> {
+  const client = requireClient();
+  const patch: Record<string, unknown> = {};
+  if (fields.name !== undefined) patch.name = fields.name;
+  if (fields.dateOfBirth !== undefined) patch.date_of_birth = fields.dateOfBirth;
+  if (fields.about !== undefined) patch.about = fields.about;
+  if (Object.keys(patch).length === 0) return;
+  let { error } = await client.from('child_profiles').update(patch).eq('family_id', session.familyId).eq('id', childId);
+  if (error && 'about' in patch && /about/.test(String((error as { message?: string }).message || ''))) {
+    const { about, ...rest } = patch;
+    if (Object.keys(rest).length === 0) return;
+    ({ error } = await client.from('child_profiles').update(rest).eq('family_id', session.familyId).eq('id', childId));
+  }
+  if (error) throw error;
+}
+
 export async function upsertChildProfileRecord(
   session: AppSession,
   payload: {

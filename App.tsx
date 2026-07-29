@@ -103,6 +103,7 @@ import {
   upsertChildProfileRecord,
   updateChildPhoto,
   updateChildAbout,
+  updateChildDetails,
   updateChildPet,
   upsertMyProfile,
   upsertStaffProfileRecord,
@@ -874,6 +875,9 @@ function AppShell() {
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
+  const [childEditOpen, setChildEditOpen] = useState(false);
+  const [childNameDraft, setChildNameDraft] = useState('');
+  const [childDobDraft, setChildDobDraft] = useState('');
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   const [petPickerOpen, setPetPickerOpen] = useState(false);
@@ -5363,6 +5367,33 @@ function AppShell() {
     }
   }
 
+  function openChildEditor() {
+    setChildNameDraft(currentChildProfile?.name || '');
+    setChildDobDraft(currentChildProfile?.dateOfBirth || '');
+    setChildAboutDraft(currentChildProfile?.about || '');
+    setChildEditOpen(true);
+  }
+  function saveChildDetails() {
+    const childId = session?.childProfileId || currentChildProfile?.id;
+    if (!childId) {
+      setChildEditOpen(false);
+      return;
+    }
+    const name = childNameDraft.trim();
+    const about = childAboutDraft.trim() || null;
+    const dobRaw = childDobDraft.trim();
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(dobRaw);
+    const dob = m ? `${m[3]}-${m[2]}-${m[1]}` : /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) ? dobRaw : dobRaw ? undefined : null;
+    setChildren((prev) =>
+      prev.map((c) => (c.id === childId ? { ...c, name: name || c.name, dateOfBirth: dobRaw || c.dateOfBirth, about: about || undefined } : c)),
+    );
+    if (session && isSupabaseConfigured) {
+      updateChildDetails(session, childId, { name: name || undefined, ...(dob !== undefined ? { dateOfBirth: dob } : {}), about }).catch((error) =>
+        setTasksError(error instanceof Error ? error.message : 'Could not save.'),
+      );
+    }
+    setChildEditOpen(false);
+  }
   function saveChildAbout() {
     const childId = session?.childProfileId;
     if (!childId) return;
@@ -6206,8 +6237,9 @@ function AppShell() {
   };
   const childSettingsNode = (
     <View style={styles.dashWrap}>
-      <View style={styles.staffHeaderCard}>
-        <Pressable style={styles.staffHeaderAvatar} onPress={pickChildAvatar} accessibilityLabel="Change your photo">
+      {/* Tap the card to edit personal data: photo, name, date of birth, about. */}
+      <Pressable style={styles.staffHeaderCard} onPress={openChildEditor} accessibilityLabel="Edit your profile">
+        <View style={styles.staffHeaderAvatar}>
           {currentChildProfile?.photoUri ? (
             <Image source={{ uri: currentChildProfile.photoUri }} style={styles.staffHeaderAvatarImg} />
           ) : (
@@ -6215,41 +6247,78 @@ function AppShell() {
               {(currentChildProfile?.name || childFirstName || 'K').trim().charAt(0).toUpperCase()}
             </Text>
           )}
-        </Pressable>
+        </View>
         <View style={styles.staffHeaderCopy}>
           <Text style={styles.staffHeaderHi}>{currentChildProfile?.name || childFirstName}</Text>
-          <Text style={styles.staffHeaderSub}>Your account</Text>
+          <Text style={styles.staffHeaderSub}>Your account · tap to edit</Text>
         </View>
-      </View>
-
-      <View style={styles.childCard}>
-        <Text style={styles.childCardTitle}>My photo</Text>
-        <Pressable style={[styles.authBtn, styles.authSecondary, { alignSelf: 'flex-start' }]} onPress={pickChildAvatar}>
-          <Text style={[styles.authBtnText, styles.authSecondaryText]}>
-            {currentChildProfile?.photoUri ? 'Change photo' : 'Choose a photo'}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.childCard}>
-        <Text style={styles.childCardTitle}>About me</Text>
-        <TextInput
-          style={styles.childAboutInput}
-          placeholder="Write something about you — what you like, your hobbies…"
-          placeholderTextColor={colors.subtext}
-          value={childAboutDraft}
-          onChangeText={setChildAboutDraft}
-          onBlur={saveChildAbout}
-          multiline
-        />
-        <Pressable style={[styles.authBtn, { alignSelf: 'flex-start' }]} onPress={saveChildAbout}>
-          <Text style={styles.authBtnText}>Save</Text>
-        </Pressable>
-      </View>
+        <Icon name="chevron" color={colors.subtext} size={16} />
+      </Pressable>
 
       <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={childSignOut}>
         <Text style={[styles.authBtnText, styles.authSecondaryText]}>Sign out</Text>
       </Pressable>
+
+      <Modal visible={childEditOpen} transparent animationType="fade" onRequestClose={() => setChildEditOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.childEditorModalCard}>
+            <View style={styles.childEditorHeader}>
+              <Text style={styles.authTitle}>Your profile</Text>
+              <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setChildEditOpen(false)}>
+                <Text style={[styles.authBtnText, styles.authSecondaryText]}>Close</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.childEditorBody} contentContainerStyle={styles.childEditorBodyContent} showsVerticalScrollIndicator={false}>
+              <Pressable style={[styles.childAvatarCircle, { width: 84, height: 84, borderRadius: 42, alignSelf: 'center' }]} onPress={pickChildAvatar}>
+                {currentChildProfile?.photoUri ? (
+                  <Image source={{ uri: currentChildProfile.photoUri }} style={{ width: 84, height: 84, borderRadius: 42 }} />
+                ) : (
+                  <Text style={styles.staffHeaderAvatarText}>
+                    {(childNameDraft || childFirstName || 'K').trim().charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable style={[styles.authBtn, styles.authSecondary, { alignSelf: 'center' }]} onPress={pickChildAvatar}>
+                <Text style={[styles.authBtnText, styles.authSecondaryText]}>
+                  {currentChildProfile?.photoUri ? 'Change photo' : 'Choose a photo'}
+                </Text>
+              </Pressable>
+
+              <Text style={styles.childFieldLabel}>Name</Text>
+              <TextInput
+                style={[styles.input, styles.authField]}
+                placeholder="Your name"
+                placeholderTextColor={colors.subtext}
+                value={childNameDraft}
+                onChangeText={setChildNameDraft}
+              />
+
+              <Text style={styles.childFieldLabel}>Date of birth</Text>
+              <TextInput
+                style={[styles.input, styles.authField]}
+                placeholder="DD.MM.YYYY"
+                placeholderTextColor={colors.subtext}
+                value={childDobDraft}
+                onChangeText={setChildDobDraft}
+              />
+
+              <Text style={styles.childFieldLabel}>About me</Text>
+              <TextInput
+                style={styles.childAboutInput}
+                placeholder="What you like, your hobbies…"
+                placeholderTextColor={colors.subtext}
+                value={childAboutDraft}
+                onChangeText={setChildAboutDraft}
+                multiline
+              />
+
+              <Pressable style={[styles.authBtn, { marginTop: 14 }]} onPress={saveChildDetails}>
+                <Text style={styles.authBtnText}>Save</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
   const childComingSoon = (title: string, sub: string) => (
@@ -14424,6 +14493,13 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     backgroundColor: '#fef3c7',
     borderColor: '#f59e0b',
     color: '#b45309',
+  },
+  childFieldLabel: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 12,
+    marginBottom: 4,
   },
   childAboutInput: {
     minHeight: 80,
