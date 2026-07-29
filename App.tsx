@@ -877,6 +877,8 @@ function AppShell() {
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   const [petPickerOpen, setPetPickerOpen] = useState(false);
+  const petScaleAnim = useRef(new Animated.Value(1)).current; // squash/bounce on feed
+  const petTiltAnim = useRef(new Animated.Value(0)).current; // shake when hungry
   // Where "Back" from a sub-screen (Habits / Meds / Fix it) should return to — set to
   // wherever the user opened it from, so Back goes back, not always to Home.
   const [subScreenBack, setSubScreenBack] = useState<Screen>('household');
@@ -6279,6 +6281,13 @@ function AppShell() {
         setTasksError(error instanceof Error ? error.message : 'Could not feed your pet.'),
       );
     }
+    // "Chew": two quick squash-and-stretch pulses.
+    Animated.sequence([
+      Animated.timing(petScaleAnim, { toValue: 1.16, duration: 110, useNativeDriver: true }),
+      Animated.timing(petScaleAnim, { toValue: 0.94, duration: 110, useNativeDriver: true }),
+      Animated.timing(petScaleAnim, { toValue: 1.12, duration: 110, useNativeDriver: true }),
+      Animated.spring(petScaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
   };
   const childPetNode = (() => {
     const pet = PET_OPTIONS.find((p) => p.key === currentChildProfile?.petType);
@@ -6308,28 +6317,36 @@ function AppShell() {
       );
     }
     const fed = currentChildProfile?.petFed || 0;
-    const size = Math.min(72 + fed * 6, 220); // starts small, grows with feeding
     const fedTodayNow = currentChildProfile?.petFedDate === todayDateKey ? currentChildProfile?.petFedToday || 0 : 0;
     const available = Math.max(0, childFruits - fedTodayNow);
+    const hungry = available > 0; // fruit earned but not given yet
     const months = (() => {
       if (!currentChildProfile?.createdAt) return 0;
       const start = new Date(currentChildProfile.createdAt);
       const now = new Date();
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
-    const stage3d = Math.min(230 + fed * 8, 360); // 3D pet grows with feeding
+    // Growth in stages: starts small, jumps up as it eats.
+    const stage = fed < 5 ? { name: 'Малыш', base: 190 } : fed < 15 ? { name: 'Подросток', base: 270 } : { name: 'Взрослый', base: 330 };
+    const stage3d = Math.min(stage.base + fed * 3, 380);
+    const emojiSize = Math.min(90 + fed * 5, 200);
     return (
       <View style={styles.dashWrap}>
+        <Text style={[styles.petBubble, hungry ? styles.petBubbleHungry : null]}>
+          {hungry ? '😖 Покорми меня!' : fed > 0 ? '😋 Ням!' : '👋 Привет!'}
+        </Text>
         <View style={styles.petStage}>
-          {pet.model ? (
-            <Pet3D uri={pet.model} size={stage3d} />
-          ) : (
-            <Text style={{ fontSize: size }}>{pet.emoji}</Text>
-          )}
+          <Animated.View style={{ transform: [{ scale: petScaleAnim }] }}>
+            {pet.model ? (
+              <Pet3D uri={pet.model} size={stage3d} />
+            ) : (
+              <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
+            )}
+          </Animated.View>
         </View>
         <Text style={styles.petName}>{pet.name}</Text>
         <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
-          {months} month{months === 1 ? '' : 's'} old · fed {fed} time{fed === 1 ? '' : 's'}
+          {stage.name} · {months} мес · съел {fed} 🍎
         </Text>
         <View style={styles.childCard}>
           <Text style={styles.childCardTitle}>🍎 {available} to give today</Text>
@@ -14371,6 +14388,24 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  petBubble: {
+    alignSelf: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    overflow: 'hidden',
+  },
+  petBubbleHungry: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    color: '#b45309',
   },
   childAboutInput: {
     minHeight: 80,
