@@ -879,6 +879,7 @@ function AppShell() {
   const [childNameDraft, setChildNameDraft] = useState('');
   const [childDobDraft, setChildDobDraft] = useState('');
   const [childChoreDraft, setChildChoreDraft] = useState('');
+  const [childChoreAdding, setChildChoreAdding] = useState(false);
   const [childSavedFlash, setChildSavedFlash] = useState(false);
   // Child can show/hide functions the PARENT granted (a personal display choice; the
   // parent grant + RLS remain the source of truth for what's available at all).
@@ -6185,6 +6186,7 @@ function AppShell() {
     };
     setChores((prev) => [...prev, newChore]);
     setChildChoreDraft('');
+    setChildChoreAdding(false);
     if (session && isSupabaseConfigured) {
       addChildChore(session, newChore).catch((error) => {
         setTasksError(error instanceof Error ? error.message : 'Could not add your chore.');
@@ -6246,9 +6248,19 @@ function AppShell() {
       {/* Chores the child ticks off — and can add their own. Only an adult can
           remove one, so there's no delete here. */}
       <View style={styles.childCard}>
-        <Text style={styles.childCardTitle}>My chores</Text>
-        {childChores.length === 0 ? (
-          <Text style={styles.childEmptyText}>No chores yet — add one below 👇</Text>
+        <View style={styles.childChoreHeader}>
+          <Text style={styles.childCardTitle}>My chores</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={childChoreAdding ? 'Close' : 'Add a chore'}
+            style={styles.childChoreHeaderBtn}
+            onPress={() => { setChildChoreDraft(''); setChildChoreAdding((v) => !v); }}
+          >
+            <Text style={styles.childChoreHeaderBtnText}>{childChoreAdding ? '×' : '+'}</Text>
+          </Pressable>
+        </View>
+        {childChores.length === 0 && !childChoreAdding ? (
+          <Text style={styles.childEmptyText}>No chores yet — tap “+” to add one.</Text>
         ) : (
           childChores.map((c) => {
             const done = choreStatus(c) !== 'todo';
@@ -6263,27 +6275,30 @@ function AppShell() {
             );
           })
         )}
-        <View style={styles.childChoreAddRow}>
-          <TextInput
-            value={childChoreDraft}
-            onChangeText={setChildChoreDraft}
-            placeholder="Add a chore — e.g. Water the plants"
-            placeholderTextColor={colors.subtext}
-            style={styles.childChoreInput}
-            returnKeyType="done"
-            onSubmitEditing={submitChildChore}
-            blurOnSubmit={false}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add chore"
-            style={[styles.childChoreAddBtn, !childChoreDraft.trim() && styles.childChoreAddBtnDisabled]}
-            onPress={submitChildChore}
-            disabled={!childChoreDraft.trim()}
-          >
-            <Text style={styles.childChoreAddBtnText}>+</Text>
-          </Pressable>
-        </View>
+        {childChoreAdding ? (
+          <View style={styles.childChoreAddRow}>
+            <TextInput
+              value={childChoreDraft}
+              onChangeText={setChildChoreDraft}
+              placeholder="e.g. Water the plants"
+              placeholderTextColor={colors.subtext}
+              style={styles.childChoreInput}
+              returnKeyType="done"
+              onSubmitEditing={submitChildChore}
+              autoFocus
+              blurOnSubmit={false}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save chore"
+              style={[styles.childChoreAddBtn, !childChoreDraft.trim() && styles.childChoreAddBtnDisabled]}
+              onPress={submitChildChore}
+              disabled={!childChoreDraft.trim()}
+            >
+              <Text style={styles.childChoreAddBtnText}>✓</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       {/* Habits — inline card exactly like the parent dashboard: tap a circle to
@@ -14597,6 +14612,25 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   childChoreFruit: {
     fontSize: 16,
+  },
+  childChoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  childChoreHeaderBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: '#eef2ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childChoreHeaderBtnText: {
+    color: colors.primary,
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 24,
   },
   childChoreAddRow: {
     flexDirection: 'row',
