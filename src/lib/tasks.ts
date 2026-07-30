@@ -3410,10 +3410,11 @@ export async function addChildWord(session: AppSession, word: ChildWord): Promis
 export async function updateChildWord(
   session: AppSession,
   wordId: string,
-  patch: Partial<Pick<ChildWord, 'translation' | 'example' | 'distractors' | 'box' | 'dueDate' | 'lastResult' | 'enrichedAt'>>,
+  patch: Partial<Pick<ChildWord, 'term' | 'translation' | 'example' | 'distractors' | 'box' | 'dueDate' | 'lastResult' | 'enrichedAt'>>,
 ): Promise<void> {
   const client = requireClient();
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.term !== undefined) row.term = patch.term;
   if (patch.translation !== undefined) row.translation = patch.translation ?? null;
   if (patch.example !== undefined) row.example = patch.example ?? null;
   if (patch.distractors !== undefined) row.distractors = patch.distractors;

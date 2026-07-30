@@ -80,6 +80,7 @@ import {
   addChildChore,
   listChildWords,
   addChildWord,
+  updateChildWord,
   deleteChildWord,
   listChildEventChecks,
   setChildEventDone,
@@ -121,6 +122,7 @@ import {
   deleteTask,
 } from '@/lib/tasks';
 import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
+import { enrichWords } from '@/lib/words';
 import { choreStatus, choreTodayKey } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
@@ -906,6 +908,8 @@ function AppShell() {
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   // The child's personal vocabulary deck + which language pair they're studying.
   const [childWords, setChildWords] = useState<ChildWord[]>([]);
+  // Word ids currently being auto-translated by the AI (shows a "translating…" state).
+  const [childWordEnriching, setChildWordEnriching] = useState<Set<string>>(new Set());
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -6238,16 +6242,17 @@ function AppShell() {
       (w) => w.srcLang === childWordLang.src && w.tgtLang === childWordLang.tgt && w.term.toLowerCase() === t.toLowerCase(),
     );
     if (dup) return;
+    const manual = translation.trim();
     const newWord: ChildWord = {
       id: `w${Date.now()}`,
       term: t,
-      translation: translation.trim() || undefined,
+      translation: manual || undefined,
       distractors: [],
       srcLang: childWordLang.src,
       tgtLang: childWordLang.tgt,
       box: 1,
       dueDate: todayDateKey,
-      enrichedAt: translation.trim() ? new Date().toISOString() : undefined,
+      enrichedAt: manual ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString(),
     };
     setChildWords((prev) => [newWord, ...prev]);
@@ -6256,6 +6261,38 @@ function AppShell() {
         setTasksError(error instanceof Error ? error.message : 'Could not add your word.');
         setChildWords((prev) => prev.filter((w) => w.id !== newWord.id));
       });
+    }
+    // No manual meaning → let the AI detect the language and fill term/translation/
+    // example/distractors (this is the "type in either language" magic).
+    if (!manual && session && isSupabaseConfigured) {
+      setChildWordEnriching((prev) => new Set(prev).add(newWord.id));
+      enrichWords([t], childWordLang.src, childWordLang.tgt)
+        .then((cards) => {
+          const c = cards[0];
+          if (!c) return;
+          const nextTerm = c.term?.trim() || t;
+          const patch = {
+            term: nextTerm,
+            translation: c.translation?.trim() || undefined,
+            example: c.example?.trim() || undefined,
+            distractors: Array.isArray(c.distractors) ? c.distractors : [],
+            enrichedAt: new Date().toISOString(),
+          };
+          setChildWords((prev) => prev.map((w) => (w.id === newWord.id ? { ...w, ...patch } : w)));
+          updateChildWord(session, newWord.id, patch).catch(() => {
+            // A term-normalization clash with an existing word is harmless — keep local.
+          });
+        })
+        .catch((error) => {
+          setTasksError(error instanceof Error ? error.message : 'Could not translate your word.');
+        })
+        .finally(() => {
+          setChildWordEnriching((prev) => {
+            const next = new Set(prev);
+            next.delete(newWord.id);
+            return next;
+          });
+        });
     }
   };
   const deleteChildWordLocal = (wordId: string) => {
@@ -6731,6 +6768,7 @@ function AppShell() {
         {childBackBar('My words')}
         <WordsScreen
           words={childWords}
+          enrichingIds={childWordEnriching}
           srcLang={childWordLang.src}
           tgtLang={childWordLang.tgt}
           onLangChange={setChildWordLang}

@@ -28,6 +28,7 @@ function langLabel(code: string): string {
 
 type Props = {
   words: ChildWord[];
+  enrichingIds: Set<string>;
   srcLang: string;
   tgtLang: string;
   onLangChange: (src: string, tgt: string) => void;
@@ -35,11 +36,12 @@ type Props = {
   onDeleteWord: (id: string) => void;
 };
 
-export function WordsScreen({ words, srcLang, tgtLang, onLangChange, onAddWord, onDeleteWord }: Props) {
+export function WordsScreen({ words, enrichingIds, srcLang, tgtLang, onLangChange, onAddWord, onDeleteWord }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [term, setTerm] = useState('');
   const [translation, setTranslation] = useState('');
+  const [manualMode, setManualMode] = useState(false);
   const [pickerFor, setPickerFor] = useState<null | 'src' | 'tgt'>(null);
 
   // Only this language pair's words (a child could have decks in several languages).
@@ -48,7 +50,7 @@ export function WordsScreen({ words, srcLang, tgtLang, onLangChange, onAddWord, 
   const submit = () => {
     const t = term.trim();
     if (!t) return;
-    onAddWord(t, translation.trim());
+    onAddWord(t, manualMode ? translation.trim() : '');
     setTerm('');
     setTranslation('');
   };
@@ -74,33 +76,41 @@ export function WordsScreen({ words, srcLang, tgtLang, onLangChange, onAddWord, 
         </Pressable>
       </View>
 
-      {/* Add a word */}
+      {/* Add a word — type in EITHER language, we detect it and translate. */}
       <SectionCard title="Add a word">
         <TextInput
           value={term}
           onChangeText={setTerm}
-          placeholder={`Word in ${langLabel(srcLang)}`}
+          placeholder={`Type a word — ${langLabel(srcLang)} or ${langLabel(tgtLang)}`}
           placeholderTextColor={colors.subtext}
           style={styles.input}
           autoCapitalize="none"
-        />
-        <TextInput
-          value={translation}
-          onChangeText={setTranslation}
-          placeholder={`Meaning in ${langLabel(tgtLang)} (optional)`}
-          placeholderTextColor={colors.subtext}
-          style={styles.input}
           returnKeyType="done"
           onSubmitEditing={submit}
         />
+        {manualMode ? (
+          <TextInput
+            value={translation}
+            onChangeText={setTranslation}
+            placeholder={`Meaning in ${langLabel(tgtLang)}`}
+            placeholderTextColor={colors.subtext}
+            style={styles.input}
+          />
+        ) : null}
         <Pressable
           style={[styles.addBtn, !term.trim() && styles.addBtnDisabled]}
           onPress={submit}
           disabled={!term.trim()}
         >
-          <Text style={styles.addBtnText}>+  Add to my words</Text>
+          <Text style={styles.addBtnText}>{manualMode ? '+  Add to my words' : '✨  Translate & add'}</Text>
         </Pressable>
-        <Text style={styles.hint}>Tip: leave the meaning empty and we'll fill it in for you (coming soon).</Text>
+        <Pressable onPress={() => setManualMode((v) => !v)}>
+          <Text style={styles.hint}>
+            {manualMode
+              ? '↩︎ Let the app translate for me'
+              : "Write in English or Spanish — we'll find the other. · Add the meaning myself"}
+          </Text>
+        </Pressable>
       </SectionCard>
 
       {/* The deck */}
@@ -108,21 +118,26 @@ export function WordsScreen({ words, srcLang, tgtLang, onLangChange, onAddWord, 
         {deck.length === 0 ? (
           <Text style={styles.empty}>No words yet. Add a few above and start practising! 📚</Text>
         ) : (
-          deck.map((w) => (
-            <View key={w.id} style={styles.wordRow}>
-              <View style={styles.wordCopy}>
-                <Text style={styles.wordTerm}>{w.term}</Text>
-                <Text style={styles.wordTrans}>{w.translation || '…'}</Text>
+          deck.map((w) => {
+            const busy = enrichingIds.has(w.id);
+            return (
+              <View key={w.id} style={styles.wordRow}>
+                <View style={styles.wordCopy}>
+                  <Text style={styles.wordTerm}>{w.term}</Text>
+                  <Text style={[styles.wordTrans, busy && styles.wordTransBusy]}>
+                    {busy ? 'translating…' : w.translation || '—'}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel={`Delete ${w.term}`}
+                  style={styles.delBtn}
+                  onPress={() => onDeleteWord(w.id)}
+                >
+                  <Text style={styles.delBtnText}>×</Text>
+                </Pressable>
               </View>
-              <Pressable
-                accessibilityLabel={`Delete ${w.term}`}
-                style={styles.delBtn}
-                onPress={() => onDeleteWord(w.id)}
-              >
-                <Text style={styles.delBtnText}>×</Text>
-              </Pressable>
-            </View>
-          ))
+            );
+          })
         )}
       </SectionCard>
 
@@ -195,6 +210,7 @@ const createStyles = (colors: ThemeColors) =>
     wordCopy: { flex: 1 },
     wordTerm: { color: colors.text, fontSize: 17, fontWeight: '800' },
     wordTrans: { color: colors.subtext, fontSize: 14, fontWeight: '600', marginTop: 2 },
+    wordTransBusy: { fontStyle: 'italic', color: colors.primary },
     delBtn: {
       width: 34,
       height: 34,
