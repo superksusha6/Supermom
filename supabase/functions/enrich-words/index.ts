@@ -128,7 +128,16 @@ Deno.serve(async (req) => {
     }
 
     const payload = await response.json();
-    const textOutput = payload?.output_text;
+    // The raw /v1/responses HTTP body has no top-level output_text (that's an SDK
+    // convenience) — the JSON string lives in output[].content[] where type is
+    // 'output_text'. Fall back through both shapes.
+    const textOutput =
+      (typeof payload?.output_text === 'string' && payload.output_text) ||
+      (Array.isArray(payload?.output)
+        ? payload.output
+            .flatMap((o: Record<string, unknown>) => (Array.isArray(o?.content) ? o.content : []))
+            .find((c: Record<string, unknown>) => c?.type === 'output_text' && typeof c?.text === 'string')?.text
+        : undefined);
     if (!textOutput || typeof textOutput !== 'string') {
       return json({ error: 'OpenAI returned no structured output.' }, 500);
     }
