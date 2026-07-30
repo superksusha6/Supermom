@@ -456,13 +456,6 @@ function getYesterdayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Streak that reflects consecutive days: completing continues the run if the last tick
-// was yesterday, otherwise it restarts at 1; un-ticking today reverts by one.
-function nextHabitStreak(habit: HabitEntry, completing: boolean): number {
-  if (!completing) return Math.max(0, habit.streak - 1);
-  return habit.completedDate === getYesterdayKey() ? habit.streak + 1 : 1;
-}
-
 function loadLocalDailyCardState(todayKey: string = getTodayKey()): DailyCardLocalState {
   const fallback: DailyCardLocalState = {
     dateKey: todayKey,
@@ -7620,11 +7613,18 @@ function AppShell() {
       prev.map((h) =>
         h.id === id
           ? (() => {
-              const nextStreak = nextHabitStreak(h, !h.completedToday);
-              // On un-tick, keep completedDate at yesterday when a streak remains, so
-              // re-ticking continues it instead of resetting to 1.
-              const nextDate = !h.completedToday ? getTodayKey() : nextStreak > 0 ? getYesterdayKey() : undefined;
-              return { ...h, completedToday: !h.completedToday, completedDate: nextDate, streak: nextStreak };
+              // Source of truth is the DATE, not the (possibly stale) completedToday flag:
+              // a checkmark left from yesterday must not make this tap an "un-check" that
+              // resets the streak. Tapping a habit not yet done TODAY always completes it.
+              const doneToday = h.completedDate === getTodayKey();
+              const completing = !doneToday;
+              const nextStreak = completing
+                ? h.completedDate === getYesterdayKey()
+                  ? h.streak + 1
+                  : 1
+                : Math.max(0, h.streak - 1);
+              const nextDate = completing ? getTodayKey() : nextStreak > 0 ? getYesterdayKey() : undefined;
+              return { ...h, completedToday: completing, completedDate: nextDate, streak: nextStreak };
             })()
           : h,
       ),

@@ -78,12 +78,6 @@ function habitDayKey(offset = 0): string {
 function habitTodayKey(): string {
   return habitDayKey(0);
 }
-// Continue the streak if the last tick was yesterday, else restart at 1; revert on un-tick.
-function nextHabitStreak(habit: HabitEntry, completing: boolean): number {
-  if (!completing) return Math.max(0, habit.streak - 1);
-  return habit.completedDate === habitDayKey(-1) ? habit.streak + 1 : 1;
-}
-
 const HABIT_ICON_TITLE_SUGGESTIONS: Record<string, string> = {
   '💧': 'Water goal',
   '🛏️': 'Sleep routine',
@@ -237,11 +231,19 @@ export function HabitsScreen({ habits, onHabitsChange, onDeleteHabit, challenges
                   onHabitsChange((prev) =>
                     prev.map((item) => {
                       if (item.id !== habit.id) return item;
-                      const nextStreak = nextHabitStreak(item, !item.completedToday);
-                      // Keep completedDate at yesterday on un-tick so re-ticking continues
-                      // the streak instead of resetting it to 1.
-                      const nextDate = !item.completedToday ? habitTodayKey() : nextStreak > 0 ? habitDayKey(-1) : undefined;
-                      return { ...item, completedToday: !item.completedToday, completedDate: nextDate, streak: nextStreak };
+                      // Source of truth is the DATE, not the (possibly stale) completedToday
+                      // flag: a checkmark left over from yesterday must not turn this tap into
+                      // an "un-check" that resets the streak to 1. Tapping a habit not yet done
+                      // TODAY always completes it and continues the streak.
+                      const doneToday = item.completedDate === habitTodayKey();
+                      const completing = !doneToday;
+                      const nextStreak = completing
+                        ? item.completedDate === habitDayKey(-1)
+                          ? item.streak + 1
+                          : 1
+                        : Math.max(0, item.streak - 1);
+                      const nextDate = completing ? habitTodayKey() : nextStreak > 0 ? habitDayKey(-1) : undefined;
+                      return { ...item, completedToday: completing, completedDate: nextDate, streak: nextStreak };
                     }),
                   )
                 }
