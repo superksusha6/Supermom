@@ -78,6 +78,9 @@ import {
   replaceChores,
   setChoreDone,
   addChildChore,
+  listChildWords,
+  addChildWord,
+  deleteChildWord,
   listChildEventChecks,
   setChildEventDone,
   replaceCustomNutritionFoods,
@@ -126,6 +129,7 @@ import { ChildrenScreen, PhotoCropper } from '@/screens/ChildrenScreen';
 import { Pet3D } from '@/components/Pet3D';
 import { Asset } from 'expo-asset';
 import { HabitsScreen } from '@/screens/HabitsScreen';
+import { WordsScreen } from '@/screens/WordsScreen';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
 import { MedicineScreen } from '@/screens/MedicineScreen';
@@ -138,7 +142,7 @@ import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShoppingScreen } from '@/screens/ShoppingScreen';
 import { ThemeColors, ThemeMode, ThemeName, ThemeProvider, useTheme } from '@/theme/theme';
-import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, ChildFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
+import { ActivityLevel, ApprovalRequest, CalendarEvent, CalendarScope, ChildActivity, ChildProfile, ChildWord, CustomNutritionFood, CycleDayEntry, FridgeItem, FridgeItemCategory, FridgeItemStatus, FridgeItemUnit, Chore, HabitChallenge, HabitEntry, HomeIssue, HomeProvider, MealPlanSlot, MedicineItem, NutritionFoodEntry, NutritionGoal, NutritionMealType, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile, PurchaseRequest, Recipe, Role, ShoppingItem, ShoppingItemInsight, ShoppingListDoc, ShoppingShare, StaffFeature, ChildFeature, StaffRolePreset, StaffGrant, TaskItem, TaskPriority, TaskStatus, WeeklyMealPlanEntry } from '@/types/app';
 
 const HOME_TODAYS_MEALS_COVER = require('./assets/home/todays-meals-cover-v3.jpg');
 const HOME_SHOPPING_LIST_COVER = require('./assets/home/shopping-list-cover-v3.jpg');
@@ -872,7 +876,7 @@ function AppShell() {
   );
   const [screen, setScreen] = useState<Screen>('calendar');
   // Child's own navigation: 'home' is the dashboard; the rest are granted functions.
-  const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan'>('home');
+  const [childScreen, setChildScreen] = useState<'home' | 'habits' | 'nutrition' | 'shopping' | 'dayplan' | 'words'>('home');
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
@@ -900,6 +904,25 @@ function AppShell() {
   });
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
+  // The child's personal vocabulary deck + which language pair they're studying.
+  const [childWords, setChildWords] = useState<ChildWord[]>([]);
+  const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
+      if (raw) return JSON.parse(raw) as { src: string; tgt: string };
+    } catch {
+      /* fall through to default */
+    }
+    return { src: 'es', tgt: 'ru' };
+  });
+  const setChildWordLang = (src: string, tgt: string) => {
+    setChildWordLangState({ src, tgt });
+    try {
+      globalThis.localStorage?.setItem('smartmom.childWordLang.v1', JSON.stringify({ src, tgt }));
+    } catch {
+      /* ignore persistence errors */
+    }
+  };
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const petScaleAnim = useRef(new Animated.Value(1)).current; // squash/bounce on feed
   const petIdleAnim = useRef(new Animated.Value(0)).current; // continuous idle bob ("breathing")
@@ -1546,6 +1569,7 @@ function AppShell() {
       refreshLiveCustomFoods(current);
       refreshLiveHabits(current);
       refreshChildEventChecks(current);
+      refreshChildWords(current);
     };
 
     (async () => {
@@ -2379,6 +2403,15 @@ function AppShell() {
     }
   }
 
+  async function refreshChildWords(current: AppSession | null = session) {
+    if (!current || current.role !== 'child' || !isSupabaseConfigured) return;
+    try {
+      setChildWords(await listChildWords(current));
+    } catch {
+      // keep what we have
+    }
+  }
+
   async function refreshFamilyShoppers(current: AppSession | null = session) {
     if (!current || !isSupabaseConfigured) return;
     try {
@@ -2817,6 +2850,7 @@ function AppShell() {
       refreshLiveStaffProfiles(ctx),
       refreshFamilyShoppers(ctx),
       refreshChildEventChecks(ctx),
+      refreshChildWords(ctx),
       refreshMyPersonalProfile(ctx),
       refreshLiveShopping(ctx),
       refreshLiveChores(ctx),
@@ -4657,7 +4691,7 @@ function AppShell() {
       return;
     }
     try {
-      const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition'];
+      const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition', 'words'];
       const { token } = await createChildInvite(current, childId, features);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
       const q = `child=${token}&cn=${encodeURIComponent(child?.name || '')}&cp=${encodeURIComponent(childId)}`;
@@ -6129,6 +6163,7 @@ function AppShell() {
   // Cards for the granted extras (habits / food / shopping). "My day" is the Today
   // screen itself, so it's not a card.
   const childGrantedList = ([
+    { key: 'words', label: 'My words', icon: 'book' },
     { key: 'shopping', label: 'Shopping list', icon: 'cart' },
     { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
   ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childShows(f.key));
@@ -6191,6 +6226,45 @@ function AppShell() {
       addChildChore(session, newChore).catch((error) => {
         setTasksError(error instanceof Error ? error.message : 'Could not add your chore.');
         setChores((prev) => prev.filter((c) => c.id !== newChore.id));
+      });
+    }
+  };
+  // The child adds a word to their own deck (in the current language pair).
+  const addChildWordLocal = (term: string, translation: string) => {
+    const t = term.trim();
+    if (!t || !childProfileId) return;
+    // Don't add a duplicate of the same word in this language pair.
+    const dup = childWords.some(
+      (w) => w.srcLang === childWordLang.src && w.tgtLang === childWordLang.tgt && w.term.toLowerCase() === t.toLowerCase(),
+    );
+    if (dup) return;
+    const newWord: ChildWord = {
+      id: `w${Date.now()}`,
+      term: t,
+      translation: translation.trim() || undefined,
+      distractors: [],
+      srcLang: childWordLang.src,
+      tgtLang: childWordLang.tgt,
+      box: 1,
+      dueDate: todayDateKey,
+      enrichedAt: translation.trim() ? new Date().toISOString() : undefined,
+      createdAt: new Date().toISOString(),
+    };
+    setChildWords((prev) => [newWord, ...prev]);
+    if (session && isSupabaseConfigured) {
+      addChildWord(session, newWord).catch((error) => {
+        setTasksError(error instanceof Error ? error.message : 'Could not add your word.');
+        setChildWords((prev) => prev.filter((w) => w.id !== newWord.id));
+      });
+    }
+  };
+  const deleteChildWordLocal = (wordId: string) => {
+    const removed = childWords.find((w) => w.id === wordId);
+    setChildWords((prev) => prev.filter((w) => w.id !== wordId));
+    if (session && isSupabaseConfigured) {
+      deleteChildWord(session, wordId).catch((error) => {
+        setTasksError(error instanceof Error ? error.message : 'Could not delete your word.');
+        if (removed) setChildWords((prev) => [removed, ...prev]);
       });
     }
   };
@@ -6394,6 +6468,7 @@ function AppShell() {
     { key: 'dayplan' as ChildFeature, label: 'Day plan & snacks', icon: 'calendar' as IconName },
     { key: 'shopping' as ChildFeature, label: 'Shopping', icon: 'cart' as IconName },
     { key: 'habits' as ChildFeature, label: 'Habits', icon: 'heart' as IconName },
+    { key: 'words' as ChildFeature, label: 'My words', icon: 'book' as IconName },
     { key: 'nutrition' as ChildFeature, label: 'Food & energy', icon: 'meal' as IconName },
   ];
   const childSettingsNode = (
@@ -6649,6 +6724,18 @@ function AppShell() {
           challenges={habitChallenges}
           habitRemindersEnabled={habitRemindersEnabled}
           quickActionRequest={undefined}
+        />
+      </View>
+    ) : childScreen === 'words' && childShows('words') ? (
+      <View style={styles.dashWrap}>
+        {childBackBar('My words')}
+        <WordsScreen
+          words={childWords}
+          srcLang={childWordLang.src}
+          tgtLang={childWordLang.tgt}
+          onLangChange={setChildWordLang}
+          onAddWord={addChildWordLocal}
+          onDeleteWord={deleteChildWordLocal}
         />
       </View>
     ) : childScreen === 'nutrition' && childShows('nutrition') ? (

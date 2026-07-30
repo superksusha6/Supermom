@@ -2,7 +2,23 @@ export type Role = 'mother' | 'child' | 'staff' | 'admin';
 // Which app functions a staff member (nanny / cook / driver) may access.
 export type StaffFeature = 'tasks' | 'shopping' | 'menu' | 'recipes' | 'schedule' | 'fixit';
 // Functions a parent can grant an invited child (each opt-in "по запросу").
-export type ChildFeature = 'dayplan' | 'shopping' | 'habits' | 'nutrition';
+export type ChildFeature = 'dayplan' | 'shopping' | 'habits' | 'nutrition' | 'words';
+
+// A word in a child's personal vocabulary deck (language practice).
+export type ChildWord = {
+  id: string;
+  term: string;              // word/phrase in the language being learned
+  translation?: string;      // in the child's native language
+  example?: string;          // example sentence in the learned language
+  distractors: string[];     // wrong-but-plausible multiple-choice options
+  srcLang: string;           // language being learned (e.g. 'es')
+  tgtLang: string;           // child's native language (e.g. 'ru')
+  box: number;               // Leitner box 1..6
+  dueDate: string;           // YYYY-MM-DD, next review day
+  lastResult?: boolean;
+  enrichedAt?: string;
+  createdAt: string;
+};
 // A staff member can hold several roles at once (e.g. nanny who also cooks + drives).
 export type StaffRolePreset = 'nanny' | 'housekeeper' | 'cook' | 'driver' | 'assistant';
 export type StaffGrant = { roles: StaffRolePreset[]; features: StaffFeature[] };

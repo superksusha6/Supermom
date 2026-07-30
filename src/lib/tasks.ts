@@ -3,6 +3,7 @@ import {
   ApprovalRequest,
   CalendarEvent,
   ChildProfile,
+  ChildWord,
   CustomNutritionFood,
   CycleDayEntry,
   FridgeItem,
@@ -585,7 +586,7 @@ function normalizeStaffFeatures(value: unknown): StaffFeature[] {
   return value.filter((v): v is StaffFeature => typeof v === 'string' && STAFF_FEATURE_VALUES.includes(v as StaffFeature));
 }
 
-const CHILD_FEATURE_VALUES: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition'];
+const CHILD_FEATURE_VALUES: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition', 'words'];
 function normalizeChildFeatures(value: unknown): ChildFeature[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is ChildFeature => typeof v === 'string' && CHILD_FEATURE_VALUES.includes(v as ChildFeature));
@@ -3339,6 +3340,96 @@ export async function addChildChore(session: AppSession, chore: Chore) {
     break;
   }
   if (error) throw error;
+}
+
+// ---------- CHILD WORDS (vocabulary deck) ----------
+const CHILD_WORDS_MIGRATION_HINT =
+  'Supabase child_words table is missing. Run smart-mom-app/supabase/child_words.sql, then try again.';
+
+function rowToChildWord(row: Record<string, unknown>): ChildWord {
+  return {
+    id: String(row.id),
+    term: (row.term as string) || '',
+    translation: (row.translation as string) || undefined,
+    example: (row.example as string) || undefined,
+    distractors: Array.isArray(row.distractors) ? (row.distractors as string[]) : [],
+    srcLang: (row.src_lang as string) || 'es',
+    tgtLang: (row.tgt_lang as string) || 'ru',
+    box: typeof row.box === 'number' ? (row.box as number) : 1,
+    dueDate: (row.due_date as string) || '',
+    lastResult: typeof row.last_result === 'boolean' ? (row.last_result as boolean) : undefined,
+    enrichedAt: (row.enriched_at as string) || undefined,
+    createdAt: (row.created_at as string) || '',
+  };
+}
+
+// A child's own vocabulary deck (RLS scopes to their linked profile).
+export async function listChildWords(session: AppSession): Promise<ChildWord[]> {
+  const client = requireClient();
+  const childId = session.childProfileId;
+  if (!childId) return [];
+  const { data, error } = await client
+    .from('child_words')
+    .select('*')
+    .eq('family_id', session.familyId)
+    .eq('child_profile_id', childId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (isMissingHomeTableError(error, 'child_words')) return [];
+    throw error;
+  }
+  return (data as unknown as Record<string, unknown>[]).map(rowToChildWord);
+}
+
+// The child adds one word to their own deck.
+export async function addChildWord(session: AppSession, word: ChildWord): Promise<void> {
+  const client = requireClient();
+  const childId = session.childProfileId;
+  if (!childId) return;
+  const { error } = await client.from('child_words').insert({
+    id: word.id,
+    family_id: session.familyId,
+    child_profile_id: childId,
+    term: word.term,
+    translation: word.translation ?? null,
+    example: word.example ?? null,
+    distractors: word.distractors ?? [],
+    src_lang: word.srcLang,
+    tgt_lang: word.tgtLang,
+    box: word.box,
+    due_date: word.dueDate,
+    enriched_at: word.enrichedAt ?? null,
+  });
+  if (error) {
+    if (isMissingHomeTableError(error, 'child_words')) throw new Error(CHILD_WORDS_MIGRATION_HINT);
+    throw error;
+  }
+}
+
+// Update SRS progress / translation / example on one of the child's own words.
+export async function updateChildWord(
+  session: AppSession,
+  wordId: string,
+  patch: Partial<Pick<ChildWord, 'translation' | 'example' | 'distractors' | 'box' | 'dueDate' | 'lastResult' | 'enrichedAt'>>,
+): Promise<void> {
+  const client = requireClient();
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.translation !== undefined) row.translation = patch.translation ?? null;
+  if (patch.example !== undefined) row.example = patch.example ?? null;
+  if (patch.distractors !== undefined) row.distractors = patch.distractors;
+  if (patch.box !== undefined) row.box = patch.box;
+  if (patch.dueDate !== undefined) row.due_date = patch.dueDate;
+  if (patch.lastResult !== undefined) row.last_result = patch.lastResult;
+  if (patch.enrichedAt !== undefined) row.enriched_at = patch.enrichedAt ?? null;
+  const { error } = await client.from('child_words').update(row).eq('id', wordId);
+  if (error && !isMissingHomeTableError(error, 'child_words')) throw error;
+}
+
+// The child removes one of their own words.
+export async function deleteChildWord(session: AppSession, wordId: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from('child_words').delete().eq('id', wordId);
+  if (error && !isMissingHomeTableError(error, 'child_words')) throw error;
 }
 
 const MEDICINES_MIGRATION_HINT =

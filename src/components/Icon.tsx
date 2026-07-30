@@ -16,6 +16,7 @@ export type IconName =
   | 'home'
   | 'family'
   | 'heart'
+  | 'book'
   | 'more'
   | 'settings';
 
@@ -105,6 +106,12 @@ export function Icon({ name, size = 22, color = '#0f172a', strokeWidth = 2 }: Pr
       ) : null}
       {name === 'heart' ? (
         <Path d="M20.8 5.6a5.5 5.5 0 0 0-8.8 1 5.5 5.5 0 0 0-8.8-1c-2 2-2 5.4 0 7.4L12 21l8.8-8a5.2 5.2 0 0 0 0-7.4Z" {...common} />
+      ) : null}
+      {name === 'book' ? (
+        <>
+          <Path d="M4 5a2 2 0 0 1 2-2h9a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2Z" {...common} />
+          <Path d="M4 19a2 2 0 0 1 2-2h10" {...common} />
+        </>
       ) : null}
       {name === 'more' ? (
         <>
