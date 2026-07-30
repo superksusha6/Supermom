@@ -3303,6 +3303,44 @@ export async function setChoreDone(session: AppSession, choreId: string, doneDat
   if (error && !isMissingHomeTableError(error, 'chores')) throw error;
 }
 
+// A child ADDS one chore for themselves. Single-row insert (their RLS allows
+// inserting only a chore assigned to their own profile; they can't delete — that
+// stays an adult action). Column-fallback mirrors replaceChores for older schemas.
+export async function addChildChore(session: AppSession, chore: Chore) {
+  const client = requireClient();
+  const childId = session.childProfileId;
+  if (!childId) return;
+  const buildRow = (omit: Set<string>) => {
+    const row: Record<string, unknown> = {
+      id: chore.id,
+      family_id: session.familyId,
+      created_by: session.userId,
+      title: chore.title,
+      child_profile_id: childId,
+      recurrence: chore.recurrence,
+      updated_at: new Date().toISOString(),
+    };
+    if (!omit.has('verifier')) row.verifier = chore.verifier;
+    if (!omit.has('points')) row.points = chore.points || 0;
+    return row;
+  };
+  const omit = new Set<string>();
+  let error: unknown = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const result = await client.from('chores').insert(buildRow(omit));
+    error = result.error;
+    if (!error) return;
+    if (isMissingHomeTableError(error, 'chores')) throw new Error(CHORES_MIGRATION_HINT);
+    const mc = choreMissingColumn(error);
+    if (mc && !omit.has(mc)) {
+      omit.add(mc);
+      continue;
+    }
+    break;
+  }
+  if (error) throw error;
+}
+
 const MEDICINES_MIGRATION_HINT =
   'Supabase medicines table is missing. Run smart-mom-app/supabase/medicines.sql in the Supabase SQL Editor, then try again.';
 

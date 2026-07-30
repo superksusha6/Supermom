@@ -77,6 +77,7 @@ import {
   replaceCycleEntries,
   replaceChores,
   setChoreDone,
+  addChildChore,
   listChildEventChecks,
   setChildEventDone,
   replaceCustomNutritionFoods,
@@ -877,6 +878,7 @@ function AppShell() {
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
   const [childNameDraft, setChildNameDraft] = useState('');
   const [childDobDraft, setChildDobDraft] = useState('');
+  const [childChoreDraft, setChildChoreDraft] = useState('');
   const [childSavedFlash, setChildSavedFlash] = useState(false);
   // Child can show/hide functions the PARENT granted (a personal display choice; the
   // parent grant + RLS remain the source of truth for what's available at all).
@@ -6168,6 +6170,28 @@ function AppShell() {
       );
     }
   };
+  // A child adds one of their own chores. They can create + tick, but only an
+  // adult can delete (enforced by RLS — no child delete policy).
+  const submitChildChore = () => {
+    const title = childChoreDraft.trim();
+    if (!title || !childProfileId) return;
+    const newChore: Chore = {
+      id: `c${Date.now()}`,
+      title,
+      childId: childProfileId,
+      recurrence: 'daily',
+      verifier: 'self',
+      points: 0,
+    };
+    setChores((prev) => [...prev, newChore]);
+    setChildChoreDraft('');
+    if (session && isSupabaseConfigured) {
+      addChildChore(session, newChore).catch((error) => {
+        setTasksError(error instanceof Error ? error.message : 'Could not add your chore.');
+        setChores((prev) => prev.filter((c) => c.id !== newChore.id));
+      });
+    }
+  };
   const childHomeNode = (
     <View style={styles.dashWrap}>
       <View style={styles.childHeaderPlain}>
@@ -6219,11 +6243,14 @@ function AppShell() {
         )}
       </View>
 
-      {/* Chores the child ticks off */}
-      {childChores.length > 0 ? (
-        <View style={styles.childCard}>
-          <Text style={styles.childCardTitle}>My chores</Text>
-          {childChores.map((c) => {
+      {/* Chores the child ticks off — and can add their own. Only an adult can
+          remove one, so there's no delete here. */}
+      <View style={styles.childCard}>
+        <Text style={styles.childCardTitle}>My chores</Text>
+        {childChores.length === 0 ? (
+          <Text style={styles.childEmptyText}>No chores yet — add one below 👇</Text>
+        ) : (
+          childChores.map((c) => {
             const done = choreStatus(c) !== 'todo';
             return (
               <Pressable key={`cc-${c.id}`} style={styles.childChoreRow} onPress={() => toggleChildChore(c.id)}>
@@ -6234,9 +6261,30 @@ function AppShell() {
                 {done ? <Text style={styles.childChoreFruit}>🍎</Text> : null}
               </Pressable>
             );
-          })}
+          })
+        )}
+        <View style={styles.childChoreAddRow}>
+          <TextInput
+            value={childChoreDraft}
+            onChangeText={setChildChoreDraft}
+            placeholder="Add a chore — e.g. Water the plants"
+            placeholderTextColor={colors.subtext}
+            style={styles.childChoreInput}
+            returnKeyType="done"
+            onSubmitEditing={submitChildChore}
+            blurOnSubmit={false}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add chore"
+            style={[styles.childChoreAddBtn, !childChoreDraft.trim() && styles.childChoreAddBtnDisabled]}
+            onPress={submitChildChore}
+            disabled={!childChoreDraft.trim()}
+          >
+            <Text style={styles.childChoreAddBtnText}>+</Text>
+          </Pressable>
         </View>
-      ) : null}
+      </View>
 
       {/* Habits — inline card exactly like the parent dashboard: tap a circle to
           check off, tap the header to open the full tracker. */}
@@ -14549,6 +14597,39 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   },
   childChoreFruit: {
     fontSize: 16,
+  },
+  childChoreAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  childChoreInput: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  childChoreAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childChoreAddBtnDisabled: {
+    opacity: 0.4,
+  },
+  childChoreAddBtnText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 26,
   },
   petPickerGrid: {
     flexDirection: 'row',
