@@ -6127,7 +6127,6 @@ function AppShell() {
   // screen itself, so it's not a card.
   const childGrantedList = ([
     { key: 'shopping', label: 'Shopping list', icon: 'cart' },
-    { key: 'habits', label: 'My habits', icon: 'heart' },
     { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
   ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childShows(f.key));
   const childProfileId = session?.childProfileId;
@@ -6138,6 +6137,7 @@ function AppShell() {
     : [];
   const childChores = isChildView ? chores.filter((c) => !c.childId || c.childId === childProfileId) : [];
   const childActiveHabits = habits.filter((h) => h.enabled);
+  const childHabitsDone = childActiveHabits.filter((h) => h.completedToday).length;
   // A "fruit" for each chore/habit/plan-item finished today — the pet's currency.
   const childFruits =
     childChores.filter((c) => choreStatus(c) !== 'todo').length +
@@ -6236,6 +6236,58 @@ function AppShell() {
             );
           })}
         </View>
+      ) : null}
+
+      {/* Habits — inline card exactly like the parent dashboard: tap a circle to
+          check off, tap the header to open the full tracker. */}
+      {childShows('habits') && childActiveHabits.length > 0 ? (
+        <View style={styles.habitsDashCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Habits, ${childHabitsDone} of ${childActiveHabits.length} done today. Open tracker.`}
+            style={styles.habitsDashHeader}
+            onPress={() => setChildScreen('habits')}
+          >
+            <View style={styles.habitsDashTitleWrap}>
+              <Icon name="check" color={colors.primary} size={17} />
+              <Text style={styles.habitsDashTitle}>Habits</Text>
+            </View>
+            <View style={styles.habitsDashCountPill}>
+              <Text style={styles.habitsDashCountText}>{childHabitsDone}/{childActiveHabits.length}</Text>
+            </View>
+          </Pressable>
+          <View style={styles.habitsDashBar}>
+            <View style={[styles.habitsDashBarFill, { width: `${Math.round((childHabitsDone / childActiveHabits.length) * 100)}%` }]} />
+          </View>
+          {childActiveHabits.slice(0, 6).map((habit) => (
+            <Pressable
+              key={habit.id}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: habit.completedToday }}
+              accessibilityLabel={`${habit.title}${habit.completedToday ? ', done' : ''}`}
+              style={styles.habitsDashRow}
+              onPress={() => toggleHabitToday(habit.id)}
+            >
+              <View style={[styles.habitsDashCheck, habit.completedToday && styles.habitsDashCheckDone]}>
+                {habit.completedToday ? <Text style={styles.habitsDashCheckMark}>✓</Text> : null}
+              </View>
+              <View style={styles.habitsDashIcon}><Text style={styles.habitsDashIconText}>{habit.icon}</Text></View>
+              <Text style={[styles.habitsDashName, habit.completedToday && styles.habitsDashNameDone]} numberOfLines={1}>{habit.title}</Text>
+              {habit.targetText ? <Text style={styles.habitsDashTarget} numberOfLines={1}>{habit.targetText}</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : childShows('habits') ? (
+        <Pressable style={styles.tasksHubCard} onPress={() => setChildScreen('habits')}>
+          <View style={styles.tasksHubIcon}>
+            <Icon name="heart" color={colors.primary} size={20} />
+          </View>
+          <View style={styles.tasksHubCopy}>
+            <Text style={styles.tasksHubTitle}>My habits</Text>
+            <Text style={styles.tasksHubSub} numberOfLines={1}>Add your first habit</Text>
+          </View>
+          <Icon name="chevron" color={colors.subtext} size={16} />
+        </Pressable>
       ) : null}
 
       {/* Granted extras */}
