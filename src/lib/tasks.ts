@@ -3300,7 +3300,7 @@ export async function setChoreDone(session: AppSession, choreId: string, doneDat
   const { error } = await client
     .from('chores')
     .update({ last_done_date: doneDate, updated_at: new Date().toISOString() })
-    .eq('id', choreId);
+    .eq('id', coerceToUuid(choreId));
   if (error && !isMissingHomeTableError(error, 'chores')) throw error;
 }
 
@@ -3313,7 +3313,9 @@ export async function addChildChore(session: AppSession, chore: Chore) {
   if (!childId) return;
   const buildRow = (omit: Set<string>) => {
     const row: Record<string, unknown> = {
-      id: chore.id,
+      // The id column is uuid; client ids like 'c1753…' aren't. Coerce (same string →
+      // same uuid) so the insert succeeds and later toggles/deletes still line up.
+      id: coerceToUuid(chore.id),
       family_id: session.familyId,
       created_by: session.userId,
       title: chore.title,
@@ -3387,7 +3389,9 @@ export async function addChildWord(session: AppSession, word: ChildWord): Promis
   const childId = session.childProfileId;
   if (!childId) return;
   const { error } = await client.from('child_words').insert({
-    id: word.id,
+    // id column is uuid; client ids like 'w1753…' aren't — coerce so the insert works
+    // and later update/delete (which coerce the same way) target the same row.
+    id: coerceToUuid(word.id),
     family_id: session.familyId,
     child_profile_id: childId,
     term: word.term,
@@ -3422,14 +3426,14 @@ export async function updateChildWord(
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate;
   if (patch.lastResult !== undefined) row.last_result = patch.lastResult;
   if (patch.enrichedAt !== undefined) row.enriched_at = patch.enrichedAt ?? null;
-  const { error } = await client.from('child_words').update(row).eq('id', wordId);
+  const { error } = await client.from('child_words').update(row).eq('id', coerceToUuid(wordId));
   if (error && !isMissingHomeTableError(error, 'child_words')) throw error;
 }
 
 // The child removes one of their own words.
 export async function deleteChildWord(session: AppSession, wordId: string): Promise<void> {
   const client = requireClient();
-  const { error } = await client.from('child_words').delete().eq('id', wordId);
+  const { error } = await client.from('child_words').delete().eq('id', coerceToUuid(wordId));
   if (error && !isMissingHomeTableError(error, 'child_words')) throw error;
 }
 
