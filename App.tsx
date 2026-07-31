@@ -5379,6 +5379,33 @@ function AppShell() {
     });
   }
 
+  // Shrink a data-URL image (web) before sending it to an AI vision function — a
+  // full-res phone photo is several MB of base64, which is slow and can be rejected.
+  function downscaleDataUrlWeb(dataUrl: string, maxDim = 1600, quality = 0.72): Promise<string> {
+    if (typeof document === 'undefined') return Promise.resolve(dataUrl);
+    return new Promise((resolve) => {
+      const img = document.createElement('img');
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+        const w = Math.max(1, Math.round((img.width || 1) * scale));
+        const h = Math.max(1, Math.round((img.height || 1) * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   async function pickChildAvatar() {
     try {
       // Always OPEN the picker (don't gate on childProfileId — that made the tap a
@@ -5414,6 +5441,7 @@ function AppShell() {
       let dataUrl: string | null = null;
       if (Platform.OS === 'web') {
         dataUrl = await pickImageFileWeb();
+        if (dataUrl) dataUrl = await downscaleDataUrlWeb(dataUrl);
       } else {
         const res = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
