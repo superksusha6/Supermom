@@ -97,6 +97,7 @@ export function WordsScreen({
   const [translation, setTranslation] = useState('');
   const [manualMode, setManualMode] = useState(false);
   const [pickerFor, setPickerFor] = useState<null | 'src' | 'tgt'>(null);
+  const [openDay, setOpenDay] = useState<string | null>(null);
 
   // Only this language pair's words (a child could have decks in several languages).
   const deck = words.filter((w) => w.srcLang === srcLang && w.tgtLang === tgtLang);
@@ -192,37 +193,61 @@ export function WordsScreen({
         </Pressable>
       </SectionCard>
 
-      {/* The deck — grouped by the day each word was added */}
-      {deck.length === 0 ? (
-        <SectionCard title="My words">
-          <Text style={styles.empty}>No words yet. Add a few above and start practising! 📚</Text>
-        </SectionCard>
-      ) : (
-        groupByDay(deck).map((g) => (
-          <SectionCard key={g.key} title={`${g.label} · ${g.words.length}`}>
-            {g.words.map((w) => {
-              const busy = enrichingIds.has(w.id);
-              return (
-                <View key={w.id} style={styles.wordRow}>
-                  <View style={styles.wordCopy}>
-                    <Text style={styles.wordTerm}>{w.term}</Text>
-                    <Text style={[styles.wordTrans, busy && styles.wordTransBusy]}>
-                      {busy ? 'translating…' : w.translation || '—'}
-                    </Text>
+      {/* The deck — a list of day-folders; tap one to open that day's words. */}
+      {(() => {
+        const groups = groupByDay(deck);
+        const active = openDay ? groups.find((g) => g.key === openDay) : null;
+
+        if (deck.length === 0) {
+          return (
+            <SectionCard title="My words">
+              <Text style={styles.empty}>No words yet. Add a few above and start practising! 📚</Text>
+            </SectionCard>
+          );
+        }
+
+        // Opened a specific day → show its words with a back row.
+        if (active) {
+          return (
+            <SectionCard title={`${active.label} · ${active.words.length}`}>
+              <Pressable style={styles.backRow} onPress={() => setOpenDay(null)}>
+                <Text style={styles.backRowText}>‹ All days</Text>
+              </Pressable>
+              {active.words.map((w) => {
+                const busy = enrichingIds.has(w.id);
+                return (
+                  <View key={w.id} style={styles.wordRow}>
+                    <View style={styles.wordCopy}>
+                      <Text style={styles.wordTerm}>{w.term}</Text>
+                      <Text style={[styles.wordTrans, busy && styles.wordTransBusy]}>
+                        {busy ? 'translating…' : w.translation || '—'}
+                      </Text>
+                    </View>
+                    <Pressable accessibilityLabel={`Delete ${w.term}`} style={styles.delBtn} onPress={() => onDeleteWord(w.id)}>
+                      <Text style={styles.delBtnText}>×</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    accessibilityLabel={`Delete ${w.term}`}
-                    style={styles.delBtn}
-                    onPress={() => onDeleteWord(w.id)}
-                  >
-                    <Text style={styles.delBtnText}>×</Text>
-                  </Pressable>
+                );
+              })}
+            </SectionCard>
+          );
+        }
+
+        // Folder list — one tappable row per day.
+        return (
+          <SectionCard title="My words">
+            {groups.map((g) => (
+              <Pressable key={g.key} style={styles.dayRow} onPress={() => setOpenDay(g.key)}>
+                <Text style={styles.dayRowLabel}>{g.label}</Text>
+                <View style={styles.dayRowRight}>
+                  <Text style={styles.dayRowCount}>{g.words.length} words</Text>
+                  <Text style={styles.dayRowChevron}>›</Text>
                 </View>
-              );
-            })}
+              </Pressable>
+            ))}
           </SectionCard>
-        ))
-      )}
+        );
+      })()}
 
       {/* Language picker */}
       <Modal visible={pickerFor !== null} transparent animationType="fade" onRequestClose={() => setPickerFor(null)}>
@@ -296,6 +321,20 @@ const createStyles = (colors: ThemeColors) =>
     statusMsg: { color: colors.primary, fontSize: 13, fontWeight: '700', marginTop: 10, textAlign: 'center' },
     hint: { color: colors.subtext, fontSize: 12, marginTop: 10 },
     empty: { color: colors.subtext, fontSize: 14, paddingVertical: 8 },
+    dayRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    dayRowLabel: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    dayRowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    dayRowCount: { color: colors.subtext, fontSize: 14, fontWeight: '600' },
+    dayRowChevron: { color: colors.subtext, fontSize: 22, fontWeight: '700' },
+    backRow: { paddingBottom: 10 },
+    backRowText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
     wordRow: {
       flexDirection: 'row',
       alignItems: 'center',
