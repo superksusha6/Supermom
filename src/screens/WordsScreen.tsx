@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { ChildWord } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
@@ -29,14 +29,37 @@ function langLabel(code: string): string {
 type Props = {
   words: ChildWord[];
   enrichingIds: Set<string>;
+  scanning: boolean;
   srcLang: string;
   tgtLang: string;
   onLangChange: (src: string, tgt: string) => void;
   onAddWord: (term: string, translation: string) => void;
+  onAddWords: (terms: string[]) => void;
+  onScanPhoto: () => void;
   onDeleteWord: (id: string) => void;
 };
 
-export function WordsScreen({ words, enrichingIds, srcLang, tgtLang, onLangChange, onAddWord, onDeleteWord }: Props) {
+// Split a pasted blob into individual words: one per line, and also on commas /
+// semicolons / tabs so lists copied in any shape work.
+function splitWordList(text: string): string[] {
+  return text
+    .split(/[\n,;\t]+/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+}
+
+export function WordsScreen({
+  words,
+  enrichingIds,
+  scanning,
+  srcLang,
+  tgtLang,
+  onLangChange,
+  onAddWord,
+  onAddWords,
+  onScanPhoto,
+  onDeleteWord,
+}: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [term, setTerm] = useState('');
@@ -47,10 +70,18 @@ export function WordsScreen({ words, enrichingIds, srcLang, tgtLang, onLangChang
   // Only this language pair's words (a child could have decks in several languages).
   const deck = words.filter((w) => w.srcLang === srcLang && w.tgtLang === tgtLang);
 
+  const list = splitWordList(term);
+  const isMany = list.length > 1;
+
   const submit = () => {
-    const t = term.trim();
-    if (!t) return;
-    onAddWord(t, manualMode ? translation.trim() : '');
+    if (list.length === 0) return;
+    if (manualMode && !isMany) {
+      // Single word with a hand-typed meaning.
+      onAddWord(list[0], translation.trim());
+    } else {
+      // One or many words → auto-translate the whole batch.
+      onAddWords(list);
+    }
     setTerm('');
     setTranslation('');
   };
@@ -76,19 +107,18 @@ export function WordsScreen({ words, enrichingIds, srcLang, tgtLang, onLangChang
         </Pressable>
       </View>
 
-      {/* Add a word — type in EITHER language, we detect it and translate. */}
-      <SectionCard title="Add a word">
+      {/* Add words — one, or paste a whole list from your notes; or snap the notebook. */}
+      <SectionCard title="Add words">
         <TextInput
           value={term}
           onChangeText={setTerm}
-          placeholder={`Type a word — ${langLabel(srcLang)} or ${langLabel(tgtLang)}`}
+          placeholder={`Type or paste words — ${langLabel(srcLang)} or ${langLabel(tgtLang)}\n(one per line)`}
           placeholderTextColor={colors.subtext}
-          style={styles.input}
+          style={[styles.input, styles.inputMulti]}
           autoCapitalize="none"
-          returnKeyType="done"
-          onSubmitEditing={submit}
+          multiline
         />
-        {manualMode ? (
+        {manualMode && !isMany ? (
           <TextInput
             value={translation}
             onChangeText={setTranslation}
@@ -98,17 +128,33 @@ export function WordsScreen({ words, enrichingIds, srcLang, tgtLang, onLangChang
           />
         ) : null}
         <Pressable
-          style={[styles.addBtn, !term.trim() && styles.addBtnDisabled]}
+          style={[styles.addBtn, list.length === 0 && styles.addBtnDisabled]}
           onPress={submit}
-          disabled={!term.trim()}
+          disabled={list.length === 0}
         >
-          <Text style={styles.addBtnText}>{manualMode ? '+  Add to my words' : '✨  Translate & add'}</Text>
+          <Text style={styles.addBtnText}>
+            {isMany
+              ? `✨  Translate & add ${list.length} words`
+              : manualMode
+                ? '+  Add to my words'
+                : '✨  Translate & add'}
+          </Text>
         </Pressable>
+
+        <Pressable
+          style={[styles.scanBtn, scanning && styles.addBtnDisabled]}
+          onPress={onScanPhoto}
+          disabled={scanning}
+        >
+          {scanning ? <ActivityIndicator color={colors.primary} /> : null}
+          <Text style={styles.scanBtnText}>{scanning ? 'Reading the photo…' : '📷  Scan a notebook photo'}</Text>
+        </Pressable>
+
         <Pressable onPress={() => setManualMode((v) => !v)}>
           <Text style={styles.hint}>
             {manualMode
               ? '↩︎ Let the app translate for me'
-              : "Write in English or Spanish — we'll find the other. · Add the meaning myself"}
+              : "Write in either language — we'll find the other. · Add the meaning myself"}
           </Text>
         </Pressable>
       </SectionCard>
@@ -190,6 +236,7 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.text,
       marginBottom: 10,
     },
+    inputMulti: { minHeight: 88, textAlignVertical: 'top', paddingTop: 12 },
     addBtn: {
       backgroundColor: colors.primary,
       borderRadius: 12,
@@ -198,6 +245,17 @@ const createStyles = (colors: ThemeColors) =>
     },
     addBtnDisabled: { opacity: 0.4 },
     addBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    scanBtn: {
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 10,
+    },
+    scanBtnText: { color: colors.primary, fontSize: 15, fontWeight: '800' },
     hint: { color: colors.subtext, fontSize: 12, marginTop: 10 },
     empty: { color: colors.subtext, fontSize: 14, paddingVertical: 8 },
     wordRow: {

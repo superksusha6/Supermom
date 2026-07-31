@@ -122,7 +122,7 @@ import {
   deleteTask,
 } from '@/lib/tasks';
 import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
-import { enrichWords } from '@/lib/words';
+import { enrichWords, scanWordsPhoto } from '@/lib/words';
 import { choreStatus, choreTodayKey } from '@/lib/chores';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
@@ -903,6 +903,8 @@ function AppShell() {
   const [childWords, setChildWords] = useState<ChildWord[]>([]);
   // Word ids currently being auto-translated by the AI (shows a "translating…" state).
   const [childWordEnriching, setChildWordEnriching] = useState<Set<string>>(new Set());
+  // True while a notebook photo is being read for words.
+  const [childWordScanning, setChildWordScanning] = useState(false);
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -5406,6 +5408,34 @@ function AppShell() {
     }
   }
 
+  // The child photographs their notebook / word list; we read the words off it.
+  async function pickWordsPhoto() {
+    try {
+      let dataUrl: string | null = null;
+      if (Platform.OS === 'web') {
+        dataUrl = await pickImageFileWeb();
+      } else {
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.5,
+          base64: true,
+        });
+        if (res.canceled || !res.assets?.length) return;
+        const asset = res.assets[0];
+        dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null;
+      }
+      if (!dataUrl) return;
+      const match = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+      if (!match) {
+        setTasksError('Could not read that image — try another photo.');
+        return;
+      }
+      scanChildWordsFromPhoto(match[2], match[1]);
+    } catch {
+      // ignore picker failures
+    }
+  }
+
   // Save the cropped avatar the child chose.
   async function saveCroppedChildAvatar(dataUrl: string) {
     setChildCropSrc(null);
@@ -6298,6 +6328,96 @@ function AppShell() {
       });
     }
   };
+  // Add a whole LIST of words at once (pasted from notes, or read from a photo):
+  // insert them all, then translate the batch in a single AI call. Returns how many
+  // new words were actually added (after de-duping).
+  const addChildWordsBulk = (rawTerms: string[]): number => {
+    if (!childProfileId) return 0;
+    const existing = new Set(
+      childWords
+        .filter((w) => w.srcLang === childWordLang.src && w.tgtLang === childWordLang.tgt)
+        .map((w) => w.term.toLowerCase()),
+    );
+    const seen = new Set<string>();
+    const terms: string[] = [];
+    for (const raw of rawTerms) {
+      const t = raw.trim();
+      const key = t.toLowerCase();
+      if (!t || existing.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      terms.push(t);
+    }
+    if (terms.length === 0) return 0;
+    const now = Date.now();
+    const newWords: ChildWord[] = terms.map((t, i) => ({
+      id: `w${now}-${i}`,
+      term: t,
+      distractors: [],
+      srcLang: childWordLang.src,
+      tgtLang: childWordLang.tgt,
+      box: 1,
+      dueDate: todayDateKey,
+      createdAt: new Date().toISOString(),
+    }));
+    setChildWords((prev) => [...newWords, ...prev]);
+    if (!(session && isSupabaseConfigured)) return newWords.length;
+    // Persist every row, then translate the whole batch in one AI call.
+    setChildWordEnriching((prev) => {
+      const next = new Set(prev);
+      newWords.forEach((w) => next.add(w.id));
+      return next;
+    });
+    Promise.all(
+      newWords.map((w) =>
+        addChildWord(session, w).catch(() => {
+          setChildWords((prev) => prev.filter((x) => x.id !== w.id));
+        }),
+      ),
+    ).finally(() => {
+      enrichWords(terms, childWordLang.src, childWordLang.tgt)
+        .then((cards) => {
+          const byInput = new Map(cards.map((c) => [c.input.trim().toLowerCase(), c]));
+          newWords.forEach((w) => {
+            const c = byInput.get(w.term.toLowerCase());
+            if (!c) return;
+            const patch = {
+              term: c.term?.trim() || w.term,
+              translation: c.translation?.trim() || undefined,
+              example: c.example?.trim() || undefined,
+              distractors: Array.isArray(c.distractors) ? c.distractors : [],
+              enrichedAt: new Date().toISOString(),
+            };
+            setChildWords((prev) => prev.map((x) => (x.id === w.id ? { ...x, ...patch } : x)));
+            updateChildWord(session, w.id, patch).catch(() => {});
+          });
+        })
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not translate the words.'))
+        .finally(() => {
+          setChildWordEnriching((prev) => {
+            const next = new Set(prev);
+            newWords.forEach((w) => next.delete(w.id));
+            return next;
+          });
+        });
+    });
+    return newWords.length;
+  };
+  // Read words from a photo of a notebook / word list, then bulk-add them.
+  const scanChildWordsFromPhoto = (imageBase64: string, mimeType: string) => {
+    if (!(session && isSupabaseConfigured) || !childProfileId) return;
+    setChildWordScanning(true);
+    scanWordsPhoto(imageBase64, mimeType, childWordLang.src, childWordLang.tgt)
+      .then((words) => {
+        if (words.length === 0) {
+          setTasksError('No words were found in that photo — try a clearer, closer shot.');
+          return;
+        }
+        const added = addChildWordsBulk(words);
+        if (added === 0) setTasksError('Those words are already in your list.');
+      })
+      .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not read the photo.'))
+      .finally(() => setChildWordScanning(false));
+  };
   const childHomeNode = (
     <View style={styles.dashWrap}>
       <View style={styles.childHeaderPlain}>
@@ -6762,10 +6882,13 @@ function AppShell() {
         <WordsScreen
           words={childWords}
           enrichingIds={childWordEnriching}
+          scanning={childWordScanning}
           srcLang={childWordLang.src}
           tgtLang={childWordLang.tgt}
           onLangChange={setChildWordLang}
           onAddWord={addChildWordLocal}
+          onAddWords={addChildWordsBulk}
+          onScanPhoto={pickWordsPhoto}
           onDeleteWord={deleteChildWordLocal}
         />
       </View>
