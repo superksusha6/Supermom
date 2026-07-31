@@ -49,6 +49,35 @@ function splitWordList(text: string): string[] {
     .filter(Boolean);
 }
 
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Human label for a day of added words: Today / Yesterday / e.g. "24 Jul".
+function dayLabel(key: string): string {
+  const today = dayKey(new Date());
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  if (key === today) return 'Today';
+  if (key === dayKey(y)) return 'Yesterday';
+  const [yy, mm, dd] = key.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(yy, (mm || 1) - 1, dd || 1);
+  return dt.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+}
+
+// Group a deck into day-sections (newest day first), so words land under the date
+// they were added instead of one endless list.
+function groupByDay(deck: ChildWord[]): { key: string; label: string; words: ChildWord[] }[] {
+  const map = new Map<string, ChildWord[]>();
+  for (const w of deck) {
+    const k = (w.createdAt || '').slice(0, 10) || dayKey(new Date());
+    (map.get(k) ?? map.set(k, []).get(k)!).push(w);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, words]) => ({ key, label: dayLabel(key), words }));
+}
+
 export function WordsScreen({
   words,
   enrichingIds,
@@ -163,33 +192,37 @@ export function WordsScreen({
         </Pressable>
       </SectionCard>
 
-      {/* The deck */}
-      <SectionCard title={`My words · ${deck.length}`}>
-        {deck.length === 0 ? (
+      {/* The deck — grouped by the day each word was added */}
+      {deck.length === 0 ? (
+        <SectionCard title="My words">
           <Text style={styles.empty}>No words yet. Add a few above and start practising! 📚</Text>
-        ) : (
-          deck.map((w) => {
-            const busy = enrichingIds.has(w.id);
-            return (
-              <View key={w.id} style={styles.wordRow}>
-                <View style={styles.wordCopy}>
-                  <Text style={styles.wordTerm}>{w.term}</Text>
-                  <Text style={[styles.wordTrans, busy && styles.wordTransBusy]}>
-                    {busy ? 'translating…' : w.translation || '—'}
-                  </Text>
+        </SectionCard>
+      ) : (
+        groupByDay(deck).map((g) => (
+          <SectionCard key={g.key} title={`${g.label} · ${g.words.length}`}>
+            {g.words.map((w) => {
+              const busy = enrichingIds.has(w.id);
+              return (
+                <View key={w.id} style={styles.wordRow}>
+                  <View style={styles.wordCopy}>
+                    <Text style={styles.wordTerm}>{w.term}</Text>
+                    <Text style={[styles.wordTrans, busy && styles.wordTransBusy]}>
+                      {busy ? 'translating…' : w.translation || '—'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityLabel={`Delete ${w.term}`}
+                    style={styles.delBtn}
+                    onPress={() => onDeleteWord(w.id)}
+                  >
+                    <Text style={styles.delBtnText}>×</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  accessibilityLabel={`Delete ${w.term}`}
-                  style={styles.delBtn}
-                  onPress={() => onDeleteWord(w.id)}
-                >
-                  <Text style={styles.delBtnText}>×</Text>
-                </Pressable>
-              </View>
-            );
-          })
-        )}
-      </SectionCard>
+              );
+            })}
+          </SectionCard>
+        ))
+      )}
 
       {/* Language picker */}
       <Modal visible={pickerFor !== null} transparent animationType="fade" onRequestClose={() => setPickerFor(null)}>
