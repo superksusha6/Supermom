@@ -905,6 +905,9 @@ function AppShell() {
   const [childWordEnriching, setChildWordEnriching] = useState<Set<string>>(new Set());
   // True while a notebook photo is being read for words.
   const [childWordScanning, setChildWordScanning] = useState(false);
+  // A short status/error shown right on the words screen (the child can't see the
+  // global error banner, so scan/add feedback must live here).
+  const [childWordMsg, setChildWordMsg] = useState<string | null>(null);
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -6419,7 +6422,7 @@ function AppShell() {
             updateChildWord(session, w.id, patch).catch(() => {});
           });
         })
-        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not translate the words.'))
+        .catch((error) => setChildWordMsg(error instanceof Error ? error.message : 'Could not translate the words.'))
         .finally(() => {
           setChildWordEnriching((prev) => {
             const next = new Set(prev);
@@ -6432,18 +6435,24 @@ function AppShell() {
   };
   // Read words from a photo of a notebook / word list, then bulk-add them.
   const scanChildWordsFromPhoto = (imageBase64: string, mimeType: string) => {
-    if (!(session && isSupabaseConfigured) || !childProfileId) return;
+    if (!(session && isSupabaseConfigured) || !childProfileId) {
+      setChildWordMsg('Please sign in again to scan photos.');
+      return;
+    }
+    setChildWordMsg(null);
     setChildWordScanning(true);
     scanWordsPhoto(imageBase64, mimeType, childWordLang.src, childWordLang.tgt)
       .then((words) => {
         if (words.length === 0) {
-          setTasksError('No words were found in that photo — try a clearer, closer shot.');
+          setChildWordMsg('No words found in that photo — try a clearer, closer shot.');
           return;
         }
         const added = addChildWordsBulk(words);
-        if (added === 0) setTasksError('Those words are already in your list.');
+        setChildWordMsg(
+          added === 0 ? 'Those words are already in your list.' : `Added ${added} word${added === 1 ? '' : 's'} from the photo ✓`,
+        );
       })
-      .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not read the photo.'))
+      .catch((error) => setChildWordMsg(error instanceof Error ? error.message : 'Could not read the photo.'))
       .finally(() => setChildWordScanning(false));
   };
   const childHomeNode = (
@@ -6911,6 +6920,7 @@ function AppShell() {
           words={childWords}
           enrichingIds={childWordEnriching}
           scanning={childWordScanning}
+          message={childWordMsg}
           srcLang={childWordLang.src}
           tgtLang={childWordLang.tgt}
           onLangChange={setChildWordLang}

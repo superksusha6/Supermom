@@ -68,12 +68,15 @@ Deno.serve(async (req) => {
               {
                 type: 'input_text',
                 text:
-                  `You read a photo of a child's language-study notebook or a written vocabulary list. ` +
-                  `The words the child is studying are usually in "${learn}" (the language being learned) or "${native}" (their native language). ` +
-                  `Extract the individual vocabulary words or short phrases the child wrote — one entry per word/phrase. ` +
-                  `Return them in their base/dictionary form, exactly as a study list. ` +
-                  `IGNORE page headers, dates, page numbers, exercise numbers, doodles, and full sentences that are clearly not vocabulary items. ` +
-                  `If the same word appears twice, include it once. Preserve accents/diacritics. Return an empty list if you see no words.`,
+                  `You read a photo of a child's language-study notebook or a written vocabulary list (handwritten or printed). ` +
+                  `The child is learning "${learn}" and their native language is "${native}". ` +
+                  `Extract the vocabulary words the child is studying, one entry per word.\n` +
+                  `RULES:\n` +
+                  `- When a line pairs a word with its translation (e.g. "alto = tall", "casa - house", "alto/bajo = tall/short"), extract ONLY the word(s) in the language being LEARNED (${learn}) — do NOT also add the ${native} translation side.\n` +
+                  `- Split slash- or comma-separated groups into separate words (e.g. "alto/bajo" → "alto", "bajo").\n` +
+                  `- Return each word in its base/dictionary form. Preserve accents/diacritics (á, é, í, ó, ú, ñ, ü).\n` +
+                  `- IGNORE page headers, grammar labels/titles, dates, page numbers, exercise numbers, doodles, and full sentences.\n` +
+                  `- Include each distinct word only once. Return an empty list if you see no vocabulary words.`,
               },
             ],
           },

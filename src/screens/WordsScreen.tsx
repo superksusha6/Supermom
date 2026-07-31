@@ -30,6 +30,7 @@ type Props = {
   words: ChildWord[];
   enrichingIds: Set<string>;
   scanning: boolean;
+  message: string | null;
   srcLang: string;
   tgtLang: string;
   onLangChange: (src: string, tgt: string) => void;
@@ -52,6 +53,7 @@ export function WordsScreen({
   words,
   enrichingIds,
   scanning,
+  message,
   srcLang,
   tgtLang,
   onLangChange,
@@ -149,6 +151,8 @@ export function WordsScreen({
           {scanning ? <ActivityIndicator color={colors.primary} /> : null}
           <Text style={styles.scanBtnText}>{scanning ? 'Reading the photo…' : '📷  Scan a notebook photo'}</Text>
         </Pressable>
+
+        {message ? <Text style={styles.statusMsg}>{message}</Text> : null}
 
         <Pressable onPress={() => setManualMode((v) => !v)}>
           <Text style={styles.hint}>
@@ -256,6 +260,7 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: 10,
     },
     scanBtnText: { color: colors.primary, fontSize: 15, fontWeight: '800' },
+    statusMsg: { color: colors.primary, fontSize: 13, fontWeight: '700', marginTop: 10, textAlign: 'center' },
     hint: { color: colors.subtext, fontSize: 12, marginTop: 10 },
     empty: { color: colors.subtext, fontSize: 14, paddingVertical: 8 },
     wordRow: {
