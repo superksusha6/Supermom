@@ -1,13 +1,14 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChildWord } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
-type ExerciseKind = 'choose-translation' | 'choose-word' | 'type';
+// 'listen' = hear the word, pick the meaning (audio prompt).
+type ExerciseKind = 'choose-translation' | 'choose-word' | 'listen' | 'type';
 type Exercise = {
   word: ChildWord;
   kind: ExerciseKind;
-  prompt: string; // what we show
+  prompt: string; // what we show (or speak, for 'listen')
   answer: string; // the correct answer text
   options?: string[]; // for multiple choice
 };
@@ -15,8 +16,7 @@ type Exercise = {
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i -= 1) {
-    // Not cryptographic — just enough to vary option order.
-    const j = Math.floor((i + 1) * ((Math.sin(i * 99.13 + a.length) + 1) / 2)) % (i + 1);
+    const j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -35,28 +35,46 @@ function pickDistinct(pool: string[], exclude: string, n: number): string[] {
   return out;
 }
 
-// Which exercise a word gets, based on how well it's learned (its Leitner box):
-// recognise first, then recall, then spell from memory.
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Which exercise a word gets. Type is picked at RANDOM from a set that widens as the
+// word is learned (recognise → recall → produce), so a session stays varied instead
+// of asking the same thing every time.
 function makeExercise(word: ChildWord, all: ChildWord[]): Exercise {
   const box = word.box || 1;
   const translation = (word.translation || '').trim();
   const otherTranslations = all.map((w) => (w.translation || '').trim()).filter(Boolean);
   const otherTerms = all.map((w) => w.term.trim()).filter(Boolean);
 
-  if (box >= 5) {
+  const kinds: ExerciseKind[] =
+    box >= 5
+      ? ['type', 'type', 'choose-word']
+      : box >= 3
+        ? ['choose-word', 'listen', 'type']
+        : ['choose-translation', 'choose-word', 'listen'];
+  const kind = pick(kinds);
+
+  // Meaning options (native language): prefer the AI's distractors, then fill.
+  const buildMeaningOptions = () => {
+    const distractors = (word.distractors || []).map((d) => d.trim()).filter(Boolean);
+    const filled = [...distractors];
+    if (filled.length < 3) filled.push(...pickDistinct(otherTranslations, translation, 3 - filled.length));
+    return shuffle([translation, ...pickDistinct(filled, translation, 3)]);
+  };
+
+  if (kind === 'type') {
     return { word, kind: 'type', prompt: word.term, answer: translation };
   }
-  if (box >= 3) {
-    // Show the meaning, pick the word.
+  if (kind === 'choose-word') {
     const options = shuffle([word.term, ...pickDistinct(otherTerms, word.term, 3)]);
     return { word, kind: 'choose-word', prompt: translation, answer: word.term, options };
   }
-  // Show the word, pick the meaning. Prefer the AI's distractors.
-  const distractors = (word.distractors || []).map((d) => d.trim()).filter(Boolean);
-  const filled = [...distractors];
-  if (filled.length < 3) filled.push(...pickDistinct(otherTranslations, translation, 3 - filled.length));
-  const options = shuffle([translation, ...pickDistinct(filled, translation, 3)]);
-  return { word, kind: 'choose-translation', prompt: word.term, answer: translation, options };
+  if (kind === 'listen') {
+    return { word, kind: 'listen', prompt: word.term, answer: translation, options: buildMeaningOptions() };
+  }
+  return { word, kind: 'choose-translation', prompt: word.term, answer: translation, options: buildMeaningOptions() };
 }
 
 // Normalise a typed answer: lower-case, trim, drop accents + trailing punctuation.
@@ -130,6 +148,12 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
 
   const total = queue.length;
   const ex = queue[idx];
+
+  // Auto-play the word when a "listen" question appears.
+  useEffect(() => {
+    if (ex && ex.kind === 'listen' && phase === 'ask') onSpeak(ex.word.term, learnLang);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, phase === 'ask']);
 
   const commit = (correct: boolean) => {
     setWasCorrect(correct);
@@ -213,20 +237,29 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
       {/* Prompt */}
       <View style={styles.promptCard}>
         <Text style={styles.promptKind}>
-          {ex.kind === 'type' ? 'Type the meaning' : ex.kind === 'choose-word' ? 'Pick the word' : 'Pick the meaning'}
+          {ex.kind === 'type'
+            ? 'Type the meaning'
+            : ex.kind === 'choose-word'
+              ? 'Pick the word'
+              : ex.kind === 'listen'
+                ? 'Listen and pick'
+                : 'Pick the meaning'}
         </Text>
-        <View style={styles.promptWordRow}>
-          <Text style={styles.promptWord}>{ex.prompt}</Text>
-          {ex.kind !== 'choose-word' ? (
-            <Pressable
-              style={styles.speakBtn}
-              accessibilityLabel="Listen"
-              onPress={() => onSpeak(ex.word.term, learnLang)}
-            >
-              <Text style={styles.speakBtnText}>🔊</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {ex.kind === 'listen' ? (
+          <Pressable style={styles.bigSpeak} accessibilityLabel="Play the word" onPress={() => onSpeak(ex.word.term, learnLang)}>
+            <Text style={styles.bigSpeakText}>🔊</Text>
+            {phase === 'feedback' ? <Text style={styles.bigSpeakWord}>{ex.word.term}</Text> : null}
+          </Pressable>
+        ) : (
+          <View style={styles.promptWordRow}>
+            <Text style={styles.promptWord}>{ex.prompt}</Text>
+            {ex.kind === 'choose-translation' || ex.kind === 'type' ? (
+              <Pressable style={styles.speakBtn} accessibilityLabel="Listen" onPress={() => onSpeak(ex.word.term, learnLang)}>
+                <Text style={styles.speakBtnText}>🔊</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
       </View>
 
       {/* Answer area */}
@@ -311,6 +344,9 @@ const createStyles = (colors: ThemeColors) =>
     promptWord: { color: colors.text, fontSize: 30, fontWeight: '900', textAlign: 'center' },
     speakBtn: { padding: 6 },
     speakBtnText: { fontSize: 24 },
+    bigSpeak: { alignItems: 'center', gap: 8, paddingVertical: 6 },
+    bigSpeakText: { fontSize: 52 },
+    bigSpeakWord: { color: colors.text, fontSize: 22, fontWeight: '800' },
     options: { gap: 10 },
     option: {
       backgroundColor: colors.surface,
