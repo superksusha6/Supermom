@@ -1453,7 +1453,8 @@ function AppShell() {
     () => dailyCards.find((card) => card.id === selectedDailyCardId) || null,
     [dailyCards, selectedDailyCardId],
   );
-  const shouldShowDailyCardsModal = screen === 'calendar' && dailyCardsReady && dailyCardsModalOpen;
+  const shouldShowDailyCardsModal =
+    screen === 'calendar' && dailyCardsReady && dailyCardsModalOpen && session?.role !== 'child' && session?.role !== 'staff';
   const canDismissDailyCardsModal = !!selectedDailyCard && !revealingDailyCardId;
   // Who I can send a list to = the family shoppers from the server (co-parents keyed
   // by user id + connected staff), minus myself.
@@ -3121,6 +3122,9 @@ function AppShell() {
 
   useEffect(() => {
     if (screen !== 'calendar') return;
+    // Daily "card of the day" is an adult feature — never surface it for a child or
+    // staff member (their dashboards are built on the calendar screen).
+    if (isChildView || isStaffView) return;
     // For a signed-in user, wait until preferences have loaded — otherwise the
     // modal opens, then refreshUserPreferences closes it (cards flash & vanish).
     if (session && !dailyCardsPrefsReady) return;
@@ -3130,7 +3134,7 @@ function AppShell() {
     if (dailyCardPromptShown) return;
     setDailyCardPromptShown(true);
     setDailyCardsModalOpen(true);
-  }, [screen, session, dailyCardsPrefsReady, dailyCardsReady, selectedDailyCardId, revealingDailyCardId, dailyCardsModalOpen, dailyCardPromptShown]);
+  }, [screen, session, isChildView, isStaffView, dailyCardsPrefsReady, dailyCardsReady, selectedDailyCardId, revealingDailyCardId, dailyCardsModalOpen, dailyCardPromptShown]);
 
   useEffect(() => {
     latestFridgeItemsRef.current = fridgeItems;
