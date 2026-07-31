@@ -132,6 +132,7 @@ import { Pet3D } from '@/components/Pet3D';
 import { Asset } from 'expo-asset';
 import { HabitsScreen } from '@/screens/HabitsScreen';
 import { WordsScreen } from '@/screens/WordsScreen';
+import { WordPractice } from '@/screens/WordPractice';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
 import { MedicineScreen } from '@/screens/MedicineScreen';
@@ -908,6 +909,16 @@ function AppShell() {
   // A short status/error shown right on the words screen (the child can't see the
   // global error banner, so scan/add feedback must live here).
   const [childWordMsg, setChildWordMsg] = useState<string | null>(null);
+  // The word list currently being practised (null = not in a practice session).
+  const [practiceWords, setPracticeWords] = useState<ChildWord[] | null>(null);
+  // Fruits earned from word practice TODAY (feeds the pet, per-day in localStorage).
+  const [childWordFruits, setChildWordFruits] = useState<number>(() => {
+    try {
+      return parseInt(globalThis.localStorage?.getItem(`smartmom.childWordFruits.${getTodayKey()}`) || '0', 10) || 0;
+    } catch {
+      return 0;
+    }
+  });
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -6238,7 +6249,8 @@ function AppShell() {
   const childFruits =
     childChores.filter((c) => choreStatus(c) !== 'todo').length +
     childActiveHabits.filter((h) => h.completedToday).length +
-    childEventChecks.size;
+    childEventChecks.size +
+    childWordFruits;
   const toggleChildEvent = (eventId: string) => {
     const nextDone = !childEventChecks.has(eventId);
     setChildEventChecks((prev) => {
@@ -6454,6 +6466,57 @@ function AppShell() {
       })
       .catch((error) => setChildWordMsg(error instanceof Error ? error.message : 'Could not read the photo.'))
       .finally(() => setChildWordScanning(false));
+  };
+  // Leitner box → days until the word is due again. Correct answers climb the boxes
+  // (longer gaps); a wrong answer drops two boxes so it comes back soon.
+  const WORD_SRS_INTERVALS: Record<number, number> = { 1: 1, 2: 1, 3: 3, 4: 7, 5: 16, 6: 35 };
+  const bumpWordFruit = () => {
+    setChildWordFruits((n) => {
+      const next = n + 1;
+      try {
+        globalThis.localStorage?.setItem(`smartmom.childWordFruits.${getTodayKey()}`, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+  // Grade one practice answer: move the word's box, reschedule it, persist, and give
+  // a fruit when the word climbs to a new box. Returns whether it advanced.
+  const gradeChildWord = (word: ChildWord, correct: boolean): boolean => {
+    const box = word.box || 1;
+    const nextBox = correct ? Math.min(box + 1, 6) : Math.max(box - 2, 1);
+    const promoted = correct && nextBox > box;
+    const d = new Date();
+    d.setDate(d.getDate() + (WORD_SRS_INTERVALS[nextBox] || 1));
+    const dueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const patch = { box: nextBox, dueDate, lastResult: correct };
+    setChildWords((prev) => prev.map((w) => (w.id === word.id ? { ...w, ...patch } : w)));
+    if (session && isSupabaseConfigured) updateChildWord(session, word.id, patch).catch(() => {});
+    if (promoted) bumpWordFruit();
+    return promoted;
+  };
+  // Speak a word aloud with the browser's built-in voices (free, offline for local
+  // voices). Picks a voice matching the language when one is installed.
+  const speakWord = (text: string, lang: string) => {
+    try {
+      const synth = (globalThis as unknown as { speechSynthesis?: any }).speechSynthesis;
+      const Utter = (globalThis as unknown as { SpeechSynthesisUtterance?: any }).SpeechSynthesisUtterance;
+      if (!synth || !Utter) return;
+      const u = new Utter(text);
+      const map: Record<string, string> = {
+        es: 'es-ES', en: 'en-US', ru: 'ru-RU', fr: 'fr-FR', de: 'de-DE', it: 'it-IT',
+        pt: 'pt-PT', zh: 'zh-CN', ja: 'ja-JP', ar: 'ar-SA', tr: 'tr-TR', uk: 'uk-UA',
+      };
+      u.lang = map[lang] || lang;
+      const voices = synth.getVoices?.() || [];
+      const v = voices.find((vo: any) => (vo.lang || '').toLowerCase().startsWith(lang.toLowerCase()));
+      if (v) u.voice = v;
+      synth.cancel();
+      synth.speak(u);
+    } catch {
+      /* speech not available */
+    }
   };
   const childHomeNode = (
     <View style={styles.dashWrap}>
@@ -6916,19 +6979,30 @@ function AppShell() {
     ) : childScreen === 'words' && childShows('words') ? (
       <View style={styles.dashWrap}>
         {childBackBar('My words')}
-        <WordsScreen
-          words={childWords}
-          enrichingIds={childWordEnriching}
-          scanning={childWordScanning}
-          message={childWordMsg}
-          srcLang={childWordLang.src}
-          tgtLang={childWordLang.tgt}
-          onLangChange={setChildWordLang}
-          onAddWord={addChildWordLocal}
-          onAddWords={addChildWordsBulk}
-          onScanPhoto={pickWordsPhoto}
-          onDeleteWord={deleteChildWordLocal}
-        />
+        {practiceWords ? (
+          <WordPractice
+            words={practiceWords}
+            learnLang={childWordLang.src}
+            onGrade={gradeChildWord}
+            onSpeak={speakWord}
+            onClose={() => setPracticeWords(null)}
+          />
+        ) : (
+          <WordsScreen
+            words={childWords}
+            enrichingIds={childWordEnriching}
+            scanning={childWordScanning}
+            message={childWordMsg}
+            srcLang={childWordLang.src}
+            tgtLang={childWordLang.tgt}
+            onLangChange={setChildWordLang}
+            onAddWord={addChildWordLocal}
+            onAddWords={addChildWordsBulk}
+            onScanPhoto={pickWordsPhoto}
+            onDeleteWord={deleteChildWordLocal}
+            onPractice={(list) => setPracticeWords(list)}
+          />
+        )}
       </View>
     ) : childScreen === 'nutrition' && childShows('nutrition') ? (
       <View style={styles.dashWrap}>

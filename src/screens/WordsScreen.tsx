@@ -38,6 +38,7 @@ type Props = {
   onAddWords: (terms: string[]) => void;
   onScanPhoto: () => void;
   onDeleteWord: (id: string) => void;
+  onPractice: (words: ChildWord[]) => void;
 };
 
 // Split a pasted blob into individual words: one per line, and also on commas /
@@ -90,6 +91,7 @@ export function WordsScreen({
   onAddWords,
   onScanPhoto,
   onDeleteWord,
+  onPractice,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -213,6 +215,9 @@ export function WordsScreen({
               <Pressable style={styles.backRow} onPress={() => setOpenDay(null)}>
                 <Text style={styles.backRowText}>‹ All days</Text>
               </Pressable>
+              <Pressable style={styles.practiceBtn} onPress={() => onPractice(active.words)}>
+                <Text style={styles.practiceBtnText}>▶  Practise these words</Text>
+              </Pressable>
               {active.words.map((w) => {
                 const busy = enrichingIds.has(w.id);
                 return (
@@ -236,6 +241,9 @@ export function WordsScreen({
         // Folder list — one tappable row per day.
         return (
           <SectionCard title="My words">
+            <Pressable style={styles.practiceBtn} onPress={() => onPractice(deck)}>
+              <Text style={styles.practiceBtnText}>▶  Practise all {deck.length} words</Text>
+            </Pressable>
             {groups.map((g) => (
               <Pressable key={g.key} style={styles.dayRow} onPress={() => setOpenDay(g.key)}>
                 <Text style={styles.dayRowLabel}>{g.label}</Text>
@@ -335,6 +343,14 @@ const createStyles = (colors: ThemeColors) =>
     dayRowChevron: { color: colors.subtext, fontSize: 22, fontWeight: '700' },
     backRow: { paddingBottom: 10 },
     backRowText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
+    practiceBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 13,
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    practiceBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
     wordRow: {
       flexDirection: 'row',
       alignItems: 'center',
