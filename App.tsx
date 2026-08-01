@@ -902,6 +902,10 @@ function AppShell() {
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   // The child's personal vocabulary deck + which language pair they're studying.
   const [childWords, setChildWords] = useState<ChildWord[]>([]);
+  const childWordsRef = useRef<ChildWord[]>([]);
+  // >0 while a bulk/enrich write is in flight — the background poll must not overwrite
+  // optimistic local rows during this window (it would drop the just-added words).
+  const childWordsBusyRef = useRef(0);
   // Word ids currently being auto-translated by the AI (shows a "translating…" state).
   const [childWordEnriching, setChildWordEnriching] = useState<Set<string>>(new Set());
   // True while a notebook photo is being read for words.
@@ -2422,8 +2426,13 @@ function AppShell() {
 
   async function refreshChildWords(current: AppSession | null = session) {
     if (!current || current.role !== 'child' || !isSupabaseConfigured) return;
+    // A bulk add / enrichment is settling — don't overwrite optimistic local rows.
+    if (childWordsBusyRef.current > 0) return;
     try {
-      setChildWords(await listChildWords(current));
+      const rows = await listChildWords(current);
+      // Never wipe a non-empty local deck with an empty read (transient RLS/auth miss).
+      if (rows.length === 0 && childWordsRef.current.length > 0) return;
+      setChildWords(rows);
     } catch {
       // keep what we have
     }
@@ -3149,6 +3158,16 @@ function AppShell() {
     if (isChildView && childScreen === 'words') refreshChildWords(session);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isChildView, childScreen]);
+
+  useEffect(() => {
+    childWordsRef.current = childWords;
+  }, [childWords]);
+
+  // Clear a shown child error when they navigate, so it doesn't linger on a new screen.
+  useEffect(() => {
+    if (isChildView) setTasksError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childTab, childScreen]);
 
   useEffect(() => {
     latestChildrenRef.current = children;
@@ -4718,7 +4737,9 @@ function AppShell() {
       return;
     }
     try {
-      const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'nutrition', 'words'];
+      // Nutrition is OFF by default for kids — the adult weight/calorie-deficit UI is
+      // not age-appropriate. A parent can grant a kid-safe version explicitly later.
+      const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'words'];
       const { token } = await createChildInvite(current, childId, features);
       const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
       const q = `child=${token}&cn=${encodeURIComponent(child?.name || '')}&cp=${encodeURIComponent(childId)}`;
@@ -6248,7 +6269,7 @@ function AppShell() {
   const childGrantedList = ([
     { key: 'words', label: 'My words', icon: 'book' },
     { key: 'shopping', label: 'Shopping list', icon: 'cart' },
-    { key: 'nutrition', label: 'Food & energy', icon: 'meal' },
+    // 'nutrition' intentionally omitted for kids until a kid-safe (no weight-loss) variant ships.
   ] as { key: ChildFeature; label: string; icon: IconName }[]).filter((f) => childShows(f.key));
   const childProfileId = session?.childProfileId;
   const childTodayEvents = isChildView
@@ -6345,6 +6366,7 @@ function AppShell() {
     // No manual meaning → let the AI detect the language and fill term/translation/
     // example/distractors (this is the "type in either language" magic).
     if (!manual && session && isSupabaseConfigured) {
+      childWordsBusyRef.current += 1;
       setChildWordEnriching((prev) => new Set(prev).add(newWord.id));
       enrichWords([t], childWordLang.src, childWordLang.tgt)
         .then((cards) => {
@@ -6363,8 +6385,8 @@ function AppShell() {
             // A term-normalization clash with an existing word is harmless — keep local.
           });
         })
-        .catch((error) => {
-          setTasksError(error instanceof Error ? error.message : 'Could not translate your word.');
+        .catch(() => {
+          setChildWordMsg('Could not translate your word — tap it later to retry.');
         })
         .finally(() => {
           setChildWordEnriching((prev) => {
@@ -6372,6 +6394,7 @@ function AppShell() {
             next.delete(newWord.id);
             return next;
           });
+          childWordsBusyRef.current = Math.max(0, childWordsBusyRef.current - 1);
         });
     }
   };
@@ -6419,6 +6442,7 @@ function AppShell() {
     setChildWords((prev) => [...newWords, ...prev]);
     if (!(session && isSupabaseConfigured)) return newWords.length;
     // Persist every row, then translate the whole batch in one AI call.
+    childWordsBusyRef.current += 1; // block the poll from clobbering these while they settle
     setChildWordEnriching((prev) => {
       const next = new Set(prev);
       newWords.forEach((w) => next.add(w.id));
@@ -6457,8 +6481,9 @@ function AppShell() {
             newWords.forEach((w) => next.delete(w.id));
             return next;
           });
-          // Reconcile with the server (real uuids + translations) so nothing is left
-          // half-added locally — this is the authoritative copy.
+          // Release the poll lock FIRST, then reconcile with the server (real uuids +
+          // translations) so nothing is left half-added locally.
+          childWordsBusyRef.current = Math.max(0, childWordsBusyRef.current - 1);
           refreshChildWords(session);
         });
     });
@@ -6741,11 +6766,11 @@ function AppShell() {
       .catch((error) => setTasksError(error instanceof Error ? error.message : 'Sign-out failed.'));
   };
   const childToolRows = [
-    { key: 'dayplan' as ChildFeature, label: 'Day plan & snacks', icon: 'calendar' as IconName },
+    // 'dayplan' (always-on Today card, not a real toggle) and 'nutrition' (kid-safety)
+    // are intentionally not shown as child-controllable tools.
     { key: 'shopping' as ChildFeature, label: 'Shopping', icon: 'cart' as IconName },
     { key: 'habits' as ChildFeature, label: 'Habits', icon: 'heart' as IconName },
     { key: 'words' as ChildFeature, label: 'My words', icon: 'book' as IconName },
-    { key: 'nutrition' as ChildFeature, label: 'Food & energy', icon: 'meal' as IconName },
   ];
   const childSettingsNode = (
     <View style={styles.dashWrap}>
@@ -9271,6 +9296,12 @@ function AppShell() {
         </Pressable>
       ) : null}
         {screen === 'settings' && !isChildView ? settingsScreenContent : null}
+        {isChildView && tasksError ? (
+          <Pressable style={styles.childErrorBanner} onPress={() => setTasksError(null)}>
+            <Text style={styles.childErrorText}>{tasksError}</Text>
+            <Text style={styles.childErrorClose}>✕</Text>
+          </Pressable>
+        ) : null}
         {isChildView ? childScreenNode : null}
         {childCropSrc ? (
           <PhotoCropper
@@ -16172,6 +16203,20 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '800',
     marginLeft: 8,
   },
+  childErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  childErrorText: { color: '#b91c1c', fontSize: 13.5, fontWeight: '700', flex: 1 },
+  childErrorClose: { color: '#b91c1c', fontSize: 16, fontWeight: '800' },
   tasksHubIcon: {
     width: 38,
     height: 38,

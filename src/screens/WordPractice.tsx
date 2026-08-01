@@ -35,11 +35,14 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function pickDistinct(pool: string[], exclude: string, n: number): string[] {
-  const seen = new Set([exclude.toLowerCase()]);
+  // Exclude/dedupe using the SAME normalization the grader uses (normalize strips
+  // accents + trailing punctuation), so no distractor can be graded-equal to the
+  // answer — e.g. "si" must not slip past when the answer is "sí".
+  const seen = new Set([normalize(exclude)]);
   const out: string[] = [];
   for (const v of shuffle(pool)) {
-    const key = v.trim().toLowerCase();
-    if (!v.trim() || seen.has(key)) continue;
+    const key = normalize(v);
+    if (!v.trim() || !key || seen.has(key)) continue;
     seen.add(key);
     out.push(v.trim());
     if (out.length >= n) break;
@@ -92,7 +95,9 @@ function makeExercise(word: ChildWord, all: ChildWord[]): Exercise {
   const build = (kind: ExerciseKind): Exercise | null => {
     switch (kind) {
       case 'type':
-        return { word, kind, prompt: term, answer: translation };
+        // Produce the LEARNED word from its meaning (real recall + spelling), not the
+        // native translation. Accents are forgiven by the grader.
+        return { word, kind, prompt: translation, answer: term };
       case 'choose-word':
         return { word, kind, prompt: translation, answer: term, options: wordOptions() };
       case 'listen':
@@ -183,11 +188,41 @@ function answerMatches(typed: string, answer: string): boolean {
     .some((part) => part && (t === part || (part.length >= 4 && levenshtein(t, part) <= 1)));
 }
 
+function todayKeyLocal(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
+// Build a session that actually honors the spaced-repetition schedule: due reviews
+// first, then a capped number of new words, then backfill with the soonest-due words
+// if the pool is thin. Without this the Leitner boxes would be computed but ignored.
+function buildSession(eligible: ChildWord[]): ChildWord[] {
+  const SIZE = 15;
+  const NEW_CAP = 6;
+  const today = todayKeyLocal();
+  const isDue = (w: ChildWord) => (w.dueDate || '0000-00-00') <= today;
+  const fresh = shuffle(eligible.filter((w) => (w.box || 1) <= 1));
+  const dueReviews = shuffle(eligible.filter((w) => (w.box || 1) >= 2 && isDue(w)));
+  const notDue = eligible
+    .filter((w) => (w.box || 1) >= 2 && !isDue(w))
+    .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+
+  const chosen: ChildWord[] = [];
+  const add = (w: ChildWord) => {
+    if (chosen.length < SIZE && !chosen.includes(w)) chosen.push(w);
+  };
+  dueReviews.forEach(add); // all due reviews
+  fresh.slice(0, NEW_CAP).forEach(add); // new words, capped
+  notDue.forEach(add); // backfill with soonest-due
+  fresh.slice(NEW_CAP).forEach(add); // small deck: allow extra new words
+  return shuffle(chosen);
+}
+
 type Props = {
   words: ChildWord[];
   learnLang: string;
-  // Grade the FIRST attempt of a word for spaced-repetition; returns true if the
-  // word advanced a box (earned a fruit).
+  // Grade the FIRST attempt of a word for spaced-repetition; returns true if a fruit
+  // was awarded (a correct answer, under the daily cap).
   onGrade: (word: ChildWord, correct: boolean) => boolean;
   onSpeak: (text: string, lang: string) => void;
   onClose: () => void;
@@ -198,7 +233,7 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const eligible = useMemo(() => words.filter((w) => (w.translation || '').trim()), [words]);
-  const [queue, setQueue] = useState<Exercise[]>(() => shuffle(eligible).slice(0, 15).map((w) => makeExercise(w, eligible)));
+  const [queue, setQueue] = useState<Exercise[]>(() => buildSession(eligible).map((w) => makeExercise(w, eligible)));
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<'ask' | 'feedback' | 'done'>(eligible.length ? 'ask' : 'done');
   const [selected, setSelected] = useState<string | null>(null);
@@ -351,7 +386,7 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
         ) : (
           <View style={styles.promptWordRow}>
             <Text style={styles.promptWord}>{ex.prompt}</Text>
-            {ex.kind === 'choose-translation' || ex.kind === 'type' ? (
+            {ex.kind === 'choose-translation' ? (
               <Pressable style={styles.speakBtn} accessibilityLabel="Listen" onPress={() => onSpeak(ex.word.term, learnLang)}>
                 <Text style={styles.speakBtnText}>🔊</Text>
               </Pressable>

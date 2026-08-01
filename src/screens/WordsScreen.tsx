@@ -41,11 +41,15 @@ type Props = {
   onPractice: (words: ChildWord[]) => void;
 };
 
-// Split a pasted blob into individual words: one per line, and also on commas /
-// semicolons / tabs so lists copied in any shape work.
+// Split a pasted blob into individual words. Study lists come in many shapes:
+// one-per-line, comma/semicolon lists, and slash pairs like "alto/bajo". We also
+// drop an "= meaning" / "– meaning" tail so a two-column line yields just the words.
 function splitWordList(text: string): string[] {
   return text
-    .split(/[\n,;\t]+/)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s*[=—–-]\s.*$/, '')) // strip "= tall/short" style tail
+    .join('\n')
+    .split(/[\n,;/\t]+|\s{2,}/) // lines, commas, semicolons, slashes, tabs, wide gaps
     .map((w) => w.trim())
     .filter(Boolean);
 }
