@@ -6664,7 +6664,11 @@ function AppShell() {
               </View>
               <View style={styles.habitsDashIcon}><Text style={styles.habitsDashIconText}>{habit.icon}</Text></View>
               <Text style={[styles.habitsDashName, habit.completedToday && styles.habitsDashNameDone]} numberOfLines={1}>{habit.title}</Text>
-              {habit.targetText ? <Text style={styles.habitsDashTarget} numberOfLines={1}>{habit.targetText}</Text> : null}
+              {habit.streak > 0 ? (
+                <Text style={styles.habitsDashStreak} numberOfLines={1}>🔥 {habit.streak}</Text>
+              ) : habit.targetText ? (
+                <Text style={styles.habitsDashTarget} numberOfLines={1}>{habit.targetText}</Text>
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -16142,6 +16146,12 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.subtext,
     fontSize: 11.5,
     fontWeight: '600',
+    marginLeft: 8,
+  },
+  habitsDashStreak: {
+    color: '#f97316',
+    fontSize: 12.5,
+    fontWeight: '800',
     marginLeft: 8,
   },
   tasksHubIcon: {
