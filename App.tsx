@@ -3140,6 +3140,13 @@ function AppShell() {
     latestFridgeItemsRef.current = fridgeItems;
   }, [fridgeItems]);
 
+  // Whenever the child opens their words screen, pull the latest deck from the server
+  // so a raced/empty initial load can't leave it looking blank.
+  useEffect(() => {
+    if (isChildView && childScreen === 'words') refreshChildWords(session);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChildView, childScreen]);
+
   useEffect(() => {
     latestChildrenRef.current = children;
   }, [children]);
@@ -6422,8 +6429,9 @@ function AppShell() {
       ),
     ).finally(() => {
       enrichWords(terms, childWordLang.src, childWordLang.tgt)
-        .then((cards) => {
+        .then(async (cards) => {
           const byInput = new Map(cards.map((c) => [c.input.trim().toLowerCase(), c]));
+          const writes: Promise<void>[] = [];
           newWords.forEach((w) => {
             const c = byInput.get(w.term.toLowerCase());
             if (!c) return;
@@ -6435,8 +6443,9 @@ function AppShell() {
               enrichedAt: new Date().toISOString(),
             };
             setChildWords((prev) => prev.map((x) => (x.id === w.id ? { ...x, ...patch } : x)));
-            updateChildWord(session, w.id, patch).catch(() => {});
+            writes.push(updateChildWord(session, w.id, patch).catch(() => {}));
           });
+          await Promise.all(writes);
         })
         .catch((error) => setChildWordMsg(error instanceof Error ? error.message : 'Could not translate the words.'))
         .finally(() => {
@@ -6445,6 +6454,9 @@ function AppShell() {
             newWords.forEach((w) => next.delete(w.id));
             return next;
           });
+          // Reconcile with the server (real uuids + translations) so nothing is left
+          // half-added locally — this is the authoritative copy.
+          refreshChildWords(session);
         });
     });
     return newWords.length;

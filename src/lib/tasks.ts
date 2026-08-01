@@ -3370,10 +3370,12 @@ export async function listChildWords(session: AppSession): Promise<ChildWord[]> 
   const client = requireClient();
   const childId = session.childProfileId;
   if (!childId) return [];
+  // Filter by child_profile_id only — RLS already restricts to this child's own rows,
+  // and adding a family_id filter would silently hide words if the session resolved a
+  // slightly different family id than the rows were written under.
   const { data, error } = await client
     .from('child_words')
     .select('*')
-    .eq('family_id', session.familyId)
     .eq('child_profile_id', childId)
     .order('created_at', { ascending: false });
   if (error) {
