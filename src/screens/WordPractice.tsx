@@ -4,13 +4,16 @@ import { ChildWord } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
 // 'listen' = hear the word, pick the meaning (audio prompt).
-type ExerciseKind = 'choose-translation' | 'choose-word' | 'listen' | 'type';
+// 'fill-blank' = the example sentence with the word blanked out, pick the word.
+// 'scramble' = build the word from shuffled letters.
+type ExerciseKind = 'choose-translation' | 'choose-word' | 'listen' | 'fill-blank' | 'scramble' | 'type';
 type Exercise = {
   word: ChildWord;
   kind: ExerciseKind;
   prompt: string; // what we show (or speak, for 'listen')
   answer: string; // the correct answer text
   options?: string[]; // for multiple choice
+  letters?: string[]; // for 'scramble' — the shuffled tiles
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -39,42 +42,79 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// Replace the first occurrence of `term` in `sentence` with a blank. Returns null if
+// the word doesn't appear (so we can fall back to another exercise).
+function blankSentence(sentence: string, term: string): string | null {
+  const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  if (!re.test(sentence)) return null;
+  return sentence.replace(re, '_____');
+}
+
+// A single word made only of letters (no spaces/phrases), short enough to build.
+function isScrambleable(term: string): boolean {
+  return /^[\p{L}]{2,12}$/u.test(term.trim());
+}
+
 // Which exercise a word gets. Type is picked at RANDOM from a set that widens as the
-// word is learned (recognise → recall → produce), so a session stays varied instead
-// of asking the same thing every time.
+// word is learned (recognise → recall → produce), so a session stays varied. If the
+// chosen kind doesn't fit this word (e.g. no example sentence), we fall back.
 function makeExercise(word: ChildWord, all: ChildWord[]): Exercise {
   const box = word.box || 1;
+  const term = word.term.trim();
   const translation = (word.translation || '').trim();
+  const example = (word.example || '').trim();
   const otherTranslations = all.map((w) => (w.translation || '').trim()).filter(Boolean);
   const otherTerms = all.map((w) => w.term.trim()).filter(Boolean);
 
-  const kinds: ExerciseKind[] =
-    box >= 5
-      ? ['type', 'type', 'choose-word']
-      : box >= 3
-        ? ['choose-word', 'listen', 'type']
-        : ['choose-translation', 'choose-word', 'listen'];
-  const kind = pick(kinds);
-
-  // Meaning options (native language): prefer the AI's distractors, then fill.
   const buildMeaningOptions = () => {
     const distractors = (word.distractors || []).map((d) => d.trim()).filter(Boolean);
     const filled = [...distractors];
     if (filled.length < 3) filled.push(...pickDistinct(otherTranslations, translation, 3 - filled.length));
     return shuffle([translation, ...pickDistinct(filled, translation, 3)]);
   };
+  const wordOptions = () => shuffle([term, ...pickDistinct(otherTerms, term, 3)]);
 
-  if (kind === 'type') {
-    return { word, kind: 'type', prompt: word.term, answer: translation };
+  const build = (kind: ExerciseKind): Exercise | null => {
+    switch (kind) {
+      case 'type':
+        return { word, kind, prompt: term, answer: translation };
+      case 'choose-word':
+        return { word, kind, prompt: translation, answer: term, options: wordOptions() };
+      case 'listen':
+        return { word, kind, prompt: term, answer: translation, options: buildMeaningOptions() };
+      case 'choose-translation':
+        return { word, kind, prompt: term, answer: translation, options: buildMeaningOptions() };
+      case 'fill-blank': {
+        const blanked = example ? blankSentence(example, term) : null;
+        if (!blanked) return null;
+        return { word, kind, prompt: blanked, answer: term, options: wordOptions() };
+      }
+      case 'scramble': {
+        if (!isScrambleable(term)) return null;
+        let letters = shuffle(term.split(''));
+        // Make sure it isn't already spelling the answer.
+        if (letters.join('') === term) letters = shuffle(letters);
+        return { word, kind, prompt: translation, answer: term, letters };
+      }
+      default:
+        return null;
+    }
+  };
+
+  const pool: ExerciseKind[] =
+    box >= 5
+      ? ['type', 'scramble', 'choose-word', 'fill-blank']
+      : box >= 3
+        ? ['choose-word', 'listen', 'fill-blank', 'scramble', 'type']
+        : ['choose-translation', 'choose-word', 'listen', 'fill-blank'];
+
+  // Try kinds in a random order until one is feasible for this word.
+  for (const kind of shuffle(pool)) {
+    const ex = build(kind);
+    if (ex) return ex;
   }
-  if (kind === 'choose-word') {
-    const options = shuffle([word.term, ...pickDistinct(otherTerms, word.term, 3)]);
-    return { word, kind: 'choose-word', prompt: translation, answer: word.term, options };
-  }
-  if (kind === 'listen') {
-    return { word, kind: 'listen', prompt: word.term, answer: translation, options: buildMeaningOptions() };
-  }
-  return { word, kind: 'choose-translation', prompt: word.term, answer: translation, options: buildMeaningOptions() };
+  // Absolute fallback.
+  return build('choose-translation')!;
 }
 
 // Normalise a typed answer: lower-case, trim, drop accents + trailing punctuation.
@@ -140,6 +180,7 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
   const [phase, setPhase] = useState<'ask' | 'feedback' | 'done'>(eligible.length ? 'ask' : 'done');
   const [selected, setSelected] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
+  const [built, setBuilt] = useState<number[]>([]); // tapped letter-tile indices, for 'scramble'
   const [wasCorrect, setWasCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [fruits, setFruits] = useState(0);
@@ -154,6 +195,11 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
     if (ex && ex.kind === 'listen' && phase === 'ask') onSpeak(ex.word.term, learnLang);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, phase === 'ask']);
+
+  // Reset the letter-builder when the question changes.
+  useEffect(() => {
+    setBuilt([]);
+  }, [idx]);
 
   const commit = (correct: boolean) => {
     setWasCorrect(correct);
@@ -179,6 +225,11 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
   const submitTyped = () => {
     if (phase !== 'ask') return;
     commit(answerMatches(typed, ex.answer));
+  };
+  const builtWord = ex && ex.kind === 'scramble' && ex.letters ? built.map((i) => ex.letters![i]).join('') : '';
+  const submitScramble = () => {
+    if (phase !== 'ask') return;
+    commit(normalize(builtWord) === normalize(ex.answer));
   };
   const next = () => {
     setSelected(null);
@@ -243,13 +294,19 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
               ? 'Pick the word'
               : ex.kind === 'listen'
                 ? 'Listen and pick'
-                : 'Pick the meaning'}
+                : ex.kind === 'fill-blank'
+                  ? 'Fill the gap'
+                  : ex.kind === 'scramble'
+                    ? 'Build the word'
+                    : 'Pick the meaning'}
         </Text>
         {ex.kind === 'listen' ? (
           <Pressable style={styles.bigSpeak} accessibilityLabel="Play the word" onPress={() => onSpeak(ex.word.term, learnLang)}>
             <Text style={styles.bigSpeakText}>🔊</Text>
             {phase === 'feedback' ? <Text style={styles.bigSpeakWord}>{ex.word.term}</Text> : null}
           </Pressable>
+        ) : ex.kind === 'fill-blank' ? (
+          <Text style={styles.promptSentence}>{ex.prompt}</Text>
         ) : (
           <View style={styles.promptWordRow}>
             <Text style={styles.promptWord}>{ex.prompt}</Text>
@@ -278,6 +335,46 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
           />
           {phase === 'ask' ? (
             <Pressable style={[styles.primaryBtn, !typed.trim() && styles.btnDisabled]} onPress={submitTyped} disabled={!typed.trim()}>
+              <Text style={styles.primaryBtnText}>Check</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : ex.kind === 'scramble' ? (
+        <View>
+          {/* The word being built */}
+          <View style={styles.builtRow}>
+            {built.length === 0 ? (
+              <Text style={styles.builtPlaceholder}>Tap the letters…</Text>
+            ) : (
+              built.map((li, pos) => (
+                <Pressable
+                  key={`${li}-${pos}`}
+                  style={styles.builtTile}
+                  onPress={() => phase === 'ask' && setBuilt((b) => b.filter((_, k) => k !== pos))}
+                >
+                  <Text style={styles.tileText}>{ex.letters![li]}</Text>
+                </Pressable>
+              ))
+            )}
+          </View>
+          {/* Available letters */}
+          <View style={styles.tilesRow}>
+            {ex.letters!.map((ch, i) => {
+              const used = built.includes(i);
+              return (
+                <Pressable
+                  key={i}
+                  style={[styles.tile, used && styles.tileUsed]}
+                  disabled={used || phase !== 'ask'}
+                  onPress={() => setBuilt((b) => [...b, i])}
+                >
+                  <Text style={styles.tileText}>{ch}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {phase === 'ask' ? (
+            <Pressable style={[styles.primaryBtn, !built.length && styles.btnDisabled]} onPress={submitScramble} disabled={!built.length}>
               <Text style={styles.primaryBtnText}>Check</Text>
             </Pressable>
           ) : null}
@@ -342,6 +439,7 @@ const createStyles = (colors: ThemeColors) =>
     promptKind: { color: colors.subtext, fontSize: 13, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
     promptWordRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     promptWord: { color: colors.text, fontSize: 30, fontWeight: '900', textAlign: 'center' },
+    promptSentence: { color: colors.text, fontSize: 21, fontWeight: '700', textAlign: 'center', lineHeight: 30 },
     speakBtn: { padding: 6 },
     speakBtnText: { fontSize: 24 },
     bigSpeak: { alignItems: 'center', gap: 8, paddingVertical: 6 },
@@ -369,6 +467,44 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.text,
       marginBottom: 12,
     },
+    builtRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      minHeight: 56,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderBottomWidth: 2,
+      borderBottomColor: colors.border,
+      paddingBottom: 12,
+      marginBottom: 16,
+    },
+    builtPlaceholder: { color: colors.subtext, fontSize: 15, fontWeight: '600' },
+    builtTile: {
+      minWidth: 40,
+      height: 48,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      backgroundColor: colors.selection,
+      borderWidth: 2,
+      borderColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tilesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 16 },
+    tile: {
+      minWidth: 44,
+      height: 52,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tileUsed: { opacity: 0.25 },
+    tileText: { color: colors.text, fontSize: 22, fontWeight: '800' },
     feedback: { gap: 12, marginTop: 4 },
     feedbackText: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
     feedbackOk: { color: '#16a34a' },
