@@ -919,6 +919,9 @@ function AppShell() {
       return 0;
     }
   });
+  // Synchronous mirror of the counter so the per-answer cap check + return value are
+  // accurate (a setState updater runs too late to read back).
+  const childWordFruitsRef = useRef(childWordFruits);
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -6486,31 +6489,34 @@ function AppShell() {
   // Leitner box → days until the word is due again. Correct answers climb the boxes
   // (longer gaps); a wrong answer drops two boxes so it comes back soon.
   const WORD_SRS_INTERVALS: Record<number, number> = { 1: 1, 2: 1, 3: 3, 4: 7, 5: 16, 6: 35 };
-  const bumpWordFruit = () => {
-    setChildWordFruits((n) => {
-      const next = n + 1;
-      try {
-        globalThis.localStorage?.setItem(`smartmom.childWordFruits.${getTodayKey()}`, String(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
+  // Keep word-practice fruit modest: at most this many per day, so a keen learner
+  // can't farm the pet by grinding quizzes.
+  const WORD_FRUITS_DAILY_CAP = 5;
+  // Award one fruit if we're under today's cap. Returns whether it was actually given.
+  const bumpWordFruit = (): boolean => {
+    if (childWordFruitsRef.current >= WORD_FRUITS_DAILY_CAP) return false;
+    const next = childWordFruitsRef.current + 1;
+    childWordFruitsRef.current = next;
+    try {
+      globalThis.localStorage?.setItem(`smartmom.childWordFruits.${getTodayKey()}`, String(next));
+    } catch {
+      /* ignore */
+    }
+    setChildWordFruits(next);
+    return true;
   };
   // Grade one practice answer: move the word's box, reschedule it, persist, and give
-  // a fruit when the word climbs to a new box. Returns whether it advanced.
+  // a fruit for a correct answer (capped per day). Returns whether a fruit was given.
   const gradeChildWord = (word: ChildWord, correct: boolean): boolean => {
     const box = word.box || 1;
     const nextBox = correct ? Math.min(box + 1, 6) : Math.max(box - 2, 1);
-    const promoted = correct && nextBox > box;
     const d = new Date();
     d.setDate(d.getDate() + (WORD_SRS_INTERVALS[nextBox] || 1));
     const dueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const patch = { box: nextBox, dueDate, lastResult: correct };
     setChildWords((prev) => prev.map((w) => (w.id === word.id ? { ...w, ...patch } : w)));
     if (session && isSupabaseConfigured) updateChildWord(session, word.id, patch).catch(() => {});
-    if (promoted) bumpWordFruit();
-    return promoted;
+    return correct ? bumpWordFruit() : false;
   };
   // Speak a word aloud with the browser's built-in voices (free, offline for local
   // voices). Picks a voice matching the language when one is installed.
