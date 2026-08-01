@@ -6,14 +6,23 @@ import { ThemeColors, useThemeColors } from '@/theme/theme';
 // 'listen' = hear the word, pick the meaning (audio prompt).
 // 'fill-blank' = the example sentence with the word blanked out, pick the word.
 // 'scramble' = build the word from shuffled letters.
-type ExerciseKind = 'choose-translation' | 'choose-word' | 'listen' | 'fill-blank' | 'scramble' | 'type';
+// 'order-sentence' = put the shuffled words of the example into order.
+type ExerciseKind =
+  | 'choose-translation'
+  | 'choose-word'
+  | 'listen'
+  | 'fill-blank'
+  | 'scramble'
+  | 'order-sentence'
+  | 'type';
 type Exercise = {
   word: ChildWord;
   kind: ExerciseKind;
   prompt: string; // what we show (or speak, for 'listen')
   answer: string; // the correct answer text
   options?: string[]; // for multiple choice
-  letters?: string[]; // for 'scramble' — the shuffled tiles
+  tiles?: string[]; // shuffled tiles for 'scramble' (letters) / 'order-sentence' (words)
+  joiner?: string; // how tiles join to form the answer ('' for letters, ' ' for words)
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -55,6 +64,12 @@ function isScrambleable(term: string): boolean {
   return /^[\p{L}]{2,12}$/u.test(term.trim());
 }
 
+// Split an example sentence into words (keeping punctuation attached) for the
+// put-in-order exercise. Only good for short, simple sentences.
+function sentenceWords(sentence: string): string[] {
+  return sentence.trim().split(/\s+/).filter(Boolean);
+}
+
 // Which exercise a word gets. Type is picked at RANDOM from a set that widens as the
 // word is learned (recognise → recall → produce), so a session stays varied. If the
 // chosen kind doesn't fit this word (e.g. no example sentence), we fall back.
@@ -91,10 +106,18 @@ function makeExercise(word: ChildWord, all: ChildWord[]): Exercise {
       }
       case 'scramble': {
         if (!isScrambleable(term)) return null;
-        let letters = shuffle(term.split(''));
+        let tiles = shuffle(term.split(''));
         // Make sure it isn't already spelling the answer.
-        if (letters.join('') === term) letters = shuffle(letters);
-        return { word, kind, prompt: translation, answer: term, letters };
+        if (tiles.join('') === term) tiles = shuffle(tiles);
+        return { word, kind, prompt: translation, answer: term, tiles, joiner: '' };
+      }
+      case 'order-sentence': {
+        if (!example) return null;
+        const words = sentenceWords(example);
+        if (words.length < 3 || words.length > 8) return null; // keep it simple
+        let tiles = shuffle(words);
+        if (tiles.join(' ') === words.join(' ')) tiles = shuffle(tiles);
+        return { word, kind, prompt: term, answer: words.join(' '), tiles, joiner: ' ' };
       }
       default:
         return null;
@@ -103,9 +126,9 @@ function makeExercise(word: ChildWord, all: ChildWord[]): Exercise {
 
   const pool: ExerciseKind[] =
     box >= 5
-      ? ['type', 'scramble', 'choose-word', 'fill-blank']
+      ? ['type', 'scramble', 'choose-word', 'fill-blank', 'order-sentence']
       : box >= 3
-        ? ['choose-word', 'listen', 'fill-blank', 'scramble', 'type']
+        ? ['choose-word', 'listen', 'fill-blank', 'scramble', 'order-sentence', 'type']
         : ['choose-translation', 'choose-word', 'listen', 'fill-blank'];
 
   // Try kinds in a random order until one is feasible for this word.
@@ -226,10 +249,18 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
     if (phase !== 'ask') return;
     commit(answerMatches(typed, ex.answer));
   };
-  const builtWord = ex && ex.kind === 'scramble' && ex.letters ? built.map((i) => ex.letters![i]).join('') : '';
+  const isBuilder = ex && (ex.kind === 'scramble' || ex.kind === 'order-sentence');
+  const builtWord = isBuilder && ex.tiles ? built.map((i) => ex.tiles![i]).join(ex.joiner || '') : '';
   const submitScramble = () => {
     if (phase !== 'ask') return;
     commit(normalize(builtWord) === normalize(ex.answer));
+  };
+  // "I don't know" — reveal the answer, count it wrong (no fruit), and move on, so a
+  // child doesn't tap options at random.
+  const dontKnow = () => {
+    if (phase !== 'ask') return;
+    setSelected(null);
+    commit(false);
   };
   const next = () => {
     setSelected(null);
@@ -257,9 +288,17 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
             <>
               <Text style={styles.doneEmoji}>🎉</Text>
               <Text style={styles.doneTitle}>Great job!</Text>
-              <Text style={styles.doneSub}>
-                {correctCount} / {practiced} right{fruits > 0 ? ` · +${fruits} 🍎 for your pet` : ''}
-              </Text>
+              <View style={styles.scoreRow}>
+                <View style={styles.scorePill}>
+                  <Text style={styles.scoreGood}>✓ {correctCount}</Text>
+                  <Text style={styles.scoreLabel}>right</Text>
+                </View>
+                <View style={styles.scorePill}>
+                  <Text style={styles.scoreBad}>✕ {Math.max(0, practiced - correctCount)}</Text>
+                  <Text style={styles.scoreLabel}>wrong</Text>
+                </View>
+              </View>
+              {fruits > 0 ? <Text style={styles.doneSub}>+{fruits} 🍎 for your pet</Text> : null}
             </>
           )}
           <Pressable style={styles.primaryBtn} onPress={onClose}>
@@ -298,7 +337,9 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
                   ? 'Fill the gap'
                   : ex.kind === 'scramble'
                     ? 'Build the word'
-                    : 'Pick the meaning'}
+                    : ex.kind === 'order-sentence'
+                      ? 'Make a sentence'
+                      : 'Pick the meaning'}
         </Text>
         {ex.kind === 'listen' ? (
           <Pressable style={styles.bigSpeak} accessibilityLabel="Play the word" onPress={() => onSpeak(ex.word.term, learnLang)}>
@@ -339,12 +380,12 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
             </Pressable>
           ) : null}
         </View>
-      ) : ex.kind === 'scramble' ? (
+      ) : isBuilder ? (
         <View>
-          {/* The word being built */}
+          {/* The answer being built */}
           <View style={styles.builtRow}>
             {built.length === 0 ? (
-              <Text style={styles.builtPlaceholder}>Tap the letters…</Text>
+              <Text style={styles.builtPlaceholder}>{ex.kind === 'order-sentence' ? 'Tap the words in order…' : 'Tap the letters…'}</Text>
             ) : (
               built.map((li, pos) => (
                 <Pressable
@@ -352,14 +393,14 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
                   style={styles.builtTile}
                   onPress={() => phase === 'ask' && setBuilt((b) => b.filter((_, k) => k !== pos))}
                 >
-                  <Text style={styles.tileText}>{ex.letters![li]}</Text>
+                  <Text style={styles.tileText}>{ex.tiles![li]}</Text>
                 </Pressable>
               ))
             )}
           </View>
-          {/* Available letters */}
+          {/* Available tiles */}
           <View style={styles.tilesRow}>
-            {ex.letters!.map((ch, i) => {
+            {ex.tiles!.map((ch, i) => {
               const used = built.includes(i);
               return (
                 <Pressable
@@ -402,6 +443,13 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
           })}
         </View>
       )}
+
+      {/* "I don't know" — reveal instead of guessing */}
+      {phase === 'ask' ? (
+        <Pressable style={styles.dontKnowBtn} onPress={dontKnow}>
+          <Text style={styles.dontKnowText}>🤔  I don't know</Text>
+        </Pressable>
+      ) : null}
 
       {/* Feedback */}
       {phase === 'feedback' ? (
@@ -513,6 +561,21 @@ const createStyles = (colors: ThemeColors) =>
     primaryBtn: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
     btnDisabled: { opacity: 0.4 },
     primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+    dontKnowBtn: { paddingVertical: 12, alignItems: 'center' },
+    dontKnowText: { color: colors.subtext, fontSize: 15, fontWeight: '700' },
+    scoreRow: { flexDirection: 'row', gap: 14, marginVertical: 6 },
+    scorePill: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 22,
+    },
+    scoreGood: { color: '#16a34a', fontSize: 26, fontWeight: '900' },
+    scoreBad: { color: '#ef4444', fontSize: 26, fontWeight: '900' },
+    scoreLabel: { color: colors.subtext, fontSize: 13, fontWeight: '700', marginTop: 2 },
     doneCard: { alignItems: 'center', gap: 12, paddingVertical: 40 },
     doneEmoji: { fontSize: 54 },
     doneTitle: { color: colors.text, fontSize: 24, fontWeight: '900' },
