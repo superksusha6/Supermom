@@ -211,16 +211,22 @@ function buildSession(eligible: ChildWord[]): ChildWord[] {
   const add = (w: ChildWord) => {
     if (chosen.length < SIZE && !chosen.includes(w)) chosen.push(w);
   };
+  const MIN = 10;
   dueReviews.forEach(add); // all due reviews
   fresh.slice(0, NEW_CAP).forEach(add); // new words, capped
   notDue.forEach(add); // backfill with soonest-due
-  fresh.slice(NEW_CAP).forEach(add); // small deck: allow extra new words
+  // Only add MORE new words past the cap to reach a reasonable minimum session (so a
+  // brand-new all-new deck isn't a single 15-cold-word slog, but also isn't just 6).
+  fresh.slice(NEW_CAP).forEach((w) => {
+    if (chosen.length < MIN) add(w);
+  });
   return shuffle(chosen);
 }
 
 type Props = {
   words: ChildWord[];
   learnLang: string;
+  streak: number;
   // Grade the FIRST attempt of a word for spaced-repetition; returns true if a fruit
   // was awarded (a correct answer, under the daily cap).
   onGrade: (word: ChildWord, correct: boolean) => boolean;
@@ -228,12 +234,18 @@ type Props = {
   onClose: () => void;
 };
 
-export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Props) {
+export function WordPractice({ words, learnLang, streak, onGrade, onSpeak, onClose }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const eligible = useMemo(() => words.filter((w) => (w.translation || '').trim()), [words]);
-  const [queue, setQueue] = useState<Exercise[]>(() => buildSession(eligible).map((w) => makeExercise(w, eligible)));
+  // Fix the session once so shuffles don't change on re-render.
+  const [sessionWords] = useState<ChildWord[]>(() => buildSession(eligible));
+  const [queue, setQueue] = useState<Exercise[]>(() => sessionWords.map((w) => makeExercise(w, eligible)));
+  // New words (box ≤1) get a flashcard preview BEFORE being quizzed — see it once first.
+  const learnWords = useMemo(() => sessionWords.filter((w) => (w.box || 1) <= 1), [sessionWords]);
+  const [stage, setStage] = useState<'learn' | 'quiz'>(learnWords.length ? 'learn' : 'quiz');
+  const [learnIdx, setLearnIdx] = useState(0);
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<'ask' | 'feedback' | 'done'>(eligible.length ? 'ask' : 'done');
   const [selected, setSelected] = useState<string | null>(null);
@@ -253,6 +265,12 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
     if (ex && ex.kind === 'listen' && phase === 'ask') onSpeak(ex.word.term, learnLang);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, phase === 'ask']);
+
+  // Auto-play each flashcard word as it's shown in the learn stage.
+  useEffect(() => {
+    if (stage === 'learn' && learnWords[learnIdx]) onSpeak(learnWords[learnIdx].term, learnLang);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, learnIdx]);
 
   // Reset the letter-builder when the question changes.
   useEffect(() => {
@@ -308,6 +326,40 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
     }
   };
 
+  // LEARN stage — flashcards for the new words before any quiz.
+  if (stage === 'learn' && eligible.length > 0 && learnWords[learnIdx]) {
+    const w = learnWords[learnIdx];
+    const last = learnIdx + 1 >= learnWords.length;
+    const advance = () => (last ? setStage('quiz') : setLearnIdx((i) => i + 1));
+    return (
+      <ScrollView contentContainerStyle={styles.wrap}>
+        <View style={styles.topRow}>
+          <Pressable onPress={onClose} accessibilityLabel="Stop">
+            <Text style={styles.closeText}>✕</Text>
+          </Pressable>
+          <Text style={styles.learnHint}>New word {learnIdx + 1} / {learnWords.length}</Text>
+          <Pressable onPress={() => setStage('quiz')}>
+            <Text style={styles.skipText}>Skip →</Text>
+          </Pressable>
+        </View>
+        <View style={styles.flashCard}>
+          <Text style={styles.flashKind}>Learn this</Text>
+          <View style={styles.promptWordRow}>
+            <Text style={styles.promptWord}>{w.term}</Text>
+            <Pressable style={styles.speakBtn} accessibilityLabel="Listen" onPress={() => onSpeak(w.term, learnLang)}>
+              <Text style={styles.speakBtnText}>🔊</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.flashTranslation}>{w.translation}</Text>
+          {w.example ? <Text style={styles.exampleText}>{w.example}</Text> : null}
+        </View>
+        <Pressable style={styles.primaryBtn} onPress={advance}>
+          <Text style={styles.primaryBtnText}>{last ? 'Start practice ▶' : 'Got it →'}</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
   if (phase === 'done' || !ex) {
     const practiced = gradedRef.current.size;
     return (
@@ -334,6 +386,7 @@ export function WordPractice({ words, learnLang, onGrade, onSpeak, onClose }: Pr
                 </View>
               </View>
               {fruits > 0 ? <Text style={styles.doneSub}>+{fruits} 🍎 for your pet</Text> : null}
+              {streak > 0 ? <Text style={styles.doneStreak}>🔥 {streak} day{streak === 1 ? '' : 's'} in a row</Text> : null}
             </>
           )}
           <Pressable style={styles.primaryBtn} onPress={onClose}>
@@ -611,6 +664,21 @@ const createStyles = (colors: ThemeColors) =>
     scoreGood: { color: '#16a34a', fontSize: 26, fontWeight: '900' },
     scoreBad: { color: '#ef4444', fontSize: 26, fontWeight: '900' },
     scoreLabel: { color: colors.subtext, fontSize: 13, fontWeight: '700', marginTop: 2 },
+    learnHint: { flex: 1, textAlign: 'center', color: colors.subtext, fontSize: 13, fontWeight: '700' },
+    skipText: { color: colors.subtext, fontSize: 14, fontWeight: '700' },
+    flashCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      paddingVertical: 30,
+      paddingHorizontal: 20,
+      alignItems: 'center',
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    flashKind: { color: colors.primary, fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+    flashTranslation: { color: colors.text, fontSize: 22, fontWeight: '800', textAlign: 'center' },
+    doneStreak: { color: '#f97316', fontSize: 16, fontWeight: '800' },
     doneCard: { alignItems: 'center', gap: 12, paddingVertical: 40 },
     doneEmoji: { fontSize: 54 },
     doneTitle: { color: colors.text, fontSize: 24, fontWeight: '900' },

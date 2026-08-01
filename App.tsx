@@ -279,12 +279,12 @@ function habitsLookUserModified(habits: HabitEntry[]): boolean {
 // emoji placeholders until more models are added.
 const GREEN_PET_URI = Asset.fromModule(require('./assets/pets/green.glb')).uri;
 const PET_OPTIONS: { key: string; emoji: string; name: string; model?: string }[] = [
-  { key: 'green', emoji: '🟢', name: 'Пушистик', model: GREEN_PET_URI },
-  { key: 'dragon', emoji: '🐲', name: 'Дракоша' },
-  { key: 'alien', emoji: '👾', name: 'Пиксель' },
-  { key: 'ogre', emoji: '👹', name: 'Рогги' },
-  { key: 'ghost', emoji: '👻', name: 'Бу' },
-  { key: 'octo', emoji: '🐙', name: 'Осьмик' },
+  { key: 'green', emoji: '🟢', name: 'Fluffy', model: GREEN_PET_URI },
+  { key: 'dragon', emoji: '🐲', name: 'Draco' },
+  { key: 'alien', emoji: '👾', name: 'Pixel' },
+  { key: 'ogre', emoji: '👹', name: 'Roggy' },
+  { key: 'ghost', emoji: '👻', name: 'Boo' },
+  { key: 'octo', emoji: '🐙', name: 'Octo' },
 ];
 
 const LOCAL_HABIT_REMINDERS_KEY = 'smartmom.habitRemindersEnabled.v1';
@@ -449,6 +449,16 @@ function getTodayKey() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Normalize a word for duplicate detection: lower-case, trimmed, accents stripped —
+// so "alto", "Alto" and "álto" collapse to the same key.
+function normalizeWordKey(s: string): string {
+  return (s || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
 }
 
 function getYesterdayKey() {
@@ -926,6 +936,32 @@ function AppShell() {
   // Synchronous mirror of the counter so the per-answer cap check + return value are
   // accurate (a setState updater runs too late to read back).
   const childWordFruitsRef = useRef(childWordFruits);
+  // Practice streak — consecutive days the child did at least one session.
+  const [childWordStreak, setChildWordStreak] = useState<number>(() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.childWordStreak.v1');
+      if (!raw) return 0;
+      const { count, lastDay } = JSON.parse(raw) as { count: number; lastDay: string };
+      // A streak only survives if the last practice was today or yesterday.
+      return lastDay === getTodayKey() || lastDay === getYesterdayKey() ? count : 0;
+    } catch {
+      return 0;
+    }
+  });
+  // Mark today practised and extend/reset the streak. Idempotent within a day.
+  const markWordPracticeDay = () => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.childWordStreak.v1');
+      const prev = raw ? (JSON.parse(raw) as { count: number; lastDay: string }) : { count: 0, lastDay: '' };
+      const today = getTodayKey();
+      if (prev.lastDay === today) return; // already counted today
+      const next = prev.lastDay === getYesterdayKey() ? prev.count + 1 : 1;
+      globalThis.localStorage?.setItem('smartmom.childWordStreak.v1', JSON.stringify({ count: next, lastDay: today }));
+      setChildWordStreak(next);
+    } catch {
+      /* ignore */
+    }
+  };
   const [childWordLang, setChildWordLangState] = useState<{ src: string; tgt: string }>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('smartmom.childWordLang.v1');
@@ -2433,6 +2469,29 @@ function AppShell() {
       // Never wipe a non-empty local deck with an empty read (transient RLS/auth miss).
       if (rows.length === 0 && childWordsRef.current.length > 0) return;
       setChildWords(rows);
+    } catch {
+      // keep what we have
+    }
+  }
+
+  // Pull the authoritative deck AND drop duplicates that AI-normalization can create
+  // (pasting both sides of a pair — "alto" and "tall" — both become term "alto").
+  // Keeps the earliest of each (srcLang, tgtLang, normalized-term) and deletes the rest.
+  async function reconcileAndDedupeChildWords(current: AppSession | null = session) {
+    if (!current || current.role !== 'child' || !isSupabaseConfigured) return;
+    try {
+      const rows = await listChildWords(current);
+      const keptKeys = new Set<string>();
+      const dupeIds = new Set<string>();
+      [...rows]
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+        .forEach((w) => {
+          const key = `${w.srcLang}|${w.tgtLang}|${normalizeWordKey(w.term)}`;
+          if (keptKeys.has(key)) dupeIds.add(w.id);
+          else keptKeys.add(key);
+        });
+      setChildWords(rows.filter((w) => !dupeIds.has(w.id)));
+      dupeIds.forEach((id) => deleteChildWord(current, id).catch(() => {}));
     } catch {
       // keep what we have
     }
@@ -6482,9 +6541,9 @@ function AppShell() {
             return next;
           });
           // Release the poll lock FIRST, then reconcile with the server (real uuids +
-          // translations) so nothing is left half-added locally.
+          // translations) and drop any AI-normalized duplicates.
           childWordsBusyRef.current = Math.max(0, childWordsBusyRef.current - 1);
-          refreshChildWords(session);
+          reconcileAndDedupeChildWords(session);
         });
     });
     return newWords.length;
@@ -6955,13 +7014,13 @@ function AppShell() {
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
     // Growth in stages: starts small, jumps up as it eats.
-    const stage = fed < 5 ? { name: 'Малыш', base: 190 } : fed < 15 ? { name: 'Подросток', base: 270 } : { name: 'Взрослый', base: 330 };
+    const stage = fed < 5 ? { name: 'Baby', base: 190 } : fed < 15 ? { name: 'Teen', base: 270 } : { name: 'Grown', base: 330 };
     const stage3d = Math.min(stage.base + fed * 3, 380);
     const emojiSize = Math.min(90 + fed * 5, 200);
     return (
       <View style={styles.dashWrap}>
         <Text style={[styles.petBubble, hungry ? styles.petBubbleHungry : null]}>
-          {hungry ? '😖 Покорми меня!' : fed > 0 ? '😋 Ням!' : '👋 Привет!'}
+          {hungry ? '😖 Feed me!' : fed > 0 ? '😋 Yum!' : '👋 Hi!'}
         </Text>
         <View style={styles.petStage}>
           <Animated.View
@@ -6982,7 +7041,7 @@ function AppShell() {
         </View>
         <Text style={styles.petName}>{pet.name}</Text>
         <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
-          {stage.name} · {months} мес · съел {fed} 🍎
+          {stage.name} · {months === 0 ? 'new!' : `${months} mo`} · ate {fed} 🍎
         </Text>
         <View style={styles.childCard}>
           <Text style={styles.childCardTitle}>🍎 {available} to give today</Text>
@@ -7034,6 +7093,7 @@ function AppShell() {
           <WordPractice
             words={practiceWords}
             learnLang={childWordLang.src}
+            streak={childWordStreak}
             onGrade={gradeChildWord}
             onSpeak={speakWord}
             onClose={() => setPracticeWords(null)}
@@ -7044,6 +7104,7 @@ function AppShell() {
             enrichingIds={childWordEnriching}
             scanning={childWordScanning}
             message={childWordMsg}
+            streak={childWordStreak}
             srcLang={childWordLang.src}
             tgtLang={childWordLang.tgt}
             onLangChange={setChildWordLang}
@@ -7051,7 +7112,10 @@ function AppShell() {
             onAddWords={addChildWordsBulk}
             onScanPhoto={pickWordsPhoto}
             onDeleteWord={deleteChildWordLocal}
-            onPractice={(list) => setPracticeWords(list)}
+            onPractice={(list) => {
+              if (list.some((w) => (w.translation || '').trim())) markWordPracticeDay();
+              setPracticeWords(list);
+            }}
           />
         )}
       </View>

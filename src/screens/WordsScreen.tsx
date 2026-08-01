@@ -31,6 +31,7 @@ type Props = {
   enrichingIds: Set<string>;
   scanning: boolean;
   message: string | null;
+  streak: number;
   srcLang: string;
   tgtLang: string;
   onLangChange: (src: string, tgt: string) => void;
@@ -88,6 +89,7 @@ export function WordsScreen({
   enrichingIds,
   scanning,
   message,
+  streak,
   srcLang,
   tgtLang,
   onLangChange,
@@ -107,6 +109,10 @@ export function WordsScreen({
 
   // Only this language pair's words (a child could have decks in several languages).
   const deck = words.filter((w) => w.srcLang === srcLang && w.tgtLang === tgtLang);
+  // "Mastered" = reached the top Leitner boxes — makes the invisible SRS visible.
+  const mastered = deck.filter((w) => (w.box || 1) >= 5).length;
+  const translatedCount = deck.filter((w) => (w.translation || '').trim()).length;
+  const masteredPct = deck.length ? Math.round((mastered / deck.length) * 100) : 0;
 
   const list = splitWordList(term);
   const isMany = list.length > 1;
@@ -144,6 +150,21 @@ export function WordsScreen({
           <Text style={styles.langValue}>{langLabel(tgtLang)} ▾</Text>
         </Pressable>
       </View>
+
+      {/* Progress — streak + mastered, so daily effort and the SRS are visible */}
+      {deck.length > 0 ? (
+        <View style={styles.statsCard}>
+          <View style={styles.statsTop}>
+            <Text style={styles.statStreak}>🔥 {streak} day{streak === 1 ? '' : 's'}</Text>
+            <Text style={styles.statMastered}>
+              ✅ {mastered} / {deck.length} mastered
+            </Text>
+          </View>
+          <View style={styles.statsBar}>
+            <View style={[styles.statsBarFill, { width: `${masteredPct}%` }]} />
+          </View>
+        </View>
+      ) : null}
 
       {/* Add words — one, or paste a whole list from your notes; or snap the notebook. */}
       <SectionCard title="Add words">
@@ -219,9 +240,18 @@ export function WordsScreen({
               <Pressable style={styles.backRow} onPress={() => setOpenDay(null)}>
                 <Text style={styles.backRowText}>‹ All days</Text>
               </Pressable>
-              <Pressable style={styles.practiceBtn} onPress={() => onPractice(active.words)}>
-                <Text style={styles.practiceBtnText}>▶  Practise these words</Text>
-              </Pressable>
+              {(() => {
+                const dayReady = active.words.some((w) => (w.translation || '').trim());
+                return (
+                  <Pressable
+                    style={[styles.practiceBtn, !dayReady && styles.practiceBtnDisabled]}
+                    onPress={() => dayReady && onPractice(active.words)}
+                    disabled={!dayReady}
+                  >
+                    <Text style={styles.practiceBtnText}>{dayReady ? '▶  Practise these words' : 'Getting your words ready…'}</Text>
+                  </Pressable>
+                );
+              })()}
               {active.words.map((w) => {
                 const busy = enrichingIds.has(w.id);
                 return (
@@ -243,10 +273,17 @@ export function WordsScreen({
         }
 
         // Folder list — one tappable row per day.
+        const deckReady = translatedCount > 0;
         return (
           <SectionCard title="My words">
-            <Pressable style={styles.practiceBtn} onPress={() => onPractice(deck)}>
-              <Text style={styles.practiceBtnText}>▶  Practise all {deck.length} words</Text>
+            <Pressable
+              style={[styles.practiceBtn, !deckReady && styles.practiceBtnDisabled]}
+              onPress={() => deckReady && onPractice(deck)}
+              disabled={!deckReady}
+            >
+              <Text style={styles.practiceBtnText}>
+                {deckReady ? `▶  Practise ${translatedCount} words` : 'Getting your words ready…'}
+              </Text>
             </Pressable>
             {groups.map((g) => (
               <Pressable key={g.key} style={styles.dayRow} onPress={() => setOpenDay(g.key)}>
@@ -354,7 +391,22 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       marginBottom: 12,
     },
+    practiceBtnDisabled: { backgroundColor: colors.subtext, opacity: 0.6 },
     practiceBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    statsCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      gap: 10,
+    },
+    statsTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statStreak: { color: '#f97316', fontSize: 15, fontWeight: '900' },
+    statMastered: { color: colors.text, fontSize: 14, fontWeight: '800' },
+    statsBar: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+    statsBarFill: { height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
     wordRow: {
       flexDirection: 'row',
       alignItems: 'center',
