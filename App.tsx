@@ -1205,6 +1205,9 @@ function AppShell() {
   // otherwise a device that shows the local starter defaults (e.g. a fresh phone
   // reading an empty/transient list) resurrects them for every device.
   const habitsDirtyRef = useRef(false);
+  // True while a habit save is in flight — the live poll must not overwrite local state
+  // (and revert a just-ticked box) before the write commits.
+  const habitsSaveInFlightRef = useRef(false);
   // Every USER-initiated habit change goes through this so the save effect knows
   // this is real data to persist (vs. a hydrate/poll that must not be re-saved).
   const setHabitsByUser: typeof setHabits = (updater) => {
@@ -2574,8 +2577,10 @@ function AppShell() {
     // Habits weren't in the live poll, so a tick/edit on one device never reached
     // the other without a full reload. Pull the server copy so changes propagate.
     if (!current || !habitsLoadedRef.current) return;
-    // Don't clobber an edit this device just made and hasn't finished saving.
-    if (habitsDirtyRef.current) return;
+    // Don't clobber an edit this device just made and hasn't finished saving (dirty),
+    // nor one whose write is still in flight (in which case the server still has the
+    // pre-edit value and would revert the tick + reset the streak).
+    if (habitsDirtyRef.current || habitsSaveInFlightRef.current) return;
     try {
       const rows = await listHabitEntries(current);
       // Server empty = nothing saved yet (or a transient RLS/auth miss). Keep the
@@ -3388,19 +3393,28 @@ function AppShell() {
   ]);
 
   useEffect(() => {
-    if (!session || !isSupabaseConfigured || !preferencesLoadedRef.current || !habitsLoadedRef.current) return;
+    // Habits persistence must NOT depend on preferences loading — a child (or anyone)
+    // whose preferences read is slow/failed would otherwise never save a tick, so their
+    // streak would reset every day.
+    if (!session || !isSupabaseConfigured || !habitsLoadedRef.current) return;
     // Only persist USER edits. Hydrate and live polls also set `habits`, but re-saving
     // those (especially the local starter defaults shown when the server is empty) is
     // what resurrected deleted habits across devices.
     if (!habitsDirtyRef.current) return;
     // Safety: never wipe the server copy with an empty set. An empty `habits` here is
     // almost always a transient/reset state, not a deliberate "delete every habit".
-    // Keeping the server copy until there's real data to save prevents accidental loss.
     if (habits.length === 0) return;
+    if (habitsSaveInFlightRef.current) return; // a save is running; a later edit re-triggers this
+    habitsSaveInFlightRef.current = true;
     habitsDirtyRef.current = false;
-    replaceHabitEntries(session, habits).catch((error) =>
-      setTasksError(error instanceof Error ? error.message : 'Could not save habits.'),
-    );
+    replaceHabitEntries(session, habits)
+      .catch((error) => {
+        habitsDirtyRef.current = true; // failed — keep it dirty so the next change retries
+        setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
+      })
+      .finally(() => {
+        habitsSaveInFlightRef.current = false;
+      });
   }, [session, habits]);
 
   useEffect(() => {
