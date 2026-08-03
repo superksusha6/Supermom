@@ -141,6 +141,7 @@ import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon, IconName } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
 import { WeekStrip } from '@/components/WeekStrip';
+import { WheelTimePicker } from '@/components/WheelTimePicker';
 import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -1107,9 +1108,7 @@ function AppShell() {
   const [dayNewTime, setDayNewTime] = useState('4:00 PM');
   const [dayNewEnd, setDayNewEnd] = useState('');
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
-  // Compact day-sheet add: which time box's picker is open, whether an end is used,
-  // repeat weekdays, and (for a child) whether it's also shared to the parent.
-  const [dayTimeField, setDayTimeField] = useState<null | 'start' | 'end'>(null);
+  // Day-sheet add: repeat weekdays, and (for a child) whether it's also shared to parent.
   const [dayNewRepeat, setDayNewRepeat] = useState<number[]>([]);
   const [dayNewChildShare, setDayNewChildShare] = useState(true);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
@@ -4170,7 +4169,6 @@ function AppShell() {
     setDayNewTitle('');
     setDayNewTime('4:00 PM');
     setDayNewEnd('');
-    setDayTimeField(null);
     setDayNewRepeat([]);
     setDayNewChildShare(true);
     // A child adds to their own calendar by default.
@@ -8376,67 +8374,27 @@ function AppShell() {
                 value={dayNewTitle}
                 onChangeText={setDayNewTitle}
               />
-              {/* Compact time: a tidy box you tap to pick, end optional */}
-              <View style={styles.dayTimeRow}>
-                <Pressable
-                  style={styles.dayTimeBox}
-                  onPress={() => setDayTimeField((f) => (f === 'start' ? null : 'start'))}
-                >
-                  <Text style={styles.dayTimeBoxLabel}>Time</Text>
-                  <Text style={styles.dayTimeBoxValue}>{dayNewTime.replace(':00', '')} ▾</Text>
-                </Pressable>
+              {/* Time — iOS-style drum wheels (start), end optional */}
+              <View style={styles.dayWheelHead}>
+                <Text style={styles.daySheetFieldLabel}>Starts</Text>
                 {dayNewEnd ? (
-                  <Pressable
-                    style={styles.dayTimeBox}
-                    onPress={() => setDayTimeField((f) => (f === 'end' ? null : 'end'))}
-                  >
-                    <Text style={styles.dayTimeBoxLabel}>Ends</Text>
-                    <Text style={styles.dayTimeBoxValue}>{dayNewEnd.replace(':00', '')} ▾</Text>
+                  <Pressable onPress={() => setDayNewEnd('')}>
+                    <Text style={styles.dayEndAddText}>✕ no end</Text>
                   </Pressable>
                 ) : (
                   <Pressable
-                    style={styles.dayEndAdd}
-                    onPress={() => {
-                      const si = DAY_TIME_OPTIONS.indexOf(dayNewTime);
-                      setDayNewEnd(DAY_TIME_OPTIONS[Math.min(si + 1, DAY_TIME_OPTIONS.length - 1)]);
-                      setDayTimeField('end');
-                    }}
+                    onPress={() => setDayNewEnd(stepTimeStr(dayNewTime, 60))}
                   >
-                    <Text style={styles.dayEndAddText}>＋ end</Text>
+                    <Text style={styles.dayEndAddText}>＋ add end</Text>
                   </Pressable>
                 )}
-                {dayNewEnd ? (
-                  <Pressable style={styles.dayEndAdd} onPress={() => { setDayNewEnd(''); setDayTimeField(null); }}>
-                    <Text style={styles.dayEndAddText}>✕</Text>
-                  </Pressable>
-                ) : null}
               </View>
-              {dayTimeField ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
-                  {(dayTimeField === 'end'
-                    ? DAY_TIME_OPTIONS.slice(Math.max(0, DAY_TIME_OPTIONS.indexOf(dayNewTime) + 1))
-                    : DAY_TIME_OPTIONS
-                  ).map((t) => {
-                    const active = dayTimeField === 'end' ? dayNewEnd === t : dayNewTime === t;
-                    return (
-                      <Pressable
-                        key={`${dayTimeField}-${t}`}
-                        style={[styles.daySheetChip, active && styles.daySheetChipActive]}
-                        onPress={() => {
-                          if (dayTimeField === 'end') setDayNewEnd(t);
-                          else {
-                            setDayNewTime(t);
-                            const ei = DAY_TIME_OPTIONS.indexOf(dayNewEnd);
-                            if (ei >= 0 && ei <= DAY_TIME_OPTIONS.indexOf(t)) setDayNewEnd('');
-                          }
-                          setDayTimeField(null);
-                        }}
-                      >
-                        <Text style={[styles.daySheetChipText, active && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+              <WheelTimePicker value={dayNewTime} onChange={setDayNewTime} />
+              {dayNewEnd ? (
+                <>
+                  <Text style={[styles.daySheetFieldLabel, { marginTop: 12 }]}>Ends</Text>
+                  <WheelTimePicker value={dayNewEnd} onChange={setDayNewEnd} />
+                </>
               ) : null}
               {/* Repeat — daily routine */}
               <View style={styles.dayRepeatRow}>
@@ -11599,6 +11557,22 @@ function createDefaultStaffDraftTask(): StaffDraftTask {
   };
 }
 
+// Add minutes to a "H:MM AM/PM" string (used to default an end time to start + 1h).
+function stepTimeStr(value: string, deltaMin: number): string {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec((value || '').trim());
+  const h12 = m ? parseInt(m[1], 10) % 12 : 0;
+  const min = m ? parseInt(m[2], 10) : 0;
+  const ap = (m ? m[3] : 'PM').toUpperCase();
+  const h24 = ap === 'PM' ? h12 + 12 : h12;
+  const total = (((h24 * 60 + min + deltaMin) % 1440) + 1440) % 1440;
+  const H = Math.floor(total / 60);
+  const M = total % 60;
+  const p = H >= 12 ? 'PM' : 'AM';
+  let hh = H % 12;
+  if (hh === 0) hh = 12;
+  return `${hh}:${String(M).padStart(2, '0')} ${p}`;
+}
+
 function toDateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -14580,6 +14554,13 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     alignItems: 'center',
     gap: 8,
     marginTop: 8,
+  },
+  dayWheelHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 4,
   },
   dayTimeBox: {
     backgroundColor: colors.surfaceAlt,

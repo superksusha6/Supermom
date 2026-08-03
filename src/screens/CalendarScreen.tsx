@@ -3,6 +3,7 @@ import { Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, 
 import { TextInput } from 'react-native';
 import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, Role, TaskItem } from '@/types/app';
 import { SectionCard } from '@/components/SectionCard';
+import { WheelTimePicker } from '@/components/WheelTimePicker';
 import { cleanNutritionNumber, getNutritionPlan, getNutritionTotals, getNutritionValuesForGrams, NUTRITION_FOOD_PRESETS, NutritionFoodPreset } from '@/lib/nutrition';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -2257,25 +2258,24 @@ export function CalendarScreen({
               )}
               {creatorMode === 'staff_assigned_task' || creatorMode === 'staff_self_task' ? null : (
                 <>
-                  <View style={styles.timeRangeRow}>
-                    {renderTimeField('create_start', newHasEnd ? 'Start' : 'Time', false)}
-                    {newHasEnd ? (
-                      <>
-                        <Text style={styles.timeRangeArrow}>→</Text>
-                        {renderTimeField('create_end', 'End', true)}
-                        {formatDurationLabel(newTime, newEndTime) ? (
-                          <View style={styles.timeRangeDuration}>
-                            <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
-                          </View>
-                        ) : null}
-                      </>
-                    ) : null}
+                  <View style={styles.wheelHead}>
+                    <Text style={styles.label}>{newHasEnd ? 'Starts' : 'Time'}</Text>
+                    <Pressable onPress={() => setNewHasEnd((v) => !v)}>
+                      <Text style={styles.endToggleText}>{newHasEnd ? '✕ no end' : '＋ add end'}</Text>
+                    </Pressable>
                   </View>
-                  <Pressable style={styles.endToggle} onPress={() => setNewHasEnd((v) => !v)}>
-                    <Text style={styles.endToggleText}>{newHasEnd ? '✕ No end time' : '＋ Add end time'}</Text>
-                  </Pressable>
-                  {renderStartDropdown('create_start')}
-                  {newHasEnd ? renderEndDropdown('create_end') : null}
+                  <WheelTimePicker value={newTime} onChange={setNewTime} />
+                  {newHasEnd ? (
+                    <>
+                      <View style={styles.wheelHead}>
+                        <Text style={styles.label}>Ends</Text>
+                        {formatDurationLabel(newTime, newEndTime) ? (
+                          <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
+                        ) : null}
+                      </View>
+                      <WheelTimePicker value={newEndTime} onChange={setNewEndTime} />
+                    </>
+                  ) : null}
                   {/* Repeat — a daily/weekly routine (режим дня) */}
                   <Text style={styles.label}>Repeat</Text>
                   <View style={styles.repeatRow}>
@@ -2505,18 +2505,17 @@ export function CalendarScreen({
                   multiline
                 />
               </View>
-              <View style={styles.timeRangeRow}>
-                {renderTimeField('edit_start', 'Start', false)}
-                <Text style={styles.timeRangeArrow}>→</Text>
-                {renderTimeField('edit_end', 'End', true)}
+              <View style={styles.wheelHead}>
+                <Text style={styles.label}>Starts</Text>
+              </View>
+              <WheelTimePicker value={editTime} onChange={setEditTime} />
+              <View style={styles.wheelHead}>
+                <Text style={styles.label}>Ends</Text>
                 {formatDurationLabel(editTime, editEndTime) ? (
-                  <View style={styles.timeRangeDuration}>
-                    <Text style={styles.timeRangeDurationText}>{formatDurationLabel(editTime, editEndTime)}</Text>
-                  </View>
+                  <Text style={styles.timeRangeDurationText}>{formatDurationLabel(editTime, editEndTime)}</Text>
                 ) : null}
               </View>
-              {renderStartDropdown('edit_start')}
-              {renderEndDropdown('edit_end')}
+              <WheelTimePicker value={editEndTime} onChange={setEditEndTime} />
               <View style={styles.row}>
                 <Chip
                   active={editAssignee === 'mother'}
@@ -6334,6 +6333,13 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.subtext,
     fontSize: 18,
     fontWeight: '700',
+  },
+  wheelHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 2,
   },
   endToggle: {
     alignSelf: 'flex-start',
