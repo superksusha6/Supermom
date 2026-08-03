@@ -342,9 +342,23 @@ export function CalendarScreen({
   }, [currentRole, children, colors.primary]);
 
   const selectedEvents = useMemo(() => {
-    const eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
-    return eventsByDay.sort((a, b) => a.time.localeCompare(b.time));
-  }, [filtered, selectedDateKey]);
+    let eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
+    // A child's own "Me + Mom" event returns twice (their row + the parent mirror,
+    // which also satisfies their RLS). Collapse to one, preferring the child-owned copy.
+    if (currentRole === 'child') {
+      const norm = (e: CalendarEvent) =>
+        (e.category === 'Child Plan' ? e.title.replace(/^[^:]+:\s*/, '') : e.title).trim().toLowerCase();
+      const seen = new Map<string, CalendarEvent>();
+      for (const e of eventsByDay) {
+        const key = `${convertTimeToMinutes(e.time)}|${norm(e)}`;
+        const prev = seen.get(key);
+        if (!prev || (e.owner === 'child' && prev.owner !== 'child')) seen.set(key, e);
+      }
+      eventsByDay = [...seen.values()];
+    }
+    // Chronological order (string compare mis-orders "10:00 AM" vs "9:00 AM").
+    return eventsByDay.sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
+  }, [filtered, selectedDateKey, currentRole]);
   const selectedTimelineEvents = useMemo(() => buildTimelineEvents(selectedEvents), [selectedEvents]);
   const nutritionPlan = useMemo(
     () =>

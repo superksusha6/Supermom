@@ -4077,7 +4077,13 @@ function AppShell() {
         visibility,
       };
       const optimisticMirrorEvent = mirrorEvent ? { ...mirrorEvent, id: `tmp-mirror-${Date.now()}` } : null;
-      setEvents((prev) => [optimisticEvent, ...(optimisticMirrorEvent ? [optimisticMirrorEvent] : []), ...prev]);
+      // A child creating a "Mom" event can't read it back (RLS), so don't add a local
+      // copy that would just flash then vanish — it correctly lands on Mom's calendar
+      // (the day sheet closing on "Add event" is the confirmation).
+      const childMomEvent = session.role === 'child' && owner === 'mother';
+      if (!childMomEvent) {
+        setEvents((prev) => [optimisticEvent, ...(optimisticMirrorEvent ? [optimisticMirrorEvent] : []), ...prev]);
+      }
       Promise.all([
         createCalendarEvent(session, {
           title,
@@ -4180,7 +4186,18 @@ function AppShell() {
     setDayEditId(null);
   }
   const daySheetEvents = useMemo(() => {
-    if (!daySheetDate) return [] as { id: string; title: string; time: string; who: string; color: string; owner: Role; ownerName: string; rawTime: string }[];
+    if (!daySheetDate)
+      return [] as {
+        id: string;
+        title: string;
+        time: string;
+        who: string;
+        color: string;
+        owner: Role;
+        ownerName: string;
+        rawTime: string;
+        ownerChildProfileId?: string;
+      }[];
     const seen = new Set<string>();
     return events
       .filter((e) => e.date === daySheetDate)
@@ -4200,6 +4217,7 @@ function AppShell() {
         color: e.color || colors.primary,
         owner: e.owner,
         ownerName: e.ownerName || 'Family',
+        ownerChildProfileId: e.ownerChildProfileId,
       }));
   }, [events, daySheetDate, colors.primary]);
 
@@ -6444,7 +6462,8 @@ function AppShell() {
   const childTodayEvents = isChildView
     ? events
         .filter((e) => e.date === todayDateKey && (!e.ownerChildProfileId || e.ownerChildProfileId === childProfileId))
-        .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+        // Chronological, not string order ("9:00 AM" must precede "10:00 AM").
+        .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
     : [];
   const childChores = isChildView ? chores.filter((c) => !c.childId || c.childId === childProfileId) : [];
   const childActiveHabits = habits.filter((h) => h.enabled);
@@ -8360,12 +8379,20 @@ function AppShell() {
                           </View>
                         </View>
                       ) : (
-                        <Pressable key={ev.id} style={styles.daySheetEvent} onPress={() => openDayEventEdit(ev)}>
+                        // A child may only edit/delete their OWN events; others are read-only
+                        // (tapping Mom's event to "delete" it would just error + reappear).
+                        (() => {
+                          const canEdit = !isChildView || (ev.owner === 'child' && ev.ownerChildProfileId === childProfileId);
+                          const RowTag: any = canEdit ? Pressable : View;
+                          return (
+                        <RowTag key={ev.id} style={styles.daySheetEvent} {...(canEdit ? { onPress: () => openDayEventEdit(ev) } : {})}>
                           <Text style={styles.daySheetEventTime}>{ev.time}</Text>
                           <View style={[styles.daySheetEventDot, { backgroundColor: ev.color }]} />
                           <Text style={styles.daySheetEventTitle} numberOfLines={1}>{ev.title}</Text>
-                          <Icon name="chevron" color={colors.subtext} size={15} />
-                        </Pressable>
+                          {canEdit ? <Icon name="chevron" color={colors.subtext} size={15} /> : null}
+                        </RowTag>
+                          );
+                        })()
                       ),
                     )}
                   </View>
@@ -8473,11 +8500,17 @@ function AppShell() {
                     const child = dayNewWho !== 'mother' ? children.find((c) => c.id === dayNewWho) : null;
                     const idx = child ? children.findIndex((c) => c.id === child.id) : -1;
                     const color = child ? childColorPalette[idx % childColorPalette.length] || '#64748b' : colors.primary;
+                    // Guard an inverted range: if the end isn't after the start, snap it to +1h.
+                    const effEnd = dayNewEnd
+                      ? dashTimeToMinutes(dayNewEnd) > dashTimeToMinutes(dayNewTime)
+                        ? dayNewEnd
+                        : stepTimeStr(dayNewTime, 60)
+                      : undefined;
                     addCalendarEvent({
                       title: dayNewTitle.trim(),
                       date: daySheetDate,
                       time: dayNewTime,
-                      endTime: dayNewEnd || undefined,
+                      endTime: effEnd,
                       owner: child ? 'child' : 'mother',
                       ownerName: child ? child.name : parentLabel,
                       ownerChildProfileId: child ? child.id : undefined,

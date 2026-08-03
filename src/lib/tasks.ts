@@ -1195,6 +1195,7 @@ export async function updateCalendarEvent(
     owner: payload.owner,
     ownerName: payload.ownerName,
     endTime: payload.endTime,
+    seriesId: payload.seriesId, // keep an occurrence attached to its repeating series
   });
 
   const { error } = await client
@@ -1203,7 +1204,9 @@ export async function updateCalendarEvent(
       title: payload.title,
       notes,
       starts_at: startsAt,
-      owner_user_id: payload.owner === 'mother' ? session.userId : null,
+      // Same guard as buildEventRow: a child editing a shared event must not stamp
+      // their own uid as the (mom) owner.
+      owner_user_id: payload.owner === 'mother' && session.role !== 'child' ? session.userId : null,
       owner_child_profile_id: payload.ownerChildProfileId || null,
     })
     .eq('id', payload.id)
