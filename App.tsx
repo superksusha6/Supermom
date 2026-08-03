@@ -467,6 +467,13 @@ function getYesterdayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Two days ago — used for a "forgiving" streak: one missed day doesn't reset it.
+function getTwoDaysAgoKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 2);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function loadLocalDailyCardState(todayKey: string = getTodayKey()): DailyCardLocalState {
   const fallback: DailyCardLocalState = {
     dateKey: todayKey,
@@ -7982,11 +7989,10 @@ function AppShell() {
               // resets the streak. Tapping a habit not yet done TODAY always completes it.
               const doneToday = h.completedDate === getTodayKey();
               const completing = !doneToday;
-              const nextStreak = completing
-                ? h.completedDate === getYesterdayKey()
-                  ? h.streak + 1
-                  : 1
-                : Math.max(0, h.streak - 1);
+              // Forgiving streak: continue if the last tick was yesterday OR two days
+              // ago (one missed day is allowed); a bigger gap restarts at 1.
+              const continues = h.completedDate === getYesterdayKey() || h.completedDate === getTwoDaysAgoKey();
+              const nextStreak = completing ? (continues ? h.streak + 1 : 1) : Math.max(0, h.streak - 1);
               const nextDate = completing ? getTodayKey() : nextStreak > 0 ? getYesterdayKey() : undefined;
               return { ...h, completedToday: completing, completedDate: nextDate, streak: nextStreak };
             })()

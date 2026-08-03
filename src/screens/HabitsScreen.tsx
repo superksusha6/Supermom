@@ -5,13 +5,15 @@ import { SectionCard } from '@/components/SectionCard';
 import { HabitChallenge, HabitEntry, HabitReminderMode } from '@/types/app';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
-// Reward medals: a week of streak earns a gold medal; every 4 of them (a month)
-// are exchanged for a trophy. Derived from the current streak so it reflects momentum.
+// Reward medals: every MEDAL_PERIOD days of streak earns a gold medal (kept short so a
+// kid feels progress fast); every 4 medals are exchanged for a trophy. Derived from the
+// current streak so it reflects momentum.
+const MEDAL_PERIOD = 3;
 function habitMedalTally(streak: number) {
-  const weeks = Math.floor(streak / 7);
+  const weeks = Math.floor(streak / MEDAL_PERIOD);
   const trophies = Math.floor(weeks / 4);
   const medals = weeks % 4;
-  const daysToNext = streak % 7 === 0 ? 7 : 7 - (streak % 7);
+  const daysToNext = streak % MEDAL_PERIOD === 0 ? MEDAL_PERIOD : MEDAL_PERIOD - (streak % MEDAL_PERIOD);
   return { weeks, trophies, medals, daysToNext };
 }
 
@@ -237,11 +239,10 @@ export function HabitsScreen({ habits, onHabitsChange, onDeleteHabit, challenges
                       // TODAY always completes it and continues the streak.
                       const doneToday = item.completedDate === habitTodayKey();
                       const completing = !doneToday;
-                      const nextStreak = completing
-                        ? item.completedDate === habitDayKey(-1)
-                          ? item.streak + 1
-                          : 1
-                        : Math.max(0, item.streak - 1);
+                      // Forgiving streak: continue if the last tick was yesterday OR two
+                      // days ago (one missed day allowed); a bigger gap restarts at 1.
+                      const continues = item.completedDate === habitDayKey(-1) || item.completedDate === habitDayKey(-2);
+                      const nextStreak = completing ? (continues ? item.streak + 1 : 1) : Math.max(0, item.streak - 1);
                       const nextDate = completing ? habitTodayKey() : nextStreak > 0 ? habitDayKey(-1) : undefined;
                       return { ...item, completedToday: completing, completedDate: nextDate, streak: nextStreak };
                     }),
