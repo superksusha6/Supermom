@@ -143,6 +143,7 @@ import { Icon, IconName } from '@/components/Icon';
 import { FamCard } from '@/components/FamCard';
 import { WeekStrip } from '@/components/WeekStrip';
 import { WheelTimePicker } from '@/components/WheelTimePicker';
+import { PetScene } from '@/components/PetScene';
 import { statusColor } from '@/theme/tokens';
 import { RecipesScreen } from '@/screens/RecipesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -7178,19 +7179,21 @@ function AppShell() {
     const toNext = grown ? 0 : Math.max(0, stageEnd - fed);
     return (
       <View style={styles.dashWrap}>
-        {/* Habitat scene */}
+        {/* Habitat scene — SVG backdrop (sky + clouds) with a podium the pet stands on */}
         <View style={styles.petScene}>
-          <View style={styles.petGlow} />
-          <View style={[styles.petBubble2, hungry && styles.petBubble2Hungry]}>
-            <Text style={[styles.petBubble2Text, hungry && styles.petBubble2TextHungry]}>
-              {hungry ? '😖 Feed me!' : fed > 0 ? '😋 Yum!' : '👋 Hi!'}
-            </Text>
+          <PetScene hungry={hungry} />
+          <View style={styles.petBubbleWrap}>
+            <View style={[styles.petBubble2, hungry && styles.petBubble2Hungry]}>
+              <Text style={[styles.petBubble2Text, hungry && styles.petBubble2TextHungry]}>
+                {hungry ? '😖 Feed me!' : fed > 0 ? '😋 Yum!' : '👋 Hi!'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.petStage}>
+          <View style={styles.petStandWrap} pointerEvents="none">
             <Animated.View
               style={{
                 transform: [
-                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [8, -8] }) },
+                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [4, -10] }) },
                   { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.03] })) },
                   { rotate: hungry ? '-4deg' : '0deg' },
                 ],
@@ -7202,13 +7205,6 @@ function AppShell() {
                 <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
               )}
             </Animated.View>
-            {/* soft ground shadow so the pet reads as hopping, not floating */}
-            <Animated.View
-              style={[
-                styles.petShadow,
-                { transform: [{ scaleX: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.82] }) }] },
-              ]}
-            />
           </View>
         </View>
 
@@ -15541,38 +15537,30 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '700',
   },
   petScene: {
+    height: 330,
     borderRadius: 26,
-    minHeight: 320,
-    backgroundColor: colors.surfaceAlt,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 22,
-    paddingTop: 16,
     marginBottom: 14,
+    position: 'relative',
   },
-  petGlow: {
+  petBubbleWrap: {
     position: 'absolute',
-    top: -70,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: colors.selection,
-    opacity: 0.55,
+    top: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 3,
   },
-  petStage: {
+  petStandWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 34,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    minHeight: 230,
-  },
-  petShadow: {
-    width: 130,
-    height: 22,
-    borderRadius: 65,
-    backgroundColor: 'rgba(15,23,42,0.16)',
-    marginTop: 2,
+    zIndex: 2,
   },
   petName: {
     color: colors.text,
