@@ -7166,49 +7166,89 @@ function AppShell() {
       const now = new Date();
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
-    // Growth in stages: starts small, jumps up as it eats.
-    const stage = fed < 5 ? { name: 'Baby', base: 190 } : fed < 15 ? { name: 'Teen', base: 270 } : { name: 'Grown', base: 330 };
-    const stage3d = Math.min(stage.base + fed * 3, 380);
-    const emojiSize = Math.min(90 + fed * 5, 200);
+    // Growth in stages: starts small, jumps up as it eats. Sized to fit the scene.
+    const stage = fed < 5 ? { name: 'Baby', base: 150 } : fed < 15 ? { name: 'Teen', base: 185 } : { name: 'Grown', base: 210 };
+    const stage3d = Math.min(stage.base + fed * 2, 220);
+    const emojiSize = Math.min(80 + fed * 4, 150);
+    // Progress toward the next growth stage.
+    const grown = stage.name === 'Grown';
+    const nextName = stage.name === 'Baby' ? 'Teen' : 'Grown';
+    const [stageStart, stageEnd] = stage.name === 'Baby' ? [0, 5] : [5, 15];
+    const growPct = grown ? 100 : Math.max(4, Math.round(((fed - stageStart) / (stageEnd - stageStart)) * 100));
+    const toNext = grown ? 0 : Math.max(0, stageEnd - fed);
     return (
       <View style={styles.dashWrap}>
-        <Text style={[styles.petBubble, hungry ? styles.petBubbleHungry : null]}>
-          {hungry ? '😖 Feed me!' : fed > 0 ? '😋 Yum!' : '👋 Hi!'}
-        </Text>
-        <View style={styles.petStage}>
-          <Animated.View
-            style={{
-              transform: [
-                { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [8, -8] }) },
-                { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.03] })) },
-                { rotate: hungry ? '-4deg' : '0deg' },
-              ],
-            }}
-          >
-            {pet.model ? (
-              <Pet3D uri={pet.model} size={stage3d} />
-            ) : (
-              <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
-            )}
-          </Animated.View>
+        {/* Habitat scene */}
+        <View style={styles.petScene}>
+          <View style={styles.petGlow} />
+          <View style={[styles.petBubble2, hungry && styles.petBubble2Hungry]}>
+            <Text style={[styles.petBubble2Text, hungry && styles.petBubble2TextHungry]}>
+              {hungry ? '😖 Feed me!' : fed > 0 ? '😋 Yum!' : '👋 Hi!'}
+            </Text>
+          </View>
+          <View style={styles.petStage}>
+            <Animated.View
+              style={{
+                transform: [
+                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [8, -8] }) },
+                  { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.03] })) },
+                  { rotate: hungry ? '-4deg' : '0deg' },
+                ],
+              }}
+            >
+              {pet.model ? (
+                <Pet3D uri={pet.model} size={stage3d} />
+              ) : (
+                <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
+              )}
+            </Animated.View>
+            {/* soft ground shadow so the pet reads as hopping, not floating */}
+            <Animated.View
+              style={[
+                styles.petShadow,
+                { transform: [{ scaleX: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.82] }) }] },
+              ]}
+            />
+          </View>
         </View>
+
+        {/* Name + stat pills */}
         <Text style={styles.petName}>{pet.name}</Text>
-        <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
-          {stage.name} · {months === 0 ? 'new!' : `${months} mo`} · ate {fed} 🍎
-        </Text>
-        <View style={styles.childCard}>
-          <Text style={styles.childCardTitle}>🍎 {available} to give today</Text>
-          <Pressable
-            style={[styles.authBtn, available <= 0 && styles.authBtnDisabled]}
-            disabled={available <= 0}
-            onPress={feedPet}
-          >
-            <Text style={styles.authBtnText}>Feed 🍎</Text>
-          </Pressable>
-          {available <= 0 ? <Text style={styles.childEmptyText}>Tick off your chores & plan to earn fruit!</Text> : null}
+        <View style={styles.petPills}>
+          <View style={styles.petPill}><Text style={styles.petPillText}>{stage.name}</Text></View>
+          <View style={styles.petPill}><Text style={styles.petPillText}>{months === 0 ? 'new' : `${months} mo`}</Text></View>
+          <View style={styles.petPill}><Text style={styles.petPillText}>ate {fed} 🍎</Text></View>
         </View>
-        <Pressable style={[styles.authBtn, styles.authSecondary]} onPress={() => setPetPickerOpen(true)}>
-          <Text style={[styles.authBtnText, styles.authSecondaryText]}>Change pet</Text>
+
+        {/* Growth progress */}
+        {grown ? (
+          <Text style={styles.petGrownText}>Fully grown! 🎉</Text>
+        ) : (
+          <View style={styles.growWrap}>
+            <View style={styles.growRow}>
+              <Text style={styles.growLabel}>{stage.name} → {nextName}</Text>
+              <Text style={styles.growLabel}>{toNext} 🍎 to grow</Text>
+            </View>
+            <View style={styles.growBar}>
+              <View style={[styles.growFill, { width: `${growPct}%` }]} />
+            </View>
+          </View>
+        )}
+
+        {/* Feed */}
+        <Pressable
+          style={[styles.petFeedBtn, available <= 0 && styles.petFeedBtnOff]}
+          disabled={available <= 0}
+          onPress={feedPet}
+        >
+          <Text style={styles.petFeedText}>{available > 0 ? `Feed  🍎 ${available}` : 'No fruit yet'}</Text>
+        </Pressable>
+        {available <= 0 ? (
+          <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>Tick off chores &amp; your plan to earn fruit 🍎</Text>
+        ) : null}
+
+        <Pressable style={styles.petChangeLink} onPress={() => setPetPickerOpen(true)}>
+          <Text style={styles.petChangeText}>Change pet</Text>
         </Pressable>
       </View>
     );
@@ -15500,36 +15540,95 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 13,
     fontWeight: '700',
   },
+  petScene: {
+    borderRadius: 26,
+    minHeight: 320,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 22,
+    paddingTop: 16,
+    marginBottom: 14,
+  },
+  petGlow: {
+    position: 'absolute',
+    top: -70,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: colors.selection,
+    opacity: 0.55,
+  },
   petStage: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    minHeight: 260,
+    justifyContent: 'flex-end',
+    minHeight: 230,
+  },
+  petShadow: {
+    width: 130,
+    height: 22,
+    borderRadius: 65,
+    backgroundColor: 'rgba(15,23,42,0.16)',
+    marginTop: 2,
   },
   petName: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     textAlign: 'center',
+    marginBottom: 8,
   },
-  petBubble: {
-    alignSelf: 'center',
+  petPills: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  petPill: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  petPillText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  growWrap: { marginBottom: 16, gap: 6 },
+  growRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  growLabel: { color: colors.subtext, fontSize: 12.5, fontWeight: '700' },
+  growBar: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+  growFill: { height: 10, borderRadius: 5, backgroundColor: '#22c55e' },
+  petGrownText: { color: '#16a34a', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 14 },
+  petFeedBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  petFeedBtnOff: { backgroundColor: colors.subtext, opacity: 0.5, shadowOpacity: 0 },
+  petFeedText: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  petChangeLink: { alignSelf: 'center', paddingVertical: 12, marginTop: 4 },
+  petChangeText: { color: colors.subtext, fontSize: 14, fontWeight: '700' },
+  petBubble2: {
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.3)',
+    borderColor: colors.border,
     paddingVertical: 8,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    overflow: 'hidden',
+    paddingHorizontal: 16,
+    marginBottom: 6,
+    zIndex: 2,
   },
-  petBubbleHungry: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#f59e0b',
-    color: '#b45309',
-  },
+  petBubble2Hungry: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
+  petBubble2Text: { fontSize: 15, fontWeight: '800', color: colors.text },
+  petBubble2TextHungry: { color: '#b45309' },
   childFieldLabel: {
     color: colors.subtext,
     fontSize: 13,
