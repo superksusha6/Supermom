@@ -83,30 +83,54 @@ function Wheel({
   );
 }
 
-export function WheelTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function WheelTimePicker({
+  value,
+  onChange,
+  label = 'Time',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+}) {
   const colors = useThemeColors();
   const styles = wheelStyles(colors);
   const { h12, min, ap } = parse(value);
+  const [open, setOpen] = useState(false);
 
   const hours = useMemo(() => Array.from({ length: 12 }, (_, i) => String(i + 1)), []);
   const mins = useMemo(() => Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')), []);
 
   const emit = (nh: number, nm: number, nap: 'AM' | 'PM') => onChange(`${nh}:${String(nm).padStart(2, '0')} ${nap}`);
 
+  // Collapsed: a neat little box showing the time. Tap to open the drum wheels.
+  if (!open) {
+    return (
+      <Pressable style={styles.box} onPress={() => setOpen(true)}>
+        <Text style={styles.boxValue}>{value} ▾</Text>
+      </Pressable>
+    );
+  }
+
   return (
-    <View style={styles.wrap}>
-      <View style={styles.wheels}>
-        <View style={styles.band} pointerEvents="none" />
-        <Wheel items={hours} index={h12 - 1} onIndex={(i) => emit(i + 1, min, ap)} colors={colors} />
-        <Text style={styles.colon}>:</Text>
-        <Wheel items={mins} index={min / 5} onIndex={(i) => emit(h12, i * 5, ap)} colors={colors} />
-      </View>
-      <View style={styles.apCol}>
-        {(['AM', 'PM'] as const).map((p) => (
-          <Pressable key={p} style={[styles.apPill, ap === p && styles.apPillOn]} onPress={() => emit(h12, min, p)}>
-            <Text style={[styles.apText, ap === p && styles.apTextOn]}>{p}</Text>
-          </Pressable>
-        ))}
+    <View style={styles.openWrap}>
+      <Pressable style={styles.openHead} onPress={() => setOpen(false)}>
+        <Text style={styles.boxValue}>{value}</Text>
+        <Text style={styles.doneLink}>Done</Text>
+      </Pressable>
+      <View style={styles.wrap}>
+        <View style={styles.wheels}>
+          <View style={styles.band} pointerEvents="none" />
+          <Wheel items={hours} index={h12 - 1} onIndex={(i) => emit(i + 1, min, ap)} colors={colors} />
+          <Text style={styles.colon}>:</Text>
+          <Wheel items={mins} index={min / 5} onIndex={(i) => emit(h12, i * 5, ap)} colors={colors} />
+        </View>
+        <View style={styles.apCol}>
+          {(['AM', 'PM'] as const).map((p) => (
+            <Pressable key={p} style={[styles.apPill, ap === p && styles.apPillOn]} onPress={() => emit(h12, min, p)}>
+              <Text style={[styles.apText, ap === p && styles.apTextOn]}>{p}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -114,6 +138,27 @@ export function WheelTimePicker({ value, onChange }: { value: string; onChange: 
 
 const wheelStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    box: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      minWidth: 104,
+    },
+    boxLabel: { color: colors.subtext, fontSize: 11, fontWeight: '600' },
+    boxValue: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    openWrap: { alignSelf: 'flex-start' },
+    openHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+      gap: 16,
+    },
+    doneLink: { color: colors.primary, fontSize: 14, fontWeight: '800' },
     wrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     wheels: {
       flexDirection: 'row',
