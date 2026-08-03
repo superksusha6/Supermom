@@ -220,6 +220,11 @@ export function CalendarScreen({
   const [newHasEnd, setNewHasEnd] = useState(true);
   // Repeat: weekday numbers (0=Sun..6=Sat) the event recurs on. Empty = one-off.
   const [newRepeatDays, setNewRepeatDays] = useState<number[]>([]);
+  // Time-wheel expanded state (controlled so scrolling can't collapse it).
+  const [newWheelOpen, setNewWheelOpen] = useState(false);
+  const [newEndWheelOpen, setNewEndWheelOpen] = useState(false);
+  const [editWheelOpen, setEditWheelOpen] = useState(false);
+  const [editEndWheelOpen, setEditEndWheelOpen] = useState(false);
   const [editTime, setEditTime] = useState('10:00 AM');
   const [editEndTime, setEditEndTime] = useState('11:00 AM');
   const [newAssignee, setNewAssignee] = useState<string>('mother');
@@ -1262,6 +1267,8 @@ export function CalendarScreen({
     if (isBirthdayEvent(event)) return;
     setOpenTimeField(null);
     setEditingTimeField(null);
+    setEditWheelOpen(false);
+    setEditEndWheelOpen(false);
     // Close the day-view overlay so the editor isn't hidden behind it.
     setDayTimelineOpen(false);
     setEditingEventId(event.id);
@@ -1317,6 +1324,8 @@ export function CalendarScreen({
     setCreatorMode(mode);
     setHasPickedColor(false);
     setColorPickerOpen(false);
+    setNewWheelOpen(false);
+    setNewEndWheelOpen(false);
     setTonePickerOpen(false);
     setOpenTimeField(null);
     setEditingTimeField(null);
@@ -2264,7 +2273,7 @@ export function CalendarScreen({
                       <Text style={styles.endToggleText}>{newHasEnd ? '✕ no end' : '＋ add end'}</Text>
                     </Pressable>
                   </View>
-                  <WheelTimePicker value={newTime} onChange={setNewTime} />
+                  <WheelTimePicker value={newTime} onChange={setNewTime} open={newWheelOpen} onOpenChange={setNewWheelOpen} />
                   {newHasEnd ? (
                     <>
                       <View style={styles.wheelHead}>
@@ -2273,7 +2282,7 @@ export function CalendarScreen({
                           <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
                         ) : null}
                       </View>
-                      <WheelTimePicker value={newEndTime} onChange={setNewEndTime} />
+                      <WheelTimePicker value={newEndTime} onChange={setNewEndTime} open={newEndWheelOpen} onOpenChange={setNewEndWheelOpen} />
                     </>
                   ) : null}
                   {/* Repeat — a daily/weekly routine (режим дня) */}
@@ -2508,14 +2517,14 @@ export function CalendarScreen({
               <View style={styles.wheelHead}>
                 <Text style={styles.label}>Starts</Text>
               </View>
-              <WheelTimePicker value={editTime} onChange={setEditTime} />
+              <WheelTimePicker value={editTime} onChange={setEditTime} open={editWheelOpen} onOpenChange={setEditWheelOpen} />
               <View style={styles.wheelHead}>
                 <Text style={styles.label}>Ends</Text>
                 {formatDurationLabel(editTime, editEndTime) ? (
                   <Text style={styles.timeRangeDurationText}>{formatDurationLabel(editTime, editEndTime)}</Text>
                 ) : null}
               </View>
-              <WheelTimePicker value={editEndTime} onChange={setEditEndTime} />
+              <WheelTimePicker value={editEndTime} onChange={setEditEndTime} open={editEndWheelOpen} onOpenChange={setEditEndWheelOpen} />
               <View style={styles.row}>
                 <Chip
                   active={editAssignee === 'mother'}

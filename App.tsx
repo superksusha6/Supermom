@@ -1110,6 +1110,8 @@ function AppShell() {
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
   // Day-sheet add: repeat weekdays, and (for a child) whether it's also shared to parent.
   const [dayNewRepeat, setDayNewRepeat] = useState<number[]>([]);
+  const [dayWheelOpen, setDayWheelOpen] = useState(false);
+  const [dayEndWheelOpen, setDayEndWheelOpen] = useState(false);
   const [dayNewChildShare, setDayNewChildShare] = useState(true);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -4170,6 +4172,8 @@ function AppShell() {
     setDayNewTime('4:00 PM');
     setDayNewEnd('');
     setDayNewRepeat([]);
+    setDayWheelOpen(false);
+    setDayEndWheelOpen(false);
     setDayNewChildShare(true);
     // A child adds to their own calendar by default.
     setDayNewWho(isChildView && session?.childProfileId ? session.childProfileId : 'mother');
@@ -8389,11 +8393,11 @@ function AppShell() {
                   </Pressable>
                 )}
               </View>
-              <WheelTimePicker value={dayNewTime} onChange={setDayNewTime} />
+              <WheelTimePicker value={dayNewTime} onChange={setDayNewTime} open={dayWheelOpen} onOpenChange={setDayWheelOpen} />
               {dayNewEnd ? (
                 <>
                   <Text style={[styles.daySheetFieldLabel, { marginTop: 12 }]}>Ends</Text>
-                  <WheelTimePicker value={dayNewEnd} onChange={setDayNewEnd} />
+                  <WheelTimePicker value={dayNewEnd} onChange={setDayNewEnd} open={dayEndWheelOpen} onOpenChange={setDayEndWheelOpen} />
                 </>
               ) : null}
               {/* Repeat — daily routine */}

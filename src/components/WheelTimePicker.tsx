@@ -86,16 +86,19 @@ function Wheel({
 export function WheelTimePicker({
   value,
   onChange,
-  label = 'Time',
+  open,
+  onOpenChange,
 }: {
   value: string;
   onChange: (v: string) => void;
-  label?: string;
+  // Controlled by the parent so scrolling (which re-renders the tree) can never reset
+  // the expanded state back to collapsed.
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const colors = useThemeColors();
   const styles = wheelStyles(colors);
   const { h12, min, ap } = parse(value);
-  const [open, setOpen] = useState(false);
 
   const hours = useMemo(() => Array.from({ length: 12 }, (_, i) => String(i + 1)), []);
   const mins = useMemo(() => Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')), []);
@@ -105,7 +108,7 @@ export function WheelTimePicker({
   // Collapsed: a neat little box showing the time. Tap to open the drum wheels.
   if (!open) {
     return (
-      <Pressable style={styles.box} onPress={() => setOpen(true)}>
+      <Pressable style={styles.box} onPress={() => onOpenChange(true)}>
         <Text style={styles.boxValue}>{value} ▾</Text>
       </Pressable>
     );
@@ -113,7 +116,7 @@ export function WheelTimePicker({
 
   return (
     <View style={styles.openWrap}>
-      <Pressable style={styles.openHead} onPress={() => setOpen(false)}>
+      <Pressable style={styles.openHead} onPress={() => onOpenChange(false)}>
         <Text style={styles.boxValue}>{value}</Text>
         <Text style={styles.doneLink}>Done</Text>
       </Pressable>
