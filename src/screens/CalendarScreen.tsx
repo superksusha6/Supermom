@@ -59,6 +59,7 @@ type Props = {
     motherColor?: string;
     staffColor?: string;
     visibility?: 'shared' | 'staff_private';
+    repeatDays?: number[];
   }) => void;
   onUpdateEvent: (payload: {
     id: string;
@@ -216,6 +217,8 @@ export function CalendarScreen({
   // Day-plan items often just have a start time (a routine at 8:00), so the end time
   // is optional.
   const [newHasEnd, setNewHasEnd] = useState(true);
+  // Repeat: weekday numbers (0=Sun..6=Sat) the event recurs on. Empty = one-off.
+  const [newRepeatDays, setNewRepeatDays] = useState<number[]>([]);
   const [editTime, setEditTime] = useState('10:00 AM');
   const [editEndTime, setEditEndTime] = useState('11:00 AM');
   const [newAssignee, setNewAssignee] = useState<string>('mother');
@@ -1357,8 +1360,14 @@ export function CalendarScreen({
       return;
     }
 
-    setNewAssignee('mother');
-    setNewShareToParent(true);
+    // A child defaults to putting the event on their own calendar ("Me").
+    if (currentRole === 'child' && children[0]) {
+      setNewAssignee(`child:${children[0].id}`);
+      setNewShareToParent(getChildShareDefault(children[0].id));
+    } else {
+      setNewAssignee('mother');
+      setNewShareToParent(true);
+    }
     setBaseColor('#2563eb');
     setToneIndex(4);
     setNewColor('#ffffff');
@@ -2267,6 +2276,44 @@ export function CalendarScreen({
                   </Pressable>
                   {renderStartDropdown('create_start')}
                   {newHasEnd ? renderEndDropdown('create_end') : null}
+                  {/* Repeat — a daily/weekly routine (режим дня) */}
+                  <Text style={styles.label}>Repeat</Text>
+                  <View style={styles.repeatRow}>
+                    <Chip
+                      active={newRepeatDays.length === 0}
+                      label="Once"
+                      onPress={() => setNewRepeatDays([])}
+                      styles={styles}
+                    />
+                    <Chip
+                      active={newRepeatDays.length === 7}
+                      label="Every day"
+                      onPress={() => setNewRepeatDays(newRepeatDays.length === 7 ? [] : [0, 1, 2, 3, 4, 5, 6])}
+                      styles={styles}
+                    />
+                    <Chip
+                      active={newRepeatDays.length === 5 && [1, 2, 3, 4, 5].every((d) => newRepeatDays.includes(d))}
+                      label="Weekdays"
+                      onPress={() => setNewRepeatDays([1, 2, 3, 4, 5])}
+                      styles={styles}
+                    />
+                  </View>
+                  <View style={styles.weekdayRow}>
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
+                      const on = newRepeatDays.includes(i);
+                      return (
+                        <Pressable
+                          key={`wd-${i}`}
+                          style={[styles.weekdayPill, on && styles.weekdayPillOn]}
+                          onPress={() =>
+                            setNewRepeatDays((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort()))
+                          }
+                        >
+                          <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>{d}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </>
               )}
               {creatorMode === 'general' ? (
@@ -2285,7 +2332,7 @@ export function CalendarScreen({
                       <Chip
                         key={child.id}
                         active={newAssignee === `child:${child.id}`}
-                        label={child.name}
+                        label={currentRole === 'child' ? 'Me' : child.name}
                         onPress={() => {
                           setNewAssignee(`child:${child.id}`);
                           setNewShareToParent(getChildShareDefault(child.id));
@@ -2293,18 +2340,21 @@ export function CalendarScreen({
                         styles={styles}
                       />
                     ))}
-                    {staffProfiles.map((profile) => (
-                      <Chip
-                        key={`creator-staff-${profile.id}`}
-                        active={newAssignee === `staff:${profile.id}`}
-                        label={profile.name}
-                        onPress={() => {
-                          setNewAssignee(`staff:${profile.id}`);
-                          setNewShareToParent(false);
-                        }}
-                        styles={styles}
-                      />
-                    ))}
+                    {/* Staff can't be assigned events by a child. */}
+                    {currentRole !== 'child'
+                      ? staffProfiles.map((profile) => (
+                          <Chip
+                            key={`creator-staff-${profile.id}`}
+                            active={newAssignee === `staff:${profile.id}`}
+                            label={profile.name}
+                            onPress={() => {
+                              setNewAssignee(`staff:${profile.id}`);
+                              setNewShareToParent(false);
+                            }}
+                            styles={styles}
+                          />
+                        ))
+                      : null}
                   </View>
                   {newAssignee.startsWith('staff:') ? (
                     <View style={styles.row}>
@@ -2326,10 +2376,20 @@ export function CalendarScreen({
               ) : null}
               {creatorMode === 'general' && newAssignee.startsWith('child:') ? (
                 <>
-                  <Text style={styles.label}>Show this event in</Text>
+                  <Text style={styles.label}>{currentRole === 'child' ? 'Who sees it' : 'Show this event in'}</Text>
                   <View style={styles.pillRow}>
-                    <Chip active={!newShareToParent} label="Only child profile" onPress={() => setNewShareToParent(false)} styles={styles} />
-                    <Chip active={newShareToParent} label={`Also in ${parentLabel} Home`} onPress={() => setNewShareToParent(true)} styles={styles} />
+                    <Chip
+                      active={!newShareToParent}
+                      label={currentRole === 'child' ? 'Only me' : 'Only child profile'}
+                      onPress={() => setNewShareToParent(false)}
+                      styles={styles}
+                    />
+                    <Chip
+                      active={newShareToParent}
+                      label={currentRole === 'child' ? `Me + ${parentLabel}` : `Also in ${parentLabel} Home`}
+                      onPress={() => setNewShareToParent(true)}
+                      styles={styles}
+                    />
                   </View>
                 </>
               ) : null}
@@ -2384,9 +2444,12 @@ export function CalendarScreen({
                         motherColor: selectedStaff ? (isStaffAssignedTask ? resolvedColor : undefined) : undefined,
                         staffColor: selectedStaff ? (isStaffAssignedTask ? undefined : newColor) : undefined,
                         visibility: creatorMode === 'staff_self_plan' ? 'staff_private' : 'shared',
+                        repeatDays: creatorMode === 'general' ? newRepeatDays : [],
                       });
                       setNewTitle('');
                       setNewShareToParent(true);
+                      setNewRepeatDays([]);
+                      setNewHasEnd(true);
                       setCreatorOpen(false);
                     }}
                 >
@@ -6281,6 +6344,38 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  repeatRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  weekdayPill: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  weekdayPillOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  weekdayText: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  weekdayTextOn: {
+    color: '#fff',
   },
   timeRangeDuration: {
     paddingVertical: 6,

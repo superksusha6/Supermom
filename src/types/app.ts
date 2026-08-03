@@ -249,6 +249,7 @@ export type CalendarEvent = {
   motherColor?: string;
   staffColor?: string;
   visibility?: 'shared' | 'staff_private';
+  seriesId?: string; // shared by all occurrences of a repeating event
 };
 
 export type ImportedEmailEvent = {

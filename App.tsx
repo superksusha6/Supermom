@@ -10,6 +10,7 @@ import {
   createRecipe,
   createCompletedTaskNotification,
   createCalendarEvent,
+  createCalendarEvents,
   createDeleteApprovalRequest,
   createPurchaseRequest,
   createShoppingList,
@@ -3939,6 +3940,7 @@ function AppShell() {
     motherColor,
     staffColor,
     visibility,
+    repeatDays,
   }: {
     title: string;
     date: string;
@@ -3954,6 +3956,7 @@ function AppShell() {
     motherColor?: string;
     staffColor?: string;
     visibility?: 'shared' | 'staff_private';
+    repeatDays?: number[]; // weekday numbers (0=Sun..6=Sat) for a repeating event
   }) {
     const isStaffTask = owner === 'staff' && category.toLowerCase().includes('task');
     const staffTaskProfileId = isStaffTask ? staffProfiles.find((p) => p.name === ownerName)?.id : undefined;
@@ -3976,6 +3979,80 @@ function AppShell() {
           color,
         })
       : null;
+    // Repeating event ("режим дня" — every day / chosen weekdays): generate an
+    // occurrence for each matching day over the next ~8 weeks, in one batch insert.
+    if (session && repeatDays && repeatDays.length > 0) {
+      const seriesId = `s${Date.now()}`;
+      const WINDOW_DAYS = 56;
+      const start = new Date(`${date}T00:00:00`);
+      const occurrences: string[] = [];
+      for (let i = 0; i < WINDOW_DAYS; i += 1) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        if (repeatDays.includes(d.getDay())) occurrences.push(toDateKey(d));
+      }
+      const baseFor = (dk: string) => ({
+        title,
+        date: dk,
+        time,
+        endTime,
+        owner,
+        ownerName,
+        ownerChildProfileId: ownerChildProfileId || null,
+        category,
+        color,
+        motherColor,
+        staffColor,
+        visibility,
+        seriesId,
+      });
+      const mirrorFor = (dk: string) =>
+        mirrorEvent
+          ? {
+              title: mirrorEvent.title,
+              date: dk,
+              time: mirrorEvent.time,
+              endTime: mirrorEvent.endTime,
+              owner: mirrorEvent.owner,
+              ownerName: mirrorEvent.ownerName,
+              ownerChildProfileId: mirrorEvent.ownerChildProfileId || null,
+              category: mirrorEvent.category,
+              color: mirrorEvent.color,
+              motherColor: mirrorEvent.motherColor,
+              staffColor: mirrorEvent.staffColor,
+              visibility: mirrorEvent.visibility,
+              seriesId,
+            }
+          : null;
+      const payloads = occurrences.flatMap((dk) => {
+        const m = mirrorFor(dk);
+        return m ? [baseFor(dk), m] : [baseFor(dk)];
+      });
+      const optimistic: CalendarEvent[] = payloads.map((p, i) => ({
+        id: `tmp-r-${seriesId}-${i}`,
+        title: p.title,
+        date: p.date,
+        time: p.time,
+        endTime: p.endTime,
+        owner: p.owner,
+        ownerName: p.ownerName,
+        ownerChildProfileId: p.ownerChildProfileId || undefined,
+        category: p.category,
+        color: p.color,
+        motherColor: p.motherColor,
+        staffColor: p.staffColor,
+        visibility: p.visibility,
+        seriesId,
+      }));
+      setEvents((prev) => [...optimistic, ...prev]);
+      createCalendarEvents(session, payloads)
+        .then(() => refreshLiveCalendar())
+        .catch((error) => {
+          setEvents((prev) => prev.filter((e) => e.seriesId !== seriesId || !e.id.startsWith('tmp-r-')));
+          setTasksError(error instanceof Error ? error.message : 'Create repeating event failed.');
+        });
+      return;
+    }
     if (session) {
       const tempId = `tmp-e-${Date.now()}`;
       const optimisticEvent: CalendarEvent = {

@@ -87,6 +87,9 @@ type CalendarInsert = {
   motherColor?: string;
   staffColor?: string;
   visibility?: 'shared' | 'staff_private';
+  // Recurrence: an id shared by all occurrences of a repeating event, so they can be
+  // recognised/removed together. Stored in the event meta (no schema change).
+  seriesId?: string;
 };
 
 export type StaffTaskDraftRecord = {
@@ -916,6 +919,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
       motherColor: meta.motherColor,
       staffColor: meta.staffColor,
       visibility: meta.visibility === 'staff_private' ? 'staff_private' : 'shared',
+      seriesId: meta.seriesId || undefined,
     };
   });
 }
@@ -1135,9 +1139,7 @@ export async function replaceGeneratedChildEvents(session: AppSession, childId: 
   if (insertError) throw insertError;
 }
 
-export async function createCalendarEvent(session: AppSession, payload: CalendarInsert) {
-  const client = requireClient();
-  const startsAt = composeStartsAt(payload.date, payload.time);
+function buildEventRow(session: AppSession, payload: CalendarInsert) {
   const notes = JSON.stringify({
     color: payload.color,
     motherColor: payload.motherColor,
@@ -1147,18 +1149,32 @@ export async function createCalendarEvent(session: AppSession, payload: Calendar
     owner: payload.owner,
     ownerName: payload.ownerName,
     endTime: payload.endTime,
+    seriesId: payload.seriesId,
   });
-
-  const { error } = await client.from('events').insert({
+  return {
     family_id: session.familyId,
     title: payload.title,
     notes,
-    starts_at: startsAt,
-    owner_user_id: payload.owner === 'mother' ? session.userId : null,
+    starts_at: composeStartsAt(payload.date, payload.time),
+    // A child creating a "mom" event leaves owner_user_id null (meta.owner='mother'
+    // drives display) so it isn't mistakenly attributed to the child's user.
+    owner_user_id: payload.owner === 'mother' && session.role !== 'child' ? session.userId : null,
     owner_child_profile_id: payload.ownerChildProfileId || null,
     created_by: session.userId,
-  });
+  };
+}
 
+export async function createCalendarEvent(session: AppSession, payload: CalendarInsert) {
+  const client = requireClient();
+  const { error } = await client.from('events').insert(buildEventRow(session, payload));
+  if (error) throw error;
+}
+
+// Insert many occurrences of a recurring event in one request.
+export async function createCalendarEvents(session: AppSession, payloads: CalendarInsert[]) {
+  if (payloads.length === 0) return;
+  const client = requireClient();
+  const { error } = await client.from('events').insert(payloads.map((p) => buildEventRow(session, p)));
   if (error) throw error;
 }
 
