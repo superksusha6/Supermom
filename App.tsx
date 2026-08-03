@@ -8318,7 +8318,12 @@ function AppShell() {
       <Modal visible={daySheetDate !== null} transparent animationType="fade" onRequestClose={() => setDaySheetDate(null)}>
         <Pressable style={styles.daySheetBackdrop} onPress={() => setDaySheetDate(null)}>
           <Pressable style={styles.daySheetCard} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.daySheetTitle}>{daySheetDate ? formatShortDate(daySheetDate) : ''}</Text>
+            <View style={styles.daySheetHeader}>
+              <Text style={styles.daySheetTitle}>{daySheetDate ? formatShortDate(daySheetDate) : ''}</Text>
+              <Pressable style={styles.daySheetCloseX} onPress={() => setDaySheetDate(null)} accessibilityLabel="Close">
+                <Text style={styles.daySheetCloseXText}>✕</Text>
+              </Pressable>
+            </View>
 
             {daySheetEvents.length > 0 ? (
               <View style={styles.daySheetList}>
@@ -8448,9 +8453,6 @@ function AppShell() {
                 </View>
               ) : null}
               <View style={styles.daySheetActions}>
-                <Pressable style={styles.daySheetCancel} onPress={() => setDaySheetDate(null)}>
-                  <Text style={styles.daySheetCancelText}>Done</Text>
-                </Pressable>
                 {activePartnerLink ? (
                   <Pressable
                     style={styles.daySheetSend}
@@ -8464,7 +8466,8 @@ function AppShell() {
                   </Pressable>
                 ) : null}
                 <Pressable
-                  style={styles.daySheetAdd}
+                  style={[styles.daySheetAdd, !dayNewTitle.trim() && styles.daySheetAddDisabled]}
+                  disabled={!dayNewTitle.trim()}
                   onPress={() => {
                     if (!dayNewTitle.trim() || !daySheetDate) return;
                     const child = dayNewWho !== 'mother' ? children.find((c) => c.id === dayNewWho) : null;
@@ -8485,9 +8488,10 @@ function AppShell() {
                     });
                     setDayNewTitle('');
                     setDayNewRepeat([]);
+                    setDaySheetDate(null); // add & close — no separate "Done" needed
                   }}
                 >
-                  <Text style={styles.daySheetAddText}>Add</Text>
+                  <Text style={styles.daySheetAddText}>Add event</Text>
                 </Pressable>
               </View>
             </View>
@@ -14445,9 +14449,27 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     backgroundColor: colors.border,
     marginBottom: 4,
   },
+  daySheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   daySheetTitle: {
     color: colors.text,
     fontSize: 17,
+    fontWeight: '800',
+  },
+  daySheetCloseX: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  daySheetCloseXText: {
+    color: colors.subtext,
+    fontSize: 15,
     fontWeight: '800',
   },
   daySheetList: {
@@ -14645,6 +14667,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 14,
     backgroundColor: colors.primary,
     alignItems: 'center',
+  },
+  daySheetAddDisabled: {
+    opacity: 0.45,
   },
   daySheetAddText: {
     color: '#ffffff',
