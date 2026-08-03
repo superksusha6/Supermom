@@ -213,6 +213,9 @@ export function CalendarScreen({
   const [editToneIndex, setEditToneIndex] = useState(4);
   const [newTime, setNewTime] = useState('10:00 AM');
   const [newEndTime, setNewEndTime] = useState('11:00 AM');
+  // Day-plan items often just have a start time (a routine at 8:00), so the end time
+  // is optional.
+  const [newHasEnd, setNewHasEnd] = useState(true);
   const [editTime, setEditTime] = useState('10:00 AM');
   const [editEndTime, setEditEndTime] = useState('11:00 AM');
   const [newAssignee, setNewAssignee] = useState<string>('mother');
@@ -2246,17 +2249,24 @@ export function CalendarScreen({
               {creatorMode === 'staff_assigned_task' || creatorMode === 'staff_self_task' ? null : (
                 <>
                   <View style={styles.timeRangeRow}>
-                    {renderTimeField('create_start', 'Start', false)}
-                    <Text style={styles.timeRangeArrow}>→</Text>
-                    {renderTimeField('create_end', 'End', true)}
-                    {formatDurationLabel(newTime, newEndTime) ? (
-                      <View style={styles.timeRangeDuration}>
-                        <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
-                      </View>
+                    {renderTimeField('create_start', newHasEnd ? 'Start' : 'Time', false)}
+                    {newHasEnd ? (
+                      <>
+                        <Text style={styles.timeRangeArrow}>→</Text>
+                        {renderTimeField('create_end', 'End', true)}
+                        {formatDurationLabel(newTime, newEndTime) ? (
+                          <View style={styles.timeRangeDuration}>
+                            <Text style={styles.timeRangeDurationText}>{formatDurationLabel(newTime, newEndTime)}</Text>
+                          </View>
+                        ) : null}
+                      </>
                     ) : null}
                   </View>
+                  <Pressable style={styles.endToggle} onPress={() => setNewHasEnd((v) => !v)}>
+                    <Text style={styles.endToggleText}>{newHasEnd ? '✕ No end time' : '＋ Add end time'}</Text>
+                  </Pressable>
                   {renderStartDropdown('create_start')}
-                  {renderEndDropdown('create_end')}
+                  {newHasEnd ? renderEndDropdown('create_end') : null}
                 </>
               )}
               {creatorMode === 'general' ? (
@@ -2355,7 +2365,7 @@ export function CalendarScreen({
                         title: newTitle.trim(),
                         date: selectedDateKey,
                         time: newTime,
-                        endTime: newEndTime,
+                        endTime: newHasEnd ? newEndTime : undefined,
                         owner: selectedChild ? 'child' : selectedStaff ? 'staff' : 'mother',
                         ownerName: selectedChild ? selectedChild.name : selectedStaff ? selectedStaff.name : parentLabel,
                         ownerChildProfileId: selectedChild ? selectedChild.id : undefined,
@@ -6260,6 +6270,16 @@ const createStyles = (colors: ThemeColors) =>
   timeRangeArrow: {
     color: colors.subtext,
     fontSize: 18,
+    fontWeight: '700',
+  },
+  endToggle: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  endToggleText: {
+    color: colors.primary,
+    fontSize: 13,
     fontWeight: '700',
   },
   timeRangeDuration: {
