@@ -1107,6 +1107,11 @@ function AppShell() {
   const [dayNewTime, setDayNewTime] = useState('4:00 PM');
   const [dayNewEnd, setDayNewEnd] = useState('');
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
+  // Compact day-sheet add: which time box's picker is open, whether an end is used,
+  // repeat weekdays, and (for a child) whether it's also shared to the parent.
+  const [dayTimeField, setDayTimeField] = useState<null | 'start' | 'end'>(null);
+  const [dayNewRepeat, setDayNewRepeat] = useState<number[]>([]);
+  const [dayNewChildShare, setDayNewChildShare] = useState(true);
   const [dashboardMealPickerOpen, setDashboardMealPickerOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
@@ -4164,7 +4169,12 @@ function AppShell() {
     setDaySheetDate(dateKey);
     setDayNewTitle('');
     setDayNewTime('4:00 PM');
-    setDayNewWho('mother');
+    setDayNewEnd('');
+    setDayTimeField(null);
+    setDayNewRepeat([]);
+    setDayNewChildShare(true);
+    // A child adds to their own calendar by default.
+    setDayNewWho(isChildView && session?.childProfileId ? session.childProfileId : 'mother');
     setDayEditId(null);
   }
   const daySheetEvents = useMemo(() => {
@@ -8366,45 +8376,115 @@ function AppShell() {
                 value={dayNewTitle}
                 onChangeText={setDayNewTitle}
               />
-              <Text style={styles.daySheetFieldLabel}>Starts</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
-                {DAY_TIME_OPTIONS.map((t) => (
+              {/* Compact time: a tidy box you tap to pick, end optional */}
+              <View style={styles.dayTimeRow}>
+                <Pressable
+                  style={styles.dayTimeBox}
+                  onPress={() => setDayTimeField((f) => (f === 'start' ? null : 'start'))}
+                >
+                  <Text style={styles.dayTimeBoxLabel}>Time</Text>
+                  <Text style={styles.dayTimeBoxValue}>{dayNewTime.replace(':00', '')} ▾</Text>
+                </Pressable>
+                {dayNewEnd ? (
                   <Pressable
-                    key={t}
-                    style={[styles.daySheetChip, dayNewTime === t && styles.daySheetChipActive]}
+                    style={styles.dayTimeBox}
+                    onPress={() => setDayTimeField((f) => (f === 'end' ? null : 'end'))}
+                  >
+                    <Text style={styles.dayTimeBoxLabel}>Ends</Text>
+                    <Text style={styles.dayTimeBoxValue}>{dayNewEnd.replace(':00', '')} ▾</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={styles.dayEndAdd}
                     onPress={() => {
-                      setDayNewTime(t);
-                      const si = DAY_TIME_OPTIONS.indexOf(t);
-                      const ei = DAY_TIME_OPTIONS.indexOf(dayNewEnd);
-                      if (ei >= 0 && ei <= si) setDayNewEnd('');
+                      const si = DAY_TIME_OPTIONS.indexOf(dayNewTime);
+                      setDayNewEnd(DAY_TIME_OPTIONS[Math.min(si + 1, DAY_TIME_OPTIONS.length - 1)]);
+                      setDayTimeField('end');
                     }}
                   >
-                    <Text style={[styles.daySheetChipText, dayNewTime === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                    <Text style={styles.dayEndAddText}>＋ end</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
-              <Text style={styles.daySheetFieldLabel}>Ends (optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
-                <Pressable style={[styles.daySheetChip, !dayNewEnd && styles.daySheetChipActive]} onPress={() => setDayNewEnd('')}>
-                  <Text style={[styles.daySheetChipText, !dayNewEnd && styles.daySheetChipTextActive]}>No end</Text>
-                </Pressable>
-                {DAY_TIME_OPTIONS.slice(Math.max(0, DAY_TIME_OPTIONS.indexOf(dayNewTime) + 1)).map((t) => (
-                  <Pressable key={`end-${t}`} style={[styles.daySheetChip, dayNewEnd === t && styles.daySheetChipActive]} onPress={() => setDayNewEnd(t)}>
-                    <Text style={[styles.daySheetChipText, dayNewEnd === t && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                )}
+                {dayNewEnd ? (
+                  <Pressable style={styles.dayEndAdd} onPress={() => { setDayNewEnd(''); setDayTimeField(null); }}>
+                    <Text style={styles.dayEndAddText}>✕</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
-              <Text style={styles.daySheetFieldLabel}>For</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
-                <Pressable style={[styles.daySheetChip, dayNewWho === 'mother' && styles.daySheetChipActive]} onPress={() => setDayNewWho('mother')}>
-                  <Text style={[styles.daySheetChipText, dayNewWho === 'mother' && styles.daySheetChipTextActive]}>{parentLabel}</Text>
+                ) : null}
+              </View>
+              {dayTimeField ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySheetChipsRow}>
+                  {(dayTimeField === 'end'
+                    ? DAY_TIME_OPTIONS.slice(Math.max(0, DAY_TIME_OPTIONS.indexOf(dayNewTime) + 1))
+                    : DAY_TIME_OPTIONS
+                  ).map((t) => {
+                    const active = dayTimeField === 'end' ? dayNewEnd === t : dayNewTime === t;
+                    return (
+                      <Pressable
+                        key={`${dayTimeField}-${t}`}
+                        style={[styles.daySheetChip, active && styles.daySheetChipActive]}
+                        onPress={() => {
+                          if (dayTimeField === 'end') setDayNewEnd(t);
+                          else {
+                            setDayNewTime(t);
+                            const ei = DAY_TIME_OPTIONS.indexOf(dayNewEnd);
+                            if (ei >= 0 && ei <= DAY_TIME_OPTIONS.indexOf(t)) setDayNewEnd('');
+                          }
+                          setDayTimeField(null);
+                        }}
+                      >
+                        <Text style={[styles.daySheetChipText, active && styles.daySheetChipTextActive]}>{t.replace(':00', '')}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
+              {/* Repeat — daily routine */}
+              <View style={styles.dayRepeatRow}>
+                <Pressable style={[styles.daySheetChip, dayNewRepeat.length === 0 && styles.daySheetChipActive]} onPress={() => setDayNewRepeat([])}>
+                  <Text style={[styles.daySheetChipText, dayNewRepeat.length === 0 && styles.daySheetChipTextActive]}>Once</Text>
                 </Pressable>
+                <Pressable
+                  style={[styles.daySheetChip, dayNewRepeat.length === 7 && styles.daySheetChipActive]}
+                  onPress={() => setDayNewRepeat(dayNewRepeat.length === 7 ? [] : [0, 1, 2, 3, 4, 5, 6])}
+                >
+                  <Text style={[styles.daySheetChipText, dayNewRepeat.length === 7 && styles.daySheetChipTextActive]}>Every day</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.daySheetChip, dayNewRepeat.length === 5 && [1,2,3,4,5].every((d) => dayNewRepeat.includes(d)) && styles.daySheetChipActive]}
+                  onPress={() => setDayNewRepeat([1, 2, 3, 4, 5])}
+                >
+                  <Text style={[styles.daySheetChipText, dayNewRepeat.length === 5 && [1,2,3,4,5].every((d) => dayNewRepeat.includes(d)) && styles.daySheetChipTextActive]}>Weekdays</Text>
+                </Pressable>
+              </View>
+              {/* For — who the plan belongs to (child sees Me / Mom / Both) */}
+              <View style={styles.dayRepeatRow}>
+                {!isChildView ? (
+                  <Pressable style={[styles.daySheetChip, dayNewWho === 'mother' && styles.daySheetChipActive]} onPress={() => setDayNewWho('mother')}>
+                    <Text style={[styles.daySheetChipText, dayNewWho === 'mother' && styles.daySheetChipTextActive]}>{parentLabel}</Text>
+                  </Pressable>
+                ) : null}
                 {children.map((c) => (
                   <Pressable key={c.id} style={[styles.daySheetChip, dayNewWho === c.id && styles.daySheetChipActive]} onPress={() => setDayNewWho(c.id)}>
-                    <Text style={[styles.daySheetChipText, dayNewWho === c.id && styles.daySheetChipTextActive]}>{c.name}</Text>
+                    <Text style={[styles.daySheetChipText, dayNewWho === c.id && styles.daySheetChipTextActive]}>{isChildView ? 'Me' : c.name}</Text>
                   </Pressable>
                 ))}
-              </ScrollView>
+                {isChildView ? (
+                  <Pressable style={[styles.daySheetChip, dayNewWho === 'mother' && styles.daySheetChipActive]} onPress={() => setDayNewWho('mother')}>
+                    <Text style={[styles.daySheetChipText, dayNewWho === 'mother' && styles.daySheetChipTextActive]}>{parentLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {/* Child: share their own event to the parent too? */}
+              {isChildView && dayNewWho !== 'mother' ? (
+                <View style={styles.dayRepeatRow}>
+                  <Pressable style={[styles.daySheetChip, !dayNewChildShare && styles.daySheetChipActive]} onPress={() => setDayNewChildShare(false)}>
+                    <Text style={[styles.daySheetChipText, !dayNewChildShare && styles.daySheetChipTextActive]}>Only me</Text>
+                  </Pressable>
+                  <Pressable style={[styles.daySheetChip, dayNewChildShare && styles.daySheetChipActive]} onPress={() => setDayNewChildShare(true)}>
+                    <Text style={[styles.daySheetChipText, dayNewChildShare && styles.daySheetChipTextActive]}>Me + {parentLabel}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               <View style={styles.daySheetActions}>
                 <Pressable style={styles.daySheetCancel} onPress={() => setDaySheetDate(null)}>
                   <Text style={styles.daySheetCancelText}>Done</Text>
@@ -8436,11 +8516,13 @@ function AppShell() {
                       owner: child ? 'child' : 'mother',
                       ownerName: child ? child.name : parentLabel,
                       ownerChildProfileId: child ? child.id : undefined,
-                      shareToParent: child ? true : undefined,
+                      shareToParent: child ? dayNewChildShare : undefined,
                       category: child ? child.name : 'General',
                       color,
+                      repeatDays: dayNewRepeat.length ? dayNewRepeat : undefined,
                     });
                     setDayNewTitle('');
+                    setDayNewRepeat([]);
                   }}
                 >
                   <Text style={styles.daySheetAddText}>Add</Text>
@@ -14492,6 +14574,47 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   daySheetChipsRow: {
     gap: 7,
     paddingRight: 4,
+  },
+  dayTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  dayTimeBox: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 92,
+  },
+  dayTimeBoxLabel: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dayTimeBoxValue: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  dayEndAdd: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  dayEndAddText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dayRepeatRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginTop: 10,
   },
   daySheetChip: {
     paddingHorizontal: 12,
