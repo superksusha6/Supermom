@@ -7167,16 +7167,26 @@ function AppShell() {
       const now = new Date();
       return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
     })();
-    // Growth in stages: starts small, jumps up as it eats. Sized to fit the scene.
-    const stage = fed < 5 ? { name: 'Baby', base: 150 } : fed < 15 ? { name: 'Teen', base: 185 } : { name: 'Grown', base: 210 };
-    const stage3d = Math.min(stage.base + fed * 2, 220);
-    const emojiSize = Math.min(80 + fed * 4, 150);
-    // Progress toward the next growth stage.
-    const grown = stage.name === 'Grown';
-    const nextName = stage.name === 'Baby' ? 'Teen' : 'Grown';
-    const [stageStart, stageEnd] = stage.name === 'Baby' ? [0, 5] : [5, 15];
-    const growPct = grown ? 100 : Math.max(4, Math.round(((fed - stageStart) / (stageEnd - stageStart)) * 100));
+    // Growth in 5 stages, deliberately SLOW so it's a long-term goal (fully grown at
+    // 70 fruit, not 15). Sized to fit the scene.
+    const PET_STAGES = [
+      { name: 'Baby', min: 0, base: 130 },
+      { name: 'Kid', min: 8, base: 155 },
+      { name: 'Teen', min: 20, base: 180 },
+      { name: 'Big', min: 40, base: 200 },
+      { name: 'Grown', min: 70, base: 220 },
+    ];
+    const si = PET_STAGES.reduce((acc, s, i) => (fed >= s.min ? i : acc), 0);
+    const stage = PET_STAGES[si];
+    const grown = si === PET_STAGES.length - 1;
+    const nextStage = PET_STAGES[si + 1];
+    const nextName = nextStage?.name;
+    const stageStart = stage.min;
+    const stageEnd = nextStage ? nextStage.min : stage.min;
     const toNext = grown ? 0 : Math.max(0, stageEnd - fed);
+    const growPct = grown ? 100 : Math.max(4, Math.round(((fed - stageStart) / (stageEnd - stageStart)) * 100));
+    const stage3d = Math.min(stage.base + Math.floor((fed - stage.min) * 0.5), 220);
+    const emojiSize = Math.min(70 + fed * 2, 150);
     return (
       <View style={styles.dashWrap}>
         {/* Habitat scene — SVG backdrop (sky + clouds) with a podium the pet stands on */}
@@ -7237,11 +7247,13 @@ function AppShell() {
           disabled={available <= 0}
           onPress={feedPet}
         >
-          <Text style={styles.petFeedText}>{available > 0 ? `Feed  🍎 ${available}` : 'No fruit yet'}</Text>
+          <Text style={styles.petFeedText}>{available > 0 ? `Feed  🍎 ${available}` : 'Earn fruit to feed'}</Text>
         </Pressable>
-        {available <= 0 ? (
-          <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>Tick off chores &amp; your plan to earn fruit 🍎</Text>
-        ) : null}
+        <Text style={[styles.childEmptyText, { textAlign: 'center' }]}>
+          {available > 0
+            ? `You have ${available} 🍎 to give ${pet.name}`
+            : `Tick off a chore, habit or plan → earn 🍎 → feed ${pet.name}`}
+        </Text>
 
         <Pressable style={styles.petChangeLink} onPress={() => setPetPickerOpen(true)}>
           <Text style={styles.petChangeText}>Change pet</Text>
