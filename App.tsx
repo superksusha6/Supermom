@@ -18,6 +18,7 @@ import {
   listFamilyShoppers,
   createTask,
   deleteCalendarEvent,
+  deleteCalendarEvents,
   deleteChildProfile,
   deleteRecipe,
   deleteShoppingList,
@@ -1110,6 +1111,8 @@ function AppShell() {
   const [dayNewWho, setDayNewWho] = useState<string>('mother');
   // Day-sheet add: repeat weekdays, and (for a child) whether it's also shared to parent.
   const [dayNewRepeat, setDayNewRepeat] = useState<number[]>([]);
+  // Set when deleting an event that belongs to a repeating series (offers this-one / all).
+  const [seriesDeletePrompt, setSeriesDeletePrompt] = useState<{ id: string; seriesId: string } | null>(null);
   const [dayWheelOpen, setDayWheelOpen] = useState(false);
   const [dayEndWheelOpen, setDayEndWheelOpen] = useState(false);
   const [dayNewChildShare, setDayNewChildShare] = useState(true);
@@ -4197,6 +4200,7 @@ function AppShell() {
         ownerName: string;
         rawTime: string;
         ownerChildProfileId?: string;
+        seriesId?: string;
       }[];
     const seen = new Set<string>();
     return events
@@ -4218,6 +4222,7 @@ function AppShell() {
         owner: e.owner,
         ownerName: e.ownerName || 'Family',
         ownerChildProfileId: e.ownerChildProfileId,
+        seriesId: e.seriesId,
       }));
   }, [events, daySheetDate, colors.primary]);
 
@@ -4277,26 +4282,44 @@ function AppShell() {
     }
   }
 
+  // Delete a single event (+ its parent/child mirror).
+  function deleteOneEvent(id: string) {
+    const raw = events.find((e) => e.id === id) || null;
+    const counterpart = findLinkedChildMirrorEvent(events, raw);
+    const ids = [id, counterpart?.id].filter(Boolean) as string[];
+    if (dayEditId === id) setDayEditId(null);
+    setEvents((prev) => prev.filter((e) => !ids.includes(e.id)));
+    if (session && isSupabaseConfigured) {
+      Promise.all(ids.map((x) => deleteCalendarEvent(session, x)))
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
+    }
+  }
+  // Delete every occurrence (and mirror) of a repeating series.
+  function deleteEventSeries(seriesId: string) {
+    const ids = events.filter((e) => e.seriesId === seriesId).map((e) => e.id);
+    if (dayEditId && ids.includes(dayEditId)) setDayEditId(null);
+    setEvents((prev) => prev.filter((e) => e.seriesId !== seriesId));
+    if (session && isSupabaseConfigured) {
+      deleteCalendarEvents(session, ids)
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete series failed.'));
+    }
+  }
   function deleteDayEvent(id: string) {
-    const doDelete = () => {
-      const raw = events.find((e) => e.id === id) || null;
-      const counterpart = findLinkedChildMirrorEvent(events, raw);
-      const ids = [id, counterpart?.id].filter(Boolean) as string[];
-      if (dayEditId === id) setDayEditId(null);
-      setEvents((prev) => prev.filter((e) => !ids.includes(e.id)));
-      if (session && isSupabaseConfigured) {
-        Promise.all(ids.map((x) => deleteCalendarEvent(session, x)))
-          .then(() => refreshLiveCalendar())
-          .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
-      }
-    };
+    const raw = events.find((e) => e.id === id) || null;
+    // A repeating event → let the user choose this-one vs the whole series.
+    if (raw?.seriesId) {
+      setSeriesDeletePrompt({ id, seriesId: raw.seriesId });
+      return;
+    }
     if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
-      if (globalThis.confirm('Delete this event?')) doDelete();
+      if (globalThis.confirm('Delete this event?')) deleteOneEvent(id);
       return;
     }
     Alert.alert('Delete event?', 'This removes it from the plan.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doDelete },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteOneEvent(id) },
     ]);
   }
 
@@ -6795,6 +6818,7 @@ function AppShell() {
                 </View>
                 <Text style={styles.childPlanTime}>{e.time || '—'}</Text>
                 <Text style={[styles.childPlanTitle, done && styles.childChoreTextDone]} numberOfLines={1}>{e.title}</Text>
+                {e.seriesId ? <Text style={styles.repeatBadge}>↻</Text> : null}
                 {done ? <Text style={styles.childChoreFruit}>🍎</Text> : null}
               </Pressable>
             );
@@ -8389,6 +8413,7 @@ function AppShell() {
                           <Text style={styles.daySheetEventTime}>{ev.time}</Text>
                           <View style={[styles.daySheetEventDot, { backgroundColor: ev.color }]} />
                           <Text style={styles.daySheetEventTitle} numberOfLines={1}>{ev.title}</Text>
+                          {ev.seriesId ? <Text style={styles.repeatBadge}>↻</Text> : null}
                           {canEdit ? <Icon name="chevron" color={colors.subtext} size={15} /> : null}
                         </RowTag>
                           );
@@ -8528,6 +8553,37 @@ function AppShell() {
                 </Pressable>
               </View>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Delete a repeating event: this one, or the whole series */}
+      <Modal visible={seriesDeletePrompt !== null} transparent animationType="fade" onRequestClose={() => setSeriesDeletePrompt(null)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setSeriesDeletePrompt(null)}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>This event repeats ↻</Text>
+            <Text style={[styles.childEmptyText, { marginBottom: 12 }]}>Delete just this day, or the whole repeating series?</Text>
+            <Pressable
+              style={[styles.daySheetAdd, { marginBottom: 8 }]}
+              onPress={() => {
+                if (seriesDeletePrompt) deleteOneEvent(seriesDeletePrompt.id);
+                setSeriesDeletePrompt(null);
+              }}
+            >
+              <Text style={styles.daySheetAddText}>Just this day</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.daySheetAdd, { backgroundColor: colors.urgent, marginBottom: 8 }]}
+              onPress={() => {
+                if (seriesDeletePrompt) deleteEventSeries(seriesDeletePrompt.seriesId);
+                setSeriesDeletePrompt(null);
+              }}
+            >
+              <Text style={styles.daySheetAddText}>Delete all repeats</Text>
+            </Pressable>
+            <Pressable style={styles.daySheetCancel} onPress={() => setSeriesDeletePrompt(null)}>
+              <Text style={styles.daySheetCancelText}>Cancel</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -9722,6 +9778,11 @@ function AppShell() {
               }}
               onDeleteEvent={({ id }) => {
                 const sourceEvent = events.find((event) => event.id === id) || null;
+                // Repeating → ask this-one vs whole series.
+                if (sourceEvent?.seriesId) {
+                  setSeriesDeletePrompt({ id, seriesId: sourceEvent.seriesId });
+                  return;
+                }
                 const counterpartEvent = findLinkedChildMirrorEvent(events, sourceEvent);
                 const deleteIds = [id, counterpartEvent?.id].filter(Boolean) as string[];
 
@@ -14680,6 +14741,12 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexDirection: 'row',
     gap: 10,
     marginTop: 4,
+  },
+  repeatBadge: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '800',
+    marginHorizontal: 2,
   },
   daySheetCancel: {
     flex: 1,

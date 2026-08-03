@@ -1221,6 +1221,14 @@ export async function deleteCalendarEvent(session: AppSession, eventId: string) 
   if (error) throw error;
 }
 
+// Delete many events at once (e.g. every occurrence of a repeating series).
+export async function deleteCalendarEvents(session: AppSession, eventIds: string[]) {
+  if (eventIds.length === 0) return;
+  const client = requireClient();
+  const { error } = await client.from('events').delete().in('id', eventIds).eq('family_id', session.familyId);
+  if (error) throw error;
+}
+
 // --- Partner calendars (Phase 1: two separate accounts, privacy-first) ---------------------
 
 export type PartnerLink = {
