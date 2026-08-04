@@ -993,6 +993,35 @@ function AppShell() {
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const petScaleAnim = useRef(new Animated.Value(1)).current; // squash/bounce on feed
   const petIdleAnim = useRef(new Animated.Value(0)).current; // continuous idle bob ("breathing")
+  // Little floating emojis that pop when the pet is tapped / fed.
+  const petParticleId = useRef(0);
+  const [petParticles, setPetParticles] = useState<{ id: number; emoji: string; dx: number; anim: Animated.Value }[]>([]);
+  const spawnPetParticles = (emojis: string[]) => {
+    const created = emojis.map((e) => ({
+      id: petParticleId.current++,
+      emoji: e,
+      dx: Math.round(Math.random() * 120 - 60),
+      anim: new Animated.Value(0),
+    }));
+    setPetParticles((prev) => [...prev, ...created]);
+    created.forEach((pc) => {
+      Animated.timing(pc.anim, { toValue: 1, duration: 1000, useNativeDriver: true }).start(() => {
+        setPetParticles((prev) => prev.filter((x) => x.id !== pc.id));
+      });
+    });
+  };
+  const bouncePet = () => {
+    Animated.sequence([
+      Animated.timing(petScaleAnim, { toValue: 1.12, duration: 100, useNativeDriver: true }),
+      Animated.timing(petScaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }),
+      Animated.spring(petScaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  };
+  // Tap the pet → it reacts (bounce + a heart/sparkle pops).
+  const reactPet = () => {
+    bouncePet();
+    spawnPetParticles([['❤️', '⭐', '✨', '😄'][Math.floor(Math.random() * 4)]]);
+  };
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -7129,6 +7158,9 @@ function AppShell() {
       Animated.timing(petScaleAnim, { toValue: 1.12, duration: 110, useNativeDriver: true }),
       Animated.spring(petScaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
     ]).start();
+    // A little burst of happy emojis; a heart bonus when it reaches a new stage.
+    const grewStage = [8, 20, 40, 70].includes(nextFed);
+    spawnPetParticles(grewStage ? ['🎉', '⭐', '❤️', '✨', '🎉'] : ['🍎', '❤️', '⭐']);
   };
   const childPetNode = (() => {
     const pet = PET_OPTIONS.find((p) => p.key === currentChildProfile?.petType);
@@ -7202,22 +7234,45 @@ function AppShell() {
               </Text>
             </View>
           </View>
-          <View style={styles.petStandWrap} pointerEvents="none">
-            <Animated.View
-              style={{
-                transform: [
-                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [2, -6] }) },
-                  { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.02] })) },
-                  { rotate: hungry ? '-3deg' : '0deg' },
-                ],
-              }}
-            >
-              {pet.model ? (
-                <Pet3D uri={pet.model} size={stage3d} />
-              ) : (
-                <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
-              )}
-            </Animated.View>
+          <View style={styles.petStandWrap}>
+            <Pressable onPress={reactPet} accessibilityLabel={`Play with ${pet.name}`}>
+              <Animated.View
+                style={{
+                  transform: [
+                    { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [2, -6] }) },
+                    { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.02] })) },
+                    { rotate: hungry ? '-3deg' : '0deg' },
+                  ],
+                }}
+              >
+                {pet.model ? (
+                  <Pet3D uri={pet.model} size={stage3d} />
+                ) : (
+                  <Text style={{ fontSize: emojiSize }}>{pet.emoji}</Text>
+                )}
+              </Animated.View>
+            </Pressable>
+          </View>
+          {/* Floating hearts/sparkles on tap or feed */}
+          <View style={styles.petParticleLayer} pointerEvents="none">
+            {petParticles.map((pc) => (
+              <Animated.Text
+                key={pc.id}
+                style={[
+                  styles.petParticle,
+                  {
+                    opacity: pc.anim.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 1, 0] }),
+                    transform: [
+                      { translateX: pc.dx },
+                      { translateY: pc.anim.interpolate({ inputRange: [0, 1], outputRange: [0, -95] }) },
+                      { scale: pc.anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.5, 1.25, 0.85] }) },
+                    ],
+                  },
+                ]}
+              >
+                {pc.emoji}
+              </Animated.Text>
+            ))}
           </View>
         </View>
 
@@ -15567,6 +15622,18 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     right: 0,
     alignItems: 'center',
     zIndex: 3,
+  },
+  petParticleLayer: {
+    position: 'absolute',
+    top: 120,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 4,
+  },
+  petParticle: {
+    position: 'absolute',
+    fontSize: 30,
   },
   petStandWrap: {
     position: 'absolute',

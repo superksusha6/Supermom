@@ -9,10 +9,14 @@ export function Pet3D({ uri, size }: { uri: string; size: number }) {
     {
       src: uri,
       alt: 'pet',
-      style: { width: size, height: size, backgroundColor: 'transparent' },
-      'camera-controls': '',
+      // pointerEvents none so the pet's parent <Pressable> gets taps (for reactions);
+      // the model still auto-rotates on its own.
+      style: { width: size, height: size, backgroundColor: 'transparent', pointerEvents: 'none' },
+      autoplay: '', // play any animation clips baked into the .glb (idle/blink/etc.)
+      'animation-crossfade-duration': '300',
       'auto-rotate': '',
-      'disable-zoom': '',
+      'auto-rotate-delay': '0',
+      'rotation-per-second': '18deg',
       'interaction-prompt': 'none',
       exposure: '1',
       'shadow-intensity': '0',
