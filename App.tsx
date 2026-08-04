@@ -7185,8 +7185,11 @@ function AppShell() {
     const stageEnd = nextStage ? nextStage.min : stage.min;
     const toNext = grown ? 0 : Math.max(0, stageEnd - fed);
     const growPct = grown ? 100 : Math.max(4, Math.round(((fed - stageStart) / (stageEnd - stageStart)) * 100));
-    const stage3d = Math.min(stage.base + Math.floor((fed - stage.min) * 0.5), 220);
-    const emojiSize = Math.min(70 + fed * 2, 150);
+    // Keep the 3D box a FIXED size so the model's framing offset (and thus where its
+    // feet land on the podium) doesn't drift with growth. Growth shows via the stage
+    // label + progress bar, not physical size.
+    const stage3d = 210;
+    const emojiSize = 130;
     return (
       <View style={styles.dashWrap}>
         {/* Habitat scene — SVG backdrop (sky + clouds) with a podium the pet stands on */}
@@ -7203,9 +7206,9 @@ function AppShell() {
             <Animated.View
               style={{
                 transform: [
-                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [4, -10] }) },
-                  { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.03] })) },
-                  { rotate: hungry ? '-4deg' : '0deg' },
+                  { translateY: petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [2, -6] }) },
+                  { scale: Animated.multiply(petScaleAnim, petIdleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.02] })) },
+                  { rotate: hungry ? '-3deg' : '0deg' },
                 ],
               }}
             >
@@ -15569,7 +15572,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 34,
+    // Pushed down so the model's centred body drops onto the podium (the 3D box has a
+    // lot of empty space below the model) instead of floating in mid-air.
+    bottom: -18,
     alignItems: 'center',
     justifyContent: 'flex-end',
     zIndex: 2,
