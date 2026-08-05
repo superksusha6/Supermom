@@ -282,6 +282,9 @@ function habitsLookUserModified(habits: HabitEntry[]): boolean {
 // Child pet monsters. `model` (a bundled .glb URI) renders in real 3D; the rest are
 // emoji placeholders until more models are added.
 const GREEN_PET_URI = Asset.fromModule(require('./assets/pets/green.glb')).uri;
+// Pet feature is hidden for now (the model is too rough). Flip to true to bring back
+// the Pet tab, the pet screen and the 🍎 fruit counter.
+const PET_ENABLED = false;
 const PET_OPTIONS: { key: string; emoji: string; name: string; model?: string }[] = [
   { key: 'green', emoji: '🟢', name: 'Fluffy', model: GREEN_PET_URI },
   { key: 'dragon', emoji: '🐲', name: 'Draco' },
@@ -6822,9 +6825,11 @@ function AppShell() {
           <Text style={styles.childHiSmall}>Hi, {childFirstName}</Text>
           <Text style={styles.staffHeaderSub}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
         </View>
-        <View style={styles.childFruitPill}>
-          <Text style={styles.childFruitText}>🍎 {childFruits}</Text>
-        </View>
+        {PET_ENABLED ? (
+          <View style={styles.childFruitPill}>
+            <Text style={styles.childFruitText}>🍎 {childFruits}</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Week strip — same one the parent dashboard uses */}
@@ -7326,7 +7331,7 @@ function AppShell() {
     ) : childTab === 'calendar' ? (
       // Rendered by the shared CalendarScreen block below (child sees only their events).
       null
-    ) : childTab === 'pet' ? (
+    ) : childTab === 'pet' && PET_ENABLED ? (
       childPetNode
     ) : childScreen === 'shopping' && childShows('shopping') ? (
       // Rendered by the shared ShoppingScreen block below (with a Back bar).
@@ -11208,7 +11213,9 @@ function AppShell() {
       <View style={styles.tabBar}>
         <TabButton icon="calendar" label="Today" active={childTab === 'today'} onPress={() => { setChildTab('today'); setChildScreen('home'); }} styles={styles} colors={colors} />
         <TabButton icon="calendar" label="Calendar" active={childTab === 'calendar'} onPress={() => { setChildTab('calendar'); setChildScreen('home'); }} styles={styles} colors={colors} />
-        <TabButton icon="heart" label="Pet" active={childTab === 'pet'} onPress={() => { setChildTab('pet'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        {PET_ENABLED ? (
+          <TabButton icon="heart" label="Pet" active={childTab === 'pet'} onPress={() => { setChildTab('pet'); setChildScreen('home'); }} styles={styles} colors={colors} />
+        ) : null}
         <TabButton icon="settings" label="Settings" active={childTab === 'me'} onPress={() => { setChildTab('me'); setChildScreen('home'); }} styles={styles} colors={colors} />
       </View>
       ) : (
