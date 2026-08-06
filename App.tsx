@@ -5633,7 +5633,9 @@ function AppShell() {
 
   async function uncompleteMyTask(task: TaskItem) {
     setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'new' } : item)));
-    if (session && isSupabaseConfigured) {
+    // Owner "preview as staff" (isStaffPreview) must not write real rows attributed to
+    // the staffer — keep the toggle local only. Real staff sessions persist as usual.
+    if (isRealStaffSession && session && isSupabaseConfigured) {
       try {
         await updateTask(task.id, { status: 'new' });
         await refreshLiveTasks();
@@ -5898,7 +5900,10 @@ function AppShell() {
     setCompleteBusy(true);
     if (!isRoutine) setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, status: 'done' } : item)));
 
-    if (session && isSupabaseConfigured) {
+    // In owner "preview as staff" mode, don't persist — a real completion + proof would
+    // otherwise be written under the previewed staffer's name. Fall through to the
+    // local-only branch so the preview still shows the effect.
+    if (isRealStaffSession && session && isSupabaseConfigured) {
       try {
         if (!isRoutine) await updateTask(task.id, { status: 'done' });
         await createCompletedTaskNotification(session, {
@@ -8052,21 +8057,30 @@ function AppShell() {
   // already ticked off today (matched by title via the completion notifications).
   const currentStaffProfileId = isRealStaffSession ? session?.staffProfileId : activeStaffProfileId;
   const currentStaffProfile = staffProfiles.find((p) => p.id === currentStaffProfileId) || null;
-  const doneTitlesToday = new Set(
-    completedTaskNotifications
-      .filter((n) => completionDayLabel(n.completedAt) === 'Today')
-      .map((n) => (n.taskTitle || '').trim().toLowerCase()),
-  );
+  // Count today's completions and open assigned tasks by title. We consume ONE match
+  // per duty (a multiset), not a boolean Set — so two distinct duties that happen to
+  // share a title don't both vanish when just one is completed, and a duty is only
+  // hidden by as many same-named tasks/completions as actually exist. Title-based so it
+  // still syncs across devices (routine completions have no real task-row id to match).
+  const bumpCount = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) || 0) + 1);
+  const doneTitleCountsToday = new Map<string, number>();
+  completedTaskNotifications
+    .filter((n) => completionDayLabel(n.completedAt) === 'Today')
+    .forEach((n) => bumpCount(doneTitleCountsToday, (n.taskTitle || '').trim().toLowerCase()));
   const routineTasksToday: TaskItem[] = (() => {
     if (!isStaffView || !currentStaffProfile) return [];
     const todayCode = jsDayToWeekDayCode(new Date().getDay());
-    const openTitles = new Set(myOpenStaffTasks.map((t) => t.title.trim().toLowerCase()));
+    const openTitleCounts = new Map<string, number>();
+    myOpenStaffTasks.forEach((t) => bumpCount(openTitleCounts, t.title.trim().toLowerCase()));
+    const doneLeft = new Map(doneTitleCountsToday);
     return (currentStaffProfile.tasks || [])
       .filter((d) => d.title.trim())
       .filter((d) => !d.weekDays || d.weekDays.length === 0 || d.weekDays.includes(todayCode))
       .filter((d) => {
         const key = d.title.trim().toLowerCase();
-        return !doneTitlesToday.has(key) && !openTitles.has(key);
+        if ((doneLeft.get(key) || 0) > 0) { doneLeft.set(key, (doneLeft.get(key) || 0) - 1); return false; }
+        if ((openTitleCounts.get(key) || 0) > 0) { openTitleCounts.set(key, (openTitleCounts.get(key) || 0) - 1); return false; }
+        return true;
       })
       .map((d) => ({
         id: `routine:${d.id}`,

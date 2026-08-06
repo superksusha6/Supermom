@@ -57,15 +57,18 @@ Deno.serve(async (req) => {
       .single();
     if (!profile) return json({ error: 'Staff profile not found.' }, 404);
 
-    // The caller must be an active member of that family.
-    const { data: callerMember } = await admin
+    // The caller must be an active member of that family — and NOT a staff member.
+    // Only owners/co-parents assign tasks, so a staffer must not be able to fire pings
+    // (spoofed title/spam) at a co-worker. There can be multiple membership rows for one
+    // user (e.g. owner + a staff self-invite), so require at least one non-staff row.
+    const { data: callerMembers } = await admin
       .from('family_members')
-      .select('user_id')
+      .select('role')
       .eq('family_id', profile.family_id)
       .eq('user_id', caller)
-      .eq('status', 'active')
-      .maybeSingle();
-    if (!callerMember) return json({ error: 'Not your family.' }, 403);
+      .eq('status', 'active');
+    if (!callerMembers || callerMembers.length === 0) return json({ error: 'Not your family.' }, 403);
+    if (!callerMembers.some((m) => m.role !== 'staff')) return json({ error: 'Not allowed.' }, 403);
 
     // The staff's own connected account.
     const { data: staffMember } = await admin
