@@ -2339,6 +2339,21 @@ function AppShell() {
     const title = recipe?.title || entry.customTitle || 'Dinner planned';
     return { title, recipe, servings: recipe?.servings || null, cookTime: recipe?.cookTimeMinutes || null };
   }, [weeklyMealPlan, recipes, todayDateKey]);
+  // A cook prepares the whole day — surface breakfast/lunch/dinner (from the family
+  // plan), not just dinner. Slots with nothing planned come back with title=null.
+  const todayMeals = useMemo(() => {
+    const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
+    return (['breakfast', 'lunch', 'dinner'] as MealPlanSlot[]).map((slot) => {
+      const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
+      const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === slot && (e.recipeId || e.customTitle));
+      const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+      if (!entry) return { slot, label, title: null as string | null, recipe: null as Recipe | null, cookTime: null as number | null, servings: null as number | null };
+      const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
+      const title = recipe?.title || entry.customTitle || null;
+      return { slot, label, title, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null };
+    });
+  }, [weeklyMealPlan, recipes, todayDateKey]);
+  const plannedTodayMeals = todayMeals.filter((m) => m.title);
   const todayChoreList = useMemo(() => {
     return chores
       .filter((c) => c.childId && choreStatus(c) === 'todo')
@@ -8212,15 +8227,22 @@ function AppShell() {
 
   // Staff home extras: a peek at today's dinner (if they cook) and a fast way to jot
   // products onto the family's shopping list (if they shop). Both feature-gated.
-  const focusStaffMenu = isStaffView && staffCan('menu') && tonightMeal ? (
+  const focusStaffMenu = isStaffView && staffCan('menu') && plannedTodayMeals.length > 0 ? (
     <Pressable onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }}>
       <FamCard title="Menu today">
-        <Text style={styles.staffMenuMeal}>Dinner · {tonightMeal.title}</Text>
-        {tonightMeal.cookTime ? (
-          <Text style={styles.staffMenuMeta}>
-            {tonightMeal.cookTime} min{tonightMeal.servings ? ` · ${tonightMeal.servings} servings` : ''}
-          </Text>
-        ) : null}
+        {plannedTodayMeals.map((m) => (
+          <View key={m.slot} style={styles.staffMenuRow}>
+            <Text style={styles.staffMenuSlot}>{m.label}</Text>
+            <View style={styles.staffMenuRowBody}>
+              <Text style={styles.staffMenuMeal}>{m.title}</Text>
+              {m.cookTime || m.servings ? (
+                <Text style={styles.staffMenuMeta}>
+                  {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ))}
       </FamCard>
     </Pressable>
   ) : null;
@@ -9994,10 +10016,36 @@ function AppShell() {
 
         {screen === 'food' && foodTab === 'today' ? (
           <View style={styles.dashWrap}>
-            {/* Tonight leads into the weekly menu / a recipe — only offer it to someone
-                who was actually granted those. Staff with just shopping used to land in
-                the full meal planner through this card. */}
-            {staffCan('menu') || staffCan('recipes') ? (
+            {/* A cook (menu grant) lands here — show the WHOLE day's menu, each meal
+                tappable into its recipe. Everyone else keeps the single "Tonight" card. */}
+            {isStaffView && staffCan('menu') ? (
+            <View style={styles.foodTonightCard}>
+              <Text style={styles.foodTonightLabel}>TODAY&apos;S MENU · {formatShortDate(todayDateKey)}</Text>
+              {todayMeals.map((m) => {
+                const canOpen = !!m.recipe && staffCan('recipes');
+                return (
+                  <Pressable
+                    key={m.slot}
+                    accessibilityRole="button"
+                    accessibilityLabel={m.title ? `${m.label}, ${m.title}` : `${m.label}, not planned`}
+                    style={styles.staffDayMenuRow}
+                    onPress={() => setFoodTab(canOpen ? 'recipes' : 'plan')}
+                  >
+                    <Text style={styles.staffDayMenuSlot}>{m.label}</Text>
+                    <View style={styles.staffMenuRowBody}>
+                      <Text style={[styles.staffDayMenuName, !m.title && styles.staffDayMenuEmpty]}>{m.title || 'Not planned'}</Text>
+                      {m.title && (m.cookTime || m.servings) ? (
+                        <Text style={styles.foodTonightMeta}>
+                          {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {canOpen ? <Icon name="chevron" color={colors.subtext} size={16} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            ) : staffCan('menu') || staffCan('recipes') ? (
             <View style={styles.foodTonightCard}>
               <Pressable
                 accessibilityRole="button"
@@ -15184,6 +15232,50 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 12.5,
     fontWeight: '600',
     marginTop: 2,
+  },
+  staffMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  staffMenuRowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  staffMenuSlot: {
+    width: 68,
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    paddingTop: 2,
+  },
+  staffDayMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  staffDayMenuSlot: {
+    width: 74,
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  staffDayMenuName: {
+    color: colors.text,
+    fontSize: 14.5,
+    fontWeight: '700',
+  },
+  staffDayMenuEmpty: {
+    color: colors.subtext,
+    fontWeight: '600',
   },
   staffShopHint: {
     color: colors.subtext,
