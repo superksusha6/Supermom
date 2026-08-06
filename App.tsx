@@ -137,6 +137,7 @@ import { WordsScreen } from '@/screens/WordsScreen';
 import { WordPractice } from '@/screens/WordPractice';
 import { NutritionScreen } from '@/screens/NutritionScreen';
 import { MealPlannerScreen } from '@/screens/MealPlannerScreen';
+import { FamilyOnboarding, OnboardPayload, OnboardResult } from '@/screens/FamilyOnboarding';
 import { MedicineScreen } from '@/screens/MedicineScreen';
 import { medsNeedAttentionCount } from '@/lib/meds';
 import { Icon, IconName } from '@/components/Icon';
@@ -1203,6 +1204,7 @@ function AppShell() {
   const [childDraftIncludeInMotherCalendar, setChildDraftIncludeInMotherCalendar] = useState(initialChildDraft.includeInMotherCalendar);
   const [childSetupOpen, setChildSetupOpen] = useState(false);
   const [staffSetupOpen, setStaffSetupOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([]);
   // staff_profile_ids that have an activated, linked account (invite accepted).
   const [staffConnectedIds, setStaffConnectedIds] = useState<string[]>([]);
@@ -5084,6 +5086,85 @@ function AppShell() {
     }
   }
 
+  // Post-registration wizard build step: create every profile the owner added and mint
+  // an invite link for each member that needs their own login. Reuses the same server
+  // functions as the per-member invite buttons, so nothing about the model changes.
+  async function runOnboardingBuild(payload: OnboardPayload): Promise<OnboardResult[]> {
+    const current = session || sessionRef.current;
+    const results: OnboardResult[] = [];
+    if (!current || !isSupabaseConfigured) return results;
+    const origin = (typeof window !== 'undefined' && window.location?.origin) || 'https://supermom-rose.vercel.app';
+
+    if (payload.coparent) {
+      try {
+        const { token } = await createCoparentInvite(current);
+        const pn = personalProfile.fullName?.trim() || 'your family';
+        results.push({
+          key: 'coparent',
+          kind: 'coparent',
+          name: payload.coparent.name || 'Second parent',
+          sub: 'Second parent · full owner',
+          link: `${origin}/?coparent=${token}&pn=${encodeURIComponent(pn)}`,
+        });
+      } catch {
+        /* skip this member, keep the rest */
+      }
+    }
+
+    const nowYear = new Date().getFullYear();
+    for (const kid of payload.children) {
+      const name = kid.name.trim();
+      try {
+        const yr = parseInt(kid.year, 10);
+        const age = Number.isFinite(yr) && yr > 1900 && yr <= nowYear ? nowYear - yr : 0;
+        const childId = await upsertChildProfileRecord(current, { name, age, dateOfBirth: undefined, activities: [] });
+        let link: string | null = null;
+        if (kid.ownLogin && childId) {
+          // Nutrition stays off for kids — the adult calorie UI is not age-appropriate.
+          const features: ChildFeature[] = ['dayplan', 'shopping', 'habits', 'words'];
+          const { token } = await createChildInvite(current, childId, features);
+          link = `${origin}/?child=${token}&cn=${encodeURIComponent(name)}&cp=${encodeURIComponent(childId)}`;
+        }
+        results.push({
+          key: `child-${childId || kid.id}`,
+          kind: 'child',
+          name,
+          sub: kid.ownLogin ? 'Child · own login' : 'Child · in the family 🍼',
+          link,
+        });
+      } catch {
+        /* skip this child, keep the rest */
+      }
+    }
+
+    for (const st of payload.staff) {
+      const name = st.name.trim();
+      try {
+        const roles = [st.role];
+        const features = STAFF_ROLE_PRESETS[st.role].features;
+        const staffId = await upsertStaffProfileRecord(current, { id: `staff-ob-${st.id}`, name, tasks: [] });
+        setStaffGrants((prev) => ({ ...prev, [staffId]: { roles, features } }));
+        const { token } = await createStaffInvite(current, staffId, roles, features);
+        results.push({
+          key: `staff-${staffId}`,
+          kind: 'staff',
+          name,
+          sub: STAFF_ROLE_PRESETS[st.role].label,
+          link: `${origin}/?invite=${token}&sn=${encodeURIComponent(name)}&sp=${encodeURIComponent(staffId)}`,
+        });
+      } catch {
+        /* skip this staffer, keep the rest */
+      }
+    }
+
+    try {
+      await Promise.all([refreshLiveChildren(current), refreshLiveStaffProfiles(current)]);
+    } catch {
+      /* the members are created server-side regardless; local refresh is best-effort */
+    }
+    return results;
+  }
+
   function shareInviteWhatsApp(link: string, name: string) {
     const text = `Join our family on FamOs as ${name}: ${link}`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -6145,6 +6226,9 @@ function AppShell() {
           ]);
           sessionRef.current = ctx;
           if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
+          // Brand-new owner (a signup that didn't consume any invite) → guide them
+          // through building the rest of the family with the onboarding wizard.
+          setOnboardingOpen(true);
         }
       } else {
         setParentLabel(nextParentLabel);
@@ -11382,6 +11466,14 @@ function AppShell() {
       )}
 
       {focusStaffWelcome}
+
+      <FamilyOnboarding
+        visible={onboardingOpen}
+        ownerName={(personalProfile.fullName || '').trim() || 'there'}
+        defaultLabel={parentLabel === 'Dad' ? 'Dad' : 'Mom'}
+        onBuild={runOnboardingBuild}
+        onClose={() => setOnboardingOpen(false)}
+      />
 
       <Modal visible={completedTasksOpen} transparent animationType="fade" onRequestClose={() => setCompletedTasksOpen(false)}>
         <View style={styles.modalBackdrop}>
