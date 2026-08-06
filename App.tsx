@@ -5603,7 +5603,10 @@ function AppShell() {
       });
       if (res.canceled || !res.assets?.length) return;
       const asset = res.assets[0];
-      setCompletePhoto(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
+      let uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      // Proof photos land in a text column and are re-pulled on every sync — shrink first.
+      if (uri.startsWith('data:')) uri = await downscaleDataUrlWeb(uri, 1024, 0.6);
+      setCompletePhoto(uri);
     } catch {
       // ignore picker failures
     }
@@ -5625,7 +5628,9 @@ function AppShell() {
       });
       if (res.canceled || !res.assets?.length) return;
       const asset = res.assets[0];
-      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      let uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      // Avatar stored as base64 in a text column — downscale to avoid multi-MB bloat.
+      if (uri.startsWith('data:')) uri = await downscaleDataUrlWeb(uri, 512, 0.7);
       setStaffProfiles((prev) => prev.map((p) => (p.id === staffId ? { ...p, photoUri: uri } : p)));
       try {
         await setStaffProfilePhoto(staffId, uri);

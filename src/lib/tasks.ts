@@ -685,12 +685,13 @@ export async function acceptStaffInvite(token: string): Promise<{ familyId: stri
 // A newly-joined staff member writes their own date of birth back to their profile.
 // Uses a security-definer RPC (staff can't update staff_profiles directly via RLS).
 export async function deleteStaffProfileRecord(session: AppSession, staffProfileId: string): Promise<void> {
+  // Revoke the live account's membership + expire pending invites + delete the profile,
+  // atomically and server-side. Deleting only the staff_profiles row (as this used to)
+  // left the family_members row — and all authorization keys off family_members, so a
+  // "removed" staffer kept full access. session is kept for signature stability.
+  void session;
   const client = requireClient();
-  const { error } = await client
-    .from('staff_profiles')
-    .delete()
-    .eq('id', staffProfileId)
-    .eq('family_id', session.familyId);
+  const { error } = await client.rpc('remove_staff_member', { p_staff_profile_id: staffProfileId });
   if (error) throw error;
 }
 
