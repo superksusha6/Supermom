@@ -328,6 +328,14 @@ const STAFF_FEATURE_LABELS: Record<StaffFeature, string> = {
   recipes: 'Recipes',
   fixit: 'Fix it',
 };
+// Friendly one-liners for the first-run welcome card (what each granted function means).
+const STAFF_WELCOME_DESC: Record<StaffFeature, string> = {
+  tasks: 'See and tick off your tasks — add a photo when a job is done.',
+  shopping: 'Add what needs buying to the family shopping list.',
+  menu: "Check today's menu so you know what to prepare.",
+  recipes: 'Open full recipes with ingredients and steps.',
+  fixit: 'Report home issues and reach the right contact.',
+};
 
 function loadLocalStaffGrants(): Record<string, StaffGrant> {
   if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) return {};
@@ -1227,6 +1235,9 @@ function AppShell() {
   const [expandedStaffDays, setExpandedStaffDays] = useState<Set<string>>(() => new Set(['Today']));
   const [staffShopName, setStaffShopName] = useState('');
   const [staffShopQty, setStaffShopQty] = useState('');
+  // First-run welcome for an invited staffer (shown once, persisted per user).
+  const [staffWelcomeSeen, setStaffWelcomeSeen] = useState(false);
+  const [staffWelcomeChecked, setStaffWelcomeChecked] = useState(false);
   const [staffReminderNotifications, setStaffReminderNotifications] = useState<StaffReminderNotification[]>([]);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [taskNotificationsFilter, setTaskNotificationsFilter] = useState<TaskNotificationsFilter>('all');
@@ -1745,6 +1756,32 @@ function AppShell() {
     setScreen(first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaffView, screen, staffFeatures]);
+
+  // Read the one-time "welcome" flag once we know who the staffer is. `checked` gates
+  // the card so a returning staffer never sees it flash before storage is read.
+  useEffect(() => {
+    if (!isRealStaffSession || !session?.userId) {
+      setStaffWelcomeChecked(false);
+      return;
+    }
+    let seen = false;
+    try {
+      seen = globalThis.localStorage?.getItem(`smartmom.staffWelcomeSeen.${session.userId}`) === '1';
+    } catch {
+      /* ignore storage errors */
+    }
+    setStaffWelcomeSeen(seen);
+    setStaffWelcomeChecked(true);
+  }, [isRealStaffSession, session?.userId]);
+
+  const dismissStaffWelcome = () => {
+    setStaffWelcomeSeen(true);
+    try {
+      if (session?.userId) globalThis.localStorage?.setItem(`smartmom.staffWelcomeSeen.${session.userId}`, '1');
+    } catch {
+      /* ignore storage errors */
+    }
+  };
   const overdueStaffTasks = useMemo(
     () =>
       tasks
@@ -8235,6 +8272,33 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // First-run welcome: a one-time sheet orienting a freshly-joined staffer to exactly
+  // what they can do, derived from their granted functions. Shown as a modal (not a
+  // dashboard card) so it reaches staff who land on Food/Home too, not just Tasks.
+  // Dismissed with "Got it" and remembered per user.
+  const showStaffWelcome = isRealStaffSession && staffWelcomeChecked && !staffWelcomeSeen && staffHasAnyFunction;
+  const focusStaffWelcome = (
+    <Modal visible={showStaffWelcome} transparent animationType="fade" onRequestClose={dismissStaffWelcome}>
+      <Pressable style={styles.newListBackdrop} onPress={dismissStaffWelcome}>
+        <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+          <Text style={styles.daySheetTitle}>Welcome, {staffFirstName}! 👋</Text>
+          <Text style={[styles.staffShopHint, { marginTop: 4 }]}>You&apos;ve joined the family. Here&apos;s what you can do:</Text>
+          <View style={styles.staffWelcomeList}>
+            {STAFF_FEATURE_ORDER.filter((f) => staffCan(f)).map((f) => (
+              <View key={f} style={styles.staffWelcomeRow}>
+                <Text style={styles.staffWelcomeDot}>•</Text>
+                <Text style={styles.staffWelcomeText}>{STAFF_WELCOME_DESC[f]}</Text>
+              </View>
+            ))}
+          </View>
+          <Pressable style={styles.daySheetAdd} onPress={dismissStaffWelcome} accessibilityRole="button">
+            <Text style={styles.daySheetAddText}>Got it</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   // Today's habits — a compact daily card with one-tap check-off. Only for the
   // main user, when the Habits add-on is on and there's at least one habit.
   const activeHabits = habits.filter((h) => h.enabled);
@@ -11254,6 +11318,8 @@ function AppShell() {
         <TabButton icon="settings" label="Settings" active={settingsPanelOpen} onPress={() => setSettingsPanelOpen(true)} styles={styles} colors={colors} />
       </View>
       )}
+
+      {focusStaffWelcome}
 
       <Modal visible={completedTasksOpen} transparent animationType="fade" onRequestClose={() => setCompletedTasksOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -15150,6 +15216,27 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: '#ffffff',
     fontWeight: '800',
     fontSize: 14,
+  },
+  staffWelcomeList: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  staffWelcomeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  staffWelcomeDot: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  staffWelcomeText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13.5,
+    lineHeight: 20,
   },
   daySheetSendText: {
     color: colors.primary,
