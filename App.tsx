@@ -313,20 +313,19 @@ const LOCAL_STAFF_GRANTS_KEY = 'smartmom.staffGrants.v1';
 // Each role is a job "hat" that grants a bundle of functions. A staff member can hold
 // several at once (union of bundles), then the mom can fine-tune individual functions.
 const STAFF_ROLE_PRESETS: Record<StaffRolePreset, { label: string; features: StaffFeature[] }> = {
-  nanny: { label: 'Nanny', features: ['tasks', 'schedule'] },
+  nanny: { label: 'Nanny', features: ['tasks'] },
   housekeeper: { label: 'Housekeeper', features: ['tasks', 'shopping'] },
   cook: { label: 'Cook', features: ['menu', 'shopping', 'recipes'] },
-  driver: { label: 'Driver', features: ['schedule'] },
+  driver: { label: 'Driver', features: ['tasks'] },
   assistant: { label: 'Assistant', features: ['tasks', 'shopping', 'menu'] },
 };
 const STAFF_ROLE_ORDER: StaffRolePreset[] = ['nanny', 'housekeeper', 'cook', 'driver', 'assistant'];
-const STAFF_FEATURE_ORDER: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'schedule', 'fixit'];
+const STAFF_FEATURE_ORDER: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'fixit'];
 const STAFF_FEATURE_LABELS: Record<StaffFeature, string> = {
   tasks: 'Tasks / duties',
   shopping: 'Shopping list',
   menu: 'Weekly menu',
   recipes: 'Recipes',
-  schedule: 'Schedule',
   fixit: 'Fix it',
 };
 
@@ -1621,7 +1620,7 @@ function AppShell() {
     // Habits/wellness is the owner's personal tracker — never part of a staff grant.
     if (targetScreen === 'wellness') return false;
     if (targetScreen === 'household' || targetScreen === 'fixit' || targetScreen === 'meds') return staffCan('fixit');
-    if (targetScreen === 'calendar') return staffCan('schedule') || staffCan('tasks');
+    if (targetScreen === 'calendar') return staffCan('tasks');
     // Anything not listed above is denied: a screen added later must be granted
     // explicitly rather than defaulting to visible for staff.
     return false;
@@ -1736,13 +1735,13 @@ function AppShell() {
 
   useEffect(() => {
     if (!isStaffView || staffScreenAllowed(screen)) return;
-    const first = staffCan('schedule') || staffCan('tasks')
+    const first = staffCan('tasks')
       ? 'calendar'
       : staffCan('shopping') || staffCan('menu') || staffCan('recipes')
         ? 'food'
         : staffCan('fixit')
           ? 'household'
-          : 'calendar';
+          : 'calendar'; // no function granted → dashboard shows the "nothing assigned" card
     setScreen(first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaffView, screen, staffFeatures]);
@@ -8223,6 +8222,19 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // Safety net: a staffer with no granted function would otherwise land on a blank
+  // dashboard (just the greeting) — the old "Driver = schedule only" dead-end. Show a
+  // friendly card instead so the screen is never empty. Real staff sessions only.
+  const staffHasAnyFunction =
+    staffCan('tasks') || staffCan('shopping') || staffCan('menu') || staffCan('recipes') || staffCan('fixit');
+  const focusStaffEmpty = isStaffView && staffFeatures !== null && !staffHasAnyFunction ? (
+    <FamCard title="Nothing assigned yet">
+      <Text style={styles.staffShopHint}>
+        The family hasn&apos;t given you any functions yet. When they do — tasks, shopping or the menu — they&apos;ll appear right here. Reopen the app after they update your access.
+      </Text>
+    </FamCard>
+  ) : null;
+
   // Today's habits — a compact daily card with one-tap check-off. Only for the
   // main user, when the Habits add-on is on and there's at least one habit.
   const activeHabits = habits.filter((h) => h.enabled);
@@ -8373,6 +8385,7 @@ function AppShell() {
       {focusStaffHistory}
       {focusStaffMenu}
       {focusStaffShopping}
+      {focusStaffEmpty}
       {focusCalories}
       {focusHabits}
       {focusTasks}
@@ -8390,6 +8403,7 @@ function AppShell() {
         {focusStaffHistory}
         {focusStaffMenu}
         {focusStaffShopping}
+        {focusStaffEmpty}
         {focusCalories}
         {focusHabits}
         {focusTasks}
@@ -11225,7 +11239,7 @@ function AppShell() {
       </View>
       ) : (
       <View style={styles.tabBar}>
-        {staffCan('schedule') || staffCan('tasks') ? (
+        {!isStaffView || staffCan('tasks') ? (
           <TabButton icon={isStaffView ? 'chores' : 'calendar'} label={isStaffView ? 'Tasks' : 'Today'} active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {staffCan('shopping') || staffCan('menu') || staffCan('recipes') ? (

@@ -583,7 +583,9 @@ export async function getOrCreateSessionContext(): Promise<AppSession | null> {
   };
 }
 
-const STAFF_FEATURE_VALUES: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'schedule', 'fixit'];
+// Note: 'schedule' was retired (it granted no real access — staff have no calendar).
+// It's intentionally absent so any legacy grant carrying it is normalized away.
+const STAFF_FEATURE_VALUES: StaffFeature[] = ['tasks', 'shopping', 'menu', 'recipes', 'fixit'];
 function normalizeStaffFeatures(value: unknown): StaffFeature[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is StaffFeature => typeof v === 'string' && STAFF_FEATURE_VALUES.includes(v as StaffFeature));

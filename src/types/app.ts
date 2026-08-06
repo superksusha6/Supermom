@@ -1,6 +1,6 @@
 export type Role = 'mother' | 'child' | 'staff' | 'admin';
 // Which app functions a staff member (nanny / cook / driver) may access.
-export type StaffFeature = 'tasks' | 'shopping' | 'menu' | 'recipes' | 'schedule' | 'fixit';
+export type StaffFeature = 'tasks' | 'shopping' | 'menu' | 'recipes' | 'fixit';
 // Functions a parent can grant an invited child (each opt-in "по запросу").
 export type ChildFeature = 'dayplan' | 'shopping' | 'habits' | 'nutrition' | 'words';
 
