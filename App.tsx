@@ -5102,8 +5102,8 @@ function AppShell() {
         results.push({
           key: 'coparent',
           kind: 'coparent',
-          name: payload.coparent.name || 'Second parent',
-          sub: 'Second parent · full owner',
+          name: payload.coparent.name || 'Partner',
+          sub: 'Partner · full access',
           link: `${origin}/?coparent=${token}&pn=${encodeURIComponent(pn)}`,
         });
       } catch {

@@ -47,7 +47,6 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
   const [step, setStep] = useState<Step>('welcome');
   const [who, setWho] = useState({ coparent: false, children: false, staff: false });
   const [cpName, setCpName] = useState('');
-  const [cpLabel, setCpLabel] = useState<'Mom' | 'Dad'>(defaultLabel === 'Mom' ? 'Dad' : 'Mom');
   const [kids, setKids] = useState<OnboardChildInput[]>([emptyChild()]);
   const [staff, setStaff] = useState<OnboardStaffInput[]>([emptyStaff()]);
   const [results, setResults] = useState<OnboardResult[]>([]);
@@ -75,7 +74,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
   async function startBuild() {
     setStep('building');
     const payload: OnboardPayload = {
-      coparent: who.coparent ? { name: cpName.trim(), label: cpLabel } : null,
+      coparent: who.coparent ? { name: cpName.trim(), label: defaultLabel } : null,
       children: who.children ? kids.filter((k) => k.name.trim()) : [],
       staff: who.staff ? staff.filter((s) => s.name.trim()) : [],
     };
@@ -134,7 +133,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
               <View>
                 <Text style={styles.q}>Who&apos;s in your household?</Text>
                 <Text style={styles.sub}>Pick everyone you&apos;d like to add. We&apos;ll set each one up next.</Text>
-                <WhoOption label="A second parent" hint="Shares everything — full owner" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
+                <WhoOption label="Partner" hint="Shares everything — full access" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
                 <WhoOption label="Children" hint="Own profile, optional login" on={who.children} onToggle={() => setWho((w) => ({ ...w, children: !w.children }))} styles={styles} />
                 <WhoOption label="Household staff" hint="Nanny, cook, driver…" on={who.staff} onToggle={() => setWho((w) => ({ ...w, staff: !w.staff }))} styles={styles} />
               </View>
@@ -143,15 +142,8 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
             {step === 'coparent' ? (
               <View>
                 <Text style={styles.q}>Your partner</Text>
-                <Text style={styles.sub}>They sign in with their own account and share this exact household — same tasks, calendar and shopping. Both of you are full owners.</Text>
+                <Text style={styles.sub}>They sign in with their own account and share this exact household — same tasks, calendar and shopping. Both of you have full access.</Text>
                 <TextInput style={styles.input} placeholder="Their name" placeholderTextColor={colors.subtext} value={cpName} onChangeText={setCpName} />
-                <View style={styles.segRow}>
-                  {(['Mom', 'Dad'] as const).map((l) => (
-                    <Pressable key={l} style={[styles.seg, cpLabel === l && styles.segOn]} onPress={() => setCpLabel(l)}>
-                      <Text style={[styles.segText, cpLabel === l && styles.segTextOn]}>{l}</Text>
-                    </Pressable>
-                  ))}
-                </View>
               </View>
             ) : null}
 
