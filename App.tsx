@@ -5140,8 +5140,10 @@ function AppShell() {
     for (const st of payload.staff) {
       const name = st.name.trim();
       try {
-        const roles = [st.role];
-        const features = STAFF_ROLE_PRESETS[st.role].features;
+        const roles = st.roles.length ? st.roles : (['nanny'] as StaffRolePreset[]);
+        // A staffer can hold several roles (e.g. nanny + housekeeper + cook) — grant the
+        // UNION of every selected role's features.
+        const features = Array.from(new Set(roles.flatMap((r) => STAFF_ROLE_PRESETS[r].features)));
         const staffId = await upsertStaffProfileRecord(current, { id: `staff-ob-${st.id}`, name, tasks: [] });
         setStaffGrants((prev) => ({ ...prev, [staffId]: { roles, features } }));
         const { token } = await createStaffInvite(current, staffId, roles, features);
@@ -5149,7 +5151,7 @@ function AppShell() {
           key: `staff-${staffId}`,
           kind: 'staff',
           name,
-          sub: STAFF_ROLE_PRESETS[st.role].label,
+          sub: roles.map((r) => STAFF_ROLE_PRESETS[r].label).join(' · '),
           link: `${origin}/?invite=${token}&sn=${encodeURIComponent(name)}&sp=${encodeURIComponent(staffId)}`,
         });
       } catch {

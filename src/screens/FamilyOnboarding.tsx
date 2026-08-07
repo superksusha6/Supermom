@@ -9,7 +9,7 @@ import { StaffRolePreset } from '@/types/app';
 // who needs their own login. Everything here is also reachable later from Settings.
 
 export type OnboardChildInput = { id: string; name: string; year: string; sex: 'boy' | 'girl'; ownLogin: boolean };
-export type OnboardStaffInput = { id: string; name: string; role: StaffRolePreset };
+export type OnboardStaffInput = { id: string; name: string; roles: StaffRolePreset[] };
 export type OnboardPayload = {
   coparent: { name: string; label: 'Mom' | 'Dad' } | null;
   children: OnboardChildInput[];
@@ -38,7 +38,7 @@ const ROLE_OPTIONS: { key: StaffRolePreset; label: string }[] = [
 let seq = 0;
 const nextId = () => `ob-${++seq}`;
 const emptyChild = (): OnboardChildInput => ({ id: nextId(), name: '', year: '', sex: 'girl', ownLogin: false });
-const emptyStaff = (): OnboardStaffInput => ({ id: nextId(), name: '', role: 'nanny' });
+const emptyStaff = (): OnboardStaffInput => ({ id: nextId(), name: '', roles: ['nanny'] });
 
 export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, onClose }: Props) {
   const colors = useThemeColors();
@@ -98,6 +98,17 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
     else startBuild();
   }
 
+  const canGoBack = step === 'who' || step === 'coparent' || step === 'children' || step === 'staff';
+  function goBack() {
+    if (step === 'who') {
+      setStep('welcome');
+      return;
+    }
+    const idx = activeInputs.indexOf(step);
+    if (idx > 0) setStep(activeInputs[idx - 1]);
+    else setStep('who');
+  }
+
   function copy(key: string, link: string) {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(link);
@@ -115,7 +126,16 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
         <View style={styles.card}>
           {step !== 'welcome' && step !== 'building' ? (
             <View style={styles.progressWrap}>
-              <Text style={styles.progressStep}>Step {progressIndex + 1} of {progressSteps.length}</Text>
+              <View style={styles.topBar}>
+                {canGoBack ? (
+                  <Pressable onPress={goBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back">
+                    <Text style={styles.backText}>‹ Back</Text>
+                  </Pressable>
+                ) : (
+                  <View />
+                )}
+                <Text style={styles.progressStep}>Step {progressIndex + 1} of {progressSteps.length}</Text>
+              </View>
               <View style={styles.progress}>
                 {progressSteps.map((s, i) => (
                   <View key={s + i} style={[styles.progressBar, i <= progressIndex && styles.progressBarOn]} />
@@ -190,17 +210,32 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
 
             {step === 'staff' ? (
               <View>
-                <Text style={styles.q}>Household help</Text>
-                <Text style={styles.sub}>Pick a role — we preset what they can see. You can fine-tune later in Settings.</Text>
+                <Text style={styles.q}>Household staff</Text>
+                <Text style={styles.sub}>Pick one or more roles — we preset what they can see. You can fine-tune later in Settings.</Text>
                 {staff.map((s) => (
                   <View key={s.id} style={styles.rowCard}>
                     <TextInput style={[styles.input, styles.mb8]} placeholder="Name" placeholderTextColor={colors.subtext} value={s.name} onChangeText={(v) => setStaff((arr) => arr.map((x) => (x.id === s.id ? { ...x, name: v } : x)))} />
                     <View style={styles.chips}>
-                      {ROLE_OPTIONS.map((r) => (
-                        <Pressable key={r.key} style={[styles.chip, s.role === r.key && styles.chipOn]} onPress={() => setStaff((arr) => arr.map((x) => (x.id === s.id ? { ...x, role: r.key } : x)))}>
-                          <Text style={[styles.chipText, s.role === r.key && styles.chipTextOn]}>{r.label}</Text>
-                        </Pressable>
-                      ))}
+                      {ROLE_OPTIONS.map((r) => {
+                        const on = s.roles.includes(r.key);
+                        return (
+                          <Pressable
+                            key={r.key}
+                            style={[styles.chip, on && styles.chipOn]}
+                            onPress={() =>
+                              setStaff((arr) =>
+                                arr.map((x) =>
+                                  x.id === s.id
+                                    ? { ...x, roles: on ? x.roles.filter((k) => k !== r.key) : [...x.roles, r.key] }
+                                    : x,
+                                ),
+                              )
+                            }
+                          >
+                            <Text style={[styles.chipText, on && styles.chipTextOn]}>{r.label}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
                     {staff.length > 1 ? (
                       <Pressable onPress={() => setStaff((arr) => arr.filter((x) => x.id !== s.id))} style={styles.removeRow}>
@@ -312,13 +347,16 @@ function WhoOption({ label, hint, on, onToggle, styles }: { label: string; hint:
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(15,20,30,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-    card: { width: '100%', maxWidth: 460, maxHeight: '92%', backgroundColor: colors.surface, borderRadius: 24, overflow: 'hidden' },
+    // Fixed height so the card is the same size on every step (content scrolls inside).
+    card: { width: '100%', maxWidth: 460, height: 600, maxHeight: '92%', backgroundColor: colors.surface, borderRadius: 24, overflow: 'hidden' },
     progressWrap: { paddingHorizontal: 20, paddingTop: 16 },
-    progressStep: { fontSize: 11, fontWeight: '600', color: colors.subtext, textAlign: 'right', marginBottom: 6 },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    backText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    progressStep: { fontSize: 11, fontWeight: '600', color: colors.subtext },
     progress: { flexDirection: 'row', gap: 6 },
     progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border },
     progressBarOn: { backgroundColor: colors.primary },
-    scroll: { flexGrow: 0 },
+    scroll: { flex: 1 },
     scrollBody: { padding: 22 },
     center: { textAlign: 'center' },
     welcomeTop: { marginTop: 6 },
