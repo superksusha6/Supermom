@@ -45,7 +45,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [step, setStep] = useState<Step>('welcome');
-  const [who, setWho] = useState({ coparent: true, children: true, staff: true });
+  const [who, setWho] = useState({ coparent: false, children: false, staff: false });
   const [cpName, setCpName] = useState('');
   const [cpLabel, setCpLabel] = useState<'Mom' | 'Dad'>(defaultLabel === 'Mom' ? 'Dad' : 'Mom');
   const [kids, setKids] = useState<OnboardChildInput[]>([emptyChild()]);
@@ -125,8 +125,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
             {step === 'welcome' ? (
               <View>
-                <Text style={styles.bigEmoji}>👋</Text>
-                <Text style={[styles.q, styles.center]}>Welcome, {ownerName || 'there'}!</Text>
+                <Text style={[styles.q, styles.center, styles.welcomeTop]}>Welcome, {ownerName || 'there'}!</Text>
                 <Text style={[styles.sub, styles.center]}>Let&apos;s set up your family. It takes a minute — you can invite everyone with a link.</Text>
               </View>
             ) : null}
@@ -135,9 +134,9 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
               <View>
                 <Text style={styles.q}>Who&apos;s in your household?</Text>
                 <Text style={styles.sub}>Pick everyone you&apos;d like to add. We&apos;ll set each one up next.</Text>
-                <WhoOption emoji="👩‍❤️‍👨" label="A second parent" hint="Shares everything — full owner" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
-                <WhoOption emoji="🧒" label="Children" hint="Own profile, optional login" on={who.children} onToggle={() => setWho((w) => ({ ...w, children: !w.children }))} styles={styles} />
-                <WhoOption emoji="🧹" label="Household help" hint="Nanny, cook, driver…" on={who.staff} onToggle={() => setWho((w) => ({ ...w, staff: !w.staff }))} styles={styles} />
+                <WhoOption label="A second parent" hint="Shares everything — full owner" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
+                <WhoOption label="Children" hint="Own profile, optional login" on={who.children} onToggle={() => setWho((w) => ({ ...w, children: !w.children }))} styles={styles} />
+                <WhoOption label="Household staff" hint="Nanny, cook, driver…" on={who.staff} onToggle={() => setWho((w) => ({ ...w, staff: !w.staff }))} styles={styles} />
               </View>
             ) : null}
 
@@ -176,7 +175,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
                     <View style={styles.switchRow}>
                       <View style={styles.flex1}>
                         <Text style={styles.switchLabel}>Give {k.name.trim() || 'them'} their own login</Text>
-                        <Text style={styles.switchHint}>{k.ownLogin ? 'Standard kid access — adjust in Settings' : 'Part of the family — no login needed yet 🍼'}</Text>
+                        <Text style={styles.switchHint}>{k.ownLogin ? 'Standard kid access — adjust in Settings' : 'Part of the family — no login needed yet'}</Text>
                       </View>
                       <Switch value={k.ownLogin} onValueChange={(v) => setKids((arr) => arr.map((x) => (x.id === k.id ? { ...x, ownLogin: v } : x)))} trackColor={{ true: colors.primary, false: colors.border }} thumbColor="#ffffff" />
                     </View>
@@ -230,8 +229,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
 
             {step === 'done' ? (
               <View>
-                <Text style={styles.bigEmoji}>🎉</Text>
-                <Text style={[styles.q, styles.center]}>Your family is ready</Text>
+                <Text style={[styles.q, styles.center, styles.welcomeTop]}>Your family is ready</Text>
                 <Text style={[styles.sub, styles.center]}>Send a link to everyone who has a login. Little ones are already in your family — no link needed.</Text>
                 {results.length === 0 ? (
                   <Text style={[styles.sub, styles.center, { marginTop: 12 }]}>Nothing added yet — you can invite anyone anytime from Settings.</Text>
@@ -300,10 +298,9 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
   );
 }
 
-function WhoOption({ emoji, label, hint, on, onToggle, styles }: { emoji: string; label: string; hint: string; on: boolean; onToggle: () => void; styles: ReturnType<typeof makeStyles> }) {
+function WhoOption({ label, hint, on, onToggle, styles }: { label: string; hint: string; on: boolean; onToggle: () => void; styles: ReturnType<typeof makeStyles> }) {
   return (
-    <Pressable style={[styles.whoOpt, on && styles.whoOptOn]} onPress={onToggle}>
-      <Text style={styles.whoEmoji}>{emoji}</Text>
+    <Pressable style={[styles.whoOpt, on && styles.whoOptOn]} onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
       <View style={styles.flex1}>
         <Text style={styles.whoLabel}>{label}</Text>
         <Text style={styles.whoHint}>{hint}</Text>
@@ -323,7 +320,7 @@ function makeStyles(colors: ThemeColors) {
     scroll: { flexGrow: 0 },
     scrollBody: { padding: 22 },
     center: { textAlign: 'center' },
-    bigEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 6 },
+    welcomeTop: { marginTop: 6 },
     q: { fontSize: 21, fontWeight: '800', color: colors.text, letterSpacing: -0.3, marginBottom: 4 },
     sub: { fontSize: 13.5, color: colors.subtext, lineHeight: 19 },
     input: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14.5, color: colors.text, marginBottom: 10, outlineWidth: 0, outlineColor: 'transparent' },
@@ -339,7 +336,6 @@ function makeStyles(colors: ThemeColors) {
     segTextOn: { color: colors.primary },
     whoOpt: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginTop: 10, backgroundColor: colors.surfaceAlt },
     whoOptOn: { borderColor: colors.primary, backgroundColor: colors.selection },
-    whoEmoji: { fontSize: 20 },
     whoLabel: { fontSize: 14, fontWeight: '700', color: colors.text },
     whoHint: { fontSize: 11.5, color: colors.subtext, marginTop: 1 },
     checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },

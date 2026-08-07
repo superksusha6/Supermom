@@ -5129,7 +5129,7 @@ function AppShell() {
           key: `child-${childId || kid.id}`,
           kind: 'child',
           name,
-          sub: kid.ownLogin ? 'Child · own login' : 'Child · in the family 🍼',
+          sub: kid.ownLogin ? 'Child · own login' : 'Child · in the family',
           link,
         });
       } catch {
