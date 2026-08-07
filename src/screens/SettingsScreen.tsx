@@ -83,6 +83,7 @@ type Props = {
   onInvitePartner: () => void;
   onRemovePartner: () => void;
   onInviteCoparent: () => void;
+  onSetupFamily: () => void;
   pushState: 'unsupported' | 'default' | 'denied' | 'enabled' | 'error';
   onTogglePush: () => void;
 };
@@ -152,6 +153,7 @@ export function SettingsScreen({
   onInvitePartner,
   onRemovePartner,
   onInviteCoparent,
+  onSetupFamily,
   pushState,
   onTogglePush,
 }: Props) {
@@ -882,6 +884,14 @@ export function SettingsScreen({
       <>
         {currentRole === 'mother' ? (
           <>
+            <Text style={styles.label}>Set up your family</Text>
+            <Text style={styles.emptyText}>
+              Add a second parent, your children and any staff in one guided flow — and get a share link for everyone who needs their own login.
+            </Text>
+            <Pressable style={styles.primaryBtn} onPress={onSetupFamily}>
+              <Text style={styles.primaryBtnText}>Set up my family</Text>
+            </Pressable>
+
             <Text style={styles.label}>Parent profile</Text>
             <View style={styles.pillRow}>
               {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (

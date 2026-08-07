@@ -6623,6 +6623,7 @@ function AppShell() {
       partnerConnectedName={partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || null}
       onInvitePartner={handleInvitePartner}
       onInviteCoparent={handleInviteCoparent}
+      onSetupFamily={() => setOnboardingOpen(true)}
       onRemovePartner={() => {
         const link = partnerLinks.find((l) => l.status === 'accepted');
         if (link) handleRemovePartner(link.id);
