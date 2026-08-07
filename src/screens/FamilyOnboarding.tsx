@@ -114,10 +114,13 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
       <View style={styles.backdrop}>
         <View style={styles.card}>
           {step !== 'welcome' && step !== 'building' ? (
-            <View style={styles.progress}>
-              {progressSteps.map((s, i) => (
-                <View key={s + i} style={[styles.progressBar, i <= progressIndex && styles.progressBarOn]} />
-              ))}
+            <View style={styles.progressWrap}>
+              <Text style={styles.progressStep}>Step {progressIndex + 1} of {progressSteps.length}</Text>
+              <View style={styles.progress}>
+                {progressSteps.map((s, i) => (
+                  <View key={s + i} style={[styles.progressBar, i <= progressIndex && styles.progressBarOn]} />
+                ))}
+              </View>
             </View>
           ) : null}
 
@@ -131,11 +134,11 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
 
             {step === 'who' ? (
               <View>
-                <Text style={styles.q}>Who&apos;s in your household?</Text>
-                <Text style={styles.sub}>Pick everyone you&apos;d like to add. We&apos;ll set each one up next.</Text>
-                <WhoOption label="Partner" hint="Shares everything — full access" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
-                <WhoOption label="Children" hint="Own profile, optional login" on={who.children} onToggle={() => setWho((w) => ({ ...w, children: !w.children }))} styles={styles} />
-                <WhoOption label="Household staff" hint="Nanny, cook, driver…" on={who.staff} onToggle={() => setWho((w) => ({ ...w, staff: !w.staff }))} styles={styles} />
+                <Text style={styles.q}>Who would you like to add?</Text>
+                <Text style={styles.sub}>Set up profiles for the people you share family life with.</Text>
+                <WhoOption label="Partner" hint="Shares planning, calendars and shopping" on={who.coparent} onToggle={() => setWho((w) => ({ ...w, coparent: !w.coparent }))} styles={styles} />
+                <WhoOption label="Children" hint="Profiles — with a login for older kids" on={who.children} onToggle={() => setWho((w) => ({ ...w, children: !w.children }))} styles={styles} />
+                <WhoOption label="Household staff" hint="A nanny, cook or helper with task access" on={who.staff} onToggle={() => setWho((w) => ({ ...w, staff: !w.staff }))} styles={styles} />
               </View>
             ) : null}
 
@@ -263,8 +266,11 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
 
           {step === 'who' ? (
             <View style={styles.footer}>
-              <Pressable style={[styles.primaryBtn, !anySelected && styles.primaryBtnMuted]} onPress={() => (anySelected ? goAfter('who') : onClose())}>
-                <Text style={styles.primaryBtnText}>{anySelected ? 'Continue' : 'Finish'}</Text>
+              <Pressable style={[styles.primaryBtn, !anySelected && styles.primaryBtnDisabled]} disabled={!anySelected} onPress={() => goAfter('who')}>
+                <Text style={[styles.primaryBtnText, !anySelected && styles.primaryBtnTextDisabled]}>Continue</Text>
+              </Pressable>
+              <Pressable style={styles.ghostBtn} onPress={onClose}>
+                <Text style={styles.ghostBtnText}>Skip for now</Text>
               </Pressable>
             </View>
           ) : null}
@@ -293,6 +299,7 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
 function WhoOption({ label, hint, on, onToggle, styles }: { label: string; hint: string; on: boolean; onToggle: () => void; styles: ReturnType<typeof makeStyles> }) {
   return (
     <Pressable style={[styles.whoOpt, on && styles.whoOptOn]} onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
+      {on ? <View style={styles.whoRail} /> : null}
       <View style={styles.flex1}>
         <Text style={styles.whoLabel}>{label}</Text>
         <Text style={styles.whoHint}>{hint}</Text>
@@ -306,8 +313,10 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(15,20,30,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 },
     card: { width: '100%', maxWidth: 460, maxHeight: '92%', backgroundColor: colors.surface, borderRadius: 24, overflow: 'hidden' },
-    progress: { flexDirection: 'row', gap: 4, paddingHorizontal: 20, paddingTop: 18 },
-    progressBar: { flex: 1, height: 4, borderRadius: 3, backgroundColor: colors.border },
+    progressWrap: { paddingHorizontal: 20, paddingTop: 16 },
+    progressStep: { fontSize: 11, fontWeight: '600', color: colors.subtext, textAlign: 'right', marginBottom: 6 },
+    progress: { flexDirection: 'row', gap: 6 },
+    progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border },
     progressBarOn: { backgroundColor: colors.primary },
     scroll: { flexGrow: 0 },
     scrollBody: { padding: 22 },
@@ -326,13 +335,14 @@ function makeStyles(colors: ThemeColors) {
     segOn: { borderColor: colors.primary, backgroundColor: colors.selection },
     segText: { fontSize: 13, fontWeight: '700', color: colors.subtext },
     segTextOn: { color: colors.primary },
-    whoOpt: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginTop: 10, backgroundColor: colors.surfaceAlt },
+    whoOpt: { position: 'relative', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingVertical: 14, paddingLeft: 16, paddingRight: 14, marginTop: 12, minHeight: 64, backgroundColor: colors.surface },
     whoOptOn: { borderColor: colors.primary, backgroundColor: colors.selection },
+    whoRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: colors.primary },
     whoLabel: { fontSize: 14, fontWeight: '700', color: colors.text },
     whoHint: { fontSize: 11.5, color: colors.subtext, marginTop: 1 },
-    checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    checkbox: { width: 26, height: 26, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
-    checkboxTick: { color: '#ffffff', fontSize: 13, fontWeight: '900', lineHeight: 16 },
+    checkboxTick: { color: '#ffffff', fontSize: 14, fontWeight: '900', lineHeight: 17 },
     rowCard: { marginTop: 6 },
     rowDivider: { height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 2 },
     switchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 11, backgroundColor: colors.surfaceAlt },
@@ -364,8 +374,9 @@ function makeStyles(colors: ThemeColors) {
     noLink: { fontSize: 11, fontWeight: '600', color: colors.subtext },
     footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     primaryBtn: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
-    primaryBtnMuted: { opacity: 0.9 },
+    primaryBtnDisabled: { backgroundColor: colors.border },
     primaryBtnText: { color: '#ffffff', fontSize: 14.5, fontWeight: '800' },
+    primaryBtnTextDisabled: { color: colors.subtext },
     ghostBtn: { paddingVertical: 8, alignItems: 'center' },
     ghostBtnText: { color: colors.subtext, fontSize: 13, fontWeight: '600' },
   });
