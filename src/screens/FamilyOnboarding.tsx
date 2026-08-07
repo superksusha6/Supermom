@@ -326,7 +326,7 @@ function makeStyles(colors: ThemeColors) {
     bigEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 6 },
     q: { fontSize: 21, fontWeight: '800', color: colors.text, letterSpacing: -0.3, marginBottom: 4 },
     sub: { fontSize: 13.5, color: colors.subtext, lineHeight: 19 },
-    input: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14.5, color: colors.text, marginBottom: 10 },
+    input: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14.5, color: colors.text, marginBottom: 10, outlineWidth: 0, outlineColor: 'transparent' },
     mb0: { marginBottom: 0 },
     mb8: { marginBottom: 8 },
     flex1: { flex: 1, minWidth: 0 },

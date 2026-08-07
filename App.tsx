@@ -14126,6 +14126,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingVertical: 10,
     backgroundColor: colors.surface,
     color: colors.text,
+    // Drop the browser's default focus ring (web) — our own border is the frame.
+    outlineWidth: 0,
+    outlineColor: 'transparent',
   },
   passwordInputWrap: {
     flexDirection: 'row',
@@ -14143,6 +14146,9 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingHorizontal: 0,
     paddingRight: 8,
     backgroundColor: 'transparent',
+    // No inner focus ring — the wrapping View draws the single frame.
+    outlineWidth: 0,
+    outlineColor: 'transparent',
   },
   passwordToggleBtn: {
     width: 34,
