@@ -369,7 +369,8 @@ export function SettingsScreen({
           <View style={styles.half}>
             <Text style={styles.label}>Height (cm)</Text>
             <TextInput
-              placeholder="170"
+              placeholder="e.g. 170"
+              placeholderTextColor={colors.subtext}
               keyboardType="number-pad"
               style={styles.input}
               value={personalProfile.heightCm || ''}
@@ -379,7 +380,8 @@ export function SettingsScreen({
           <View style={styles.half}>
             <Text style={styles.label}>Weight (kg)</Text>
             <TextInput
-              placeholder="60.5"
+              placeholder="e.g. 60.5"
+              placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               style={styles.input}
               value={personalProfile.weightKg || ''}
