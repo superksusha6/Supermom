@@ -63,6 +63,7 @@ export type ChildProfile = {
 export type PersonalProfile = {
   fullName: string;
   nickname?: string;
+  photoUri?: string;
   dateOfBirth?: string;
   heightCm?: string;
   weightKg?: string;

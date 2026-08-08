@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { getNutritionPlan } from '@/lib/nutrition';
 import { ActivityLevel, HabitEntry, HabitReminderMode, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile } from '@/types/app';
@@ -83,6 +83,8 @@ type Props = {
   onRemovePartner: () => void;
   onInviteCoparent: () => void;
   onSetupFamily: () => void;
+  onPickPersonalPhoto: () => void;
+  onRemovePersonalPhoto: () => void;
   pushState: 'unsupported' | 'default' | 'denied' | 'enabled' | 'error';
   onTogglePush: () => void;
 };
@@ -151,6 +153,8 @@ export function SettingsScreen({
   onRemovePartner,
   onInviteCoparent,
   onSetupFamily,
+  onPickPersonalPhoto,
+  onRemovePersonalPhoto,
   pushState,
   onTogglePush,
 }: Props) {
@@ -347,6 +351,23 @@ export function SettingsScreen({
   function renderPersonalEditor() {
     return (
       <>
+        <View style={styles.avatarEditWrap}>
+          <Pressable style={styles.avatarEditCircle} onPress={onPickPersonalPhoto} accessibilityRole="button" accessibilityLabel="Change your photo">
+            {personalProfile.photoUri ? (
+              <Image source={{ uri: personalProfile.photoUri }} style={styles.avatarEditImg} />
+            ) : (
+              <Text style={styles.avatarEditInit}>{initialOf(personalProfile.fullName || parentLabel)}</Text>
+            )}
+            <View style={styles.avatarEditBadge}><Text style={styles.avatarEditBadgeText}>＋</Text></View>
+          </Pressable>
+          <View style={styles.avatarEditActions}>
+            <Pressable onPress={onPickPersonalPhoto}><Text style={styles.avatarEditAction}>{personalProfile.photoUri ? 'Change photo' : 'Add photo'}</Text></Pressable>
+            {personalProfile.photoUri ? (
+              <Pressable onPress={onRemovePersonalPhoto}><Text style={styles.avatarEditRemove}>Remove</Text></Pressable>
+            ) : null}
+          </View>
+        </View>
+
         <Text style={styles.iosHeader}>Profile</Text>
         <View style={styles.iosGroup}>
           <View style={styles.iosRow}>
@@ -1770,6 +1791,15 @@ const createStyles = (colors: ThemeColors) =>
     iosSegTextOn: { fontWeight: '700', color: colors.primary },
     iosSwitch: { marginLeft: 'auto', transform: [{ scale: 0.86 }] },
     iosFoot: { fontSize: 12.5, color: colors.subtext, marginTop: 7, marginLeft: 6, marginRight: 6, lineHeight: 17 },
+    avatarEditWrap: { alignItems: 'center', gap: 8, marginBottom: 4 },
+    avatarEditCircle: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.selection, borderWidth: 1.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+    avatarEditImg: { width: '100%', height: '100%', borderRadius: 38 },
+    avatarEditInit: { color: colors.primary, fontSize: 30, fontWeight: '800' },
+    avatarEditBadge: { position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+    avatarEditBadgeText: { color: '#ffffff', fontSize: 14, fontWeight: '800', lineHeight: 16 },
+    avatarEditActions: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+    avatarEditAction: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+    avatarEditRemove: { color: colors.urgent, fontSize: 14, fontWeight: '700' },
     staffCard: {
       flexDirection: 'row',
       alignItems: 'center',

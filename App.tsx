@@ -2744,6 +2744,9 @@ function AppShell() {
       const nextProfile: PersonalProfile = {
         fullName: nextFullName,
         nickname: nextNickname,
+        // Avatar photo isn't stored server-side yet — keep whatever the device has so a
+        // server refresh doesn't wipe it. (profile.photoUri is set once avatar_url lands.)
+        photoUri: profile.photoUri || currentProfile.photoUri,
         dateOfBirth: nextDateOfBirth,
         heightCm: profile.heightCm || currentProfile.heightCm || '',
         weightKg: profile.weightKg || currentProfile.weightKg || '',
@@ -5868,6 +5871,31 @@ function AppShell() {
     }
   }
 
+  // The owner sets their own account-avatar photo (shown top-right → Settings).
+  async function pickPersonalPhoto() {
+    try {
+      let uri: string | null = null;
+      if (Platform.OS === 'web') {
+        uri = await pickImageFileWeb();
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) return;
+        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
+        if (res.canceled || !res.assets?.length) return;
+        const asset = res.assets[0];
+        uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      }
+      if (!uri) return;
+      if (uri.startsWith('data:')) uri = await downscaleDataUrlWeb(uri, 512, 0.7);
+      setPersonalProfile((prev) => ({ ...prev, photoUri: uri as string }));
+    } catch {
+      // ignore picker failures
+    }
+  }
+  function removePersonalPhoto() {
+    setPersonalProfile((prev) => ({ ...prev, photoUri: undefined }));
+  }
+
   // The child photographs their notebook / word list; we read the words off it.
   async function pickWordsPhoto() {
     try {
@@ -6370,6 +6398,7 @@ function AppShell() {
     const normalizedProfile: PersonalProfile = {
       fullName,
       nickname,
+      photoUri: personalProfile.photoUri,
       dateOfBirth,
       heightCm,
       weightKg,
@@ -6631,6 +6660,8 @@ function AppShell() {
       onInvitePartner={handleInvitePartner}
       onInviteCoparent={handleInviteCoparent}
       onSetupFamily={() => { setSettingsPanelOpen(false); setOnboardingOpen(true); }}
+      onPickPersonalPhoto={pickPersonalPhoto}
+      onRemovePersonalPhoto={removePersonalPhoto}
       onRemovePartner={() => {
         const link = partnerLinks.find((l) => l.status === 'accepted');
         if (link) handleRemovePartner(link.id);
@@ -8647,8 +8678,8 @@ function AppShell() {
           {/* Account + Settings live in the top-right avatar (settings is no longer a
               bottom tab). Contextual quick-actions moved to the "+" FAB above the tabs. */}
           <Pressable style={styles.avatarBtn} onPress={() => setSettingsPanelOpen(true)} accessibilityRole="button" accessibilityLabel="Account and settings">
-            {isStaffView && currentStaffProfile?.photoUri ? (
-              <Image source={{ uri: currentStaffProfile.photoUri }} style={styles.avatarBtnImg} />
+            {(isStaffView ? currentStaffProfile?.photoUri : personalProfile.photoUri) ? (
+              <Image source={{ uri: (isStaffView ? currentStaffProfile?.photoUri : personalProfile.photoUri) as string }} style={styles.avatarBtnImg} />
             ) : (
               <Text style={styles.avatarBtnText}>
                 {((isStaffView ? currentStaffProfile?.name || '' : personalProfile.fullName || '').trim()[0] || '✦').toUpperCase()}
