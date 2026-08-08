@@ -1592,15 +1592,29 @@ export function ShoppingScreen({
             <Pressable style={styles.shoppingPrimaryBtn} onPress={onStartFromBaseList}>
               <Text style={styles.shoppingPrimaryBtnText}>Use basket</Text>
             </Pressable>
-          ) : activeList && activeList.items.length > 0 && shareTargets.length > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send this list to a shopper"
-              style={styles.shoppingSendBtn}
-              onPress={() => setSendOpen(true)}
-            >
-              <Text style={styles.shoppingSendBtnText}>🛒 Send</Text>
-            </Pressable>
+          ) : activeList && activeList.items.length > 0 ? (
+            <View style={styles.shoppingHeaderActions}>
+              {shareTargets.length > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Send this list to a shopper"
+                  style={styles.shoppingSendBtn}
+                  onPress={() => setSendOpen(true)}
+                >
+                  <Text style={styles.shoppingSendBtnText}>🛒 Send</Text>
+                </Pressable>
+              ) : null}
+              {!isStaffShopper ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Finish shopping and save this list by date"
+                  style={styles.shoppingHeaderFinishBtn}
+                  onPress={onFinishShopping}
+                >
+                  <Text style={styles.shoppingHeaderFinishText}>✓ Finish</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
 
@@ -1775,12 +1789,6 @@ export function ShoppingScreen({
             filteredShoppingItems.map(renderShoppingRow)
           )}
         </View>
-        ) : null}
-
-        {!isStaffShopper && activeList && activeList.items.length > 0 ? (
-          <Pressable style={styles.shoppingFinishBtn} onPress={onFinishShopping}>
-            <Text style={styles.shoppingFinishBtnText}>✓ Finish shopping</Text>
-          </Pressable>
         ) : null}
 
         {!isStaffShopper && historyLists.length > 0 ? (
@@ -5200,16 +5208,20 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       gap: 8,
       marginTop: 2,
     },
-    shoppingFinishBtn: {
-      marginTop: 12,
-      borderRadius: 14,
+    shoppingHeaderActions: {
+      alignItems: 'flex-end',
+      gap: 8,
+    },
+    shoppingHeaderFinishBtn: {
+      borderRadius: 12,
       backgroundColor: colors.done,
-      paddingVertical: 13,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
       alignItems: 'center',
     },
-    shoppingFinishBtnText: {
+    shoppingHeaderFinishText: {
       color: '#ffffff',
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '800',
     },
     shoppingTimeline: {
