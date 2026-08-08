@@ -8604,8 +8604,35 @@ function AppShell() {
     </FamCard>
   ) : null;
 
+  // Incoming shopping list a co-parent/staff sent to THIS person — shown right at the
+  // top of the home dashboard with an accent card so it's noticed without opening Food.
+  // visibleShoppingShares is already filtered to the current user's recipient key.
+  const focusIncomingShopping = visibleShoppingShares.length > 0 ? (
+    <View style={styles.incomingShareCard}>
+      {visibleShoppingShares.map((share) => (
+        <Pressable
+          key={share.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open shopping list from ${share.senderLabel}`}
+          style={styles.incomingShareRow}
+          onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('shopping'); }}
+        >
+          <View style={styles.incomingShareDot} />
+          <View style={styles.incomingShareBody}>
+            <Text style={styles.incomingShareTitle}>New shopping list</Text>
+            <Text style={styles.incomingShareSub} numberOfLines={1}>
+              From {share.senderLabel} · {share.items.length} item{share.items.length === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <Text style={styles.incomingShareCta}>Open →</Text>
+        </Pressable>
+      ))}
+    </View>
+  ) : null;
+
   const focusHome = isMobile ? (
     <View style={styles.dashWrap}>
+      {focusIncomingShopping}
       {focusStaffHeader}
       {focusPlanner}
       {focusProposals}
@@ -8624,6 +8651,7 @@ function AppShell() {
   ) : (
     <View style={styles.dashDesktop}>
       <View style={styles.dashMain}>
+        {focusIncomingShopping}
         {focusStaffHeader}
         {focusPlanner}
         {focusProposals}
@@ -11511,7 +11539,7 @@ function AppShell() {
           <TabButton icon={isStaffView ? 'chores' : 'calendar'} label={isStaffView ? 'Tasks' : 'Today'} active={screen === 'calendar'} onPress={() => { setScreen('calendar'); setHomeTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {staffCan('shopping') || staffCan('menu') || staffCan('recipes') ? (
-          <TabButton icon="meal" label="Food" active={screen === 'food'} onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
+          <TabButton icon="meal" label="Food" active={screen === 'food'} badge={visibleShoppingShares.length > 0} onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }} styles={styles} colors={colors} />
         ) : null}
         {!isStaffView ? (
           <TabButton icon="family" label="Family" active={screen === 'family'} onPress={() => setScreen('family')} styles={styles} colors={colors} />
@@ -12155,6 +12183,7 @@ function TabButton({
   onPress,
   styles,
   colors,
+  badge,
 }: {
   icon: IconName;
   label: string;
@@ -12162,10 +12191,14 @@ function TabButton({
   onPress: () => void;
   styles: ReturnType<typeof createStyles>;
   colors: ThemeColors;
+  badge?: boolean;
 }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.tabItem} onPress={onPress}>
-      <Icon name={icon} color={active ? colors.primary : colors.subtext} size={23} strokeWidth={active ? 2.3 : 2} />
+      <View>
+        <Icon name={icon} color={active ? colors.primary : colors.subtext} size={23} strokeWidth={active ? 2.3 : 2} />
+        {badge ? <View style={styles.tabBadge} /> : null}
+      </View>
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </Pressable>
   );
@@ -14937,6 +14970,62 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   tabLabelActive: {
     color: colors.primary,
     fontWeight: '800',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.urgent,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  incomingShareCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  incomingShareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  incomingShareDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.urgent,
+  },
+  incomingShareBody: {
+    flex: 1,
+  },
+  incomingShareTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  incomingShareSub: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.subtext,
+    marginTop: 1,
+  },
+  incomingShareCta: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
   },
   daySheetBackdrop: {
     flex: 1,
