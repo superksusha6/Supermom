@@ -13,6 +13,7 @@ type StaffSummary = {
   name: string;
   dateOfBirth?: string;
   connected?: boolean;
+  roleLabel?: string;
 };
 
 type ChildSummary = {
@@ -160,6 +161,9 @@ export function SettingsScreen({
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const showCycleTracking = currentRole === 'mother' && parentLabel === 'Mom';
+  // Which member row has its "…" actions menu open (id/key), if any.
+  const [famMenuFor, setFamMenuFor] = useState<string | null>(null);
+  const initialOf = (name: string) => (name.trim()[0] || '?').toUpperCase();
   const nutritionPlan = useMemo(
     () =>
       getNutritionPlan({
@@ -880,118 +884,185 @@ export function SettingsScreen({
   }
 
   function renderFamilyEditor() {
+    const ownerName = personalProfile.fullName?.trim() || parentLabel;
+    const familyEmpty = children.length === 0 && staffProfiles.length === 0 && !partnerConnectedName;
+    const toggleMenu = (key: string) => setFamMenuFor((prev) => (prev === key ? null : key));
     return (
       <>
         {currentRole === 'mother' ? (
           <>
-            <Text style={styles.label}>Set up your family</Text>
-            <Text style={styles.emptyText}>
-              Add a second parent, your children and any staff in one guided flow — and get a share link for everyone who needs their own login.
-            </Text>
-            <Pressable style={styles.primaryBtn} onPress={onSetupFamily}>
-              <Text style={styles.primaryBtnText}>Set up my family</Text>
-            </Pressable>
-
-            <Text style={styles.label}>Parent profile</Text>
-            <View style={styles.pillRow}>
-              {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
-                <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
-                  <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
+            {familyEmpty ? (
+              <View style={styles.famBanner}>
+                <Text style={styles.famBannerTitle}>Set up your family</Text>
+                <Text style={styles.famBannerText}>
+                  Add a partner, your children and any staff — and get a share link for everyone who needs their own login.
+                </Text>
+                <Pressable style={styles.primaryBtn} onPress={onSetupFamily}>
+                  <Text style={styles.primaryBtnText}>Set up my family</Text>
                 </Pressable>
-              ))}
+              </View>
+            ) : null}
+
+            <View style={styles.quickRow}>
+              <Pressable style={styles.quickTile} onPress={onToggleChildProfileSetup}>
+                <Text style={styles.quickPlus}>+</Text>
+                <Text style={styles.quickLabel}>Child</Text>
+              </Pressable>
+              <Pressable style={styles.quickTile} onPress={onToggleStaffProfileSetup}>
+                <Text style={styles.quickPlus}>+</Text>
+                <Text style={styles.quickLabel}>Staff</Text>
+              </Pressable>
+              <Pressable style={styles.quickTile} onPress={onInviteCoparent}>
+                <Text style={styles.quickPlus}>+</Text>
+                <Text style={styles.quickLabel}>Partner</Text>
+              </Pressable>
             </View>
 
-            <Text style={styles.label}>Open family workspace</Text>
-            <View style={styles.pillRow}>
-              <Pressable style={[styles.pillBtn, activeFamilyViewKey === 'mother' && styles.pillBtnActive]} onPress={() => onSelectFamilyView('mother')}>
-                <Text style={[styles.pillBtnText, activeFamilyViewKey === 'mother' && styles.pillBtnTextActive]}>{parentLabel}</Text>
-              </Pressable>
+            <Text style={styles.famSectionLabel}>People</Text>
+            <View style={styles.famCard}>
+              <View style={styles.memberRow}>
+                <View style={[styles.mono, styles.monoP]}><Text style={styles.monoText}>{initialOf(ownerName)}</Text></View>
+                <View style={styles.memberWho}>
+                  <Text style={styles.memberName} numberOfLines={1}>{ownerName}</Text>
+                  <Text style={styles.memberSub}>Parent</Text>
+                </View>
+                <Text style={styles.youText}>You</Text>
+              </View>
+
               {children.map((child) => (
-                <Pressable
-                  key={`settings-child-${child.id}`}
-                  style={[styles.pillBtn, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnActive]}
-                  onPress={() => onSelectFamilyView(`child:${child.id}`)}
-                >
-                  <Text style={[styles.pillBtnText, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnTextActive]}>{child.name}</Text>
-                </Pressable>
+                <View key={`child-${child.id}`}>
+                  <View style={[styles.memberRow, styles.memberRowDivider]}>
+                    <View style={[styles.mono, styles.monoC]}><Text style={styles.monoText}>{initialOf(child.name)}</Text></View>
+                    <View style={styles.memberWho}>
+                      <Text style={styles.memberName} numberOfLines={1}>{child.name}</Text>
+                      <Text style={styles.memberSub}>Child</Text>
+                    </View>
+                    <Pressable style={styles.dotsBtn} hitSlop={8} onPress={() => toggleMenu(`child:${child.id}`)}>
+                      <Text style={styles.dotsText}>⋯</Text>
+                    </Pressable>
+                  </View>
+                  {famMenuFor === `child:${child.id}` ? (
+                    <View style={styles.menuStrip}>
+                      <Pressable style={styles.menuBtn} onPress={() => { setFamMenuFor(null); onToggleChildProfileSetup(); }}>
+                        <Text style={styles.menuBtnText}>Open child setup</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
               ))}
+
               {staffProfiles.map((profile) => (
-                <Pressable
-                  key={`settings-staff-${profile.id}`}
-                  style={[styles.pillBtn, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnActive]}
-                  onPress={() => onSelectFamilyView(`staff:${profile.id}`)}
-                >
-                  <Text style={[styles.pillBtnText, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnTextActive]}>{profile.name}</Text>
-                </Pressable>
+                <View key={`staff-${profile.id}`}>
+                  <View style={[styles.memberRow, styles.memberRowDivider]}>
+                    <View style={[styles.mono, styles.monoS]}><Text style={styles.monoText}>{initialOf(profile.name)}</Text></View>
+                    <View style={styles.memberWho}>
+                      <Text style={styles.memberName} numberOfLines={1}>{profile.name}</Text>
+                      <Text style={styles.memberSub} numberOfLines={1}>{profile.roleLabel || 'Staff'}</Text>
+                    </View>
+                    <View style={[styles.chip, profile.connected ? styles.chipOk : styles.chipNo]}>
+                      <View style={[styles.chipDot, { backgroundColor: profile.connected ? colors.done : colors.subtext }]} />
+                      <Text style={[styles.chipText, { color: profile.connected ? colors.done : colors.subtext }]}>
+                        {profile.connected ? 'Connected' : 'Not connected'}
+                      </Text>
+                    </View>
+                    <Pressable style={styles.dotsBtn} hitSlop={8} onPress={() => toggleMenu(`staff:${profile.id}`)}>
+                      <Text style={styles.dotsText}>⋯</Text>
+                    </Pressable>
+                  </View>
+                  {famMenuFor === `staff:${profile.id}` ? (
+                    <View style={styles.menuStrip}>
+                      <Pressable style={styles.menuBtn} onPress={() => { setFamMenuFor(null); onInviteStaff(profile.id); }}>
+                        <Text style={styles.menuBtnText}>{profile.connected ? 'Re-invite' : 'Send invite'}</Text>
+                      </Pressable>
+                      <Pressable style={styles.menuBtn} onPress={() => { setFamMenuFor(null); onEditStaffProfile(profile.id); }}>
+                        <Text style={styles.menuBtnText}>Edit</Text>
+                      </Pressable>
+                      <Pressable style={styles.menuBtn} onPress={() => { setFamMenuFor(null); onDeleteStaffProfile(profile.id); }}>
+                        <Text style={[styles.menuBtnText, styles.menuBtnDanger]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
               ))}
             </View>
 
-            <View style={styles.profileActionsRow}>
-              <Pressable style={styles.secondaryBtn} onPress={onToggleChildProfileSetup}>
-                <Text style={styles.secondaryBtnText}>Child Profile Setup</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryBtn} onPress={onToggleStaffProfileSetup}>
-                <Text style={styles.secondaryBtnText}>Staff Profile</Text>
-              </Pressable>
+            <Text style={styles.famSectionLabel}>Partner calendar</Text>
+            <View style={styles.famCard}>
+              {partnerConnectedName ? (
+                <View>
+                  <View style={styles.memberRow}>
+                    <View style={[styles.mono, styles.monoP]}><Text style={styles.monoText}>{initialOf(partnerConnectedName)}</Text></View>
+                    <View style={styles.memberWho}>
+                      <Text style={styles.memberName} numberOfLines={1}>{partnerConnectedName}</Text>
+                      <Text style={styles.memberSub}>Partner calendar · you can send slots</Text>
+                    </View>
+                    <View style={[styles.chip, styles.chipOk]}>
+                      <View style={[styles.chipDot, { backgroundColor: colors.done }]} />
+                      <Text style={[styles.chipText, { color: colors.done }]}>Connected</Text>
+                    </View>
+                    <Pressable style={styles.dotsBtn} hitSlop={8} onPress={() => toggleMenu('partnercal')}>
+                      <Text style={styles.dotsText}>⋯</Text>
+                    </Pressable>
+                  </View>
+                  {famMenuFor === 'partnercal' ? (
+                    <View style={styles.menuStrip}>
+                      <Pressable style={styles.menuBtn} onPress={() => { setFamMenuFor(null); onRemovePartner(); }}>
+                        <Text style={[styles.menuBtnText, styles.menuBtnDanger]}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <Pressable style={styles.famAddRow} onPress={onInvitePartner}>
+                  <View style={styles.famAddIcon}><Text style={styles.famAddIconText}>+</Text></View>
+                  <View style={styles.memberWho}>
+                    <Text style={styles.memberName}>Connect partner calendar</Text>
+                    <Text style={styles.memberSub}>Share time slots, keep calendars separate</Text>
+                  </View>
+                  <Text style={styles.famChevron}>›</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <Text style={styles.famSectionLabel}>Your profile &amp; view</Text>
+            <View style={styles.famQuietCard}>
+              <Text style={styles.famQuietLabel}>Editing as</Text>
+              <View style={styles.pillRow}>
+                {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
+                  <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
+                    <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={[styles.famQuietLabel, { marginTop: 14 }]}>Open workspace</Text>
+              <View style={styles.pillRow}>
+                <Pressable style={[styles.pillBtn, activeFamilyViewKey === 'mother' && styles.pillBtnActive]} onPress={() => onSelectFamilyView('mother')}>
+                  <Text style={[styles.pillBtnText, activeFamilyViewKey === 'mother' && styles.pillBtnTextActive]}>{parentLabel}</Text>
+                </Pressable>
+                {children.map((child) => (
+                  <Pressable
+                    key={`settings-child-${child.id}`}
+                    style={[styles.pillBtn, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnActive]}
+                    onPress={() => onSelectFamilyView(`child:${child.id}`)}
+                  >
+                    <Text style={[styles.pillBtnText, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnTextActive]}>{child.name}</Text>
+                  </Pressable>
+                ))}
+                {staffProfiles.map((profile) => (
+                  <Pressable
+                    key={`settings-staff-${profile.id}`}
+                    style={[styles.pillBtn, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnActive]}
+                    onPress={() => onSelectFamilyView(`staff:${profile.id}`)}
+                  >
+                    <Text style={[styles.pillBtnText, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnTextActive]}>{profile.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </>
         ) : null}
 
-        <Text style={styles.label}>Staff profiles</Text>
-        {staffProfiles.length === 0 ? <Text style={styles.emptyText}>No staff profiles yet.</Text> : null}
-        {staffProfiles.map((profile) => (
-          <View key={profile.id} style={styles.staffCard}>
-            <View style={styles.staffCopy}>
-              <Text style={styles.staffName}>{profile.name}</Text>
-              <Text style={styles.staffMeta}>{profile.dateOfBirth ? `Birthday: ${profile.dateOfBirth}` : 'Birthday not set yet'}</Text>
-              <Text style={[styles.staffMeta, { color: profile.connected ? '#16a34a' : colors.subtext, fontWeight: profile.connected ? '600' : '400' }]}>
-                {profile.connected ? '✓ Connected · has their own login' : 'Not connected yet · send an invite'}
-              </Text>
-            </View>
-            <View style={styles.staffCardActions}>
-              <Pressable style={styles.secondaryBtn} onPress={() => onInviteStaff(profile.id)}>
-                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>{profile.connected ? 'Re-invite' : 'Invite'}</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryBtn} onPress={() => onEditStaffProfile(profile.id)}>
-                <Text style={styles.secondaryBtnText}>Edit</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryBtn} onPress={() => onDeleteStaffProfile(profile.id)}>
-                <Text style={[styles.secondaryBtnText, { color: '#dc2626' }]}>Delete</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
-
-        <Text style={styles.label}>Second parent</Text>
-        <Text style={styles.emptyText}>
-          Invite your partner as a second parent. They sign in with their own account and share this exact household — the same tasks, staff, calendar, shopping and everything you see. Both of you are full owners.
-        </Text>
-        <Pressable style={styles.secondaryBtn} onPress={onInviteCoparent}>
-          <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite second parent</Text>
-        </Pressable>
-
-        <Text style={styles.label}>Partner calendar</Text>
-        <Text style={styles.emptyText}>
-          Connect your partner's own account. You can send a proposed time slot from any day — they confirm it on their side and it lands in both calendars. Neither of you can read the other's calendar.
-        </Text>
-        {partnerConnectedName ? (
-          <View style={styles.staffCard}>
-            <View style={styles.staffCopy}>
-              <Text style={styles.staffName}>{partnerConnectedName}</Text>
-              <Text style={styles.staffMeta}>Connected · you can send time slots</Text>
-            </View>
-            <View style={styles.staffCardActions}>
-              <Pressable style={styles.secondaryBtn} onPress={onRemovePartner}>
-                <Text style={[styles.secondaryBtnText, { color: '#dc2626' }]}>Remove</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <Pressable style={styles.secondaryBtn} onPress={onInvitePartner}>
-            <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Invite partner</Text>
-          </Pressable>
-        )}
-
+        <Text style={styles.famSectionLabel}>Notifications</Text>
         {pushState === 'unsupported' ? (
           <Text style={styles.emptyText}>Push notifications aren't supported in this browser. On iPhone, add FamOs to your Home Screen first, then enable them here.</Text>
         ) : (
@@ -1589,6 +1660,109 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 18,
       fontWeight: '800',
     },
+    // ---- Family & Access (redesign, variant B) ----
+    famBanner: {
+      backgroundColor: colors.selection,
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 4,
+    },
+    famBannerTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+    famBannerText: { fontSize: 13, color: colors.subtext, marginTop: 4, marginBottom: 12, lineHeight: 18 },
+    quickRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    quickTile: {
+      flex: 1,
+      backgroundColor: colors.selection,
+      borderRadius: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    quickPlus: { fontSize: 18, fontWeight: '800', color: colors.primary, lineHeight: 22 },
+    quickLabel: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 2 },
+    famSectionLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+      color: colors.subtext,
+      marginTop: 22,
+      marginBottom: 8,
+      marginLeft: 4,
+    },
+    famCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    memberRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 11,
+      paddingVertical: 11,
+      paddingHorizontal: 13,
+    },
+    memberRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+    mono: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    monoText: { fontSize: 15, fontWeight: '800', color: colors.primary },
+    monoP: { backgroundColor: colors.selection },
+    monoC: { backgroundColor: colors.selection },
+    monoS: { backgroundColor: colors.selection },
+    memberWho: { flex: 1, minWidth: 0 },
+    memberName: { fontSize: 14.5, fontWeight: '600', color: colors.text },
+    memberSub: { fontSize: 12, color: colors.subtext, marginTop: 1 },
+    youText: { fontSize: 11.5, fontWeight: '600', color: colors.subtext },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: colors.surfaceAlt,
+    },
+    chipOk: { backgroundColor: colors.surfaceAlt },
+    chipNo: { backgroundColor: colors.surfaceAlt },
+    chipDot: { width: 5, height: 5, borderRadius: 3 },
+    chipText: { fontSize: 11, fontWeight: '700' },
+    dotsBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+    dotsText: { fontSize: 18, color: colors.subtext, fontWeight: '700' },
+    menuStrip: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 13,
+      paddingBottom: 12,
+      paddingTop: 2,
+    },
+    menuBtn: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
+    menuBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.primary },
+    menuBtnDanger: { color: colors.urgent },
+    famAddRow: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13 },
+    famAddIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor: colors.selection,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    famAddIconText: { fontSize: 20, fontWeight: '700', color: colors.primary },
+    famChevron: { fontSize: 18, color: colors.subtext },
+    famQuietCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14,
+    },
+    famQuietLabel: { fontSize: 12.5, fontWeight: '600', color: colors.subtext, marginBottom: 8 },
     staffCard: {
       flexDirection: 'row',
       alignItems: 'center',

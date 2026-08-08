@@ -6614,7 +6614,13 @@ function AppShell() {
       eventReminderLead={eventReminderLead}
       onEventReminderLeadChange={setEventReminderLead}
       children={children.map((child) => ({ id: child.id, name: child.name }))}
-      staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name, dateOfBirth: profile.dateOfBirth, connected: staffConnectedIds.includes(profile.id) }))}
+      staffProfiles={staffProfiles.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        dateOfBirth: profile.dateOfBirth,
+        connected: staffConnectedIds.includes(profile.id),
+        roleLabel: ((staffGrants[profile.id]?.roles || []).map((r) => STAFF_ROLE_PRESETS[r].label).join(' · ')) || 'Staff',
+      }))}
       activeFamilyViewKey={activeOwnerFilter}
       onSelectFamilyView={selectCalendarProfile}
       onSelectParentLabel={handleSelectParentLabel}
