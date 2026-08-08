@@ -6621,8 +6621,6 @@ function AppShell() {
         connected: staffConnectedIds.includes(profile.id),
         roleLabel: ((staffGrants[profile.id]?.roles || []).map((r) => STAFF_ROLE_PRESETS[r].label).join(' · ')) || 'Staff',
       }))}
-      activeFamilyViewKey={activeOwnerFilter}
-      onSelectFamilyView={selectCalendarProfile}
       onSelectParentLabel={handleSelectParentLabel}
       onToggleChildProfileSetup={() => setChildSetupOpen((prev) => !prev)}
       onToggleStaffProfileSetup={() => setStaffSetupOpen((prev) => !prev)}

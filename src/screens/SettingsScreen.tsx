@@ -72,8 +72,6 @@ type Props = {
   onEventReminderLeadChange: (value: string) => void;
   children: ChildSummary[];
   staffProfiles: StaffSummary[];
-  activeFamilyViewKey: string;
-  onSelectFamilyView: (target: string) => void;
   onSelectParentLabel: (label: 'Mom' | 'Dad') => void;
   onToggleChildProfileSetup: () => void;
   onToggleStaffProfileSetup: () => void;
@@ -142,8 +140,6 @@ export function SettingsScreen({
   onEventReminderLeadChange,
   children,
   staffProfiles,
-  activeFamilyViewKey,
-  onSelectFamilyView,
   onSelectParentLabel,
   onToggleChildProfileSetup,
   onToggleStaffProfileSetup,
@@ -450,12 +446,8 @@ export function SettingsScreen({
               (k) => onActivityLevelChange(k as ActivityLevel),
             )}
           </View>
-          <View style={[styles.iosRow, styles.iosRowSep]}>
-            <Text style={styles.iosLabel}>Daily calories</Text>
-            <Text style={styles.iosValue}>{nutritionPlan ? `${nutritionPlan.calories} kcal` : '—'}</Text>
-          </View>
         </View>
-        <Text style={styles.iosFoot}>Calculated from your details. Use Advanced to fine-tune protein, timeline or override the number.</Text>
+        <Text style={styles.iosFoot}>Your daily calories are calculated below. Use Advanced to fine-tune protein, timeline or override the number.</Text>
 
         <Text style={styles.iosHeader}>Advanced</Text>
         <View style={styles.iosGroup}>
