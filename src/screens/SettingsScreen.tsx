@@ -392,7 +392,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Height</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder="e.g. 170"
+              placeholder=""
               placeholderTextColor={colors.subtext}
               keyboardType="number-pad"
               value={personalProfile.heightCm || ''}
@@ -404,7 +404,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Weight</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder="e.g. 65"
+              placeholder=""
               placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               value={personalProfile.weightKg || ''}
@@ -416,7 +416,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Goal weight</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder="e.g. 60"
+              placeholder=""
               placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               value={desiredWeight}
