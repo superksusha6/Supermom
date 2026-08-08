@@ -556,6 +556,14 @@ function formatAddedWhen(iso?: string): string {
   return then.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+// Date label for a past (completed) shopping list row, e.g. "Fri, Aug 8".
+function formatHistoryDate(iso?: string): string {
+  if (!iso) return 'Earlier';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Earlier';
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 // Split a single quick-add entry into a clean name and an optional trailing quantity,
 // e.g. "bananas 3 kg" -> { name: "bananas", quantity: "3 kg" }, "milk" -> { name: "milk", quantity: "1 pcs" }.
 function splitNameAndQuantity(raw: string): { name: string; quantity: string | null } {
@@ -636,6 +644,7 @@ export function ShoppingScreen({
   const [shoppingCategory, setShoppingCategory] = useState<ShoppingCategory>('all');
   const [baseListOpen, setBaseListOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [addComposerOpen, setAddComposerOpen] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [quickAddAmount, setQuickAddAmount] = useState('1');
@@ -1847,19 +1856,65 @@ export function ShoppingScreen({
                 <View style={styles.moreSubsection}>
                   <Text style={styles.moreSubsectionTitle}>Past lists</Text>
                   <View style={styles.shoppingHistoryList}>
-                    {historyLists.slice(0, 2).map((list) => (
-                      <View key={list.id} style={styles.shoppingHistoryCard}>
-                        <View style={styles.shoppingHistoryCopy}>
-                          <Text style={styles.shoppingHistoryCardTitle}>{list.title}</Text>
-                          <Text style={styles.shoppingHistoryMeta}>
-                            {list.items.length} item{list.items.length === 1 ? '' : 's'}
-                          </Text>
+                    {historyLists.map((list) => {
+                      const expanded = expandedHistoryId === list.id;
+                      const when = formatHistoryDate(list.completedAt || list.createdAt);
+                      return (
+                        <View key={list.id} style={styles.shoppingHistoryCard}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`${expanded ? 'Collapse' : 'Open'} list from ${when}`}
+                            style={styles.shoppingHistoryHeader}
+                            onPress={() => setExpandedHistoryId((prev) => (prev === list.id ? null : list.id))}
+                          >
+                            <View style={styles.shoppingHistoryCopy}>
+                              <Text style={styles.shoppingHistoryCardTitle}>{when}</Text>
+                              <Text style={styles.shoppingHistoryMeta}>
+                                {list.items.length} item{list.items.length === 1 ? '' : 's'}
+                              </Text>
+                            </View>
+                            <Text style={styles.shoppingHistoryChevron}>{expanded ? '−' : '+'}</Text>
+                          </Pressable>
+
+                          {expanded ? (
+                            <View style={styles.shoppingHistoryDetail}>
+                              {list.items.length > 0 ? (
+                                <View style={styles.shoppingHistoryItems}>
+                                  {list.items.map((item) => (
+                                    <View key={item.id} style={styles.shoppingHistoryItemRow}>
+                                      <Text style={styles.shoppingHistoryItemName} numberOfLines={1}>{item.name}</Text>
+                                      <Text style={styles.shoppingHistoryItemQty} numberOfLines={1}>{item.quantity}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              ) : (
+                                <Text style={styles.shoppingHistoryMeta}>This list is empty.</Text>
+                              )}
+                              {list.items.length > 0 ? (
+                                <View style={styles.shoppingHistoryActions}>
+                                  <Pressable
+                                    style={styles.shoppingHistoryAddBtn}
+                                    onPress={() => {
+                                      onCreateList(
+                                        list.items.map((item) => ({ name: item.name, quantity: item.quantity, category: item.category })),
+                                        activeList?.id ?? null,
+                                        'force-current',
+                                      );
+                                      setExpandedHistoryId(null);
+                                    }}
+                                  >
+                                    <Text style={styles.shoppingHistoryAddBtnText}>Add to current list</Text>
+                                  </Pressable>
+                                  <Pressable style={styles.shoppingHistoryBtn} onPress={() => onUsePastList(list.id)}>
+                                    <Text style={styles.shoppingHistoryBtnText}>Use again</Text>
+                                  </Pressable>
+                                </View>
+                              ) : null}
+                            </View>
+                          ) : null}
                         </View>
-                        <Pressable style={styles.shoppingHistoryBtn} onPress={() => onUsePastList(list.id)}>
-                          <Text style={styles.shoppingHistoryBtnText}>Use again</Text>
-                        </Pressable>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 </View>
               ) : null}
@@ -5079,11 +5134,68 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       borderColor: 'rgba(223,232,244,0.9)',
       borderRadius: 18,
       backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    shoppingHistoryHeader: {
       padding: 14,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    shoppingHistoryChevron: {
+      color: colors.primary,
+      fontSize: 20,
+      fontWeight: '800',
+      width: 20,
+      textAlign: 'center',
+    },
+    shoppingHistoryDetail: {
+      paddingHorizontal: 14,
+      paddingBottom: 14,
+      gap: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    shoppingHistoryItems: {
+      gap: 6,
+      marginTop: 10,
+    },
+    shoppingHistoryItemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    shoppingHistoryItemName: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    shoppingHistoryItemQty: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    shoppingHistoryActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 2,
+    },
+    shoppingHistoryAddBtn: {
+      flex: 1,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      alignItems: 'center',
+    },
+    shoppingHistoryAddBtnText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '800',
     },
     shoppingHistoryCopy: {
       flex: 1,
