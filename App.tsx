@@ -1692,6 +1692,9 @@ function AppShell() {
       refreshLiveHabits(current);
       refreshChildEventChecks(current);
       refreshChildWords(current);
+      // Keep the "who can I send a shopping list to" list fresh so a co-parent who
+      // just joined (or a newly connected shopper) shows up without a full reload.
+      refreshFamilyShoppers(current);
     };
 
     (async () => {
@@ -6642,6 +6645,9 @@ function AppShell() {
       onEventRemindersEnabledChange={setEventRemindersEnabled}
       eventReminderLead={eventReminderLead}
       onEventReminderLeadChange={setEventReminderLead}
+      coParents={familyShoppers
+        .filter((s) => s.key.startsWith('user:'))
+        .map((s) => ({ key: s.key, name: s.label }))}
       children={children.map((child) => ({ id: child.id, name: child.name }))}
       staffProfiles={staffProfiles.map((profile) => ({
         id: profile.id,

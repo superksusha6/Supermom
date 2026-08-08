@@ -21,6 +21,11 @@ type ChildSummary = {
   name: string;
 };
 
+type CoParentSummary = {
+  key: string;
+  name: string;
+};
+
 type Props = {
   parentLabel: 'Mom' | 'Dad';
   currentRole: 'mother' | 'child' | 'staff' | 'admin';
@@ -70,6 +75,7 @@ type Props = {
   onEventRemindersEnabledChange: Dispatch<SetStateAction<boolean>>;
   eventReminderLead: string;
   onEventReminderLeadChange: (value: string) => void;
+  coParents?: CoParentSummary[];
   children: ChildSummary[];
   staffProfiles: StaffSummary[];
   onSelectParentLabel: (label: 'Mom' | 'Dad') => void;
@@ -140,6 +146,7 @@ export function SettingsScreen({
   onEventRemindersEnabledChange,
   eventReminderLead,
   onEventReminderLeadChange,
+  coParents,
   children,
   staffProfiles,
   onSelectParentLabel,
@@ -951,6 +958,20 @@ export function SettingsScreen({
                 </View>
                 <Text style={styles.youText}>You</Text>
               </View>
+
+              {(coParents || []).map((parent) => (
+                <View key={`coparent-${parent.key}`} style={[styles.memberRow, styles.memberRowDivider]}>
+                  <View style={[styles.mono, styles.monoP]}><Text style={[styles.monoText, styles.monoTextP]}>{initialOf(parent.name)}</Text></View>
+                  <View style={styles.memberWho}>
+                    <Text style={styles.memberName} numberOfLines={1}>{parent.name}</Text>
+                    <Text style={styles.memberSub}>Partner · full access</Text>
+                  </View>
+                  <View style={[styles.chip, styles.chipOk]}>
+                    <View style={[styles.chipDot, { backgroundColor: colors.done }]} />
+                    <Text style={[styles.chipText, { color: colors.done }]}>Connected</Text>
+                  </View>
+                </View>
+              ))}
 
               {children.map((child) => (
                 <View key={`child-${child.id}`}>
