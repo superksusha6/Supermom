@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { getNutritionPlan } from '@/lib/nutrition';
 import { ActivityLevel, HabitEntry, HabitReminderMode, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, PersonalProfile } from '@/types/app';
@@ -392,7 +392,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Height</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder=""
+              placeholder="Add"
               placeholderTextColor={colors.subtext}
               keyboardType="number-pad"
               value={personalProfile.heightCm || ''}
@@ -404,7 +404,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Weight</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder=""
+              placeholder="Add"
               placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               value={personalProfile.weightKg || ''}
@@ -416,7 +416,7 @@ export function SettingsScreen({
             <Text style={styles.iosLabel}>Goal weight</Text>
             <TextInput
               style={styles.iosInput}
-              placeholder=""
+              placeholder="Add"
               placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               value={desiredWeight}
@@ -526,89 +526,81 @@ export function SettingsScreen({
   }
 
   function renderCycleEditor() {
+    const on = !!personalProfile.cycleTrackingEnabled;
     return (
       <>
-        <Text style={styles.label}>Cycle Tracking</Text>
-        <Pressable
-          style={[styles.toggle, personalProfile.cycleTrackingEnabled && styles.toggleOn]}
-          onPress={() => onPersonalProfileChange((prev) => ({ ...prev, cycleTrackingEnabled: !prev }))}
-        >
-          <Text style={styles.toggleText}>{personalProfile.cycleTrackingEnabled ? 'Enabled' : 'Disabled'}</Text>
-        </Pressable>
-
-        {personalProfile.cycleTrackingEnabled ? (
-          <>
-            <Text style={styles.label}>Last Period Start</Text>
-            <TextInput
-              placeholder="DD.MM.YYYY"
-              keyboardType="number-pad"
-              style={styles.input}
-              value={personalProfile.cycleLastPeriodStart || ''}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLastPeriodStart: formatBirthDateInput(text) }))}
+        <Text style={styles.iosHeader}>Cycle</Text>
+        <View style={styles.iosGroup}>
+          <View style={styles.iosRow}>
+            <Text style={styles.iosLabel}>Cycle tracking</Text>
+            <Switch
+              style={styles.iosSwitch}
+              value={on}
+              onValueChange={() => onPersonalProfileChange((prev) => ({ ...prev, cycleTrackingEnabled: !prev.cycleTrackingEnabled }))}
+              trackColor={{ true: colors.done, false: colors.surfaceAlt }}
+              thumbColor="#ffffff"
             />
-
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Cycle Length (days)</Text>
+          </View>
+          {on ? (
+            <>
+              <View style={[styles.iosRow, styles.iosRowSep]}>
+                <Text style={styles.iosLabel}>Last period start</Text>
                 <TextInput
-                  placeholder="28"
+                  style={styles.iosInput}
+                  placeholder="DD.MM.YYYY"
+                  placeholderTextColor={colors.subtext}
                   keyboardType="number-pad"
-                  style={styles.input}
+                  value={personalProfile.cycleLastPeriodStart || ''}
+                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLastPeriodStart: formatBirthDateInput(text) }))}
+                />
+              </View>
+              <View style={[styles.iosRow, styles.iosRowSep]}>
+                <Text style={styles.iosLabel}>Cycle length</Text>
+                <TextInput
+                  style={styles.iosInput}
+                  placeholder="28"
+                  placeholderTextColor={colors.subtext}
+                  keyboardType="number-pad"
                   value={personalProfile.cycleLengthDays || ''}
                   onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cycleLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))}
                 />
+                <Text style={styles.iosUnit}>days</Text>
               </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Period Length (days)</Text>
+              <View style={[styles.iosRow, styles.iosRowSep]}>
+                <Text style={styles.iosLabel}>Period length</Text>
                 <TextInput
+                  style={styles.iosInput}
                   placeholder="5"
+                  placeholderTextColor={colors.subtext}
                   keyboardType="number-pad"
-                  style={styles.input}
                   value={personalProfile.cyclePeriodLengthDays || ''}
-                  onChangeText={(text) =>
-                    onPersonalProfileChange((prev) => ({ ...prev, cyclePeriodLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))
-                  }
+                  onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, cyclePeriodLengthDays: text.replace(/[^\d]/g, '').slice(0, 2) }))}
+                />
+                <Text style={styles.iosUnit}>days</Text>
+              </View>
+              <View style={[styles.iosRow, styles.iosRowSep]}>
+                <Text style={styles.iosLabel}>Period reminders</Text>
+                <Switch
+                  style={styles.iosSwitch}
+                  value={periodRemindersEnabled}
+                  onValueChange={() => onPeriodRemindersEnabledChange((prev) => !prev)}
+                  trackColor={{ true: colors.done, false: colors.surfaceAlt }}
+                  thumbColor="#ffffff"
                 />
               </View>
-            </View>
-
-            <View style={styles.masterReminderRow}>
-              <View style={styles.masterReminderCopy}>
-                <Text style={styles.masterReminderTitle}>Period reminders</Text>
-                <Text style={styles.masterReminderSubtitle}>
-                  {periodRemindersEnabled
-                    ? `Remind me ${periodReminderLeadDays} day${periodReminderLeadDays === 1 ? '' : 's'} before my period may start.`
-                    : 'Period reminders are off.'}
-                </Text>
-              </View>
-              <Pressable
-                style={[styles.toggle, periodRemindersEnabled && styles.toggleOn]}
-                onPress={() => onPeriodRemindersEnabledChange((prev) => !prev)}
-              >
-                <Text style={styles.toggleText}>{periodRemindersEnabled ? 'On' : 'Off'}</Text>
-              </Pressable>
-            </View>
-
-            {periodRemindersEnabled ? (
-              <>
-                <Text style={styles.label}>Remind me before</Text>
-                <View style={styles.pillRow}>
-                  {[1, 2, 3].map((days) => (
-                    <Pressable
-                      key={days}
-                      style={[styles.pillBtn, periodReminderLeadDays === days && styles.pillBtnActive]}
-                      onPress={() => onPeriodReminderLeadDaysChange(days)}
-                    >
-                      <Text style={[styles.pillBtnText, periodReminderLeadDays === days && styles.pillBtnTextActive]}>
-                        {days} day{days === 1 ? '' : 's'}
-                      </Text>
-                    </Pressable>
-                  ))}
+              {periodRemindersEnabled ? (
+                <View style={[styles.iosRow, styles.iosRowSep]}>
+                  <Text style={styles.iosLabel}>Remind before</Text>
+                  {renderSeg(
+                    [{ key: '1', label: '1 day' }, { key: '2', label: '2 days' }, { key: '3', label: '3 days' }],
+                    String(periodReminderLeadDays),
+                    (k) => onPeriodReminderLeadDaysChange(Number(k)),
+                  )}
                 </View>
-              </>
-            ) : null}
-          </>
-        ) : null}
+              ) : null}
+            </>
+          ) : null}
+        </View>
       </>
     );
   }
@@ -939,7 +931,7 @@ export function SettingsScreen({
             <Text style={styles.famSectionLabel}>People</Text>
             <View style={styles.famCard}>
               <View style={styles.memberRow}>
-                <View style={[styles.mono, styles.monoP]}><Text style={styles.monoText}>{initialOf(ownerName)}</Text></View>
+                <View style={[styles.mono, styles.monoP]}><Text style={[styles.monoText, styles.monoTextP]}>{initialOf(ownerName)}</Text></View>
                 <View style={styles.memberWho}>
                   <Text style={styles.memberName} numberOfLines={1}>{ownerName}</Text>
                   <Text style={styles.memberSub}>Parent</Text>
@@ -950,7 +942,7 @@ export function SettingsScreen({
               {children.map((child) => (
                 <View key={`child-${child.id}`}>
                   <View style={[styles.memberRow, styles.memberRowDivider]}>
-                    <View style={[styles.mono, styles.monoC]}><Text style={styles.monoText}>{initialOf(child.name)}</Text></View>
+                    <View style={[styles.mono, styles.monoC]}><Text style={[styles.monoText, styles.monoTextC]}>{initialOf(child.name)}</Text></View>
                     <View style={styles.memberWho}>
                       <Text style={styles.memberName} numberOfLines={1}>{child.name}</Text>
                       <Text style={styles.memberSub}>Child</Text>
@@ -972,7 +964,7 @@ export function SettingsScreen({
               {staffProfiles.map((profile) => (
                 <View key={`staff-${profile.id}`}>
                   <View style={[styles.memberRow, styles.memberRowDivider]}>
-                    <View style={[styles.mono, styles.monoS]}><Text style={styles.monoText}>{initialOf(profile.name)}</Text></View>
+                    <View style={[styles.mono, styles.monoS]}><Text style={[styles.monoText, styles.monoTextS]}>{initialOf(profile.name)}</Text></View>
                     <View style={styles.memberWho}>
                       <Text style={styles.memberName} numberOfLines={1}>{profile.name}</Text>
                       <Text style={styles.memberSub} numberOfLines={1}>{profile.roleLabel || 'Staff'}</Text>
@@ -1009,7 +1001,7 @@ export function SettingsScreen({
               {partnerConnectedName ? (
                 <View>
                   <View style={styles.memberRow}>
-                    <View style={[styles.mono, styles.monoP]}><Text style={styles.monoText}>{initialOf(partnerConnectedName)}</Text></View>
+                    <View style={[styles.mono, styles.monoP]}><Text style={[styles.monoText, styles.monoTextP]}>{initialOf(partnerConnectedName)}</Text></View>
                     <View style={styles.memberWho}>
                       <Text style={styles.memberName} numberOfLines={1}>{partnerConnectedName}</Text>
                       <Text style={styles.memberSub}>Partner calendar · you can send slots</Text>
@@ -1045,33 +1037,38 @@ export function SettingsScreen({
           </>
         ) : null}
 
-        <Text style={styles.famSectionLabel}>Notifications</Text>
-        {pushState === 'unsupported' ? (
-          <Text style={styles.emptyText}>Push notifications aren't supported in this browser. On iPhone, add FamOs to your Home Screen first, then enable them here.</Text>
-        ) : (
-          <>
-            <Pressable
-              style={[styles.toggle, pushState === 'enabled' && styles.toggleOn]}
-              onPress={onTogglePush}
-            >
-              <Text style={styles.toggleText}>
-                {pushState === 'enabled' ? 'Push notifications: On' : 'Enable push notifications'}
-              </Text>
-            </Pressable>
-            <Text style={styles.emptyText}>
-              {pushState === 'enabled'
-                ? "You'll get a push when your partner sends a slot or answers yours — even with the app closed."
-                : pushState === 'denied'
-                  ? 'Blocked in your browser. Allow notifications for this site, then tap again.'
-                  : 'Get alerted on this device when a slot arrives or is answered.'}
-            </Text>
-          </>
-        )}
-
-        <Text style={styles.label}>Enable Staff Access</Text>
-        <Pressable style={[styles.toggle, staffEnabled && styles.toggleOn]} onPress={onToggleStaff}>
-          <Text style={styles.toggleText}>{staffEnabled ? 'Enabled' : 'Disabled'}</Text>
-        </Pressable>
+        <Text style={styles.famSectionLabel}>Notifications &amp; access</Text>
+        <View style={styles.iosGroup}>
+          {pushState !== 'unsupported' ? (
+            <View style={styles.iosRow}>
+              <Text style={styles.iosLabel}>Push notifications</Text>
+              <Switch
+                style={styles.iosSwitch}
+                value={pushState === 'enabled'}
+                onValueChange={onTogglePush}
+                trackColor={{ true: colors.done, false: colors.surfaceAlt }}
+                thumbColor="#ffffff"
+              />
+            </View>
+          ) : null}
+          <View style={[styles.iosRow, pushState !== 'unsupported' && styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Staff access</Text>
+            <Switch
+              style={styles.iosSwitch}
+              value={staffEnabled}
+              onValueChange={onToggleStaff}
+              trackColor={{ true: colors.done, false: colors.surfaceAlt }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
+        <Text style={styles.iosFoot}>
+          {pushState === 'unsupported'
+            ? "Push isn't supported in this browser. On iPhone, add FamOs to your Home Screen first."
+            : pushState === 'denied'
+              ? 'Notifications are blocked in your browser settings — allow them for this site, then toggle again.'
+              : 'Get a push when a partner sends or answers a time slot. Staff access lets you invite helpers with their own login.'}
+        </Text>
       </>
     );
   }
@@ -1682,10 +1679,13 @@ const createStyles = (colors: ThemeColors) =>
     },
     memberRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
     mono: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-    monoText: { fontSize: 15, fontWeight: '800', color: colors.primary },
+    monoText: { fontSize: 15, fontWeight: '800' },
+    monoTextP: { color: colors.primary },
+    monoTextC: { color: colors.done },
+    monoTextS: { color: '#8a7cf0' },
     monoP: { backgroundColor: colors.selection },
-    monoC: { backgroundColor: colors.selection },
-    monoS: { backgroundColor: colors.selection },
+    monoC: { backgroundColor: 'rgba(37,160,106,0.16)' },
+    monoS: { backgroundColor: 'rgba(124,92,214,0.18)' },
     memberWho: { flex: 1, minWidth: 0 },
     memberName: { fontSize: 14.5, fontWeight: '600', color: colors.text },
     memberSub: { fontSize: 12, color: colors.subtext, marginTop: 1 },
@@ -1772,10 +1772,11 @@ const createStyles = (colors: ThemeColors) =>
     iosInput: { flex: 1, marginLeft: 'auto', textAlign: 'right', fontSize: 16, color: colors.text, paddingVertical: 0, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' },
     iosUnit: { fontSize: 16, color: colors.subtext, marginLeft: 2 },
     iosSeg: { flexDirection: 'row', marginLeft: 'auto', backgroundColor: colors.surfaceAlt, borderRadius: 9, padding: 2 },
-    iosSegItem: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 7 },
-    iosSegItemOn: { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-    iosSegText: { fontSize: 13, color: colors.text, fontWeight: '500' },
+    iosSegItem: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 7 },
+    iosSegItemOn: { backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+    iosSegText: { fontSize: 13, color: colors.subtext, fontWeight: '500' },
     iosSegTextOn: { fontWeight: '700', color: colors.primary },
+    iosSwitch: { marginLeft: 'auto', transform: [{ scale: 0.86 }] },
     iosFoot: { fontSize: 12.5, color: colors.subtext, marginTop: 7, marginLeft: 6, marginRight: 6, lineHeight: 17 },
     staffCard: {
       flexDirection: 'row',

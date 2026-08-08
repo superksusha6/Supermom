@@ -55,8 +55,15 @@ export function FamilyOnboarding({ visible, ownerName, defaultLabel, onBuild, on
   // Reset to the first step each time the wizard is opened afresh.
   useEffect(() => {
     if (visible) {
+      // Fresh start each open — otherwise old entries linger and re-running the build
+      // would create duplicate invites.
       setStep('welcome');
       setCopiedKey(null);
+      setWho({ coparent: false, children: false, staff: false });
+      setCpName('');
+      setKids([emptyChild()]);
+      setStaff([emptyStaff()]);
+      setResults([]);
     }
   }, [visible]);
 
