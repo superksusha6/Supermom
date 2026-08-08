@@ -355,7 +355,8 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(15,20,30,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 },
     // Fixed height so the card is the same size on every step (content scrolls inside).
-    card: { width: '100%', maxWidth: 460, height: 600, maxHeight: '92%', backgroundColor: colors.surface, borderRadius: 24, overflow: 'hidden' },
+    // maxWidth 412 matches the app's standard content modals (settings editor, auth, etc).
+    card: { width: '100%', maxWidth: 412, height: 600, maxHeight: '90%', backgroundColor: colors.surface, borderRadius: 22, overflow: 'hidden' },
     progressWrap: { paddingHorizontal: 20, paddingTop: 16 },
     topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
     backText: { fontSize: 13, fontWeight: '700', color: colors.primary },
