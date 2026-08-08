@@ -8644,11 +8644,16 @@ function AppShell() {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable
-            style={styles.menuButton}
-            onPress={() => (sectionActions.length ? setSectionMenuOpen(true) : setSettingsPanelOpen(true))}
-          >
-            <Text style={styles.menuButtonIcon}>☰</Text>
+          {/* Account + Settings live in the top-right avatar (settings is no longer a
+              bottom tab). Contextual quick-actions moved to the "+" FAB above the tabs. */}
+          <Pressable style={styles.avatarBtn} onPress={() => setSettingsPanelOpen(true)} accessibilityRole="button" accessibilityLabel="Account and settings">
+            {isStaffView && currentStaffProfile?.photoUri ? (
+              <Image source={{ uri: currentStaffProfile.photoUri }} style={styles.avatarBtnImg} />
+            ) : (
+              <Text style={styles.avatarBtnText}>
+                {((isStaffView ? currentStaffProfile?.name || '' : personalProfile.fullName || '').trim()[0] || '✦').toUpperCase()}
+              </Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -11446,6 +11451,14 @@ function AppShell() {
         ) : null}
       </ScrollView>
 
+      {/* Contextual quick-actions ("Add event", "Add child"…) as a floating + button,
+          since the ☰ menu was replaced by the account avatar. Owner-side screens only. */}
+      {!isChildView && sectionActions.length > 0 ? (
+        <Pressable style={styles.quickFab} onPress={() => setSectionMenuOpen(true)} accessibilityRole="button" accessibilityLabel="Quick actions">
+          <Text style={styles.quickFabIcon}>+</Text>
+        </Pressable>
+      ) : null}
+
       {isChildView ? (
       <View style={styles.tabBar}>
         <TabButton icon="calendar" label="Today" active={childTab === 'today'} onPress={() => { setChildTab('today'); setChildScreen('home'); }} styles={styles} colors={colors} />
@@ -11469,7 +11482,6 @@ function AppShell() {
         {staffCan('fixit') ? (
           <TabButton icon="home" label="Home" active={screen === 'household' || screen === 'fixit' || screen === 'meds' || screen === 'wellness'} onPress={() => setScreen('household')} styles={styles} colors={colors} />
         ) : null}
-        <TabButton icon="settings" label="Settings" active={settingsPanelOpen} onPress={() => setSettingsPanelOpen(true)} styles={styles} colors={colors} />
       </View>
       )}
 
@@ -13864,6 +13876,52 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontWeight: '800',
     fontSize: isMobile ? 18 : 20,
     lineHeight: isMobile ? 18 : 20,
+  },
+  avatarBtn: {
+    width: isMobile ? 42 : 46,
+    height: isMobile ? 42 : 46,
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.selection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  avatarBtnImg: { width: '100%', height: '100%' },
+  avatarBtnText: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: isMobile ? 17 : 19,
+  },
+  quickFab: {
+    position: 'absolute',
+    right: 16,
+    bottom: isMobile ? 80 : 84,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 60,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  quickFabIcon: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontWeight: '400',
+    lineHeight: 34,
+    marginTop: -2,
   },
   accountMenu: {
     marginTop: 54,
