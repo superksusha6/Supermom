@@ -15553,9 +15553,10 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     zIndex: 40,
   },
   sectionMenuAnchor: {
+    // Anchored just above the "+" FAB (bottom-right), which now triggers this menu.
     position: 'absolute',
-    top: 66,
-    right: 14,
+    bottom: isMobile ? 142 : 148,
+    right: 16,
     zIndex: 41,
     alignItems: 'flex-end',
   },
