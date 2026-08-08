@@ -10860,10 +10860,8 @@ function AppShell() {
                 const targetItem = targetList?.items.find((item) => item.id === id);
                 if (!targetItem) return;
                 const nextPurchased = !targetItem.purchased;
-                const shouldMoveToInventory = nextPurchased;
-                const nextFridgeItems = shouldMoveToInventory
-                  ? mergeFridgeItemsWithShoppingItem(latestFridgeItemsRef.current, targetItem)
-                  : latestFridgeItemsRef.current;
+                // Purchased items stay in the (dated) shopping list only — they no longer
+                // auto-copy into Inventory (that cluttered the pantry with every grocery).
                 if (nextPurchased) trackPurchasedShoppingItem(targetItem);
                 setShoppingLists((prev) =>
                   prev.map((list) =>
@@ -10875,7 +10873,6 @@ function AppShell() {
                       : list,
                     ),
                 );
-                if (shouldMoveToInventory) setFridgeItems(nextFridgeItems);
                 Promise.all([toggleShoppingItemPurchased(id, nextPurchased)])
                   .then(() => {
                     return refreshLiveShopping();
@@ -10891,7 +10888,6 @@ function AppShell() {
                           : list,
                       ),
                     );
-                    if (shouldMoveToInventory) setFridgeItems(latestFridgeItemsRef.current);
                     setTasksError(error instanceof Error ? error.message : 'Update failed.');
                   });
                 return;
@@ -10908,9 +10904,6 @@ function AppShell() {
               );
               const targetList = shoppingLists.find((list) => list.id === listId);
               const targetItem = targetList?.items.find((item) => item.id === id);
-              if (targetItem && !targetItem.purchased) {
-                setFridgeItems((prev) => mergeFridgeItemsWithShoppingItem(prev, targetItem));
-              }
               if (targetItem && !targetItem.purchased) {
                 trackPurchasedShoppingItem(targetItem);
               }
