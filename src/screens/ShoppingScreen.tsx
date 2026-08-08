@@ -441,6 +441,7 @@ type Props = {
   currentActorLabel: string;
   purchaseRequests: PurchaseRequest[];
   onUpdateFridgeItemStatus: (itemId: string, status: FridgeItemStatus) => void;
+  onClearInventory: () => void;
   onAddFridgeItemToShopping: (itemId: string) => void;
   onAddAllLowFridgeItemsToShopping: () => void;
   onUpdateFridgeItem: (item: FridgeItem) => void;
@@ -616,6 +617,7 @@ export function ShoppingScreen({
   currentActorLabel,
   purchaseRequests,
   onUpdateFridgeItemStatus,
+  onClearInventory,
   onAddFridgeItemToShopping,
   onAddAllLowFridgeItemsToShopping,
   onUpdateFridgeItem,
@@ -649,6 +651,7 @@ export function ShoppingScreen({
   const [baseListOpen, setBaseListOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [inventoryClearConfirm, setInventoryClearConfirm] = useState(false);
   const [addComposerOpen, setAddComposerOpen] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [quickAddAmount, setQuickAddAmount] = useState('1');
@@ -1962,6 +1965,31 @@ export function ShoppingScreen({
             </View>
           </View>
           <Text style={styles.fridgePhotoTip}>Tip: capture shelves or products front-on, with visible labels, and avoid cropping.</Text>
+          {fridgeItems.length > 0 ? (
+            inventoryClearConfirm ? (
+              <View style={styles.inventoryClearConfirmRow}>
+                <Text style={styles.inventoryClearConfirmText}>Clear all {fridgeItems.length} items?</Text>
+                <View style={styles.inventoryClearConfirmActions}>
+                  <Pressable
+                    style={styles.inventoryClearYes}
+                    onPress={() => {
+                      onClearInventory();
+                      setInventoryClearConfirm(false);
+                    }}
+                  >
+                    <Text style={styles.inventoryClearYesText}>Clear all</Text>
+                  </Pressable>
+                  <Pressable style={styles.inventoryClearNo} onPress={() => setInventoryClearConfirm(false)}>
+                    <Text style={styles.inventoryClearNoText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.inventoryClearBtn} onPress={() => setInventoryClearConfirm(true)}>
+                <Text style={styles.inventoryClearBtnText}>Clear all</Text>
+              </Pressable>
+            )
+          ) : null}
           <View style={[styles.fridgeSummaryRow, isMobile && styles.fridgeSummaryRowMobile]}>
             <Pressable
               style={[styles.fridgeSummaryChip, inventoryFilter === 'all' && styles.fridgeSummaryChipActive]}
@@ -3431,6 +3459,60 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
       fontSize: 11,
       lineHeight: 16,
       marginBottom: 10,
+    },
+    inventoryClearBtn: {
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      marginBottom: 10,
+    },
+    inventoryClearBtnText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    inventoryClearConfirmRow: {
+      borderWidth: 1,
+      borderColor: colors.urgent,
+      borderRadius: 12,
+      padding: 10,
+      marginBottom: 10,
+      gap: 8,
+    },
+    inventoryClearConfirmText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    inventoryClearConfirmActions: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    inventoryClearYes: {
+      borderRadius: 10,
+      backgroundColor: colors.urgent,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    inventoryClearYesText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    inventoryClearNo: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    inventoryClearNoText: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '700',
     },
     fridgeSummaryRow: {
       flexDirection: 'row',

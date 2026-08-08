@@ -10652,6 +10652,7 @@ function AppShell() {
               const nextFridgeItems = fridgeItems.map((item) => (item.id === itemId ? { ...item, status } : item));
               setFridgeItems(nextFridgeItems);
             }}
+            onClearInventory={() => setFridgeItems([])}
             onAddFridgeItemToShopping={(itemId) => {
               const targetItem = fridgeItems.find((item) => item.id === itemId);
               if (!targetItem) return;
