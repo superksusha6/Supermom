@@ -11199,6 +11199,71 @@ function AppShell() {
                 ];
               });
             }}
+            onFinishShopping={() => {
+              // Seal the current list into dated history and open a fresh empty one.
+              // This is what makes "saved by date" reliable (before, a list only got a
+              // date as a side effect of starting another one).
+              const currentList = getCurrentShoppingList(shoppingLists);
+              if (!currentList || currentList.items.length === 0) return;
+              const stamp = new Date().toISOString();
+              if (session && isSupabaseConfigured) {
+                updateShoppingListMeta(session, currentList.id, { listType: 'history', completedAt: stamp })
+                  .then(() => createShoppingList(session, 'Shopping List', [], { listType: 'current' }))
+                  .then(() => refreshLiveShopping())
+                  .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not finish the list.'));
+                return;
+              }
+              setShoppingLists((prev) => [
+                {
+                  id: `sl-current-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  title: 'Shopping List',
+                  listType: 'current',
+                  createdAt: stamp,
+                  items: [],
+                },
+                ...prev.map((list) =>
+                  list.id === currentList.id
+                    ? { ...list, listType: 'history' as const, completedAt: stamp }
+                    : list,
+                ),
+              ]);
+            }}
+            onReopenPastList={(listId) => {
+              // Make a past dated list the active one again. The current list is sealed
+              // into history (if it has items) or dropped (if empty) so there's only ever
+              // one active list.
+              const sourceList = shoppingLists.find((list) => list.id === listId);
+              if (!sourceList) return;
+              const currentList = getCurrentShoppingList(shoppingLists);
+              const stamp = new Date().toISOString();
+              const currentHasItems = !!currentList && currentList.id !== listId && currentList.items.length > 0;
+              const currentIsEmpty = !!currentList && currentList.id !== listId && currentList.items.length === 0;
+              if (session && isSupabaseConfigured) {
+                const settleCurrent = currentHasItems
+                  ? updateShoppingListMeta(session, currentList!.id, { listType: 'history', completedAt: stamp })
+                  : currentIsEmpty
+                    ? deleteShoppingList(session, currentList!.id)
+                    : Promise.resolve();
+                settleCurrent
+                  .then(() => updateShoppingListMeta(session, listId, { listType: 'current', completedAt: null }))
+                  .then(() => refreshLiveShopping())
+                  .catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not reopen the list.'));
+                return;
+              }
+              setShoppingLists((prev) =>
+                prev
+                  .filter((list) => !(currentIsEmpty && list.id === currentList!.id))
+                  .map((list) => {
+                    if (currentHasItems && list.id === currentList!.id) {
+                      return { ...list, listType: 'history' as const, completedAt: stamp };
+                    }
+                    if (list.id === listId) {
+                      return { ...list, listType: 'current' as const, completedAt: undefined };
+                    }
+                    return list;
+                  }),
+              );
+            }}
             onShareListToProfile={(listId, recipientKey) => {
               const target = shoppingShareTargets.find((item) => item.key === recipientKey);
               const sourceList = shoppingLists.find((item) => item.id === listId);

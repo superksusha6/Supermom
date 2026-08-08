@@ -456,6 +456,8 @@ type Props = {
   onSaveAsBaseList: (listId: string) => void;
   onStartFromBaseList: () => void;
   onUsePastList: (listId: string) => void;
+  onFinishShopping: () => void;
+  onReopenPastList: (listId: string) => void;
   onShareListToProfile: (listId: string, recipientKey: string) => void;
   onImportSharedList: (shareId: string) => void;
   onDismissSharedList: (shareId: string) => void;
@@ -625,6 +627,8 @@ export function ShoppingScreen({
   onSaveAsBaseList,
   onStartFromBaseList,
   onUsePastList,
+  onFinishShopping,
+  onReopenPastList,
   onShareListToProfile,
   onImportSharedList,
   onDismissSharedList,
@@ -1773,6 +1777,88 @@ export function ShoppingScreen({
         </View>
         ) : null}
 
+        {!isStaffShopper && activeList && activeList.items.length > 0 ? (
+          <Pressable style={styles.shoppingFinishBtn} onPress={onFinishShopping}>
+            <Text style={styles.shoppingFinishBtnText}>✓ Finish shopping</Text>
+          </Pressable>
+        ) : null}
+
+        {!isStaffShopper && historyLists.length > 0 ? (
+          <View style={styles.shoppingTimeline}>
+            <Text style={styles.shoppingTimelineTitle}>Saved lists · by date</Text>
+            <View style={styles.shoppingHistoryList}>
+              {historyLists.map((list) => {
+                const expanded = expandedHistoryId === list.id;
+                const when = formatHistoryDate(list.completedAt || list.createdAt);
+                return (
+                  <View key={list.id} style={styles.shoppingHistoryCard}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${expanded ? 'Collapse' : 'Open'} list from ${when}`}
+                      style={styles.shoppingHistoryHeader}
+                      onPress={() => setExpandedHistoryId((prev) => (prev === list.id ? null : list.id))}
+                    >
+                      <View style={styles.shoppingHistoryCopy}>
+                        <Text style={styles.shoppingHistoryCardTitle}>{when}</Text>
+                        <Text style={styles.shoppingHistoryMeta}>
+                          {list.items.length} item{list.items.length === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                      <Text style={styles.shoppingHistoryChevron}>{expanded ? '−' : '+'}</Text>
+                    </Pressable>
+
+                    {expanded ? (
+                      <View style={styles.shoppingHistoryDetail}>
+                        {list.items.length > 0 ? (
+                          <View style={styles.shoppingHistoryItems}>
+                            {list.items.map((item) => (
+                              <View key={item.id} style={styles.shoppingHistoryItemRow}>
+                                <Text style={styles.shoppingHistoryItemName} numberOfLines={1}>{item.name}</Text>
+                                <Text style={styles.shoppingHistoryItemQty} numberOfLines={1}>{item.quantity}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={styles.shoppingHistoryMeta}>This list is empty.</Text>
+                        )}
+                        {list.items.length > 0 ? (
+                          <View style={styles.shoppingHistoryActions}>
+                            <Pressable
+                              style={styles.shoppingHistoryAddBtn}
+                              onPress={() => {
+                                onReopenPastList(list.id);
+                                setExpandedHistoryId(null);
+                              }}
+                            >
+                              <Text style={styles.shoppingHistoryAddBtnText}>Reopen</Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.shoppingHistoryBtn}
+                              onPress={() => {
+                                onCreateList(
+                                  list.items.map((item) => ({ name: item.name, quantity: item.quantity, category: item.category })),
+                                  activeList?.id ?? null,
+                                  'force-current',
+                                );
+                                setExpandedHistoryId(null);
+                              }}
+                            >
+                              <Text style={styles.shoppingHistoryBtnText}>Merge</Text>
+                            </Pressable>
+                            <Pressable style={styles.shoppingHistoryBtn} onPress={() => onUsePastList(list.id)}>
+                              <Text style={styles.shoppingHistoryBtnText}>Duplicate</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         {!needsBasketOnboarding ? (
         <View style={styles.moreSection}>
           <Pressable
@@ -1812,11 +1898,6 @@ export function ShoppingScreen({
                 >
                   <Text style={styles.moreSecondaryBtnText}>Share</Text>
                 </Pressable>
-                {historyLists[0] ? (
-                  <Pressable style={styles.moreSecondaryBtn} onPress={() => onUsePastList(historyLists[0].id)}>
-                    <Text style={styles.moreSecondaryBtnText}>Use last list</Text>
-                  </Pressable>
-                ) : null}
               </View>
 
               {shareOpen ? (
@@ -1852,72 +1933,6 @@ export function ShoppingScreen({
                 </View>
               ) : null}
 
-              {historyLists.length > 0 ? (
-                <View style={styles.moreSubsection}>
-                  <Text style={styles.moreSubsectionTitle}>Past lists</Text>
-                  <View style={styles.shoppingHistoryList}>
-                    {historyLists.map((list) => {
-                      const expanded = expandedHistoryId === list.id;
-                      const when = formatHistoryDate(list.completedAt || list.createdAt);
-                      return (
-                        <View key={list.id} style={styles.shoppingHistoryCard}>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`${expanded ? 'Collapse' : 'Open'} list from ${when}`}
-                            style={styles.shoppingHistoryHeader}
-                            onPress={() => setExpandedHistoryId((prev) => (prev === list.id ? null : list.id))}
-                          >
-                            <View style={styles.shoppingHistoryCopy}>
-                              <Text style={styles.shoppingHistoryCardTitle}>{when}</Text>
-                              <Text style={styles.shoppingHistoryMeta}>
-                                {list.items.length} item{list.items.length === 1 ? '' : 's'}
-                              </Text>
-                            </View>
-                            <Text style={styles.shoppingHistoryChevron}>{expanded ? '−' : '+'}</Text>
-                          </Pressable>
-
-                          {expanded ? (
-                            <View style={styles.shoppingHistoryDetail}>
-                              {list.items.length > 0 ? (
-                                <View style={styles.shoppingHistoryItems}>
-                                  {list.items.map((item) => (
-                                    <View key={item.id} style={styles.shoppingHistoryItemRow}>
-                                      <Text style={styles.shoppingHistoryItemName} numberOfLines={1}>{item.name}</Text>
-                                      <Text style={styles.shoppingHistoryItemQty} numberOfLines={1}>{item.quantity}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                              ) : (
-                                <Text style={styles.shoppingHistoryMeta}>This list is empty.</Text>
-                              )}
-                              {list.items.length > 0 ? (
-                                <View style={styles.shoppingHistoryActions}>
-                                  <Pressable
-                                    style={styles.shoppingHistoryAddBtn}
-                                    onPress={() => {
-                                      onCreateList(
-                                        list.items.map((item) => ({ name: item.name, quantity: item.quantity, category: item.category })),
-                                        activeList?.id ?? null,
-                                        'force-current',
-                                      );
-                                      setExpandedHistoryId(null);
-                                    }}
-                                  >
-                                    <Text style={styles.shoppingHistoryAddBtnText}>Add to current list</Text>
-                                  </Pressable>
-                                  <Pressable style={styles.shoppingHistoryBtn} onPress={() => onUsePastList(list.id)}>
-                                    <Text style={styles.shoppingHistoryBtnText}>Use again</Text>
-                                  </Pressable>
-                                </View>
-                              ) : null}
-                            </View>
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : null}
             </View>
           ) : null}
         </View>
@@ -5181,8 +5196,33 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName) => {
     shoppingHistoryActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      flexWrap: 'wrap',
+      gap: 8,
       marginTop: 2,
+    },
+    shoppingFinishBtn: {
+      marginTop: 12,
+      borderRadius: 14,
+      backgroundColor: colors.done,
+      paddingVertical: 13,
+      alignItems: 'center',
+    },
+    shoppingFinishBtnText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    shoppingTimeline: {
+      marginTop: 18,
+      gap: 10,
+    },
+    shoppingTimelineTitle: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+      marginLeft: 2,
     },
     shoppingHistoryAddBtn: {
       flex: 1,
