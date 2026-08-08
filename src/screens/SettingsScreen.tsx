@@ -352,6 +352,19 @@ export function SettingsScreen({
           onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, dateOfBirth: formatBirthDateInput(text) }))}
         />
 
+        {currentRole === 'mother' ? (
+          <>
+            <Text style={styles.label}>I am the…</Text>
+            <View style={styles.pillRow}>
+              {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
+                <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
+                  <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
+
         <View style={styles.row}>
           <View style={styles.half}>
             <Text style={styles.label}>Height (cm)</Text>
@@ -1024,41 +1037,6 @@ export function SettingsScreen({
               )}
             </View>
 
-            <Text style={styles.famSectionLabel}>Your profile &amp; view</Text>
-            <View style={styles.famQuietCard}>
-              <Text style={styles.famQuietLabel}>Editing as</Text>
-              <View style={styles.pillRow}>
-                {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
-                  <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
-                    <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={[styles.famQuietLabel, { marginTop: 14 }]}>Open workspace</Text>
-              <View style={styles.pillRow}>
-                <Pressable style={[styles.pillBtn, activeFamilyViewKey === 'mother' && styles.pillBtnActive]} onPress={() => onSelectFamilyView('mother')}>
-                  <Text style={[styles.pillBtnText, activeFamilyViewKey === 'mother' && styles.pillBtnTextActive]}>{parentLabel}</Text>
-                </Pressable>
-                {children.map((child) => (
-                  <Pressable
-                    key={`settings-child-${child.id}`}
-                    style={[styles.pillBtn, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnActive]}
-                    onPress={() => onSelectFamilyView(`child:${child.id}`)}
-                  >
-                    <Text style={[styles.pillBtnText, activeFamilyViewKey === `child:${child.id}` && styles.pillBtnTextActive]}>{child.name}</Text>
-                  </Pressable>
-                ))}
-                {staffProfiles.map((profile) => (
-                  <Pressable
-                    key={`settings-staff-${profile.id}`}
-                    style={[styles.pillBtn, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnActive]}
-                    onPress={() => onSelectFamilyView(`staff:${profile.id}`)}
-                  >
-                    <Text style={[styles.pillBtnText, activeFamilyViewKey === `staff:${profile.id}` && styles.pillBtnTextActive]}>{profile.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
           </>
         ) : null}
 
