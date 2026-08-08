@@ -6230,6 +6230,7 @@ function AppShell() {
           if (pendingPartnerTokenRef.current) await consumePendingPartnerInvite();
           // Brand-new owner (a signup that didn't consume any invite) → guide them
           // through building the rest of the family with the onboarding wizard.
+          setSignInModalOpen(false);
           setOnboardingOpen(true);
         }
       } else {
@@ -6625,7 +6626,7 @@ function AppShell() {
       partnerConnectedName={partnerLinks.find((l) => l.status === 'accepted')?.partnerLabel || null}
       onInvitePartner={handleInvitePartner}
       onInviteCoparent={handleInviteCoparent}
-      onSetupFamily={() => setOnboardingOpen(true)}
+      onSetupFamily={() => { setSettingsPanelOpen(false); setOnboardingOpen(true); }}
       onRemovePartner={() => {
         const link = partnerLinks.find((l) => l.status === 'accepted');
         if (link) handleRemovePartner(link.id);
@@ -14128,9 +14129,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingVertical: 10,
     backgroundColor: colors.surface,
     color: colors.text,
-    // Drop the browser's default focus ring (web) — our own border is the frame.
+    // Drop the browser's default focus ring/glow (web) — our own border is the frame.
     outlineWidth: 0,
     outlineColor: 'transparent',
+    outlineOffset: 0,
+    boxShadow: 'none',
   },
   passwordInputWrap: {
     flexDirection: 'row',
@@ -14148,9 +14151,11 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingHorizontal: 0,
     paddingRight: 8,
     backgroundColor: 'transparent',
-    // No inner focus ring — the wrapping View draws the single frame.
+    // No inner focus ring/glow — the wrapping View draws the single frame.
     outlineWidth: 0,
     outlineColor: 'transparent',
+    outlineOffset: 0,
+    boxShadow: 'none',
   },
   passwordToggleBtn: {
     width: 34,
