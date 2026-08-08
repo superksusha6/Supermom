@@ -332,64 +332,99 @@ export function SettingsScreen({
     if (didSave) closeSection();
   }
 
+  // iOS-style inline segmented control (label sits in the row; this is the right side).
+  function renderSeg(items: { key: string; label: string }[], selected: string, onSelect: (key: string) => void) {
+    return (
+      <View style={styles.iosSeg}>
+        {items.map((it) => {
+          const on = selected === it.key;
+          return (
+            <Pressable key={it.key} style={[styles.iosSegItem, on && styles.iosSegItemOn]} onPress={() => onSelect(it.key)}>
+              <Text style={[styles.iosSegText, on && styles.iosSegTextOn]}>{it.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
+
   function renderPersonalEditor() {
     return (
       <>
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          placeholder="Your full name"
-          style={styles.input}
-          value={personalProfile.fullName}
-          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, fullName: text }))}
-        />
-
-        <Text style={styles.label}>Date of Birth</Text>
-        <TextInput
-          placeholder="DD.MM.YYYY"
-          keyboardType="number-pad"
-          style={styles.input}
-          value={personalProfile.dateOfBirth || ''}
-          onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, dateOfBirth: formatBirthDateInput(text) }))}
-        />
-
-        {currentRole === 'mother' ? (
-          <>
-            <Text style={styles.label}>I am the…</Text>
-            <View style={styles.pillRow}>
-              {(['Mom', 'Dad'] as Array<'Mom' | 'Dad'>).map((label) => (
-                <Pressable key={label} style={[styles.pillBtn, parentLabel === label && styles.pillBtnActive]} onPress={() => onSelectParentLabel(label)}>
-                  <Text style={[styles.pillBtnText, parentLabel === label && styles.pillBtnTextActive]}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Text style={styles.label}>Height (cm)</Text>
+        <Text style={styles.iosHeader}>Profile</Text>
+        <View style={styles.iosGroup}>
+          <View style={styles.iosRow}>
+            <Text style={styles.iosLabel}>Name</Text>
             <TextInput
-              placeholder="e.g. 170"
+              style={styles.iosInput}
+              placeholder="Your name"
               placeholderTextColor={colors.subtext}
-              keyboardType="number-pad"
-              style={styles.input}
-              value={personalProfile.heightCm || ''}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, heightCm: text.replace(/[^\d]/g, '').slice(0, 3) }))}
+              value={personalProfile.fullName}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, fullName: text }))}
             />
           </View>
-          <View style={styles.half}>
-            <Text style={styles.label}>Weight (kg)</Text>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Date of birth</Text>
             <TextInput
-              placeholder="e.g. 60.5"
+              style={styles.iosInput}
+              placeholder="DD.MM.YYYY"
               placeholderTextColor={colors.subtext}
-              keyboardType="decimal-pad"
-              style={styles.input}
-              value={personalProfile.weightKg || ''}
-              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, weightKg: text.replace(/[^0-9.,]/g, '').slice(0, 6) }))}
+              keyboardType="number-pad"
+              value={personalProfile.dateOfBirth || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, dateOfBirth: formatBirthDateInput(text) }))}
             />
+          </View>
+          {currentRole === 'mother' ? (
+            <View style={[styles.iosRow, styles.iosRowSep]}>
+              <Text style={styles.iosLabel}>I am the</Text>
+              {renderSeg([{ key: 'Mom', label: 'Mom' }, { key: 'Dad', label: 'Dad' }], parentLabel, (k) => onSelectParentLabel(k as 'Mom' | 'Dad'))}
+            </View>
+          ) : null}
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Sex</Text>
+            {renderSeg([{ key: 'female', label: 'Female' }, { key: 'male', label: 'Male' }], nutritionSex, (k) => onNutritionSexChange(k as NutritionSex))}
           </View>
         </View>
 
+        <Text style={styles.iosHeader}>Body</Text>
+        <View style={styles.iosGroup}>
+          <View style={styles.iosRow}>
+            <Text style={styles.iosLabel}>Height</Text>
+            <TextInput
+              style={styles.iosInput}
+              placeholder="e.g. 170"
+              placeholderTextColor={colors.subtext}
+              keyboardType="number-pad"
+              value={personalProfile.heightCm || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, heightCm: text.replace(/[^\d]/g, '').slice(0, 3) }))}
+            />
+            <Text style={styles.iosUnit}>cm</Text>
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Weight</Text>
+            <TextInput
+              style={styles.iosInput}
+              placeholder="e.g. 65"
+              placeholderTextColor={colors.subtext}
+              keyboardType="decimal-pad"
+              value={personalProfile.weightKg || ''}
+              onChangeText={(text) => onPersonalProfileChange((prev) => ({ ...prev, weightKg: text.replace(/[^0-9.,]/g, '').slice(0, 6) }))}
+            />
+            <Text style={styles.iosUnit}>kg</Text>
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Goal weight</Text>
+            <TextInput
+              style={styles.iosInput}
+              placeholder="e.g. 60"
+              placeholderTextColor={colors.subtext}
+              keyboardType="decimal-pad"
+              value={desiredWeight}
+              onChangeText={(text) => onDesiredWeightChange(text.replace(/[^0-9.,]/g, '').slice(0, 6))}
+            />
+            <Text style={styles.iosUnit}>kg</Text>
+          </View>
+        </View>
       </>
     );
   }
@@ -397,93 +432,61 @@ export function SettingsScreen({
   function renderNutritionEditor() {
     return (
       <>
-        <Text style={styles.label}>Goal</Text>
-        <View style={styles.pillRow}>
-          {(['lose', 'maintain', 'gain'] as NutritionGoal[]).map((goal) => (
-            <Pressable key={goal} style={[styles.pillBtn, nutritionGoal === goal && styles.pillBtnActive]} onPress={() => onNutritionGoalChange(goal)}>
-              <Text style={[styles.pillBtnText, nutritionGoal === goal && styles.pillBtnTextActive]}>
-                {goal === 'lose' ? 'Lose' : goal === 'gain' ? 'Gain' : 'Maintain'}
-              </Text>
-            </Pressable>
-          ))}
+        <Text style={styles.iosHeader}>Nutrition</Text>
+        <View style={styles.iosGroup}>
+          <View style={styles.iosRow}>
+            <Text style={styles.iosLabel}>Goal</Text>
+            {renderSeg(
+              [{ key: 'lose', label: 'Lose' }, { key: 'maintain', label: 'Maintain' }, { key: 'gain', label: 'Gain' }],
+              nutritionGoal,
+              (k) => onNutritionGoalChange(k as NutritionGoal),
+            )}
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Activity</Text>
+            {renderSeg(
+              [{ key: 'low', label: 'Low' }, { key: 'moderate', label: 'Mid' }, { key: 'high', label: 'High' }],
+              activityLevel,
+              (k) => onActivityLevelChange(k as ActivityLevel),
+            )}
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Daily calories</Text>
+            <Text style={styles.iosValue}>{nutritionPlan ? `${nutritionPlan.calories} kcal` : '—'}</Text>
+          </View>
         </View>
+        <Text style={styles.iosFoot}>Calculated from your details. Use Advanced to fine-tune protein, timeline or override the number.</Text>
 
-        <Text style={styles.label}>Lifestyle / activity</Text>
-        <View style={styles.pillRow}>
-          {([
-            { key: 'low' as ActivityLevel, label: 'Mostly sitting' },
-            { key: 'moderate' as ActivityLevel, label: 'Mixed routine' },
-            { key: 'high' as ActivityLevel, label: 'Very active' },
-          ]).map((level) => (
-            <Pressable key={level.key} style={[styles.pillBtn, activityLevel === level.key && styles.pillBtnActive]} onPress={() => onActivityLevelChange(level.key)}>
-              <Text style={[styles.pillBtnText, activityLevel === level.key && styles.pillBtnTextActive]}>{level.label}</Text>
-            </Pressable>
-          ))}
+        <Text style={styles.iosHeader}>Advanced</Text>
+        <View style={styles.iosGroup}>
+          <View style={styles.iosRow}>
+            <Text style={styles.iosLabel}>Protein</Text>
+            {renderSeg(
+              [{ key: 'toned', label: 'Balanced' }, { key: 'strong', label: 'Higher' }],
+              physiqueGoal === 'strong' ? 'strong' : 'toned',
+              (k) => onPhysiqueGoalChange(k as PhysiqueGoal),
+            )}
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Timeline</Text>
+            {renderSeg(
+              [{ key: 'fast', label: 'Fast' }, { key: 'flexible', label: 'Flexible' }],
+              nutritionPace,
+              (k) => onNutritionPaceChange(k as NutritionPace),
+            )}
+          </View>
+          <View style={[styles.iosRow, styles.iosRowSep]}>
+            <Text style={styles.iosLabel}>Calorie override</Text>
+            <TextInput
+              style={styles.iosInput}
+              placeholder="Auto"
+              placeholderTextColor={colors.subtext}
+              keyboardType="number-pad"
+              value={calorieOverride}
+              onChangeText={(text) => onCalorieOverrideChange(text.replace(/[^\d]/g, '').slice(0, 4))}
+            />
+          </View>
         </View>
-
-        <Text style={styles.label}>Sex</Text>
-        <View style={styles.pillRow}>
-          {(['female', 'male'] as NutritionSex[]).map((sex) => (
-            <Pressable key={sex} style={[styles.pillBtn, nutritionSex === sex && styles.pillBtnActive]} onPress={() => onNutritionSexChange(sex)}>
-              <Text style={[styles.pillBtnText, nutritionSex === sex && styles.pillBtnTextActive]}>{sex === 'female' ? 'Female' : 'Male'}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Desired Weight (kg)</Text>
-        <TextInput
-          placeholder="Optional target weight"
-          keyboardType="decimal-pad"
-          style={styles.input}
-          value={desiredWeight}
-          onChangeText={(text) => onDesiredWeightChange(text.replace(/[^0-9.,]/g, '').slice(0, 6))}
-        />
-
-        <Text style={styles.label}>Timeline</Text>
-        <View style={styles.pillRow}>
-          {(['fast', 'flexible'] as NutritionPace[]).map((pace) => (
-            <Pressable key={pace} style={[styles.pillBtn, nutritionPace === pace && styles.pillBtnActive]} onPress={() => onNutritionPaceChange(pace)}>
-              <Text style={[styles.pillBtnText, nutritionPace === pace && styles.pillBtnTextActive]}>
-                {pace === 'fast' ? 'Fast result' : 'No deadline'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Protein</Text>
-        <Text style={styles.helpText}>How your food is split. This only changes protein (carbs fill the rest) — your calories stay the same, set by your goal above.</Text>
-        <View style={styles.pillRow}>
-          {([
-            { key: 'toned', label: 'Balanced', sub: '≈1.6 g/kg' },
-            { key: 'strong', label: 'Higher protein', sub: '≈1.8 g/kg' },
-          ] as { key: PhysiqueGoal; label: string; sub: string }[]).map((opt) => {
-            const active = opt.key === 'strong' ? physiqueGoal === 'strong' : physiqueGoal !== 'strong';
-            return (
-              <Pressable
-                key={opt.key}
-                style={[styles.pillBtn, active && styles.pillBtnActive]}
-                onPress={() => onPhysiqueGoalChange(opt.key)}
-              >
-                <Text style={[styles.pillBtnText, active && styles.pillBtnTextActive]}>{opt.label}</Text>
-                <Text style={[styles.proteinPillSub, active && styles.pillBtnTextActive]}>{opt.sub}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <Text style={styles.helpText}>
-          {physiqueGoal === 'strong'
-            ? 'More protein to help keep muscle — good if you train with weights.'
-            : 'A balanced split that works for most people.'}
-        </Text>
-
-        <Text style={styles.label}>Daily Calories Override</Text>
-        <TextInput
-          placeholder="Optional manual target, e.g. 1800"
-          keyboardType="number-pad"
-          style={styles.input}
-          value={calorieOverride}
-          onChangeText={(text) => onCalorieOverrideChange(text.replace(/[^\d]/g, '').slice(0, 4))}
-        />
 
         {nutritionPlan ? (
           <View style={styles.nutritionPlanCard}>
@@ -1112,14 +1115,8 @@ export function SettingsScreen({
                 {activeSection === 'personal' ? (
                   <>
                     {renderPersonalEditor()}
-                    <View style={styles.editorSectionDivider} />
                     {renderNutritionEditor()}
-                    {showCycleTracking ? (
-                      <>
-                        <View style={styles.editorSectionDivider} />
-                        {renderCycleEditor()}
-                      </>
-                    ) : null}
+                    {showCycleTracking ? renderCycleEditor() : null}
                     <Pressable style={[styles.primaryBtn, styles.editorSaveBtn]} onPress={handleSaveAndClose}>
                       <Text style={styles.primaryBtnText}>Save &amp; close</Text>
                     </Pressable>
@@ -1743,6 +1740,43 @@ const createStyles = (colors: ThemeColors) =>
       padding: 14,
     },
     famQuietLabel: { fontSize: 12.5, fontWeight: '600', color: colors.subtext, marginBottom: 8 },
+    // ---- iOS grouped-list (Personal & Nutrition, variant I) ----
+    iosHeader: {
+      fontSize: 12.5,
+      fontWeight: '500',
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+      color: colors.subtext,
+      marginTop: 22,
+      marginBottom: 7,
+      marginLeft: 6,
+    },
+    iosGroup: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    iosRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 46,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+    },
+    iosRowSep: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    iosLabel: { fontSize: 16, color: colors.text, flexShrink: 0 },
+    iosValue: { marginLeft: 'auto', fontSize: 16, color: colors.subtext, textAlign: 'right' },
+    iosInput: { flex: 1, marginLeft: 'auto', textAlign: 'right', fontSize: 16, color: colors.text, paddingVertical: 0, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' },
+    iosUnit: { fontSize: 16, color: colors.subtext, marginLeft: 2 },
+    iosSeg: { flexDirection: 'row', marginLeft: 'auto', backgroundColor: colors.surfaceAlt, borderRadius: 9, padding: 2 },
+    iosSegItem: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 7 },
+    iosSegItemOn: { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+    iosSegText: { fontSize: 13, color: colors.text, fontWeight: '500' },
+    iosSegTextOn: { fontWeight: '700', color: colors.primary },
+    iosFoot: { fontSize: 12.5, color: colors.subtext, marginTop: 7, marginLeft: 6, marginRight: 6, lineHeight: 17 },
     staffCard: {
       flexDirection: 'row',
       alignItems: 'center',
