@@ -87,6 +87,59 @@ function createDraftIngredientRow(): DraftIngredientRow {
   };
 }
 
+// A new (not-yet-saved) recipe is auto-saved locally as a draft so an unfinished recipe
+// survives closing the builder / navigating away / reloading. Only the "create" draft is
+// kept (editing an existing recipe isn't a draft).
+const RECIPE_DRAFT_KEY = 'famos.recipeDraft.v1';
+type RecipeDraft = {
+  title: string;
+  photoUri: string;
+  photoCredit?: { name: string; url: string; source: string };
+  mealTypes: RecipeMealType[];
+  cookTime: string;
+  servings: string;
+  steps: string;
+  classifiers: RecipeClassifier[];
+  ingredientRows: DraftIngredientRow[];
+  manualNutritionOn: boolean;
+  manualNutrition: { calories: string; protein: string; fat: string; carbs: string };
+};
+function draftHasContent(d: RecipeDraft): boolean {
+  return (
+    !!d.title.trim() ||
+    !!d.steps.trim() ||
+    d.ingredientRows.some((row) => row.query.trim() || row.preset)
+  );
+}
+function readRecipeDraft(): RecipeDraft | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(RECIPE_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RecipeDraft;
+    if (!parsed || !Array.isArray(parsed.ingredientRows)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+function writeRecipeDraft(d: RecipeDraft) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(RECIPE_DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* storage full / unavailable — draft just won't persist */
+  }
+}
+function clearRecipeDraft() {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem(RECIPE_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function customHasValues(custom?: CustomIngredientNutrition) {
   if (!custom) return false;
   return [custom.calories, custom.protein, custom.fat, custom.carbs].some((v) => (Number(String(v).replace(',', '.')) || 0) > 0);
@@ -345,6 +398,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [draftResumed, setDraftResumed] = useState(false);
   const [builderSaving, setBuilderSaving] = useState(false);
   const [builderError, setBuilderError] = useState<string | null>(null);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
@@ -536,10 +590,78 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     setUnitPickerOpenFor(null);
   }
 
+  function applyRecipeDraft(d: RecipeDraft) {
+    setEditingRecipeId(null);
+    setDraftTitle(d.title || '');
+    setDraftPhotoUri(d.photoUri || '');
+    setDraftPhotoCredit(d.photoCredit);
+    setPhotoLoading(false);
+    setPhotoError('');
+    setDraftMealTypes(d.mealTypes && d.mealTypes.length ? d.mealTypes : ['breakfast']);
+    setDraftCookTime(d.cookTime || '');
+    setDraftServings(d.servings || '');
+    setDraftSteps(d.steps || '');
+    setDraftClassifiers(d.classifiers || []);
+    setDraftIngredientRows(d.ingredientRows && d.ingredientRows.length ? d.ingredientRows : [createDraftIngredientRow()]);
+    setManualNutritionOn(!!d.manualNutritionOn);
+    setManualNutrition(d.manualNutrition || { calories: '', protein: '', fat: '', carbs: '' });
+    setUnitPickerOpenFor(null);
+  }
+
+  // Auto-save the in-progress "create" draft while the builder is open, so an unfinished
+  // recipe isn't lost on close/reload. Editing an existing recipe is never a draft.
+  useEffect(() => {
+    if (!builderOpen || editingRecipeId) return;
+    const draft: RecipeDraft = {
+      title: draftTitle,
+      photoUri: draftPhotoUri,
+      photoCredit: draftPhotoCredit,
+      mealTypes: draftMealTypes,
+      cookTime: draftCookTime,
+      servings: draftServings,
+      steps: draftSteps,
+      classifiers: draftClassifiers,
+      ingredientRows: draftIngredientRows,
+      manualNutritionOn,
+      manualNutrition,
+    };
+    if (draftHasContent(draft)) writeRecipeDraft(draft);
+    else clearRecipeDraft();
+  }, [
+    builderOpen,
+    editingRecipeId,
+    draftTitle,
+    draftPhotoUri,
+    draftPhotoCredit,
+    draftMealTypes,
+    draftCookTime,
+    draftServings,
+    draftSteps,
+    draftClassifiers,
+    draftIngredientRows,
+    manualNutritionOn,
+    manualNutrition,
+  ]);
+
   function openBuilderForCreate() {
-    resetBuilder();
+    const saved = readRecipeDraft();
+    if (saved && draftHasContent(saved)) {
+      // Resume the unfinished recipe instead of wiping it.
+      applyRecipeDraft(saved);
+      setDraftResumed(true);
+    } else {
+      resetBuilder();
+      setDraftResumed(false);
+    }
     setBuilderError(null);
     setBuilderOpen(true);
+  }
+
+  function startNewRecipeDraft() {
+    clearRecipeDraft();
+    resetBuilder();
+    setDraftResumed(false);
+    setBuilderError(null);
   }
 
   function openBuilderForEdit(recipe: Recipe) {
@@ -581,6 +703,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
     setUnitPickerOpenFor(null);
     setBuilderError(null);
     setSelectedRecipeId(null);
+    setDraftResumed(false);
     setBuilderOpen(true);
   }
 
@@ -673,6 +796,8 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
       const savedRecipe = editingRecipeId ? await onRecipeUpdate(nextRecipe) : await onRecipeCreate(nextRecipe);
       setSelectedRecipeId(savedRecipe.id);
       setBuilderOpen(false);
+      clearRecipeDraft();
+      setDraftResumed(false);
       resetBuilder();
     } catch (error) {
       // Supabase errors are plain objects, not Error instances — pull the real
@@ -1238,6 +1363,17 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
           </View>
 
           <ScrollView style={styles.builderScreenScroll} contentContainerStyle={styles.builderScreenScrollContent}>
+            {draftResumed && !editingRecipeId ? (
+              <View style={styles.draftResumeBanner}>
+                <View style={styles.draftResumeCopy}>
+                  <Text style={styles.draftResumeTitle}>Continuing your unfinished recipe</Text>
+                  <Text style={styles.draftResumeSub}>We kept what you were working on.</Text>
+                </View>
+                <Pressable style={styles.draftResumeBtn} onPress={startNewRecipeDraft}>
+                  <Text style={styles.draftResumeBtnText}>Start new</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.builderSectionCard}>
               <TextInput placeholder="Recipe title" placeholderTextColor={colors.subtext} style={styles.builderInput} value={draftTitle} onChangeText={setDraftTitle} />
               <View style={styles.coverSection}>
@@ -2531,6 +2667,45 @@ const createStyles = (colors: ThemeColors) =>
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 8 },
       elevation: 6,
+    },
+    draftResumeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginBottom: 12,
+    },
+    draftResumeCopy: {
+      flex: 1,
+    },
+    draftResumeTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    draftResumeSub: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: 1,
+    },
+    draftResumeBtn: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    draftResumeBtnText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '800',
     },
     builderGrid: {
       flexDirection: 'row',
