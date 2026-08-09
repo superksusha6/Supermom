@@ -1452,6 +1452,25 @@ export function NutritionScreen({
                 ) : null}
               </View>
             </View>
+            {!editingEntryId && !editingCustomFoodId ? (
+              <View style={styles.mealSwitchWrap}>
+                <Text style={styles.mealSwitchLabel}>Add to</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mealSwitchRow}>
+                  {mealSections.map((section) => {
+                    const active = activeMealType === section.key;
+                    return (
+                      <Pressable
+                        key={`mealsw-${section.key}`}
+                        style={[styles.mealSwitchChip, active && styles.mealSwitchChipActive]}
+                        onPress={() => setActiveMealType(section.key)}
+                      >
+                        <Text style={[styles.mealSwitchChipText, active && styles.mealSwitchChipTextActive]}>{section.title}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
               <View style={styles.modalSection}>
                 {!customFoodMode ? (
@@ -2678,6 +2697,46 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+    },
+    mealSwitchWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: isMobile ? 14 : 18,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: '#e1e8f2',
+      backgroundColor: colors.surface,
+    },
+    mealSwitchLabel: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    mealSwitchRow: {
+      gap: 7,
+      paddingRight: 8,
+    },
+    mealSwitchChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+    },
+    mealSwitchChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selection,
+    },
+    mealSwitchChipText: {
+      color: colors.subtext,
+      fontSize: 12.5,
+      fontWeight: '700',
+    },
+    mealSwitchChipTextActive: {
+      color: colors.primary,
+      fontWeight: '800',
     },
     modalContent: {
       padding: isMobile ? 14 : 18,
