@@ -729,7 +729,12 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   async function saveDraftRecipe() {
     if (builderSaving) return;
     const title = draftTitle.trim();
-    if (!title) return;
+    if (!title) {
+      // Don't fail silently — a blank title used to make the save button a no-op,
+      // so a filled-in recipe looked "saved" but never persisted.
+      setBuilderError('Add a recipe name at the top to save it.');
+      return;
+    }
     const stepLines = draftSteps
       .split('\n')
       .map((item) => item.trim())
