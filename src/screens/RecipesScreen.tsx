@@ -23,6 +23,9 @@ type Props = {
   // to add a newly-typed custom product to that database.
   customFoods?: CustomNutritionFood[];
   onSaveCustomFood?: (food: CustomNutritionFood) => void;
+  // Product names the user has already typed anywhere (shopping lists + inventory), so
+  // the ingredient picker can autocomplete them even without saved macros.
+  myProducts?: string[];
 };
 
 const LOG_MEAL_TYPES: NutritionMealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -323,7 +326,7 @@ function formatIngredientLine(ingredient: { amount: string; name: string; option
   return ingredient.optional ? `${base} (optional)` : base;
 }
 
-export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], cookNowToken, onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange, customFoods = [], onSaveCustomFood }: Props) {
+export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], cookNowToken, onAddToShoppingList, onRecipeCreate, onRecipeUpdate, onRecipeDelete, onNutritionEntriesChange, customFoods = [], onSaveCustomFood, myProducts = [] }: Props) {
   // Built-in foods + the user's own saved products, searched together in the ingredient
   // picker so a product typed once (with its macros) can be reused in any recipe.
   const allFoodPresets = useMemo(
@@ -1309,7 +1312,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                 // (exact name first) including the plain product itself.
                 const presetChosen = !!row.preset && row.preset.name.toLowerCase() === q;
                 const rank = (name: string) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
-                const suggestions = queryText && !presetChosen
+                const presetMatches = queryText && !presetChosen
                   ? allFoodPresets.filter((item) => {
                       if (item.name.toLowerCase().includes(q)) return true;
                       return (item.aliases || []).some((alias) => alias.toLowerCase().includes(q));
@@ -1317,6 +1320,23 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                       .sort((a, b) => rank(a.name.toLowerCase()) - rank(b.name.toLowerCase()))
                       .slice(0, 8)
                   : [];
+                // Also suggest products the user has typed before (shopping lists /
+                // inventory), even if they carry no saved macros — picking one just fills
+                // the name (nutrition stays optional/custom).
+                const shownNames = new Set(presetMatches.map((p) => p.name.toLowerCase()));
+                const productMatches = queryText && !presetChosen
+                  ? myProducts
+                      .filter((name) => {
+                        const lc = name.toLowerCase();
+                        return lc.includes(q) && !shownNames.has(lc);
+                      })
+                      .sort((a, b) => rank(a.toLowerCase()) - rank(b.toLowerCase()))
+                      .slice(0, 6)
+                  : [];
+                const suggestions: Array<{ id: string; name: string; preset: (typeof allFoodPresets)[number] | null }> = [
+                  ...presetMatches.map((p) => ({ id: p.id, name: p.name, preset: p })),
+                  ...productMatches.map((name) => ({ id: `myprod-${name.toLowerCase()}`, name, preset: null })),
+                ];
                 const ingredientNutrition = getIngredientNutrition(row);
                 const calculationGrams = getIngredientCalculationGrams(row);
                 return (
@@ -1373,7 +1393,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                           <Pressable
                             key={`${row.id}-${item.id}`}
                             style={styles.productSuggestionItem}
-                            onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, query: item.name, preset: item, customOpen: false }))}
+                            onPress={() => updateDraftIngredientRow(row.id, (current) => ({ ...current, query: item.name, preset: item.preset, customOpen: false }))}
                           >
                             <Text style={styles.productSuggestionText}>{item.name}</Text>
                           </Pressable>

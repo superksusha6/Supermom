@@ -1992,6 +1992,23 @@ function AppShell() {
   );
   // Items checked off a shopping list in the last 5 days are treated as "at home"
   // for recipe matching, so cooking suggestions reflect recent shopping.
+  // Every product name the user has typed anywhere — all shopping lists (bought or not)
+  // plus inventory — deduped, so the recipe ingredient picker can autocomplete them.
+  const myEnteredProductNames = useMemo(() => {
+    const byLower = new Map<string, string>();
+    shoppingLists.forEach((list) =>
+      list.items.forEach((item) => {
+        const name = item.name.trim();
+        if (name) byLower.set(name.toLowerCase(), name);
+      }),
+    );
+    fridgeItems.forEach((item) => {
+      const name = item.name.trim();
+      if (name) byLower.set(name.toLowerCase(), name);
+    });
+    return Array.from(byLower.values());
+  }, [shoppingLists, fridgeItems]);
+
   const recentlyPurchasedNames = useMemo(() => {
     const cutoff = Date.now() - 5 * 24 * 60 * 60 * 1000;
     const names: string[] = [];
@@ -10526,6 +10543,7 @@ function AppShell() {
             recipes={recipes}
             fridgeItems={fridgeItems}
             pantryExtras={recentlyPurchasedNames}
+            myProducts={myEnteredProductNames}
             cookNowToken={recipesCookNowToken}
             onAddToShoppingList={addIngredientsToShoppingList}
             onRecipeCreate={handleRecipeCreate}
