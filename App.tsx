@@ -908,6 +908,7 @@ function AppShell() {
   const [childTab, setChildTab] = useState<'today' | 'calendar' | 'pet' | 'me'>('today');
   const [childAboutDraft, setChildAboutDraft] = useState('');
   const [childCropSrc, setChildCropSrc] = useState<string | null>(null);
+  const [personalCropSrc, setPersonalCropSrc] = useState<string | null>(null);
   const [childNameDraft, setChildNameDraft] = useState('');
   const [childDobDraft, setChildDobDraft] = useState('');
   const [childChoreDraft, setChildChoreDraft] = useState('');
@@ -5883,17 +5884,22 @@ function AppShell() {
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) return;
-        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
+        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, base64: true });
         if (res.canceled || !res.assets?.length) return;
         const asset = res.assets[0];
         uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       }
       if (!uri) return;
-      if (uri.startsWith('data:')) uri = await downscaleDataUrlWeb(uri, 512, 0.7);
-      setPersonalProfile((prev) => ({ ...prev, photoUri: uri as string }));
+      // Let the owner zoom/position the square crop before saving (same cropper as the child avatar).
+      setPersonalCropSrc(uri);
     } catch {
       // ignore picker failures
     }
+  }
+  // Save the square crop the owner chose (PhotoCropper already outputs a 512×512 JPEG).
+  function saveCroppedPersonalPhoto(dataUrl: string) {
+    setPersonalCropSrc(null);
+    setPersonalProfile((prev) => ({ ...prev, photoUri: dataUrl }));
   }
   function removePersonalPhoto() {
     setPersonalProfile((prev) => ({ ...prev, photoUri: undefined }));
@@ -9999,6 +10005,14 @@ function AppShell() {
             colors={colors}
             onCancel={() => setChildCropSrc(null)}
             onDone={saveCroppedChildAvatar}
+          />
+        ) : null}
+        {personalCropSrc ? (
+          <PhotoCropper
+            src={personalCropSrc}
+            colors={colors}
+            onCancel={() => setPersonalCropSrc(null)}
+            onDone={saveCroppedPersonalPhoto}
           />
         ) : null}
         {!isChildView && screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
