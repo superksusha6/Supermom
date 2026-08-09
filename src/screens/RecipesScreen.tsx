@@ -431,10 +431,9 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   }
 
   function addDraftIngredientRow() {
-    // Append at the END so filled-in ingredients keep their order and the new empty
-    // row appears below — previously new rows were pushed to the top, shoving the
-    // ones you'd already filled downward.
-    setDraftIngredientRows((prev) => [...prev, createDraftIngredientRow()]);
+    // Prepend: the new empty row appears at the TOP, right under the "+ Add ingredient"
+    // button, so you can fill it immediately without scrolling to the bottom of the list.
+    setDraftIngredientRows((prev) => [createDraftIngredientRow(), ...prev]);
   }
 
   function removeDraftIngredientRow(rowId: string) {
@@ -1362,7 +1361,7 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
                       <TextInput
                         placeholder="0"
                         placeholderTextColor={colors.subtext}
-                        keyboardType="number-pad"
+                        keyboardType="decimal-pad"
                         style={[styles.builderInput, styles.ingredientAmountInput, isMobile && styles.ingredientAmountInputMobile]}
                         value={row.grams}
                         onFocus={() => updateDraftIngredientRow(row.id, (current) => (current.grams === '0' ? { ...current, grams: '' } : current))}
