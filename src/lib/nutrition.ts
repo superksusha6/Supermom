@@ -178,7 +178,7 @@ export const NUTRITION_FOOD_PRESETS: NutritionFoodPreset[] = [
   { id: 'preset-beef-stew', name: 'Beef stew', baseAmount: 'per 100 g', caloriesPer100g: 180, proteinPer100g: 16, fatPer100g: 12, carbsPer100g: 2, aliases: ['braised beef', 'stewed beef'] },
 
   { id: 'preset-boiled-egg', name: 'Boiled egg', baseAmount: 'per 100 g', servingGrams: 50, pieceLabel: '1 egg', caloriesPer100g: 155, proteinPer100g: 13, fatPer100g: 11, carbsPer100g: 1, aliases: ['hard boiled egg'] },
-  { id: 'preset-fried-eggs', name: 'Fried eggs', baseAmount: 'per 100 g', servingGrams: 60, pieceLabel: '1 egg', caloriesPer100g: 200, proteinPer100g: 13, fatPer100g: 16, carbsPer100g: 1, aliases: ['sunny side up'] },
+  { id: 'preset-fried-eggs', name: 'Fried eggs', baseAmount: 'per 100 g', servingGrams: 45, pieceLabel: '1 egg', caloriesPer100g: 200, proteinPer100g: 13, fatPer100g: 16, carbsPer100g: 1, aliases: ['sunny side up'] },
 
   { id: 'preset-cottage-cheese-bake', name: 'Cottage cheese bake', baseAmount: 'per 100 g', caloriesPer100g: 170, proteinPer100g: 16, fatPer100g: 5, carbsPer100g: 15, aliases: ['curd bake', 'zapekanka'] },
 
