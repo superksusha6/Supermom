@@ -8422,22 +8422,26 @@ function AppShell() {
 
   // Staff home extras: a peek at today's dinner (if they cook) and a fast way to jot
   // products onto the family's shopping list (if they shop). Both feature-gated.
-  const focusStaffMenu = isStaffView && staffCan('menu') && plannedTodayMeals.length > 0 ? (
-    <Pressable onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('today'); }}>
+  const focusStaffMenu = isStaffView && staffCan('menu') ? (
+    <Pressable onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab(plannedTodayMeals.length > 0 ? 'today' : 'plan'); }}>
       <FamCard title="Menu today">
-        {plannedTodayMeals.map((m) => (
-          <View key={m.slot} style={styles.staffMenuRow}>
-            <Text style={styles.staffMenuSlot}>{m.label}</Text>
-            <View style={styles.staffMenuRowBody}>
-              <Text style={styles.staffMenuMeal}>{m.title}</Text>
-              {m.cookTime || m.servings ? (
-                <Text style={styles.staffMenuMeta}>
-                  {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
-                </Text>
-              ) : null}
+        {plannedTodayMeals.length > 0 ? (
+          plannedTodayMeals.map((m) => (
+            <View key={m.slot} style={styles.staffMenuRow}>
+              <Text style={styles.staffMenuSlot}>{m.label}</Text>
+              <View style={styles.staffMenuRowBody}>
+                <Text style={styles.staffMenuMeal}>{m.title}</Text>
+                {m.cookTime || m.servings ? (
+                  <Text style={styles.staffMenuMeta}>
+                    {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        ) : (
+          <Text style={styles.staffShopHint}>No menu planned for today yet — tap to open the meal plan.</Text>
+        )}
       </FamCard>
     </Pressable>
   ) : null;
@@ -8473,6 +8477,32 @@ function AppShell() {
           <Text style={styles.staffShopAddText}>Add</Text>
         </Pressable>
       </View>
+    </FamCard>
+  ) : null;
+
+  // Recipes and Fix-it are granted functions that live only in their own tab — without
+  // a home card, a recipes-only / fixit-only staffer would land on a bare greeting.
+  // A small shortcuts card keeps every granted function visible on the dashboard.
+  const focusStaffLinks = isStaffView && (staffCan('recipes') || staffCan('fixit')) ? (
+    <FamCard title="Your tools" padded={false}>
+      {staffCan('recipes') ? (
+        <Pressable
+          style={styles.staffLinkRow}
+          onPress={() => { setFoodEntryOrigin(null); setScreen('food'); setFoodTab('recipes'); }}
+        >
+          <Text style={styles.staffLinkTitle}>Recipes</Text>
+          <Text style={styles.staffLinkGo}>Open ›</Text>
+        </Pressable>
+      ) : null}
+      {staffCan('fixit') ? (
+        <Pressable
+          style={[styles.staffLinkRow, staffCan('recipes') && styles.staffLinkRowDivided]}
+          onPress={() => openSubScreen('fixit')}
+        >
+          <Text style={styles.staffLinkTitle}>Fix-it &amp; home</Text>
+          <Text style={styles.staffLinkGo}>Open ›</Text>
+        </Pressable>
+      ) : null}
     </FamCard>
   ) : null;
 
@@ -8693,6 +8723,7 @@ function AppShell() {
       {focusStaffHistory}
       {focusStaffMenu}
       {focusStaffShopping}
+      {focusStaffLinks}
       {focusStaffEmpty}
       {focusCalories}
       {focusHabits}
@@ -8712,6 +8743,7 @@ function AppShell() {
         {focusStaffHistory}
         {focusStaffMenu}
         {focusStaffShopping}
+        {focusStaffLinks}
         {focusStaffEmpty}
         {focusCalories}
         {focusHabits}
@@ -15713,6 +15745,27 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     color: colors.subtext,
     fontSize: 12.5,
     marginBottom: 10,
+  },
+  staffLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  staffLinkRowDivided: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  staffLinkTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  staffLinkGo: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '700',
   },
   staffShopRow: {
     flexDirection: 'row',
