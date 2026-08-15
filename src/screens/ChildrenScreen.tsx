@@ -458,7 +458,7 @@ export function ChildrenScreen({
         <Pressable style={styles.menuBackdrop} onPress={() => setAddChoreOpen(false)}>
           <Pressable style={styles.formCard} onPress={() => undefined}>
             <Text style={styles.formTitle}>New chore</Text>
-            <TextInput value={choreTitle} onChangeText={setChoreTitle} placeholder="e.g. Make the bed" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
+            <TextInput value={choreTitle} onChangeText={setChoreTitle} placeholder="e.g. Make the bed" placeholderTextColor={colors.subtext} style={styles.input} autoFocus autoComplete="off" autoCorrect={false} spellCheck={false} textContentType="none" />
             <View style={styles.formActions}>
               <Pressable style={styles.formCancel} onPress={() => setAddChoreOpen(false)}>
                 <Text style={styles.formCancelText}>Cancel</Text>
@@ -506,7 +506,7 @@ export function ChildrenScreen({
           <Pressable style={styles.formCard} onPress={() => undefined}>
             <Text style={styles.formTitle}>{editingActivityId ? 'Edit activity' : 'New activity'}</Text>
             <ScrollView style={styles.formScroll} keyboardShouldPersistTaps="handled">
-              <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
+              <TextInput value={activityName} onChangeText={setActivityName} placeholder="Activity name" placeholderTextColor={colors.subtext} style={styles.input} autoFocus autoComplete="off" autoCorrect={false} spellCheck={false} textContentType="none" />
               <Text style={styles.formSubLabel}>Which days?</Text>
               <View style={styles.dayRow}>
                 {WEEK_DAYS.map((d) => {
@@ -591,6 +591,9 @@ export function ChildrenScreen({
                                     autoFocus
                                     autoCorrect={false}
                                     autoCapitalize="none"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    textContentType="none"
                                     style={styles.timeSearch}
                                   />
                                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow} keyboardShouldPersistTaps="handled">
@@ -635,6 +638,9 @@ export function ChildrenScreen({
                                     autoFocus
                                     autoCorrect={false}
                                     autoCapitalize="none"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    textContentType="none"
                                     style={styles.timeSearch}
                                   />
                                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow} keyboardShouldPersistTaps="handled">
