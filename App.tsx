@@ -2458,6 +2458,21 @@ function AppShell() {
     });
   }
 
+  // Persist a child's activity LIST to the DB (child_activities). The "New activity" modal
+  // previously only saved the generated calendar events, not the activity itself — so the
+  // activity vanished on refresh. Call this whenever the list changes.
+  function persistChildActivities(targetChild: ChildProfile, nextActivities: ChildActivity[]) {
+    if (!(session && isSupabaseConfigured)) return;
+    upsertChildProfileRecord(session, {
+      id: targetChild.id,
+      name: targetChild.name,
+      age: targetChild.age || 0,
+      dateOfBirth: targetChild.dateOfBirth,
+      includeInMotherCalendar: targetChild.includeInMotherCalendar ?? true,
+      activities: nextActivities,
+    }).catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not save the activity.'));
+  }
+
   const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
   const eventColorsByDate = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -10496,6 +10511,7 @@ function AppShell() {
                 prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
               );
               scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
+              persistChildActivities(targetChild, nextActivities);
             }}
             onUpdateActivity={(childId, activityId, activityName, weekDays, dayTimes, dayEndTimes) => {
               const targetChild = children.find((child) => child.id === childId);
@@ -10525,15 +10541,18 @@ function AppShell() {
                 prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
               );
               scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
+              persistChildActivities(targetChild, nextActivities);
             }}
             onDeleteActivity={(childId, activityId) => {
+              const targetChild = children.find((child) => child.id === childId);
+              if (!targetChild) return;
+              const nextActivities = targetChild.activities.filter((a) => a.id !== activityId);
               setChildren((prev) =>
-                prev.map((child) =>
-                  child.id === childId
-                    ? { ...child, activities: child.activities.filter((a) => a.id !== activityId) }
-                    : child,
-                ),
+                prev.map((child) => (child.id === childId ? { ...child, activities: nextActivities } : child)),
               );
+              // Also remove the activity's generated calendar events, and persist the new list.
+              scheduleChildActivities(childId, targetChild.name, targetChild.includeInMotherCalendar ?? true, nextActivities);
+              persistChildActivities(targetChild, nextActivities);
             }}
           />
         ) : null}
