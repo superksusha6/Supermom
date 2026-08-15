@@ -2757,6 +2757,7 @@ function AppShell() {
               dateOfBirth: profile.dateOfBirth || savedPersonalDateOfBirthRef.current || currentProfile.dateOfBirth || '',
               heightCm: profile.heightCm || currentProfile.heightCm || '',
               weightKg: profile.weightKg || currentProfile.weightKg || '',
+              photoUri: profile.photoUri || currentProfile.photoUri || undefined,
               cycleEntries: localCycleEntries,
               cycleTrackingEnabled:
                 typeof profile.cycleTrackingEnabled === 'boolean'

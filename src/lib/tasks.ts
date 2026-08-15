@@ -253,7 +253,7 @@ export async function getMyProfile(): Promise<MyProfileRecord | null> {
 
   const fullProfileQuery = await client
     .from('profiles')
-    .select('full_name, nickname, date_of_birth, height_cm, weight_kg, cycle_tracking_enabled, cycle_last_period_start, cycle_length_days, cycle_period_length_days, cycle_entries_json')
+    .select('full_name, nickname, date_of_birth, height_cm, weight_kg, photo_uri, cycle_tracking_enabled, cycle_last_period_start, cycle_length_days, cycle_period_length_days, cycle_entries_json')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -281,6 +281,7 @@ export async function getMyProfile(): Promise<MyProfileRecord | null> {
     date_of_birth?: string | null;
     height_cm?: number | null;
     weight_kg?: number | string | null;
+    photo_uri?: string | null;
     cycle_tracking_enabled?: boolean | null;
     cycle_last_period_start?: string | null;
     cycle_length_days?: number | null;
@@ -294,6 +295,7 @@ export async function getMyProfile(): Promise<MyProfileRecord | null> {
     dateOfBirth: normalizeBirthDateValue(profileData.date_of_birth),
     heightCm: typeof profileData.height_cm === 'number' ? String(profileData.height_cm) : undefined,
     weightKg: profileData.weight_kg != null ? String(profileData.weight_kg) : undefined,
+    photoUri: profileData.photo_uri || undefined,
     cycleTrackingEnabled: !!profileData.cycle_tracking_enabled,
     cycleLastPeriodStart: normalizeBirthDateValue(profileData.cycle_last_period_start),
     cycleLengthDays: typeof profileData.cycle_length_days === 'number' ? String(profileData.cycle_length_days) : undefined,
@@ -308,6 +310,7 @@ export async function upsertMyProfile(payload: {
   dateOfBirth?: string;
   heightCm?: string;
   weightKg?: string;
+  photoUri?: string;
   cycleTrackingEnabled?: boolean;
   cycleLastPeriodStart?: string;
   cycleLengthDays?: string;
@@ -337,6 +340,7 @@ export async function upsertMyProfile(payload: {
     date_of_birth: toStorageBirthDate(dateOfBirthToStore),
     height_cm: toNullableInt(payload.heightCm),
     weight_kg: toNullableDecimal(payload.weightKg),
+    photo_uri: payload.photoUri !== undefined ? (payload.photoUri || null) : (existingProfile?.photoUri || null),
   };
   const fullProfilePayload = {
     ...baseProfilePayload,
