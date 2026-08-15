@@ -654,6 +654,8 @@ export function NutritionScreen({
         customBrand: logPreset.brand || '',
         customFoodMode: baseMode !== '100g',
         customServingType: baseMode,
+        // Spoon-logged foods reuse the 'serving' math but must read "N spoons", not "N servings".
+        unitWord: loggingUnit === 'spoon' ? 'spoon' : undefined,
       }),
       mealType: activeMealType,
       date: selectedDateKey,
@@ -2065,12 +2067,14 @@ function formatNutritionEntryName({
   customBrand: string;
   customFoodMode: boolean;
   customServingType: '100g' | '100ml' | 'serving';
+  unitWord?: string;
 }) {
   const title = customBrand.trim() ? `${customBrand.trim()} ${name}` : name;
   if (!customFoodMode) return `${title}${grams ? ` • ${grams} g` : ''}`;
   if (customServingType === 'serving') {
     const n = (grams || '1').trim();
-    return `${title} • ${n} ${Number(n) === 1 ? 'serving' : 'servings'}`;
+    const word = unitWord || 'serving';
+    return `${title} • ${n} ${Number(n) === 1 ? word : `${word}s`}`;
   }
   if (customServingType === '100ml') return `${title}${grams ? ` • ${grams} ml` : ' • 100 ml'}`;
   return `${title}${grams ? ` • ${grams} g` : ' • 100 g'}`;

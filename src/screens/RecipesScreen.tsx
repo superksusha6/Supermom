@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { RECIPE_CLASSIFIER_FILTERS, RECIPE_SECTION_FILTERS, STARTER_RECIPE_LIBRARY } from '@/lib/recipeCatalog';
 import { CustomNutritionFood, FridgeItem, NutritionFoodEntry, NutritionMealType, Recipe, RecipeClassifier, RecipeMealType } from '@/types/app';
@@ -708,22 +708,26 @@ export function RecipesScreen({ recipes, fridgeItems = [], pantryExtras = [], co
   }
 
   async function handleDeleteRecipePress(recipe: Recipe) {
-    Alert.alert('Delete recipe?', 'This will remove your custom recipe.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await onRecipeDelete(recipe.id);
-            setSelectedRecipeId(null);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Could not delete recipe.';
-            Alert.alert('Delete failed', message);
-          }
-        },
-      },
-    ]);
+    // React Native Web has no Alert.alert, so the confirm dialog never appeared
+    // and delete silently did nothing on the web build. Use the browser confirm there.
+    const confirmed =
+      Platform.OS === 'web' && typeof globalThis.confirm === 'function'
+        ? globalThis.confirm('Delete this custom recipe? This cannot be undone.')
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert('Delete recipe?', 'This will remove your custom recipe.', [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+            ]);
+          });
+    if (!confirmed) return;
+    try {
+      await onRecipeDelete(recipe.id);
+      setSelectedRecipeId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not delete recipe.';
+      if (Platform.OS === 'web' && typeof globalThis.alert === 'function') globalThis.alert(message);
+      else Alert.alert('Delete failed', message);
+    }
   }
 
   async function saveDraftRecipe() {

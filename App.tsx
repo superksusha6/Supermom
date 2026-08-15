@@ -2244,17 +2244,28 @@ function AppShell() {
     if (Number.isNaN(lastStart.getTime()) || !cycleLength) return null;
     const next = new Date(lastStart);
     next.setDate(next.getDate() + cycleLength);
+    // Roll forward to the next *future* cycle if logging was skipped for a while,
+    // so the prediction never sits in the past and silently stops firing.
+    const todayStart = parseDateKey(todayDateKey);
+    let guard = 0;
+    while (next.getTime() < todayStart.getTime() && guard < 60) {
+      next.setDate(next.getDate() + cycleLength);
+      guard += 1;
+    }
     return next;
-  }, [personalProfile.cycleLastPeriodStart, personalProfile.cycleLengthDays, personalProfile.cycleTrackingEnabled]);
+  }, [personalProfile.cycleLastPeriodStart, personalProfile.cycleLengthDays, personalProfile.cycleTrackingEnabled, todayDateKey]);
   const periodReminderSummary = useMemo(() => {
     if (!periodRemindersEnabled || !nextExpectedPeriodStart) return null;
     const msPerDay = 1000 * 60 * 60 * 24;
     const daysUntil = Math.ceil((toDateKey(nextExpectedPeriodStart) === todayDateKey ? 0 : (nextExpectedPeriodStart.getTime() - parseDateKey(todayDateKey).getTime()) / msPerDay));
-    if (daysUntil < 0 || daysUntil > 3) return null;
+    // Show the heads-up starting `periodReminderLeadDays` before the expected date
+    // (the setting used to be ignored — a hardcoded 3-day window overrode it).
+    const leadWindow = Math.max(1, Math.min(3, periodReminderLeadDays || 3));
+    if (daysUntil < 0 || daysUntil > leadWindow) return null;
     if (daysUntil === 0) return 'Expected today';
     if (daysUntil === 1) return 'Expected tomorrow';
     return `Expected in ${daysUntil} days`;
-  }, [nextExpectedPeriodStart, periodRemindersEnabled, todayDateKey]);
+  }, [nextExpectedPeriodStart, periodRemindersEnabled, periodReminderLeadDays, todayDateKey]);
 
   // --- Today summary (Home) ---
   const dailyCalorieTarget = useMemo(() => {
@@ -4115,10 +4126,12 @@ function AppShell() {
         })
       : null;
     // Repeating event ("режим дня" — every day / chosen weekdays): generate an
-    // occurrence for each matching day over the next ~8 weeks, in one batch insert.
+    // occurrence for each matching day over the next ~26 weeks, in one batch insert.
+    // (There is no rolling top-up yet, so the horizon has to outlast a test cycle;
+    // an 8-week window silently ran out mid-use.)
     if (session && repeatDays && repeatDays.length > 0) {
       const seriesId = `s${Date.now()}`;
-      const WINDOW_DAYS = 56;
+      const WINDOW_DAYS = 182;
       const start = new Date(`${date}T00:00:00`);
       const occurrences: string[] = [];
       for (let i = 0; i < WINDOW_DAYS; i += 1) {
