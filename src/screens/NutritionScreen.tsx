@@ -2068,7 +2068,10 @@ function formatNutritionEntryName({
 }) {
   const title = customBrand.trim() ? `${customBrand.trim()} ${name}` : name;
   if (!customFoodMode) return `${title}${grams ? ` • ${grams} g` : ''}`;
-  if (customServingType === 'serving') return `${title} • 1 serving`;
+  if (customServingType === 'serving') {
+    const n = (grams || '1').trim();
+    return `${title} • ${n} ${Number(n) === 1 ? 'serving' : 'servings'}`;
+  }
   if (customServingType === '100ml') return `${title}${grams ? ` • ${grams} ml` : ' • 100 ml'}`;
   return `${title}${grams ? ` • ${grams} g` : ' • 100 g'}`;
 }
