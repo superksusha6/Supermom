@@ -929,7 +929,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
 
 export async function listChildProfiles(familyId: string): Promise<ChildProfile[]> {
   const client = requireClient();
-  const activities = 'child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots)';
+  const activities = 'child_activities(id, activity_name, times_per_week, time, color, week_days, time_slots, day_times, day_end_times)';
   const extended = 'about, created_at, pet_type, pet_fed, pet_fed_today, pet_fed_date';
   const full = await client
     .from('child_profiles')
@@ -973,6 +973,8 @@ export async function listChildProfiles(familyId: string): Promise<ChildProfile[
       color: activity.color || undefined,
       weekDays: Array.isArray(activity.week_days) ? (activity.week_days as WeekDayCode[]) : [],
       timeSlots: Array.isArray(activity.time_slots) ? (activity.time_slots as string[]) : [],
+      dayTimes: activity.day_times && typeof activity.day_times === 'object' && Object.keys(activity.day_times).length ? activity.day_times : undefined,
+      dayEndTimes: activity.day_end_times && typeof activity.day_end_times === 'object' && Object.keys(activity.day_end_times).length ? activity.day_end_times : undefined,
     })),
   }));
 }
@@ -1097,6 +1099,8 @@ export async function upsertChildProfileRecord(
         color: activity.color || null,
         week_days: activity.weekDays || [],
         time_slots: activity.timeSlots || [],
+        day_times: activity.dayTimes || {},
+        day_end_times: activity.dayEndTimes || {},
       })),
     );
     if (insertActivitiesError) throw insertActivitiesError;
