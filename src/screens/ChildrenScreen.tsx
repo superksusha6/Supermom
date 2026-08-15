@@ -198,6 +198,23 @@ export function ChildrenScreen({
     }
   }
 
+  // "Same time for all days": copy the first day that has a time onto every selected day,
+  // so you don't have to set each one by hand.
+  function applyTimeToAllDays() {
+    const ordered = WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => d.code);
+    const source = ordered.find((c) => activityDayStart[c]);
+    if (!source) return;
+    const s = activityDayStart[source] as string;
+    const e = activityDayEnd[source];
+    setActivityDayStart((prev) => { const next = { ...prev }; ordered.forEach((c) => { next[c] = s; }); return next; });
+    setActivityDayEnd((prev) => {
+      const next = { ...prev };
+      ordered.forEach((c) => { if (e) next[c] = e; else delete next[c]; });
+      return next;
+    });
+    setOpenTime(null);
+  }
+
   function saveActivity() {
     const name = activityName.trim();
     if (!name || !child) return;
@@ -511,6 +528,16 @@ export function ChildrenScreen({
               {activityDays.length ? (
                 <>
                   <Text style={styles.formSubLabel}>Busy time each day</Text>
+                  {activityDays.length >= 2 && WEEK_DAYS.some((d) => activityDays.includes(d.code) && activityDayStart[d.code]) ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Use the same time for all selected days"
+                      style={styles.sameTimeBtn}
+                      onPress={applyTimeToAllDays}
+                    >
+                      <Text style={styles.sameTimeBtnText}>↕ Same time for all days</Text>
+                    </Pressable>
+                  ) : null}
                   {WEEK_DAYS.filter((d) => activityDays.includes(d.code)).map((d) => {
                     const start = activityDayStart[d.code] || '';
                     const end = activityDayEnd[d.code] || '';
@@ -958,6 +985,22 @@ const createStyles = (colors: ThemeColors) =>
     fontSize: 12,
     fontWeight: '800',
     marginTop: 2,
+  },
+  sameTimeBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.selection,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  sameTimeBtnText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
   },
   dayRow: {
     flexDirection: 'row',
