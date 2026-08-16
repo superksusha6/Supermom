@@ -9171,7 +9171,7 @@ function AppShell() {
             ) : (
               <>
                 <Text style={styles.inviteHint}>
-                  Send this private link. They open it, sign in with their own email, and get only the access you granted. It expires in 14 days.
+                  Send this private link. They open it, sign in with their own email, and get only the access you granted. It expires in 14 days. Creating a new link here disables any earlier link for this person.
                 </Text>
                 <View style={styles.inviteLinkBox}>
                   <Text style={styles.inviteLinkText} numberOfLines={3}>{inviteLink || 'Preparing link…'}</Text>
