@@ -33,6 +33,7 @@ import {
   setChildAccess,
   listChildConnections,
   setStaffProfileDob,
+  setStaffOwnName,
   deleteStaffProfileRecord,
   createPartnerInvite,
   acceptPartnerInvite,
@@ -1238,6 +1239,8 @@ function AppShell() {
   const [expandedStaffDays, setExpandedStaffDays] = useState<Set<string>>(() => new Set(['Today']));
   const [staffShopName, setStaffShopName] = useState('');
   const [staffShopQty, setStaffShopQty] = useState('');
+  const [staffNameDraft, setStaffNameDraft] = useState('');
+  const [staffNameSaving, setStaffNameSaving] = useState(false);
   // First-run welcome for an invited staffer (shown once, persisted per user).
   const [staffWelcomeSeen, setStaffWelcomeSeen] = useState(false);
   const [staffWelcomeChecked, setStaffWelcomeChecked] = useState(false);
@@ -6743,6 +6746,25 @@ function AppShell() {
       .slice(0, 2)
       .join('')
       .toUpperCase() || 'S';
+  // Keep the editable name field seeded with the current staff name (real name, not the
+  // "You" fallback) whenever the target staff profile changes.
+  useEffect(() => {
+    const real = staffProfiles.find((p) => p.id === settingsStaffId)?.name || '';
+    setStaffNameDraft(real);
+  }, [settingsStaffId, staffProfiles]);
+  const saveStaffOwnName = async () => {
+    const next = staffNameDraft.trim();
+    if (!settingsStaffId || !next || next === settingsStaffName || staffNameSaving) return;
+    setStaffNameSaving(true);
+    setStaffProfiles((prev) => prev.map((p) => (p.id === settingsStaffId ? { ...p, name: next } : p)));
+    try {
+      await setStaffOwnName(settingsStaffId, next);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : 'Could not save your name yet.');
+    } finally {
+      setStaffNameSaving(false);
+    }
+  };
   // Phase 1 child landing: greeting + which functions the parent turned on. The real
   // day-plan / shopping / habits / nutrition views arrive in Phase 2.
   const childGreetTime = (() => {
@@ -7658,6 +7680,33 @@ function AppShell() {
     <View style={styles.staffSettingsWrap}>
       <Text style={styles.staffSettingsTitle}>Settings</Text>
       <Text style={styles.staffSettingsSub}>{settingsStaffName}</Text>
+      <View style={styles.staffSettingsCard}>
+        <Text style={styles.staffSettingsSectionLabel}>Your name</Text>
+        <View style={styles.staffNameRow}>
+          <TextInput
+            style={[styles.input, styles.staffNameInput]}
+            placeholder="Your name"
+            placeholderTextColor={colors.subtext}
+            value={staffNameDraft}
+            onChangeText={setStaffNameDraft}
+            onSubmitEditing={saveStaffOwnName}
+            returnKeyType="done"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Pressable
+            style={[
+              styles.staffToggle,
+              (!staffNameDraft.trim() || staffNameDraft.trim() === settingsStaffName || staffNameSaving) && styles.staffToggleDisabled,
+            ]}
+            onPress={saveStaffOwnName}
+            disabled={!staffNameDraft.trim() || staffNameDraft.trim() === settingsStaffName || staffNameSaving}
+          >
+            <Text style={styles.staffToggleText}>{staffNameSaving ? 'Saving…' : 'Save'}</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.staffSettingsHint}>This is the name the family sees on your tasks.</Text>
+      </View>
       <View style={styles.staffSettingsCard}>
         <Text style={styles.staffSettingsSectionLabel}>Your photo</Text>
         <View style={styles.staffSettingsAvatarRow}>
@@ -15681,10 +15730,22 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderColor: colors.done,
     borderWidth: 2,
   },
+  staffToggleDisabled: {
+    opacity: 0.45,
+  },
   staffToggleText: {
     color: colors.text,
     fontWeight: '800',
     fontSize: 14,
+  },
+  staffNameRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'stretch',
+  },
+  staffNameInput: {
+    flex: 1,
+    minWidth: 0,
   },
   staffMenuMeal: {
     color: colors.text,

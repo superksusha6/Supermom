@@ -709,6 +709,16 @@ export async function setStaffProfileDob(staffProfileId: string, dob: string): P
   if (error) throw error;
 }
 
+// A connected staff member edits their OWN display name (staff_profiles writes are
+// otherwise admin-only via RLS). The RPC also re-attributes their past proof history.
+export async function setStaffOwnName(staffProfileId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Name cannot be empty');
+  const client = requireClient();
+  const { error } = await client.rpc('set_staff_own_name', { p_staff_profile_id: staffProfileId, p_name: trimmed });
+  if (error) throw error;
+}
+
 // Push edited role/feature checkboxes to an already-connected staff account.
 // Without this the grants only ever reached the server inside the invite token,
 // so changing them later had no effect on the person's actual access.
