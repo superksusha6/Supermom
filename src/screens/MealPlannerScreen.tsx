@@ -14,7 +14,19 @@ type Props = {
   onPlanProfilesChange: Dispatch<SetStateAction<MealPlanProfile[]>>;
   activeProfileKey: string;
   onActiveProfileKeyChange: Dispatch<SetStateAction<string>>;
+  rotation: MealRotation;
+  onRotationChange: (next: MealRotation) => void;
+  todayDateKey: string;
+  rotationThisWeekLabel: string;
+  rotationNextWeekLabel: string;
   staffRecipients?: { id: string; name: string; phone?: string }[];
+};
+
+type MealRotation = {
+  enabled: boolean;
+  order: string[];
+  anchorWeekKey: string;
+  mode: 'continuous' | 'monthly';
 };
 
 const DAYS: Array<{ key: string; label: string }> = [
@@ -153,10 +165,43 @@ export function MealPlannerScreen({
   onPlanProfilesChange,
   activeProfileKey,
   onActiveProfileKeyChange,
+  rotation,
+  onRotationChange,
+  todayDateKey,
+  rotationThisWeekLabel,
+  rotationNextWeekLabel,
   staffRecipients = [],
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const rotationLabelFor = (key: string) => planProfiles.find((p) => p.key === key)?.label || key;
+  const menusNotInRotation = planProfiles.filter((p) => !rotation.order.includes(p.key));
+  function toggleRotation() {
+    if (rotation.enabled) {
+      onRotationChange({ ...rotation, enabled: false });
+    } else {
+      // Seed with the current tab + anchor to this week so "this week" = the first menu.
+      const seed = rotation.order.length > 0 ? rotation.order : [activeProfileKey];
+      onRotationChange({ ...rotation, enabled: true, order: seed, anchorWeekKey: rotation.anchorWeekKey || todayDateKey });
+    }
+  }
+  function addMenuToRotation(key: string) {
+    if (rotation.order.includes(key)) return;
+    onRotationChange({ ...rotation, order: [...rotation.order, key], anchorWeekKey: rotation.anchorWeekKey || todayDateKey });
+  }
+  function removeFromRotation(key: string) {
+    onRotationChange({ ...rotation, order: rotation.order.filter((k) => k !== key) });
+  }
+  function moveInRotation(index: number, dir: -1 | 1) {
+    const next = [...rotation.order];
+    const target = index + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    onRotationChange({ ...rotation, order: next });
+  }
+  function setRotationMode(mode: 'continuous' | 'monthly') {
+    onRotationChange({ ...rotation, mode });
+  }
   const { width } = useWindowDimensions();
   const isMobile = true; // mobile-only app
   const simpleMealScrollRef = useRef<ScrollView | null>(null);
@@ -542,6 +587,87 @@ export function MealPlannerScreen({
               </View>
             ) : null}
           </View>
+        </SectionCard>
+
+        <SectionCard title="Weekly rotation">
+          <Text style={styles.heroText}>
+            Cycle several menus by week so meals don&apos;t repeat — e.g. Menu 1 one week, Menu 2 the next. The Today view and your nanny automatically follow this week&apos;s menu.
+          </Text>
+          <Pressable style={[styles.rotToggle, rotation.enabled && styles.rotToggleOn]} onPress={toggleRotation}>
+            <View style={[styles.rotCheck, rotation.enabled && styles.rotCheckOn]}>
+              {rotation.enabled ? <Text style={styles.rotCheckMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.rotToggleText}>Rotate menus each week</Text>
+          </Pressable>
+
+          {rotation.enabled ? (
+            <>
+              {rotation.order.length > 0 ? (
+                <View style={styles.rotBanner}>
+                  <Text style={styles.rotBannerText}>
+                    This week: <Text style={styles.rotBannerStrong}>{rotationThisWeekLabel || '—'}</Text>
+                    {rotationNextWeekLabel ? `   ·   Next week: ${rotationNextWeekLabel}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.rotSectionLabel}>Order of menus</Text>
+              {rotation.order.length === 0 ? (
+                <Text style={styles.rotHint}>Add at least two menus below to start rotating.</Text>
+              ) : (
+                rotation.order.map((key, index) => (
+                  <View key={key} style={styles.rotRow}>
+                    <Text style={styles.rotRowIndex}>{index + 1}</Text>
+                    <Text style={styles.rotRowLabel} numberOfLines={1}>{rotationLabelFor(key)}</Text>
+                    <Pressable style={styles.rotMoveBtn} onPress={() => moveInRotation(index, -1)} disabled={index === 0}>
+                      <Text style={[styles.rotMoveText, index === 0 && styles.rotMoveDisabled]}>↑</Text>
+                    </Pressable>
+                    <Pressable style={styles.rotMoveBtn} onPress={() => moveInRotation(index, 1)} disabled={index === rotation.order.length - 1}>
+                      <Text style={[styles.rotMoveText, index === rotation.order.length - 1 && styles.rotMoveDisabled]}>↓</Text>
+                    </Pressable>
+                    <Pressable style={styles.rotRemoveBtn} onPress={() => removeFromRotation(key)}>
+                      <Text style={styles.rotRemoveText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+
+              {menusNotInRotation.length > 0 ? (
+                <>
+                  <Text style={styles.rotSectionLabel}>Add a menu</Text>
+                  <View style={styles.rotAddWrap}>
+                    {menusNotInRotation.map((p) => (
+                      <Pressable key={p.key} style={styles.rotAddChip} onPress={() => addMenuToRotation(p.key)}>
+                        <Text style={styles.rotAddChipText}>+ {p.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={styles.rotHint}>Need another menu? Add it above under &quot;Meal plan profile&quot; (e.g. Menu 1, Menu 2), then it appears here.</Text>
+                </>
+              ) : null}
+
+              <Text style={styles.rotSectionLabel}>Rhythm</Text>
+              <View style={styles.rotModeRow}>
+                <Pressable
+                  style={[styles.rotModeBtn, rotation.mode === 'continuous' && styles.rotModeBtnOn]}
+                  onPress={() => setRotationMode('continuous')}
+                >
+                  <Text style={[styles.rotModeText, rotation.mode === 'continuous' && styles.rotModeTextOn]}>Keep cycling</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.rotModeBtn, rotation.mode === 'monthly' && styles.rotModeBtnOn]}
+                  onPress={() => setRotationMode('monthly')}
+                >
+                  <Text style={[styles.rotModeText, rotation.mode === 'monthly' && styles.rotModeTextOn]}>Restart each month</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.rotHint}>
+                {rotation.mode === 'continuous'
+                  ? 'Advances to the next menu every week and loops back to the first.'
+                  : 'Week 1 of each month uses the first menu, week 2 the second, and so on.'}
+              </Text>
+            </>
+          ) : null}
         </SectionCard>
 
         <View style={styles.weekMenuSection}>
@@ -1192,6 +1318,165 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '800',
       marginBottom: 8,
+    },
+    rotToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.glassSoft,
+    },
+    rotToggleOn: {
+      borderColor: colors.primary,
+    },
+    rotCheck: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rotCheckOn: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    rotCheckMark: {
+      color: '#fff',
+      fontWeight: '900',
+      fontSize: 13,
+    },
+    rotToggleText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    rotBanner: {
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: colors.glassStrong,
+    },
+    rotBannerText: {
+      color: colors.text,
+      fontSize: 14,
+    },
+    rotBannerStrong: {
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    rotSectionLabel: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    rotHint: {
+      color: colors.subtext,
+      fontSize: 12.5,
+      lineHeight: 18,
+      marginTop: 6,
+    },
+    rotRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    rotRowIndex: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.glassStrong,
+      color: colors.text,
+      fontWeight: '800',
+      fontSize: 12,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    rotRowLabel: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    rotMoveBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rotMoveText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    rotMoveDisabled: {
+      color: colors.subtext,
+      opacity: 0.4,
+    },
+    rotRemoveBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    rotRemoveText: {
+      color: colors.urgent,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    rotAddWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    rotAddChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.glassSoft,
+    },
+    rotAddChipText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    rotModeRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    rotModeBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    rotModeBtnOn: {
+      borderColor: colors.primary,
+      backgroundColor: colors.glassStrong,
+    },
+    rotModeText: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    rotModeTextOn: {
+      color: colors.text,
     },
     profileTabs: {
       flexDirection: 'row',

@@ -396,6 +396,43 @@ function getCustomMealPlanProfiles(profiles: MealPlanProfilePreference[]) {
   return profiles.filter((profile) => !DEFAULT_MEAL_PLAN_PROFILE_KEYS.has(profile.key));
 }
 
+// Weekly menu rotation: cycle several named menus by week (Menu 1 / Menu 2 …).
+type MealRotation = {
+  enabled: boolean;
+  order: string[]; // profile keys, in the order they play out week by week
+  anchorWeekKey: string; // date key of the week rotation started (drives "continuous" mode)
+  mode: 'continuous' | 'monthly';
+};
+const DEFAULT_MEAL_ROTATION: MealRotation = { enabled: false, order: [], anchorWeekKey: '', mode: 'continuous' };
+
+function mondayKeyOf(dateKey: string): string {
+  const d = parseDateKey(dateKey);
+  const day = d.getDay(); // 0 Sun .. 6 Sat
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  return toDateKey(d);
+}
+function wholeWeeksBetween(fromKey: string, toKey: string): number {
+  const a = parseDateKey(fromKey).getTime();
+  const b = parseDateKey(toKey).getTime();
+  return Math.floor((b - a) / (7 * 24 * 60 * 60 * 1000));
+}
+function rotationIndexFor(rotation: MealRotation, todayKey: string): number {
+  const n = rotation.order.length;
+  if (n === 0) return 0;
+  if (rotation.mode === 'monthly') {
+    const wom = Math.floor((parseDateKey(todayKey).getDate() - 1) / 7); // 0-based week of month
+    return ((wom % n) + n) % n;
+  }
+  const anchor = mondayKeyOf(rotation.anchorWeekKey || todayKey);
+  const idx = wholeWeeksBetween(anchor, mondayKeyOf(todayKey));
+  return ((idx % n) + n) % n;
+}
+// Which menu (profile key) is in effect for the given day, or null when rotation is off.
+function resolveWeekMenuKey(rotation: MealRotation, todayKey: string): string | null {
+  if (!rotation.enabled || rotation.order.length === 0) return null;
+  return rotation.order[rotationIndexFor(rotation, todayKey)] || null;
+}
+
 const DAILY_GUIDANCE_LIBRARY: DailyGuidanceCard[] = [
   { id: 'dg-01', title: 'Slow Down', message: 'It’s okay to slow down and just be.', focus: 'presence', accent: '#6d5dfc', backVariant: 'moon' },
   { id: 'dg-02', title: 'This Will Pass', message: 'Even this moment is temporary.', focus: 'perspective', accent: '#2b78ff', backVariant: 'wave' },
@@ -1068,6 +1105,8 @@ function AppShell() {
   const [weeklyMealPlan, setWeeklyMealPlan] = useState<WeeklyMealPlanEntry[]>(createDefaultWeeklyMealPlan);
   const [mealPlanProfiles, setMealPlanProfiles] = useState<MealPlanProfilePreference[]>(DEFAULT_MEAL_PLAN_PROFILES);
   const [activeMealPlanProfileKey, setActiveMealPlanProfileKey] = useState('family');
+  const [mealRotation, setMealRotation] = useState<MealRotation>(DEFAULT_MEAL_ROTATION);
+  const mealRotationRef = useRef<MealRotation>(DEFAULT_MEAL_ROTATION);
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal>('maintain');
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   const [nutritionSex, setNutritionSex] = useState<NutritionSex>('female');
@@ -1390,6 +1429,7 @@ function AppShell() {
           upsertWeeklyMealPlanRecord(activeSession, {
             entries: weeklyMealPlanRef.current,
             profiles: getCustomMealPlanProfiles(mealPlanProfilesRef.current),
+            rotation: mealRotationRef.current,
           }),
           upsertUserPreferences(activeSession, {
             activeMealPlanProfile: activeMealPlanProfileKeyRef.current,
@@ -1523,6 +1563,13 @@ function AppShell() {
     const nextValue = typeof value === 'function' ? value(activeMealPlanProfileKeyRef.current) : value;
     activeMealPlanProfileKeyRef.current = nextValue;
     setActiveMealPlanProfileKey(nextValue);
+    void persistMealPlanProfilePreferences();
+  };
+
+  const handleMealRotationChange = (value: SetStateAction<MealRotation>) => {
+    const nextValue = typeof value === 'function' ? (value as (prev: MealRotation) => MealRotation)(mealRotationRef.current) : value;
+    mealRotationRef.current = nextValue;
+    setMealRotation(nextValue);
     void persistMealPlanProfilePreferences();
   };
 
@@ -2359,37 +2406,45 @@ function AppShell() {
       .slice(0, 4)
       .map((e) => ({ id: e.id, title: e.title, who: e.ownerName || 'Family', color: e.color || colors.primary, date: e.date }));
   }, [events, todayDateKey, colors.primary]);
+  // Which menu is in effect this week (rotation), or null when rotation is off.
+  const rotationWeekMenuKey = useMemo(() => resolveWeekMenuKey(mealRotation, todayDateKey), [mealRotation, todayDateKey]);
+  // When rotating, today's meals come strictly from this week's menu; otherwise keep the
+  // classic behaviour (the shared "Family" menu, falling back to any planned entry).
+  const pickTodayEntry = (entries: WeeklyMealPlanEntry[]) =>
+    rotationWeekMenuKey
+      ? entries.find((e) => (e.profileKey || 'family') === rotationWeekMenuKey) || null
+      : entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
   const todayDinner = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
     const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
-    const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+    const entry = pickTodayEntry(entries);
     if (!entry) return null;
     if (entry.recipeId) return recipes.find((r) => r.id === entry.recipeId)?.title || entry.customTitle || 'Dinner planned';
     return entry.customTitle || null;
-  }, [weeklyMealPlan, recipes, todayDateKey]);
+  }, [weeklyMealPlan, recipes, todayDateKey, rotationWeekMenuKey]);
   const tonightMeal = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
     const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === 'dinner' && (e.recipeId || e.customTitle));
-    const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+    const entry = pickTodayEntry(entries);
     if (!entry) return null;
     const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
     const title = recipe?.title || entry.customTitle || 'Dinner planned';
     return { title, recipe, servings: recipe?.servings || null, cookTime: recipe?.cookTimeMinutes || null };
-  }, [weeklyMealPlan, recipes, todayDateKey]);
-  // A cook prepares the whole day — surface breakfast/lunch/dinner (from the family
-  // plan), not just dinner. Slots with nothing planned come back with title=null.
+  }, [weeklyMealPlan, recipes, todayDateKey, rotationWeekMenuKey]);
+  // A cook prepares the whole day — surface breakfast/lunch/dinner (from this week's
+  // menu), not just dinner. Slots with nothing planned come back with title=null.
   const todayMeals = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
     return (['breakfast', 'lunch', 'dinner'] as MealPlanSlot[]).map((slot) => {
       const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
       const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === slot && (e.recipeId || e.customTitle));
-      const entry = entries.find((e) => (e.profileKey || 'family') === 'family') || entries[0];
+      const entry = pickTodayEntry(entries);
       if (!entry) return { slot, label, title: null as string | null, recipe: null as Recipe | null, cookTime: null as number | null, servings: null as number | null };
       const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
       const title = recipe?.title || entry.customTitle || null;
       return { slot, label, title, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null };
     });
-  }, [weeklyMealPlan, recipes, todayDateKey]);
+  }, [weeklyMealPlan, recipes, todayDateKey, rotationWeekMenuKey]);
   const plannedTodayMeals = todayMeals.filter((m) => m.title);
   const todayChoreList = useMemo(() => {
     return chores
@@ -2931,6 +2986,16 @@ function AppShell() {
         mealPlanProfilesRef.current = nextProfiles;
         setMealPlanProfiles(nextProfiles);
       }
+      if (liveWeeklyPlanRecord.rotation) {
+        const nextRotation: MealRotation = {
+          enabled: !!liveWeeklyPlanRecord.rotation.enabled,
+          order: Array.isArray(liveWeeklyPlanRecord.rotation.order) ? liveWeeklyPlanRecord.rotation.order : [],
+          anchorWeekKey: liveWeeklyPlanRecord.rotation.anchorWeekKey || '',
+          mode: liveWeeklyPlanRecord.rotation.mode === 'monthly' ? 'monthly' : 'continuous',
+        };
+        mealRotationRef.current = nextRotation;
+        setMealRotation(nextRotation);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync weekly meal plan.';
       setTasksError(message);
@@ -2945,6 +3010,7 @@ function AppShell() {
         upsertWeeklyMealPlanRecord(session, {
           entries: next,
           profiles: getCustomMealPlanProfiles(mealPlanProfilesRef.current),
+          rotation: mealRotationRef.current,
         }).catch((error) => {
           const message = error instanceof Error ? error.message : 'Failed to save weekly meal plan.';
           setTasksError(message);
@@ -10681,6 +10747,15 @@ function AppShell() {
             onPlanProfilesChange={handleMealPlanProfilesChange}
             activeProfileKey={activeMealPlanProfileKey}
             onActiveProfileKeyChange={handleActiveMealPlanProfileKeyChange}
+            rotation={mealRotation}
+            onRotationChange={handleMealRotationChange}
+            todayDateKey={todayDateKey}
+            rotationThisWeekLabel={rotationWeekMenuKey ? (mealPlanProfiles.find((p) => p.key === rotationWeekMenuKey)?.label || rotationWeekMenuKey) : ''}
+            rotationNextWeekLabel={(() => {
+              if (!mealRotation.enabled || mealRotation.order.length === 0) return '';
+              const nextKey = mealRotation.order[(rotationIndexFor(mealRotation, todayDateKey) + 1) % mealRotation.order.length];
+              return mealPlanProfiles.find((p) => p.key === nextKey)?.label || nextKey || '';
+            })()}
             staffRecipients={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name }))}
           />
         ) : null}

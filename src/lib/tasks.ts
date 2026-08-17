@@ -161,9 +161,17 @@ export type MealPlanProfileRecord = {
   label: string;
 };
 
+export type MealRotationRecord = {
+  enabled: boolean;
+  order: string[];
+  anchorWeekKey: string;
+  mode: 'continuous' | 'monthly';
+};
+
 export type WeeklyMealPlanRecord = {
   entries: WeeklyMealPlanEntry[];
   profiles: MealPlanProfileRecord[];
+  rotation?: MealRotationRecord | null;
 };
 
 export type MyProfileRecord = PersonalProfile;
@@ -1622,31 +1630,54 @@ function isMissingRecipeColumnError(error: unknown, column: string) {
   return message.includes(column) && (message.includes('does not exist') || message.includes('Could not find') || message.includes('schema cache'));
 }
 
+function parseMealRotation(raw: unknown): MealRotationRecord | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.enabled !== 'boolean' && !Array.isArray(r.order)) return null;
+  return {
+    enabled: r.enabled === true,
+    order: Array.isArray(r.order) ? r.order.filter((k): k is string => typeof k === 'string') : [],
+    anchorWeekKey: typeof r.anchorWeekKey === 'string' ? r.anchorWeekKey : '',
+    mode: r.mode === 'monthly' ? 'monthly' : 'continuous',
+  };
+}
+
 export async function getWeeklyMealPlanRecord(familyId: string): Promise<WeeklyMealPlanRecord> {
   const client = requireClient();
-  const fullQuery = await client
+  // Newest schema carries rotation_json; degrade gracefully if that column (or the
+  // older profiles_json) isn't present yet.
+  const rotationQuery = await client
     .from('weekly_meal_plans')
-    .select('entries_json, profiles_json')
+    .select('entries_json, profiles_json, rotation_json')
     .eq('family_id', familyId)
     .maybeSingle();
 
-  const { data, error } = isMissingWeeklyMealPlanProfilesColumnError(fullQuery.error)
+  const afterRotation = isMissingWeeklyMealPlanRotationColumnError(rotationQuery.error)
+    ? await client
+        .from('weekly_meal_plans')
+        .select('entries_json, profiles_json')
+        .eq('family_id', familyId)
+        .maybeSingle()
+    : rotationQuery;
+
+  const { data, error } = isMissingWeeklyMealPlanProfilesColumnError(afterRotation.error)
     ? await client
         .from('weekly_meal_plans')
         .select('entries_json')
         .eq('family_id', familyId)
         .maybeSingle()
-    : fullQuery;
+    : afterRotation;
 
   if (isMissingWeeklyMealPlanTableError(error)) {
     throw new Error('Supabase weekly meal plan table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/weekly_meal_plans.sql in the Supabase SQL Editor, then refresh.');
   }
   if (error) throw error;
-  if (!data) return { entries: [], profiles: [] };
+  if (!data) return { entries: [], profiles: [], rotation: null };
 
   const record = data as {
     entries_json?: unknown;
     profiles_json?: unknown;
+    rotation_json?: unknown;
   };
 
   return {
@@ -1657,6 +1688,7 @@ export async function getWeeklyMealPlanRecord(familyId: string): Promise<WeeklyM
             !!item && typeof item === 'object' && 'key' in item && 'label' in item && typeof item.key === 'string' && typeof item.label === 'string',
         )
       : [],
+    rotation: parseMealRotation(record.rotation_json),
   };
 }
 
@@ -1672,12 +1704,28 @@ export async function upsertWeeklyMealPlanRecord(session: AppSession, record: We
       family_id: session.familyId,
       entries_json: record.entries,
       profiles_json: record.profiles,
+      ...(record.rotation !== undefined ? { rotation_json: record.rotation ?? {} } : {}),
       updated_by: session.userId,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'family_id' },
   );
 
+  if (isMissingWeeklyMealPlanRotationColumnError(error)) {
+    // Older DB without the rotation column — save the rest so meal planning still works.
+    const { error: retryError } = await client.from('weekly_meal_plans').upsert(
+      {
+        family_id: session.familyId,
+        entries_json: record.entries,
+        profiles_json: record.profiles,
+        updated_by: session.userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'family_id' },
+    );
+    if (retryError) throw retryError;
+    return;
+  }
   if (isMissingWeeklyMealPlanTableError(error)) {
     throw new Error('Supabase weekly meal plan table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/weekly_meal_plans.sql in the Supabase SQL Editor, then try again.');
   }
@@ -1709,6 +1757,17 @@ function isMissingWeeklyMealPlanProfilesColumnError(error: unknown) {
     message.includes("Could not find the 'profiles_json' column of 'public.weekly_meal_plans'") ||
     message.includes("column 'profiles_json' of relation 'weekly_meal_plans' does not exist") ||
     message.includes("column 'profiles_json' of relation 'public.weekly_meal_plans' does not exist")
+  );
+}
+
+function isMissingWeeklyMealPlanRotationColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  return (
+    message.includes("Could not find the 'rotation_json' column of 'weekly_meal_plans'") ||
+    message.includes("Could not find the 'rotation_json' column of 'public.weekly_meal_plans'") ||
+    message.includes("column 'rotation_json' of relation 'weekly_meal_plans' does not exist") ||
+    message.includes("column 'rotation_json' of relation 'public.weekly_meal_plans' does not exist")
   );
 }
 
