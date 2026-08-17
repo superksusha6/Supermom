@@ -612,16 +612,16 @@ const WEEK_DAYS: Array<{ code: WeekDayCode; label: string; jsDay: number }> = [
 
 const MEAL_PLAN_SLOTS: Array<{ key: MealPlanSlot; label: string }> = [
   { key: 'breakfast', label: 'Breakfast' },
+  { key: 'snack', label: 'Snack' },
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snack' },
 ];
 
 const DASHBOARD_MEAL_CHOICES: Array<{ key: NutritionMealType; label: string }> = [
   { key: 'breakfast', label: 'Breakfast' },
+  { key: 'snack', label: 'Snacks' },
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snacks' },
   { key: 'other', label: 'Other' },
 ];
 
@@ -2435,7 +2435,7 @@ function AppShell() {
   // menu), not just dinner. Slots with nothing planned come back with title=null.
   const todayMeals = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
-    return (['breakfast', 'lunch', 'dinner'] as MealPlanSlot[]).map((slot) => {
+    return (['breakfast', 'snack', 'lunch', 'dinner'] as MealPlanSlot[]).map((slot) => {
       const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
       const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === slot && (e.recipeId || e.customTitle));
       const entry = pickTodayEntry(entries);

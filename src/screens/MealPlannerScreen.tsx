@@ -41,9 +41,9 @@ const DAYS: Array<{ key: string; label: string }> = [
 
 const SLOTS: Array<{ key: MealPlanSlot; label: string }> = [
   { key: 'breakfast', label: 'Breakfast' },
+  { key: 'snack', label: 'Snack' },
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snack' },
 ];
 
 type MealPlanProfile = {

@@ -171,9 +171,9 @@ export function NutritionScreen({
   const totals = getNutritionTotals(selectedDateEntries);
   const mealSections: Array<{ key: NutritionMealType; title: string; icon: string; accent: string; subtitle: string }> = [
     { key: 'breakfast', title: 'Breakfast', icon: 'Sun', accent: '#f59e0b', subtitle: 'Start your day with energy' },
+    { key: 'snack', title: 'Snacks', icon: 'Spark', accent: '#8b5cf6', subtitle: 'Small bites between meals' },
     { key: 'lunch', title: 'Lunch', icon: 'Sky', accent: '#0ea5e9', subtitle: 'Main meal for focus and balance' },
     { key: 'dinner', title: 'Dinner', icon: 'Moon', accent: '#fb7185', subtitle: 'Keep the evening nourishing' },
-    { key: 'snack', title: 'Snacks', icon: 'Spark', accent: '#8b5cf6', subtitle: 'Small bites between meals' },
     { key: 'other', title: 'Other', icon: 'Mix', accent: '#64748b', subtitle: 'Anything that does not fit the usual meal slots' },
   ];
   const mealData = mealSections.map((section) => {
