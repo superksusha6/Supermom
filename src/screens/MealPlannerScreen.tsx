@@ -1,4 +1,4 @@
-import { Dispatch, Fragment, SetStateAction, useMemo, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
@@ -283,6 +283,8 @@ export function MealPlannerScreen({
       dayKey,
       dayLabel: day?.label || dayKey,
       slot,
+      // Default position by slot; a new snack lands after breakfast and can be moved.
+      order: slot === 'breakfast' ? 0 : slot === 'snack' ? 1 : slot === 'lunch' ? 2 : 3,
       ...payload,
     };
   }
@@ -565,23 +567,21 @@ export function MealPlannerScreen({
     { key: 'copy', label: 'Copy text', action: copyPlanText },
   ];
 
-  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, cellKey?: string, editing = false) => {
+  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, _cellKey?: string, flex = false) => {
     const entry = entryOverride || activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
     const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
     const customItems = getEntryCustomItems(entry);
     const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
     const customMealTitle = customSummary.title || entry?.customTitle;
     const hasMeal = Boolean(recipe || customMealTitle);
-    const showRemove = editing && hasMeal && !!entry;
-    const key = cellKey || `${dayKey}-${slot.key}`;
 
-    const cell = (
+    return (
       <Pressable
         style={[
           styles.weekGridMealCell,
           compact && styles.weekGridMealCellCompact,
           hasMeal && styles.weekGridMealCellFilled,
-          showRemove && styles.weekGridMealCellFlex,
+          flex && styles.weekGridMealCellFlex,
         ]}
         onPress={() => openSlot(dayKey, slot.key, entry)}
       >
@@ -632,19 +632,33 @@ export function MealPlannerScreen({
         ) : null}
       </Pressable>
     );
-
-    if (showRemove) {
-      return (
-        <View key={key} style={styles.editCellRow}>
-          {cell}
-          <Pressable style={styles.cellRemoveBtn} onPress={() => removeEntryDirect(entry)} accessibilityLabel={`Remove ${slot.label}`}>
-            <Text style={styles.cellRemoveText}>✕</Text>
-          </Pressable>
-        </View>
-      );
-    }
-    return <View key={key}>{cell}</View>;
   };
+
+  const SLOT_BASE_ORDER: Record<string, number> = { breakfast: 0, snack: 1, lunch: 2, dinner: 3 };
+  // All of a day's entries (this profile) in display order — snacks can sit anywhere.
+  function orderedDayEntries(dayKey: string): WeeklyMealPlanEntry[] {
+    return activeWeeklyPlan
+      .filter((e) => e.dayKey === dayKey)
+      .map((e, i) => ({ e, ord: e.order != null ? e.order : SLOT_BASE_ORDER[e.slot] ?? 99, i }))
+      .sort((a, b) => a.ord - b.ord || a.i - b.i)
+      .map((x) => x.e);
+  }
+  // Move a row up/down within its day and persist a clean 0..n-1 order for the day.
+  function moveDayEntry(dayKey: string, entryId: string, dir: -1 | 1) {
+    const sorted = orderedDayEntries(dayKey);
+    const idx = sorted.findIndex((e) => e.id === entryId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= sorted.length) return;
+    [sorted[idx], sorted[target]] = [sorted[target], sorted[idx]];
+    const orderById = new Map(sorted.map((e, i) => [e.id, i]));
+    onWeeklyPlanChange((prev) =>
+      prev.map((e) =>
+        e.dayKey === dayKey && (e.profileKey || 'family') === activeProfileKey && orderById.has(e.id)
+          ? { ...e, order: orderById.get(e.id) }
+          : e,
+      ),
+    );
+  }
 
   return (
     <>
@@ -821,20 +835,54 @@ export function MealPlannerScreen({
                     </Pressable>
                   </View>
                   <View style={styles.mobileDaySlots}>
-                    {SLOTS.map((slot) => {
-                      if (slot.key !== 'snack') return renderMealCell(day.key, slot, true, undefined, undefined, editing);
-                      const snacks = activeWeeklyPlan.filter((e) => e.dayKey === day.key && e.slot === 'snack');
-                      return (
-                        <Fragment key={`${day.key}-snacks`}>
-                          {snacks.map((s) => renderMealCell(day.key, slot, true, s, s.id, editing))}
-                          {editing ? (
-                            <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
-                              <Text style={styles.addSnackBtnText}>+ Add snack</Text>
-                            </Pressable>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
+                    {(() => {
+                      const dayRows = orderedDayEntries(day.key);
+                      return dayRows.map((entry, index) => {
+                        const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
+                        const hasMeal = Boolean(entry.recipeId || entry.customTitle || entry.customItems?.length);
+                        if (!editing) {
+                          return <View key={entry.id}>{renderMealCell(day.key, slot, true, entry, entry.id)}</View>;
+                        }
+                        const canRemove = entry.slot === 'snack' || hasMeal;
+                        return (
+                          <View key={entry.id} style={styles.editCellRow}>
+                            {renderMealCell(day.key, slot, true, entry, entry.id, true)}
+                            <View style={styles.editCtrlCol}>
+                              <Pressable
+                                style={[styles.editCtrlBtn, index === 0 && styles.editCtrlBtnDisabled]}
+                                disabled={index === 0}
+                                onPress={() => moveDayEntry(day.key, entry.id, -1)}
+                                accessibilityLabel="Move up"
+                              >
+                                <Text style={styles.editCtrlText}>↑</Text>
+                              </Pressable>
+                              <Pressable
+                                style={[styles.editCtrlBtn, index === dayRows.length - 1 && styles.editCtrlBtnDisabled]}
+                                disabled={index === dayRows.length - 1}
+                                onPress={() => moveDayEntry(day.key, entry.id, 1)}
+                                accessibilityLabel="Move down"
+                              >
+                                <Text style={styles.editCtrlText}>↓</Text>
+                              </Pressable>
+                              {canRemove ? (
+                                <Pressable
+                                  style={[styles.editCtrlBtn, styles.editCtrlBtnDanger]}
+                                  onPress={() => removeEntryDirect(entry)}
+                                  accessibilityLabel={`Remove ${slot.label}`}
+                                >
+                                  <Text style={styles.editCtrlDangerText}>✕</Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      });
+                    })()}
+                    {editing ? (
+                      <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
+                        <Text style={styles.addSnackBtnText}>+ Add snack</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
                 );
@@ -2046,6 +2094,36 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'stretch',
       gap: 8,
+    },
+    editCtrlCol: {
+      justifyContent: 'center',
+      gap: 6,
+    },
+    editCtrlBtn: {
+      width: 44,
+      flex: 1,
+      minHeight: 30,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editCtrlBtnDisabled: {
+      opacity: 0.35,
+    },
+    editCtrlBtnDanger: {
+      borderColor: colors.urgent,
+    },
+    editCtrlText: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    editCtrlDangerText: {
+      color: colors.urgent,
+      fontSize: 15,
+      fontWeight: '900',
     },
     courseTip: {
       color: colors.subtext,

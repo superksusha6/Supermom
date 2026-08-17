@@ -501,6 +501,9 @@ export type WeeklyMealPlanEntry = {
   // Optional per-child personalization (mainly snacks): if set, this item is for that
   // child only; if absent, it's shared by everyone.
   forChildId?: string;
+  // Position of this item within the day (lower = earlier). Lets a snack sit between
+  // breakfast and lunch or between lunch and dinner, and rows be reordered.
+  order?: number;
 };
 
 export type MedicineCategory =

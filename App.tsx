@@ -635,12 +635,13 @@ const DASHBOARD_MEAL_CHOICES: Array<{ key: NutritionMealType; label: string }> =
 
 const createDefaultWeeklyMealPlan = (): WeeklyMealPlanEntry[] => {
   const defaults = WEEK_DAYS.flatMap((day) =>
-    MEAL_PLAN_SLOTS.map((slot) => ({
+    MEAL_PLAN_SLOTS.map((slot, idx) => ({
       id: `meal-plan-${day.code}-${slot.key}`,
       profileKey: 'family',
       dayKey: day.code,
       dayLabel: day.label,
       slot: slot.key,
+      order: idx, // breakfast 0, snack 1, lunch 2, dinner 3
       recipeId: undefined,
     })),
   );
@@ -2452,20 +2453,22 @@ function AppShell() {
       const items = (entry.customItems || []).map((i) => i.title).filter(Boolean);
       return { key: entry.id, slot, label, title: recipe?.title || entry.customTitle || null, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null, forLabel, items };
     };
-    (['breakfast', 'snack', 'lunch', 'dinner'] as MealPlanSlot[]).forEach((slot) => {
+    const SLOT_BASE: Record<string, number> = { breakfast: 0, snack: 1, lunch: 2, dinner: 3 };
+    const menuEntries = weeklyMealPlan.filter((e) => e.dayKey === code && (e.profileKey || 'family') === menuKey);
+    // Ordered list: each fixed slot once (filled or a "not planned" placeholder) plus
+    // every filled snack, sorted by the person's chosen order so an afternoon snack sits
+    // between lunch and dinner.
+    const ordered: Array<{ entry: WeeklyMealPlanEntry | null; slot: MealPlanSlot; ord: number; idx: number }> = [];
+    (['breakfast', 'lunch', 'dinner'] as MealPlanSlot[]).forEach((slot, i) => {
+      const filled = menuEntries.find((e) => e.slot === slot && (e.recipeId || e.customTitle));
+      ordered.push({ entry: filled || null, slot, ord: filled?.order ?? SLOT_BASE[slot], idx: i });
+    });
+    menuEntries
+      .filter((e) => e.slot === 'snack' && (e.recipeId || e.customTitle))
+      .forEach((e, i) => ordered.push({ entry: e, slot: 'snack', ord: e.order ?? SLOT_BASE.snack, idx: 100 + i }));
+    ordered.sort((a, b) => a.ord - b.ord || a.idx - b.idx);
+    ordered.forEach(({ entry, slot }) => {
       const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
-      const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === slot && (e.recipeId || e.customTitle));
-      if (slot === 'snack') {
-        // Snacks are multi-per-day — surface every snack of this week's menu as its own row.
-        const snacks = entries.filter((e) => (e.profileKey || 'family') === menuKey);
-        if (snacks.length === 0) {
-          rows.push({ key: 'snack-empty', slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null, items: [] });
-        } else {
-          snacks.forEach((entry) => rows.push(toRow(slot, label, entry)));
-        }
-        return;
-      }
-      const entry = pickTodayEntry(entries);
       if (!entry) {
         rows.push({ key: `${slot}-empty`, slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null, items: [] });
       } else {
