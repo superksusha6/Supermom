@@ -158,6 +158,24 @@ function getCustomItemsSummary(items: Array<{ title: string; grams?: number; cal
   };
 }
 
+// Build the editor's dish rows from an entry. For a lunch/dinner typed as a single
+// "a + b + c" field, split it into separate courses so the person can restructure.
+function buildEditDishItems(entry: WeeklyMealPlanEntry, slot: MealPlanSlot) {
+  const items = getEntryCustomItems(entry);
+  const isMain = slot === 'lunch' || slot === 'dinner';
+  if (isMain && items.length === 1) {
+    const parts = items[0].title.split(/\s*[+\n]\s*/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      return parts.map((title, i) => ({
+        id: `${items[0].id}-p${i}`,
+        title,
+        grams: i === 0 && items[0].grams ? String(items[0].grams) : '100',
+      }));
+    }
+  }
+  return items.map((item) => ({ id: item.id, title: item.title, grams: item.grams ? String(item.grams) : '100' }));
+}
+
 const COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
 // Label multi-dish main meals as courses (First / Second …); other slots stay a plain list.
 function courseLabelFor(slot: MealPlanSlot, index: number, count: number): string {
@@ -1010,6 +1028,9 @@ export function MealPlannerScreen({
               </>
             ) : (
               <ScrollView ref={simpleMealScrollRef} contentContainerStyle={styles.modalList} keyboardShouldPersistTaps="handled">
+                {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner' ? (
+                  <Text style={styles.courseTip}>Add each dish on its own line — e.g. soup as the first course, the main as the second. Use “+ Add course” for another dish.</Text>
+                ) : null}
                 <View style={styles.simpleMealCard}>
                 {customMealItems.map((item, index) => {
                   const suggestions = getSimpleMealSuggestions(item.title);
@@ -1017,7 +1038,11 @@ export function MealPlannerScreen({
                   return (
                     <View key={item.id} style={styles.simpleMealRowCard}>
                       <View style={styles.simpleMealRowHeader}>
-                        <Text style={styles.simpleMealRowLabel}>Item {index + 1}</Text>
+                        <Text style={styles.simpleMealRowLabel}>
+                          {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner'
+                            ? `${COURSE_LABELS[index] || `Dish ${index + 1}`} course`
+                            : `Dish ${index + 1}`}
+                        </Text>
                         {customMealItems.length > 1 ? (
                           <Pressable style={styles.removeItemBtn} onPress={() => removeDraftSimpleMealItem(item.id)}>
                             <Text style={styles.removeItemBtnText}>Remove</Text>
@@ -1081,7 +1106,7 @@ export function MealPlannerScreen({
                   );
                 })}
                 <Pressable style={styles.addItemBtn} onPress={addDraftSimpleMealItem}>
-                  <Text style={styles.addItemBtnText}>+ Add item</Text>
+                  <Text style={styles.addItemBtnText}>+ Add {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner' ? 'course' : 'dish'}</Text>
                 </Pressable>
                 <TextInput
                   placeholder="Note for staff, optional"
@@ -1204,13 +1229,7 @@ export function MealPlannerScreen({
                       onPress={() => {
                         openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId, entry?.forChildId ?? null);
                         setPickerMode('simple');
-                        setCustomMealItems(
-                          getEntryCustomItems(entry).map((item) => ({
-                            id: item.id,
-                            title: item.title,
-                            grams: item.grams ? String(item.grams) : '100',
-                          })),
-                        );
+                        setCustomMealItems(buildEditDishItems(entry, detailTarget.slot));
                         setActiveSimpleMealItemId(null);
                         setCustomHideCalories(!!entry?.customHideCalories);
                         setCustomMealNote(entry?.customNote || '');
@@ -2027,6 +2046,12 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'stretch',
       gap: 8,
+    },
+    courseTip: {
+      color: colors.subtext,
+      fontSize: 12.5,
+      lineHeight: 18,
+      marginBottom: 10,
     },
     courseList: {
       gap: 6,
