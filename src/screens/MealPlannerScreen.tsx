@@ -212,6 +212,7 @@ export function MealPlannerScreen({
   const [newProfileName, setNewProfileName] = useState('');
   const [profileActionTargetKey, setProfileActionTargetKey] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
+  const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
   const [recipeSearch, setRecipeSearch] = useState('');
   const [customMealItems, setCustomMealItems] = useState<DraftSimpleMealItem[]>([createDraftSimpleMealItem()]);
@@ -406,6 +407,29 @@ export function MealPlannerScreen({
     openRecipePicker(dayKey, 'snack', undefined);
   }
 
+  // Direct remove/clear from a day's edit mode (no picker): snacks are deleted, fixed
+  // meals are emptied so their cell stays.
+  function removeEntryDirect(entry: WeeklyMealPlanEntry) {
+    onWeeklyPlanChange((prev) => {
+      if (entry.slot === 'snack') return prev.filter((e) => e.id !== entry.id);
+      return prev.map((e) =>
+        e.id === entry.id
+          ? {
+              ...e,
+              recipeId: undefined,
+              recipeSelection: undefined,
+              customItems: undefined,
+              customTitle: undefined,
+              customCalories: undefined,
+              customGrams: undefined,
+              customHideCalories: undefined,
+              customNote: undefined,
+            }
+          : e,
+      );
+    });
+  }
+
   function resetCustomMealDraft() {
     setCustomMealItems([createDraftSimpleMealItem()]);
     setActiveSimpleMealItemId(null);
@@ -506,21 +530,23 @@ export function MealPlannerScreen({
     { key: 'copy', label: 'Copy text', action: copyPlanText },
   ];
 
-  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, cellKey?: string) => {
+  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, cellKey?: string, editing = false) => {
     const entry = entryOverride || activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
     const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
     const customItems = getEntryCustomItems(entry);
     const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
     const customMealTitle = customSummary.title || entry?.customTitle;
     const hasMeal = Boolean(recipe || customMealTitle);
+    const showRemove = editing && hasMeal && !!entry;
+    const key = cellKey || `${dayKey}-${slot.key}`;
 
-    return (
+    const cell = (
       <Pressable
-        key={cellKey || `${dayKey}-${slot.key}`}
         style={[
           styles.weekGridMealCell,
           compact && styles.weekGridMealCellCompact,
           hasMeal && styles.weekGridMealCellFilled,
+          showRemove && styles.weekGridMealCellFlex,
         ]}
         onPress={() => openSlot(dayKey, slot.key, entry)}
       >
@@ -542,6 +568,18 @@ export function MealPlannerScreen({
         )}
       </Pressable>
     );
+
+    if (showRemove) {
+      return (
+        <View key={key} style={styles.editCellRow}>
+          {cell}
+          <Pressable style={styles.cellRemoveBtn} onPress={() => removeEntryDirect(entry)} accessibilityLabel={`Remove ${slot.label}`}>
+            <Text style={styles.cellRemoveText}>✕</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return <View key={key}>{cell}</View>;
   };
 
   return (
@@ -703,25 +741,40 @@ export function MealPlannerScreen({
           </View>
           {isMobile ? (
             <View style={styles.mobileWeekList}>
-              {DAYS.map((day) => (
+              {DAYS.map((day) => {
+                const editing = editingDayKey === day.key;
+                return (
                 <View key={day.key} style={styles.mobileDayCard}>
-                  <Text style={styles.mobileDayTitle}>{day.label}</Text>
+                  <View style={styles.mobileDayHeader}>
+                    <Text style={styles.mobileDayTitle}>{day.label}</Text>
+                    <Pressable
+                      style={[styles.dayEditBtn, editing && styles.dayEditBtnActive]}
+                      hitSlop={8}
+                      onPress={() => setEditingDayKey((prev) => (prev === day.key ? null : day.key))}
+                      accessibilityLabel={editing ? `Done editing ${day.label}` : `Edit ${day.label}`}
+                    >
+                      <Text style={[styles.dayEditBtnText, editing && styles.dayEditBtnTextActive]}>{editing ? 'Done' : '⋯'}</Text>
+                    </Pressable>
+                  </View>
                   <View style={styles.mobileDaySlots}>
                     {SLOTS.map((slot) => {
-                      if (slot.key !== 'snack') return renderMealCell(day.key, slot, true);
+                      if (slot.key !== 'snack') return renderMealCell(day.key, slot, true, undefined, undefined, editing);
                       const snacks = activeWeeklyPlan.filter((e) => e.dayKey === day.key && e.slot === 'snack');
                       return (
                         <Fragment key={`${day.key}-snacks`}>
-                          {snacks.map((s) => renderMealCell(day.key, slot, true, s, s.id))}
-                          <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
-                            <Text style={styles.addSnackBtnText}>+ Add snack</Text>
-                          </Pressable>
+                          {snacks.map((s) => renderMealCell(day.key, slot, true, s, s.id, editing))}
+                          {editing ? (
+                            <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
+                              <Text style={styles.addSnackBtnText}>+ Add snack</Text>
+                            </Pressable>
+                          ) : null}
                         </Fragment>
                       );
                     })}
                   </View>
                 </View>
-              ))}
+                );
+              })}
             </View>
           ) : (
             <View style={[styles.weekGrid, styles.weekGridWide]}>
@@ -1861,13 +1914,64 @@ const createStyles = (colors: ThemeColors) =>
       padding: 12,
       gap: 10,
     },
+    mobileDayHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     mobileDayTitle: {
       color: colors.text,
       fontSize: 15,
       fontWeight: '900',
     },
+    dayEditBtn: {
+      minWidth: 44,
+      height: 30,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dayEditBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.glassSoft,
+    },
+    dayEditBtnText: {
+      color: colors.subtext,
+      fontSize: 16,
+      fontWeight: '900',
+      lineHeight: 18,
+    },
+    dayEditBtnTextActive: {
+      color: colors.primary,
+      fontSize: 13,
+    },
     mobileDaySlots: {
       gap: 8,
+    },
+    editCellRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: 8,
+    },
+    weekGridMealCellFlex: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cellRemoveBtn: {
+      width: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.urgent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cellRemoveText: {
+      color: colors.urgent,
+      fontSize: 16,
+      fontWeight: '900',
     },
     addSnackBtn: {
       paddingVertical: 10,
