@@ -498,6 +498,9 @@ export type WeeklyMealPlanEntry = {
   customGrams?: number;
   customHideCalories?: boolean;
   customNote?: string;
+  // Optional per-child personalization (mainly snacks): if set, this item is for that
+  // child only; if absent, it's shared by everyone.
+  forChildId?: string;
 };
 
 export type MedicineCategory =

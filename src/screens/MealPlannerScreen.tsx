@@ -19,6 +19,7 @@ type Props = {
   todayDateKey: string;
   rotationThisWeekLabel: string;
   rotationNextWeekLabel: string;
+  children?: { id: string; name: string }[];
   staffRecipients?: { id: string; name: string; phone?: string }[];
 };
 
@@ -170,6 +171,7 @@ export function MealPlannerScreen({
   todayDateKey,
   rotationThisWeekLabel,
   rotationNextWeekLabel,
+  children = [],
   staffRecipients = [],
 }: Props) {
   const colors = useThemeColors();
@@ -213,6 +215,8 @@ export function MealPlannerScreen({
   const [profileActionTargetKey, setProfileActionTargetKey] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
+  const [pickerForChildId, setPickerForChildId] = useState<string | null>(null);
+  const childNameById = (id?: string) => (id ? children.find((c) => c.id === id)?.name || '' : '');
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
   const [recipeSearch, setRecipeSearch] = useState('');
   const [customMealItems, setCustomMealItems] = useState<DraftSimpleMealItem[]>([createDraftSimpleMealItem()]);
@@ -289,6 +293,7 @@ export function MealPlannerScreen({
     });
     setPickerTarget(null);
     setSelectedApplyDays([]);
+    setPickerForChildId(null);
     resetCustomMealDraft();
     setRecipeSearch('');
   }
@@ -323,6 +328,7 @@ export function MealPlannerScreen({
     setPickerTarget(null);
     setDetailTarget(null);
     setSelectedApplyDays([]);
+    setPickerForChildId(null);
     resetCustomMealDraft();
     setRecipeSearch('');
   }
@@ -337,6 +343,7 @@ export function MealPlannerScreen({
       customItems: undefined,
       customHideCalories: undefined,
       customNote: undefined,
+      forChildId: pickerTarget?.slot === 'snack' ? pickerForChildId || undefined : undefined,
     });
   }
 
@@ -383,13 +390,15 @@ export function MealPlannerScreen({
       customGrams: normalizedItems.reduce((sum, item) => sum + (item.grams || 0), 0) || undefined,
       customHideCalories,
       customNote: note,
+      forChildId: pickerTarget?.slot === 'snack' ? pickerForChildId || undefined : undefined,
     });
   }
 
-  function openRecipePicker(dayKey: string, slot: MealPlanSlot, entryId?: string) {
+  function openRecipePicker(dayKey: string, slot: MealPlanSlot, entryId?: string, forChildId?: string | null) {
     setPickerTarget({ dayKey, slot, entryId });
     // A snack is per-day; "apply to other days" would create duplicates, so don't preselect.
     setSelectedApplyDays(slot === 'snack' ? [] : [dayKey]);
+    setPickerForChildId(forChildId ?? null);
     setPickerMode('simple');
     setRecipeSearch('');
   }
@@ -399,12 +408,12 @@ export function MealPlannerScreen({
       setDetailTarget({ dayKey, slot, entryId: entry.id });
       return;
     }
-    openRecipePicker(dayKey, slot, entry?.id);
+    openRecipePicker(dayKey, slot, entry?.id, entry?.forChildId ?? null);
   }
 
   // Add another snack cell to a day (snacks can repeat: morning + afternoon, etc.).
   function addSnack(dayKey: string) {
-    openRecipePicker(dayKey, 'snack', undefined);
+    openRecipePicker(dayKey, 'snack', undefined, null);
   }
 
   // Direct remove/clear from a day's edit mode (no picker): snacks are deleted, fixed
@@ -566,6 +575,11 @@ export function MealPlannerScreen({
             <Text style={styles.weekGridAddChipText}>{compact ? '+ Add' : '+'}</Text>
           </View>
         )}
+        {hasMeal && entry?.forChildId && childNameById(entry.forChildId) ? (
+          <View style={styles.forChildBadge}>
+            <Text style={styles.forChildBadgeText}>For {childNameById(entry.forChildId)}</Text>
+          </View>
+        ) : null}
       </Pressable>
     );
 
@@ -881,6 +895,32 @@ export function MealPlannerScreen({
               })}
             </View>
 
+            {pickerTarget?.slot === 'snack' && children.length > 0 ? (
+              <>
+                <Text style={styles.modalHint}>For:</Text>
+                <View style={styles.applyDaysRow}>
+                  <Pressable
+                    style={[styles.applyDayChip, !pickerForChildId && styles.applyDayChipActive]}
+                    onPress={() => setPickerForChildId(null)}
+                  >
+                    <Text style={[styles.applyDayChipText, !pickerForChildId && styles.applyDayChipTextActive]}>Everyone</Text>
+                  </Pressable>
+                  {children.map((child) => {
+                    const active = pickerForChildId === child.id;
+                    return (
+                      <Pressable
+                        key={`for-${child.id}`}
+                        style={[styles.applyDayChip, active && styles.applyDayChipActive]}
+                        onPress={() => setPickerForChildId(child.id)}
+                      >
+                        <Text style={[styles.applyDayChipText, active && styles.applyDayChipTextActive]}>{child.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+
             {pickerMode === 'recipe' ? (
               <>
                 <TextInput
@@ -1069,7 +1109,7 @@ export function MealPlannerScreen({
                     <Pressable
                       style={styles.staffExportBtn}
                       onPress={() => {
-                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId);
+                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId, entry?.forChildId ?? null);
                         setDetailTarget(null);
                       }}
                     >
@@ -1130,7 +1170,7 @@ export function MealPlannerScreen({
                     <Pressable
                       style={styles.staffExportBtn}
                       onPress={() => {
-                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId);
+                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId, entry?.forChildId ?? null);
                         setPickerMode('simple');
                         setCustomMealItems(
                           getEntryCustomItems(entry).map((item) => ({
@@ -1955,6 +1995,19 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'stretch',
       gap: 8,
+    },
+    forChildBadge: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+      backgroundColor: colors.primary,
+    },
+    forChildBadgeText: {
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: '800',
     },
     weekGridMealCellFlex: {
       flex: 1,
