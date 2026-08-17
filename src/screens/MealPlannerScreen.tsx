@@ -158,6 +158,14 @@ function getCustomItemsSummary(items: Array<{ title: string; grams?: number; cal
   };
 }
 
+const COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+// Label multi-dish main meals as courses (First / Second …); other slots stay a plain list.
+function courseLabelFor(slot: MealPlanSlot, index: number, count: number): string {
+  if (count < 2) return '';
+  if (slot === 'lunch' || slot === 'dinner') return COURSE_LABELS[index] || `Dish ${index + 1}`;
+  return '';
+}
+
 export function MealPlannerScreen({
   recipes,
   weeklyPlan,
@@ -566,10 +574,34 @@ export function MealPlannerScreen({
             <Text style={styles.weekGridRecipeMeta}>{recipeCaloriesForEntry(recipe, entry)} kcal</Text>
           </>
         ) : customMealTitle ? (
-          <>
-            <Text style={[styles.weekGridRecipeTitle, compact && styles.weekGridRecipeTitleCompact]}>{customMealTitle}</Text>
-            <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
-          </>
+          customItems.length > 1 ? (
+            <>
+              <View style={styles.courseList}>
+                {customItems.map((it, i) => {
+                  const course = courseLabelFor(slot.key, i, customItems.length);
+                  return (
+                    <View key={it.id} style={styles.courseRow}>
+                      {course ? (
+                        <Text style={styles.courseLabel}>{course}</Text>
+                      ) : (
+                        <Text style={styles.courseBullet}>•</Text>
+                      )}
+                      <Text style={styles.courseTitle}>
+                        {it.title}
+                        {it.grams ? <Text style={styles.courseGrams}>  {it.grams} g</Text> : null}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.weekGridRecipeTitle, compact && styles.weekGridRecipeTitleCompact]}>{customMealTitle}</Text>
+              <Text style={styles.weekGridRecipeMeta}>{customSummary.meta}</Text>
+            </>
+          )
         ) : (
           <View style={[styles.weekGridAddChip, compact && styles.weekGridAddChipCompact]}>
             <Text style={styles.weekGridAddChipText}>{compact ? '+ Add' : '+'}</Text>
@@ -1995,6 +2027,42 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'stretch',
       gap: 8,
+    },
+    courseList: {
+      gap: 6,
+      marginTop: 2,
+    },
+    courseRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    courseLabel: {
+      minWidth: 54,
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+      paddingTop: 1,
+    },
+    courseBullet: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '900',
+      lineHeight: 18,
+    },
+    courseTitle: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.text,
+      fontSize: 14.5,
+      fontWeight: '700',
+    },
+    courseGrams: {
+      color: colors.subtext,
+      fontSize: 12,
+      fontWeight: '600',
     },
     forChildBadge: {
       alignSelf: 'flex-start',

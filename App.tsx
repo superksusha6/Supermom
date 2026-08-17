@@ -617,6 +617,14 @@ const MEAL_PLAN_SLOTS: Array<{ key: MealPlanSlot; label: string }> = [
   { key: 'dinner', label: 'Dinner' },
 ];
 
+const MEAL_COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+// Label multi-dish lunch/dinner as courses (First / Second …) for the cook's day view.
+function mealCourseLabel(slot: MealPlanSlot, index: number, count: number): string {
+  if (count < 2) return '';
+  if (slot === 'lunch' || slot === 'dinner') return MEAL_COURSE_LABELS[index] || `Dish ${index + 1}`;
+  return '';
+}
+
 const DASHBOARD_MEAL_CHOICES: Array<{ key: NutritionMealType; label: string }> = [
   { key: 'breakfast', label: 'Breakfast' },
   { key: 'snack', label: 'Snacks' },
@@ -2436,11 +2444,13 @@ function AppShell() {
   const todayMeals = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
     const menuKey = rotationWeekMenuKey || 'family';
-    const rows: Array<{ key: string; slot: MealPlanSlot; label: string; title: string | null; recipe: Recipe | null; cookTime: number | null; servings: number | null; forLabel: string | null }> = [];
+    const rows: Array<{ key: string; slot: MealPlanSlot; label: string; title: string | null; recipe: Recipe | null; cookTime: number | null; servings: number | null; forLabel: string | null; items: string[] }> = [];
     const toRow = (slot: MealPlanSlot, label: string, entry: WeeklyMealPlanEntry) => {
       const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
       const forLabel = entry.forChildId ? children.find((c) => c.id === entry.forChildId)?.name || null : null;
-      return { key: entry.id, slot, label, title: recipe?.title || entry.customTitle || null, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null, forLabel };
+      // A custom meal can hold several dishes (soup + main); surface them as separate lines.
+      const items = (entry.customItems || []).map((i) => i.title).filter(Boolean);
+      return { key: entry.id, slot, label, title: recipe?.title || entry.customTitle || null, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null, forLabel, items };
     };
     (['breakfast', 'snack', 'lunch', 'dinner'] as MealPlanSlot[]).forEach((slot) => {
       const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
@@ -2449,7 +2459,7 @@ function AppShell() {
         // Snacks are multi-per-day — surface every snack of this week's menu as its own row.
         const snacks = entries.filter((e) => (e.profileKey || 'family') === menuKey);
         if (snacks.length === 0) {
-          rows.push({ key: 'snack-empty', slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null });
+          rows.push({ key: 'snack-empty', slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null, items: [] });
         } else {
           snacks.forEach((entry) => rows.push(toRow(slot, label, entry)));
         }
@@ -2457,7 +2467,7 @@ function AppShell() {
       }
       const entry = pickTodayEntry(entries);
       if (!entry) {
-        rows.push({ key: `${slot}-empty`, slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null });
+        rows.push({ key: `${slot}-empty`, slot, label, title: null, recipe: null, cookTime: null, servings: null, forLabel: null, items: [] });
       } else {
         rows.push(toRow(slot, label, entry));
       }
@@ -8564,7 +8574,22 @@ function AppShell() {
             <View key={m.key} style={styles.staffMenuRow}>
               <Text style={styles.staffMenuSlot}>{m.label}</Text>
               <View style={styles.staffMenuRowBody}>
-                <Text style={styles.staffMenuMeal}>{m.title}{m.forLabel ? `  · for ${m.forLabel}` : ''}</Text>
+                {m.items.length > 1 ? (
+                  <>
+                    {m.items.map((dish, i) => {
+                      const course = mealCourseLabel(m.slot, i, m.items.length);
+                      return (
+                        <View key={`${m.key}-${i}`} style={styles.staffMenuDishRow}>
+                          <Text style={styles.staffMenuDishLabel}>{course || '•'}</Text>
+                          <Text style={styles.staffMenuDish}>{dish}</Text>
+                        </View>
+                      );
+                    })}
+                    {m.forLabel ? <Text style={styles.staffMenuMeta}>for {m.forLabel}</Text> : null}
+                  </>
+                ) : (
+                  <Text style={styles.staffMenuMeal}>{m.title}{m.forLabel ? `  · for ${m.forLabel}` : ''}</Text>
+                )}
                 {m.cookTime || m.servings ? (
                   <Text style={styles.staffMenuMeta}>
                     {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
@@ -10435,7 +10460,22 @@ function AppShell() {
                   >
                     <Text style={styles.staffDayMenuSlot}>{m.label}</Text>
                     <View style={styles.staffMenuRowBody}>
-                      <Text style={[styles.staffDayMenuName, !m.title && styles.staffDayMenuEmpty]}>{m.title || 'Not planned'}{m.title && m.forLabel ? `  · for ${m.forLabel}` : ''}</Text>
+                      {m.items.length > 1 ? (
+                        <>
+                          {m.items.map((dish, i) => {
+                            const course = mealCourseLabel(m.slot, i, m.items.length);
+                            return (
+                              <View key={`${m.key}-${i}`} style={styles.staffMenuDishRow}>
+                                <Text style={styles.staffMenuDishLabel}>{course || '•'}</Text>
+                                <Text style={styles.staffMenuDish}>{dish}</Text>
+                              </View>
+                            );
+                          })}
+                          {m.forLabel ? <Text style={styles.staffDayMenuEmpty}>for {m.forLabel}</Text> : null}
+                        </>
+                      ) : (
+                        <Text style={[styles.staffDayMenuName, !m.title && styles.staffDayMenuEmpty]}>{m.title || 'Not planned'}{m.title && m.forLabel ? `  · for ${m.forLabel}` : ''}</Text>
+                      )}
                       {m.title && (m.cookTime || m.servings) ? (
                         <Text style={styles.foodTonightMeta}>
                           {[m.servings ? `${m.servings} servings` : null, m.cookTime ? `${m.cookTime} min` : null].filter(Boolean).join(' · ')}
@@ -15845,6 +15885,28 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
   staffMenuMeal: {
     color: colors.text,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  staffMenuDishRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 2,
+  },
+  staffMenuDishLabel: {
+    minWidth: 52,
+    color: colors.primary,
+    fontSize: 10.5,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    paddingTop: 2,
+  },
+  staffMenuDish: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.text,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   staffMenuMeta: {
