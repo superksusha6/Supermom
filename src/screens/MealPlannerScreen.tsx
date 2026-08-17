@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
+import { Dispatch, Fragment, SetStateAction, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
@@ -206,12 +206,12 @@ export function MealPlannerScreen({
   const isMobile = true; // mobile-only app
   const simpleMealScrollRef = useRef<ScrollView | null>(null);
   const simpleMealInputRefs = useRef<Record<string, TextInput | null>>({});
-  const [pickerTarget, setPickerTarget] = useState<{ dayKey: string; slot: MealPlanSlot } | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [selectedApplyDays, setSelectedApplyDays] = useState<string[]>([]);
   const [recipeSort, setRecipeSort] = useState<'default' | 'kcal_asc' | 'kcal_desc'>('default');
   const [newProfileName, setNewProfileName] = useState('');
   const [profileActionTargetKey, setProfileActionTargetKey] = useState<string | null>(null);
-  const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
   const [recipeSearch, setRecipeSearch] = useState('');
   const [customMealItems, setCustomMealItems] = useState<DraftSimpleMealItem[]>([createDraftSimpleMealItem()]);
@@ -243,40 +243,46 @@ export function MealPlannerScreen({
       return !entry?.recipeId && !entry?.customTitle && !(entry?.customItems?.length);
     }).map((day) => day.key);
   }, [activeWeeklyPlan, pickerTarget]);
-  function setRecipeForSlot(dayKey: string, slot: MealPlanSlot, recipeId?: string) {
-    const targetDays = Array.from(new Set([dayKey, ...selectedApplyDays]));
+  function buildNewMealEntry(dayKey: string, slot: MealPlanSlot, payload: Partial<WeeklyMealPlanEntry>): WeeklyMealPlanEntry {
+    const day = DAYS.find((item) => item.key === dayKey);
+    return {
+      id: `meal-plan-${activeProfileKey}-${dayKey}-${slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      profileKey: activeProfileKey,
+      profileLabel: activeProfile.label,
+      dayKey,
+      dayLabel: day?.label || dayKey,
+      slot,
+      ...payload,
+    };
+  }
+
+  // Save a meal to the current picker target. Snacks are multi-per-day: a snack is
+  // never overwritten by slot — editing targets a specific entry id, and a fresh add
+  // (no id) always appends. Breakfast/lunch/dinner keep the single-cell-per-day behaviour.
+  function applyMealToTargets(payload: Partial<WeeklyMealPlanEntry>) {
+    const target = pickerTarget;
+    if (!target) return;
+    const targetDays = Array.from(new Set([target.dayKey, ...selectedApplyDays]));
     onWeeklyPlanChange((prev) => {
       const next = [...prev];
       targetDays.forEach((targetDayKey) => {
-        const existingIndex = next.findIndex(
-          (entry) => (entry.profileKey || 'family') === activeProfileKey && entry.dayKey === targetDayKey && entry.slot === slot,
-        );
-        if (existingIndex >= 0) {
-          next[existingIndex] = {
-            ...next[existingIndex],
-            profileKey: activeProfileKey,
-            profileLabel: activeProfile.label,
-            recipeId,
-            recipeSelection: undefined,
-            customTitle: undefined,
-            customCalories: undefined,
-            customGrams: undefined,
-            customItems: undefined,
-            customHideCalories: undefined,
-            customNote: undefined,
-          };
-          return;
+        if (targetDayKey === target.dayKey && target.entryId) {
+          const byId = next.findIndex((entry) => entry.id === target.entryId);
+          if (byId >= 0) {
+            next[byId] = { ...next[byId], profileKey: activeProfileKey, profileLabel: activeProfile.label, ...payload };
+            return;
+          }
         }
-        const day = DAYS.find((item) => item.key === targetDayKey);
-        next.push({
-          id: `meal-plan-${activeProfileKey}-${targetDayKey}-${slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          profileKey: activeProfileKey,
-          profileLabel: activeProfile.label,
-          dayKey: targetDayKey,
-          dayLabel: day?.label || targetDayKey,
-          slot,
-          recipeId,
-        });
+        if (target.slot !== 'snack') {
+          const bySlot = next.findIndex(
+            (entry) => (entry.profileKey || 'family') === activeProfileKey && entry.dayKey === targetDayKey && entry.slot === target.slot,
+          );
+          if (bySlot >= 0) {
+            next[bySlot] = { ...next[bySlot], profileKey: activeProfileKey, profileLabel: activeProfile.label, ...payload };
+            return;
+          }
+        }
+        next.push(buildNewMealEntry(targetDayKey, target.slot, payload));
       });
       return next;
     });
@@ -286,11 +292,61 @@ export function MealPlannerScreen({
     setRecipeSearch('');
   }
 
+  // Clear the current slot. A snack is removed entirely (optional, multi-per-day);
+  // a fixed meal is just emptied so its cell stays.
+  function clearCurrentSlot() {
+    const target = pickerTarget || detailTarget;
+    if (!target) return;
+    onWeeklyPlanChange((prev) => {
+      if (target.slot === 'snack') {
+        return target.entryId ? prev.filter((entry) => entry.id !== target.entryId) : prev;
+      }
+      return prev.map((entry) => {
+        const match = target.entryId
+          ? entry.id === target.entryId
+          : (entry.profileKey || 'family') === activeProfileKey && entry.dayKey === target.dayKey && entry.slot === target.slot;
+        if (!match) return entry;
+        return {
+          ...entry,
+          recipeId: undefined,
+          recipeSelection: undefined,
+          customItems: undefined,
+          customTitle: undefined,
+          customCalories: undefined,
+          customGrams: undefined,
+          customHideCalories: undefined,
+          customNote: undefined,
+        };
+      });
+    });
+    setPickerTarget(null);
+    setDetailTarget(null);
+    setSelectedApplyDays([]);
+    resetCustomMealDraft();
+    setRecipeSearch('');
+  }
+
+  function setRecipeForSlot(_dayKey: string, _slot: MealPlanSlot, recipeId?: string) {
+    applyMealToTargets({
+      recipeId,
+      recipeSelection: undefined,
+      customTitle: undefined,
+      customCalories: undefined,
+      customGrams: undefined,
+      customItems: undefined,
+      customHideCalories: undefined,
+      customNote: undefined,
+    });
+  }
+
   // Per-slot recipe customization (choiceId -> optionId), stored on the entry.
-  function setEntryRecipeSelection(dayKey: string, slot: MealPlanSlot, choiceId: string, optionId: string) {
+  function setEntryRecipeSelection(dayKey: string, slot: MealPlanSlot, choiceId: string, optionId: string, entryId?: string) {
     onWeeklyPlanChange((prev) =>
       prev.map((entry) => {
-        if ((entry.profileKey || 'family') !== activeProfileKey || entry.dayKey !== dayKey || entry.slot !== slot) return entry;
+        const match = entryId
+          ? entry.id === entryId
+          : (entry.profileKey || 'family') === activeProfileKey && entry.dayKey === dayKey && entry.slot === slot;
+        if (!match) return entry;
         return { ...entry, recipeSelection: { ...(entry.recipeSelection || {}), [choiceId]: optionId } };
       }),
     );
@@ -317,66 +373,37 @@ export function MealPlannerScreen({
 
     const summary = getCustomItemsSummary(normalizedItems);
     const note = customMealNote.trim() || undefined;
-    const targetDays = Array.from(new Set([dayKey, ...selectedApplyDays]));
-
-    onWeeklyPlanChange((prev) => {
-      const next = [...prev];
-      targetDays.forEach((targetDayKey) => {
-        const existingIndex = next.findIndex(
-          (entry) => (entry.profileKey || 'family') === activeProfileKey && entry.dayKey === targetDayKey && entry.slot === slot,
-        );
-        if (existingIndex >= 0) {
-          next[existingIndex] = {
-            ...next[existingIndex],
-            profileKey: activeProfileKey,
-            profileLabel: activeProfile.label,
-            recipeId: undefined,
-            customItems: normalizedItems,
-            customTitle: summary.title,
-            customCalories: normalizedItems.reduce((sum, item) => sum + (item.calories || 0), 0) || undefined,
-            customGrams: normalizedItems.reduce((sum, item) => sum + (item.grams || 0), 0) || undefined,
-            customHideCalories,
-            customNote: note,
-          };
-          return;
-        }
-        const day = DAYS.find((item) => item.key === targetDayKey);
-        next.push({
-          id: `meal-plan-${activeProfileKey}-${targetDayKey}-${slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          profileKey: activeProfileKey,
-          profileLabel: activeProfile.label,
-          dayKey: targetDayKey,
-          dayLabel: day?.label || targetDayKey,
-          slot,
-          customItems: normalizedItems,
-          customTitle: summary.title,
-          customCalories: normalizedItems.reduce((sum, item) => sum + (item.calories || 0), 0) || undefined,
-          customGrams: normalizedItems.reduce((sum, item) => sum + (item.grams || 0), 0) || undefined,
-          customHideCalories,
-          customNote: note,
-        });
-      });
-      return next;
+    applyMealToTargets({
+      recipeId: undefined,
+      recipeSelection: undefined,
+      customItems: normalizedItems,
+      customTitle: summary.title,
+      customCalories: normalizedItems.reduce((sum, item) => sum + (item.calories || 0), 0) || undefined,
+      customGrams: normalizedItems.reduce((sum, item) => sum + (item.grams || 0), 0) || undefined,
+      customHideCalories,
+      customNote: note,
     });
-    setPickerTarget(null);
-    setSelectedApplyDays([]);
-    resetCustomMealDraft();
-    setRecipeSearch('');
   }
 
-  function openRecipePicker(dayKey: string, slot: MealPlanSlot) {
-    setPickerTarget({ dayKey, slot });
-    setSelectedApplyDays([dayKey]);
+  function openRecipePicker(dayKey: string, slot: MealPlanSlot, entryId?: string) {
+    setPickerTarget({ dayKey, slot, entryId });
+    // A snack is per-day; "apply to other days" would create duplicates, so don't preselect.
+    setSelectedApplyDays(slot === 'snack' ? [] : [dayKey]);
     setPickerMode('simple');
     setRecipeSearch('');
   }
 
   function openSlot(dayKey: string, slot: MealPlanSlot, entry?: WeeklyMealPlanEntry) {
     if (entry?.recipeId || entry?.customTitle || entry?.customItems?.length) {
-      setDetailTarget({ dayKey, slot });
+      setDetailTarget({ dayKey, slot, entryId: entry.id });
       return;
     }
-    openRecipePicker(dayKey, slot);
+    openRecipePicker(dayKey, slot, entry?.id);
+  }
+
+  // Add another snack cell to a day (snacks can repeat: morning + afternoon, etc.).
+  function addSnack(dayKey: string) {
+    openRecipePicker(dayKey, 'snack', undefined);
   }
 
   function resetCustomMealDraft() {
@@ -479,8 +506,8 @@ export function MealPlannerScreen({
     { key: 'copy', label: 'Copy text', action: copyPlanText },
   ];
 
-  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false) => {
-    const entry = activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
+  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, cellKey?: string) => {
+    const entry = entryOverride || activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
     const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
     const customItems = getEntryCustomItems(entry);
     const customSummary = getCustomItemsSummary(customItems, !!entry?.customHideCalories);
@@ -489,7 +516,7 @@ export function MealPlannerScreen({
 
     return (
       <Pressable
-        key={`${dayKey}-${slot.key}`}
+        key={cellKey || `${dayKey}-${slot.key}`}
         style={[
           styles.weekGridMealCell,
           compact && styles.weekGridMealCellCompact,
@@ -680,7 +707,18 @@ export function MealPlannerScreen({
                 <View key={day.key} style={styles.mobileDayCard}>
                   <Text style={styles.mobileDayTitle}>{day.label}</Text>
                   <View style={styles.mobileDaySlots}>
-                    {SLOTS.map((slot) => renderMealCell(day.key, slot, true))}
+                    {SLOTS.map((slot) => {
+                      if (slot.key !== 'snack') return renderMealCell(day.key, slot, true);
+                      const snacks = activeWeeklyPlan.filter((e) => e.dayKey === day.key && e.slot === 'snack');
+                      return (
+                        <Fragment key={`${day.key}-snacks`}>
+                          {snacks.map((s) => renderMealCell(day.key, slot, true, s, s.id))}
+                          <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
+                            <Text style={styles.addSnackBtnText}>+ Add snack</Text>
+                          </Pressable>
+                        </Fragment>
+                      );
+                    })}
                   </View>
                 </View>
               ))}
@@ -817,10 +855,10 @@ export function MealPlannerScreen({
                 <ScrollView contentContainerStyle={styles.modalList}>
                   <Pressable
                     style={styles.recipePickerCard}
-                    onPress={() => pickerTarget && setRecipeForSlot(pickerTarget.dayKey, pickerTarget.slot, undefined)}
+                    onPress={() => clearCurrentSlot()}
                   >
-                    <Text style={styles.recipePickerTitle}>Clear slot</Text>
-                    <Text style={styles.recipePickerMeta}>Remove meal from this slot</Text>
+                    <Text style={styles.recipePickerTitle}>{pickerTarget?.slot === 'snack' ? 'Remove snack' : 'Clear slot'}</Text>
+                    <Text style={styles.recipePickerMeta}>{pickerTarget?.slot === 'snack' ? 'Delete this snack' : 'Remove meal from this slot'}</Text>
                   </Pressable>
 
                   {!recipeSearchText ? (
@@ -931,9 +969,9 @@ export function MealPlannerScreen({
                 <View style={styles.exportActions}>
                   <Pressable
                     style={styles.staffExportBtn}
-                    onPress={() => pickerTarget && setRecipeForSlot(pickerTarget.dayKey, pickerTarget.slot, undefined)}
+                    onPress={() => clearCurrentSlot()}
                   >
-                    <Text style={styles.staffExportBtnText}>Clear slot</Text>
+                    <Text style={styles.staffExportBtnText}>{pickerTarget?.slot === 'snack' ? 'Remove snack' : 'Clear slot'}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.staffExportBtnPrimary, !customMealItems.some((item) => item.title.trim()) && styles.disabledBtn]}
@@ -956,7 +994,9 @@ export function MealPlannerScreen({
           {detailTarget ? (
             <View style={styles.modalCard}>
               {(() => {
-                const entry = activeWeeklyPlan.find((item) => item.dayKey === detailTarget.dayKey && item.slot === detailTarget.slot);
+                const entry = detailTarget.entryId
+                  ? activeWeeklyPlan.find((item) => item.id === detailTarget.entryId)
+                  : activeWeeklyPlan.find((item) => item.dayKey === detailTarget.dayKey && item.slot === detailTarget.slot);
                 const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
                 return (
                   <>
@@ -976,7 +1016,7 @@ export function MealPlannerScreen({
                     <Pressable
                       style={styles.staffExportBtn}
                       onPress={() => {
-                        openRecipePicker(detailTarget.dayKey, detailTarget.slot);
+                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId);
                         setDetailTarget(null);
                       }}
                     >
@@ -1000,7 +1040,7 @@ export function MealPlannerScreen({
                                   <Pressable
                                     key={option.id}
                                     style={[styles.slotChoiceChip, active && styles.slotChoiceChipActive]}
-                                    onPress={() => setEntryRecipeSelection(detailTarget.dayKey, detailTarget.slot, choiceItem.id, option.id)}
+                                    onPress={() => setEntryRecipeSelection(detailTarget.dayKey, detailTarget.slot, choiceItem.id, option.id, detailTarget.entryId)}
                                   >
                                     <Text style={[styles.slotChoiceChipText, active && styles.slotChoiceChipTextActive]}>{option.label}</Text>
                                   </Pressable>
@@ -1037,7 +1077,7 @@ export function MealPlannerScreen({
                     <Pressable
                       style={styles.staffExportBtn}
                       onPress={() => {
-                        openRecipePicker(detailTarget.dayKey, detailTarget.slot);
+                        openRecipePicker(detailTarget.dayKey, detailTarget.slot, detailTarget.entryId);
                         setPickerMode('simple');
                         setCustomMealItems(
                           getEntryCustomItems(entry).map((item) => ({
@@ -1828,6 +1868,19 @@ const createStyles = (colors: ThemeColors) =>
     },
     mobileDaySlots: {
       gap: 8,
+    },
+    addSnackBtn: {
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: colors.primary,
+      alignItems: 'center',
+    },
+    addSnackBtnText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
     },
     mobileSlotLabel: {
       color: colors.primary,

@@ -2435,15 +2435,33 @@ function AppShell() {
   // menu), not just dinner. Slots with nothing planned come back with title=null.
   const todayMeals = useMemo(() => {
     const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
-    return (['breakfast', 'snack', 'lunch', 'dinner'] as MealPlanSlot[]).map((slot) => {
+    const menuKey = rotationWeekMenuKey || 'family';
+    const rows: Array<{ key: string; slot: MealPlanSlot; label: string; title: string | null; recipe: Recipe | null; cookTime: number | null; servings: number | null }> = [];
+    const toRow = (slot: MealPlanSlot, label: string, entry: WeeklyMealPlanEntry) => {
+      const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
+      return { key: entry.id, slot, label, title: recipe?.title || entry.customTitle || null, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null };
+    };
+    (['breakfast', 'snack', 'lunch', 'dinner'] as MealPlanSlot[]).forEach((slot) => {
       const label = MEAL_PLAN_SLOTS.find((s) => s.key === slot)?.label || slot;
       const entries = weeklyMealPlan.filter((e) => e.dayKey === code && e.slot === slot && (e.recipeId || e.customTitle));
+      if (slot === 'snack') {
+        // Snacks are multi-per-day — surface every snack of this week's menu as its own row.
+        const snacks = entries.filter((e) => (e.profileKey || 'family') === menuKey);
+        if (snacks.length === 0) {
+          rows.push({ key: 'snack-empty', slot, label, title: null, recipe: null, cookTime: null, servings: null });
+        } else {
+          snacks.forEach((entry) => rows.push(toRow(slot, label, entry)));
+        }
+        return;
+      }
       const entry = pickTodayEntry(entries);
-      if (!entry) return { slot, label, title: null as string | null, recipe: null as Recipe | null, cookTime: null as number | null, servings: null as number | null };
-      const recipe = entry.recipeId ? recipes.find((r) => r.id === entry.recipeId) || null : null;
-      const title = recipe?.title || entry.customTitle || null;
-      return { slot, label, title, recipe, cookTime: recipe?.cookTimeMinutes || null, servings: recipe?.servings || null };
+      if (!entry) {
+        rows.push({ key: `${slot}-empty`, slot, label, title: null, recipe: null, cookTime: null, servings: null });
+      } else {
+        rows.push(toRow(slot, label, entry));
+      }
     });
+    return rows;
   }, [weeklyMealPlan, recipes, todayDateKey, rotationWeekMenuKey]);
   const plannedTodayMeals = todayMeals.filter((m) => m.title);
   const todayChoreList = useMemo(() => {
@@ -8542,7 +8560,7 @@ function AppShell() {
       <FamCard title="Menu today">
         {plannedTodayMeals.length > 0 ? (
           plannedTodayMeals.map((m) => (
-            <View key={m.slot} style={styles.staffMenuRow}>
+            <View key={m.key} style={styles.staffMenuRow}>
               <Text style={styles.staffMenuSlot}>{m.label}</Text>
               <View style={styles.staffMenuRowBody}>
                 <Text style={styles.staffMenuMeal}>{m.title}</Text>
@@ -10408,7 +10426,7 @@ function AppShell() {
                 const canOpen = !!m.recipe && staffCan('recipes');
                 return (
                   <Pressable
-                    key={m.slot}
+                    key={m.key}
                     accessibilityRole="button"
                     accessibilityLabel={m.title ? `${m.label}, ${m.title}` : `${m.label}, not planned`}
                     style={styles.staffDayMenuRow}
