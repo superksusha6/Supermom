@@ -2,8 +2,9 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
 
 // Vertical reorder list (RN core Animated + PanResponder → works on web).
-// Long-press a row → "arrange mode": every row pulses and can be dragged. Drag to move.
-// A tap (no drag) exits arrange mode. Outside arrange mode a tap acts normally (opens the row).
+// Long-press a row → that row (only it) pulses and is "picked up". Drag it to move
+// (a drop line shows the target). A tap while a row is picked up returns to normal mode
+// where a tap opens the row.
 type ArmProps = { onLongPress: () => void; delayLongPress: number };
 type Props = {
   ids: string[];
@@ -14,7 +15,7 @@ type Props = {
 };
 
 export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor }: Props) {
-  const [arranging, setArranging] = useState(false);
+  const [armedId, setArmedId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [targetIndex, setTargetIndex] = useState(-1);
   const translateY = useRef(new Animated.Value(0)).current;
@@ -27,26 +28,26 @@ export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor 
   const movedRef = useRef(false);
   const dragIdRef = useRef<string | null>(null);
   const targetRef = useRef(-1);
-  const arrangingRef = useRef(false);
+  const armedRef = useRef<string | null>(null);
   const orderRef = useRef<string[]>(ids);
   orderRef.current = ids;
+  armedRef.current = armedId;
 
   useEffect(() => {
-    arrangingRef.current = arranging;
-    if (!arranging) {
+    if (!armedId) {
       pulse.setValue(0);
       return undefined;
     }
     pulse.setValue(0);
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 470, useNativeDriver: false }),
-        Animated.timing(pulse, { toValue: 0, duration: 470, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 1, duration: 460, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 460, useNativeDriver: false }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [arranging, pulse]);
+  }, [armedId, pulse]);
 
   const rowSpan = (id: string) => (heights.current[id] || 44) + gap;
   const computeTarget = (pointerY: number) => {
@@ -83,21 +84,28 @@ export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor 
 
   const makeResponder = (id: string) =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => arrangingRef.current,
-      onStartShouldSetPanResponderCapture: () => arrangingRef.current,
-      onMoveShouldSetPanResponder: () => arrangingRef.current,
-      onMoveShouldSetPanResponderCapture: () => arrangingRef.current,
+      // While something is picked up, rows capture touches so a tap can put it down and a
+      // drag on the picked-up row can move it.
+      onStartShouldSetPanResponder: () => armedRef.current != null,
+      onStartShouldSetPanResponderCapture: () => armedRef.current != null,
+      onMoveShouldSetPanResponder: () => armedRef.current != null,
+      onMoveShouldSetPanResponderCapture: () => armedRef.current != null,
       onPanResponderGrant: (e) => {
-        dragIdRef.current = id;
-        setDragId(id);
         grantY.current = e.nativeEvent.pageY;
         movedRef.current = false;
-        translateY.setValue(0);
-        listRef.current?.measureInWindow((_x, y) => {
-          listTop.current = y;
-        });
+        if (id === armedRef.current) {
+          dragIdRef.current = id;
+          setDragId(id);
+          translateY.setValue(0);
+          listRef.current?.measureInWindow((_x, y) => {
+            listTop.current = y;
+          });
+        } else {
+          dragIdRef.current = null;
+        }
       },
       onPanResponderMove: (e) => {
+        if (id !== armedRef.current) return;
         const dy = e.nativeEvent.pageY - grantY.current;
         if (Math.abs(dy) > 6) movedRef.current = true;
         translateY.setValue(dy);
@@ -106,12 +114,12 @@ export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor 
         setTargetIndex(t);
       },
       onPanResponderRelease: () => {
-        if (movedRef.current) commitReorder();
-        else setArranging(false); // a tap while arranging → back to normal mode
+        if (id === armedRef.current && movedRef.current) commitReorder();
+        else setArmedId(null); // a tap (no drag) → back to normal mode
         clearDrag();
       },
       onPanResponderTerminate: () => {
-        if (movedRef.current) commitReorder();
+        if (id === armedRef.current && movedRef.current) commitReorder();
         clearDrag();
       },
     });
@@ -121,14 +129,14 @@ export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor 
   };
 
   const dropLine = <View style={[styles.dropLine, { backgroundColor: accentColor }]} pointerEvents="none" />;
-  const armProps: ArmProps = { onLongPress: () => setArranging(true), delayLongPress: 240 };
 
   return (
     <View ref={listRef} style={{ gap }}>
       {ids.map((id, index) => {
+        const isArmed = armedId === id;
         const isDragging = dragId === id;
         const responder = makeResponder(id);
-        const scale = arranging ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.02] }) : 1;
+        const scale = isArmed ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) : 1;
         return (
           <View key={id}>
             {dragIdRef.current && targetIndex === index ? dropLine : null}
@@ -136,12 +144,12 @@ export function DraggableList({ ids, renderRow, onReorder, gap = 8, accentColor 
               onLayout={onRowLayout(id)}
               {...responder.panHandlers}
               style={[
-                arranging && styles.arrangingRow,
+                isArmed && styles.armedRow,
                 isDragging && styles.draggingRow,
                 { transform: [{ translateY: isDragging ? translateY : 0 }, { scale }], zIndex: isDragging ? 20 : 0 },
               ]}
             >
-              {renderRow(id, arranging || isDragging, armProps)}
+              {renderRow(id, isArmed, { onLongPress: () => setArmedId(id), delayLongPress: 240 })}
             </Animated.View>
           </View>
         );
@@ -157,8 +165,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginVertical: 2,
   },
-  arrangingRow: {
-    opacity: 0.97,
+  armedRow: {
+    opacity: 0.98,
   },
   draggingRow: {
     shadowColor: '#000',
