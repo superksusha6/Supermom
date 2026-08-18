@@ -568,7 +568,7 @@ export function MealPlannerScreen({
     { key: 'copy', label: 'Copy text', action: copyPlanText },
   ];
 
-  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, _cellKey?: string, flex = false) => {
+  const renderMealCell = (dayKey: string, slot: { key: MealPlanSlot; label: string }, compact = false, entryOverride?: WeeklyMealPlanEntry, _cellKey?: string, flex = false, pressProps?: { onLongPress?: () => void; delayLongPress?: number }) => {
     const entry = entryOverride || activeWeeklyPlan.find((item) => item.dayKey === dayKey && item.slot === slot.key);
     const recipe = entry?.recipeId ? recipesById[entry.recipeId] : null;
     const customItems = getEntryCustomItems(entry);
@@ -585,6 +585,8 @@ export function MealPlannerScreen({
           flex && styles.weekGridMealCellFlex,
         ]}
         onPress={() => openSlot(dayKey, slot.key, entry)}
+        onLongPress={pressProps?.onLongPress}
+        delayLongPress={pressProps?.delayLongPress}
       >
         {compact ? <Text style={styles.mobileSlotLabel}>{slot.label}</Text> : null}
         {recipe ? (
@@ -834,28 +836,22 @@ export function MealPlannerScreen({
                     {(() => {
                       const dayRows = orderedDayEntries(day.key);
                       const entryById = (id: string) => dayRows.find((e) => e.id === id);
-                      if (!editing) {
-                        return dayRows.map((entry) => {
-                          const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
-                          return <View key={entry.id}>{renderMealCell(day.key, slot, true, entry, entry.id)}</View>;
-                        });
-                      }
                       return (
                         <DraggableList
                           ids={dayRows.map((e) => e.id)}
                           onReorder={(ids) => reorderDay(day.key, ids)}
                           accentColor={colors.primary}
-                          gripColor={colors.subtext}
-                          renderRow={(id) => {
+                          renderRow={(id, active, armProps) => {
                             const entry = entryById(id);
                             if (!entry) return null;
                             const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
                             const hasMeal = Boolean(entry.recipeId || entry.customTitle || entry.customItems?.length);
-                            const canRemove = entry.slot === 'snack' || hasMeal;
+                            // Show ✕ only in edit mode and not while arranging/dragging.
+                            const showRemove = editing && (entry.slot === 'snack' || hasMeal) && !active;
                             return (
                               <View style={styles.editCellRow}>
-                                {renderMealCell(day.key, slot, true, entry, entry.id, true)}
-                                {canRemove ? (
+                                {renderMealCell(day.key, slot, true, entry, entry.id, showRemove, armProps)}
+                                {showRemove ? (
                                   <Pressable
                                     style={styles.cellRemoveBtn}
                                     onPress={() => removeEntryDirect(entry)}
