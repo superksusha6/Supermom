@@ -846,10 +846,12 @@ export function MealPlannerScreen({
                             if (!entry) return null;
                             const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
                             const hasMeal = Boolean(entry.recipeId || entry.customTitle || entry.customItems?.length);
-                            // Show ✕ only in edit mode and not while arranging/dragging.
+                            // Show ✕ only in edit mode and not while the row is picked up.
                             const showRemove = editing && (entry.slot === 'snack' || hasMeal) && !active;
                             return (
-                              <View style={styles.editCellRow}>
+                              // While picked up, make the content touch-transparent so the drag
+                              // gesture reaches the wrapper (otherwise the inner button eats it).
+                              <View style={styles.editCellRow} pointerEvents={active ? 'none' : 'auto'}>
                                 {renderMealCell(day.key, slot, true, entry, entry.id, showRemove, armProps)}
                                 {showRemove ? (
                                   <Pressable
