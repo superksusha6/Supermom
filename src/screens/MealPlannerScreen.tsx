@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
+import { DraggableList } from '@/components/DraggableList';
 import { NUTRITION_FOOD_PRESETS } from '@/lib/nutrition';
 import { computeRecipeNutritionForSelection, resolveRecipeIngredients } from '@/lib/recipeNutrition';
 import { MealPlanSlot, Recipe, WeeklyMealPlanEntry } from '@/types/app';
@@ -643,14 +644,9 @@ export function MealPlannerScreen({
       .sort((a, b) => a.ord - b.ord || a.i - b.i)
       .map((x) => x.e);
   }
-  // Move a row up/down within its day and persist a clean 0..n-1 order for the day.
-  function moveDayEntry(dayKey: string, entryId: string, dir: -1 | 1) {
-    const sorted = orderedDayEntries(dayKey);
-    const idx = sorted.findIndex((e) => e.id === entryId);
-    const target = idx + dir;
-    if (idx < 0 || target < 0 || target >= sorted.length) return;
-    [sorted[idx], sorted[target]] = [sorted[target], sorted[idx]];
-    const orderById = new Map(sorted.map((e, i) => [e.id, i]));
+  // Persist a new full ordering (0..n-1) for a day after a drag reorder.
+  function reorderDay(dayKey: string, orderedIds: string[]) {
+    const orderById = new Map(orderedIds.map((id, i) => [id, i]));
     onWeeklyPlanChange((prev) =>
       prev.map((e) =>
         e.dayKey === dayKey && (e.profileKey || 'family') === activeProfileKey && orderById.has(e.id)
@@ -837,46 +833,42 @@ export function MealPlannerScreen({
                   <View style={styles.mobileDaySlots}>
                     {(() => {
                       const dayRows = orderedDayEntries(day.key);
-                      return dayRows.map((entry, index) => {
-                        const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
-                        const hasMeal = Boolean(entry.recipeId || entry.customTitle || entry.customItems?.length);
-                        if (!editing) {
+                      const entryById = (id: string) => dayRows.find((e) => e.id === id);
+                      if (!editing) {
+                        return dayRows.map((entry) => {
+                          const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
                           return <View key={entry.id}>{renderMealCell(day.key, slot, true, entry, entry.id)}</View>;
-                        }
-                        const canRemove = entry.slot === 'snack' || hasMeal;
-                        return (
-                          <View key={entry.id} style={styles.editCellRow}>
-                            {renderMealCell(day.key, slot, true, entry, entry.id, true)}
-                            <View style={styles.editCtrlCol}>
-                              <Pressable
-                                style={[styles.editCtrlBtn, index === 0 && styles.editCtrlBtnDisabled]}
-                                disabled={index === 0}
-                                onPress={() => moveDayEntry(day.key, entry.id, -1)}
-                                accessibilityLabel="Move up"
-                              >
-                                <Text style={styles.editCtrlText}>↑</Text>
-                              </Pressable>
-                              <Pressable
-                                style={[styles.editCtrlBtn, index === dayRows.length - 1 && styles.editCtrlBtnDisabled]}
-                                disabled={index === dayRows.length - 1}
-                                onPress={() => moveDayEntry(day.key, entry.id, 1)}
-                                accessibilityLabel="Move down"
-                              >
-                                <Text style={styles.editCtrlText}>↓</Text>
-                              </Pressable>
-                              {canRemove ? (
-                                <Pressable
-                                  style={[styles.editCtrlBtn, styles.editCtrlBtnDanger]}
-                                  onPress={() => removeEntryDirect(entry)}
-                                  accessibilityLabel={`Remove ${slot.label}`}
-                                >
-                                  <Text style={styles.editCtrlDangerText}>✕</Text>
-                                </Pressable>
-                              ) : null}
-                            </View>
-                          </View>
-                        );
-                      });
+                        });
+                      }
+                      return (
+                        <DraggableList
+                          ids={dayRows.map((e) => e.id)}
+                          onReorder={(ids) => reorderDay(day.key, ids)}
+                          accentColor={colors.primary}
+                          gripColor={colors.subtext}
+                          renderRow={(id) => {
+                            const entry = entryById(id);
+                            if (!entry) return null;
+                            const slot = SLOTS.find((s) => s.key === entry.slot) || SLOTS[0];
+                            const hasMeal = Boolean(entry.recipeId || entry.customTitle || entry.customItems?.length);
+                            const canRemove = entry.slot === 'snack' || hasMeal;
+                            return (
+                              <View style={styles.editCellRow}>
+                                {renderMealCell(day.key, slot, true, entry, entry.id, true)}
+                                {canRemove ? (
+                                  <Pressable
+                                    style={styles.cellRemoveBtn}
+                                    onPress={() => removeEntryDirect(entry)}
+                                    accessibilityLabel={`Remove ${slot.label}`}
+                                  >
+                                    <Text style={styles.cellRemoveText}>✕</Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                            );
+                          }}
+                        />
+                      );
                     })()}
                     {editing ? (
                       <Pressable style={styles.addSnackBtn} onPress={() => addSnack(day.key)}>
