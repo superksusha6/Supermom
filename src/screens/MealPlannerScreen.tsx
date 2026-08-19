@@ -486,10 +486,11 @@ export function MealPlannerScreen({
 
   function addDraftSimpleMealItem() {
     const nextItem = createDraftSimpleMealItem();
-    setCustomMealItems((prev) => [nextItem, ...prev]);
+    // Append at the bottom so existing dishes keep their order (first course stays first).
+    setCustomMealItems((prev) => [...prev, nextItem]);
     setActiveSimpleMealItemId(nextItem.id);
     setTimeout(() => {
-      simpleMealScrollRef.current?.scrollTo({ y: 0, animated: true });
+      simpleMealScrollRef.current?.scrollToEnd({ animated: true });
       simpleMealInputRefs.current[nextItem.id]?.focus();
     }, 60);
   }
