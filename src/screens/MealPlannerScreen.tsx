@@ -486,11 +486,12 @@ export function MealPlannerScreen({
 
   function addDraftSimpleMealItem() {
     const nextItem = createDraftSimpleMealItem();
-    // Append at the bottom so existing dishes keep their order (first course stays first).
+    // New dish is the next course (kept last internally so the first course stays first),
+    // but the list renders newest-on-top, so it appears above and we scroll to the top.
     setCustomMealItems((prev) => [...prev, nextItem]);
     setActiveSimpleMealItemId(nextItem.id);
     setTimeout(() => {
-      simpleMealScrollRef.current?.scrollToEnd({ animated: true });
+      simpleMealScrollRef.current?.scrollTo({ y: 0, animated: true });
       simpleMealInputRefs.current[nextItem.id]?.focus();
     }, 60);
   }
@@ -1071,7 +1072,10 @@ export function MealPlannerScreen({
                   <Text style={styles.courseTip}>Add each dish on its own line — e.g. soup as the first course, the main as the second. Use “+ Add course” for another dish.</Text>
                 ) : null}
                 <View style={styles.simpleMealCard}>
-                {customMealItems.map((item, index) => {
+                {/* Render newest on top, but number courses bottom-up so the first dish
+                    entered stays "First course" (soup) and a new row lands above it. */}
+                {customMealItems.slice().reverse().map((item, revIndex) => {
+                  const index = customMealItems.length - 1 - revIndex;
                   const suggestions = getSimpleMealSuggestions(item.title);
                   const itemCalories = getDraftSimpleMealCalories(item);
                   return (
