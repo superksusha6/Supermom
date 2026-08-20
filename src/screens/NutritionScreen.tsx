@@ -2081,6 +2081,7 @@ function formatNutritionEntryName({
   customBrand,
   customFoodMode,
   customServingType,
+  unitWord,
 }: {
   name: string;
   grams: string;
