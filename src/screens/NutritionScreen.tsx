@@ -778,7 +778,13 @@ export function NutritionScreen({
   function editNutritionEntry(entry: NutritionFoodEntry) {
     const source = entry.source;
     if (!source) return;
-    const preset = presetFromEntrySource(source, `entry-src-${entry.id}`);
+    // Prefer the full saved custom food (it carries the per-serving unit); the entry's
+    // flattened source only keeps per-100g, so editing would otherwise offer grams only.
+    const nameKey = normalizeNutritionSearchText(source.displayName || entry.name);
+    const savedFood = customFoodPresets.find((f) => normalizeNutritionSearchText(f.name) === nameKey);
+    const preset = savedFood
+      ? customNutritionFoodToPreset(savedFood)
+      : presetFromEntrySource(source, `entry-src-${entry.id}`);
     const values = getNutritionValuesForGrams(preset, source.grams);
     setEditingEntryId(entry.id);
     setActiveMealType(entry.mealType);
