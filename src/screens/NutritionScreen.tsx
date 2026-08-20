@@ -1440,11 +1440,21 @@ export function NutritionScreen({
               </View>
               <View style={styles.modalHeaderActions}>
                 <Pressable
-                  style={[styles.modalGhostBtn, sessionAddedCount > 0 && styles.modalDoneBtn]}
-                  onPress={() => { setActiveMealType(null); setEditingEntryId(null); setEditingCustomFoodId(null); setCustomFoodMode(false); }}
+                  style={[styles.modalGhostBtn, (sessionAddedCount > 0 || ((customFoodMode || !!editingEntryId || !!editingCustomFoodId) && !!draftMealName.trim())) && styles.modalDoneBtn]}
+                  onPress={() => {
+                    // Don't lose a filled-in product: if one is being entered, save it
+                    // first (same as "✓ Add"), then close — pressing Done no longer discards it.
+                    if ((customFoodMode || editingEntryId || editingCustomFoodId) && draftMealName.trim()) {
+                      commitProduct();
+                    }
+                    setActiveMealType(null);
+                    setEditingEntryId(null);
+                    setEditingCustomFoodId(null);
+                    setCustomFoodMode(false);
+                  }}
                 >
-                  <Text style={[styles.modalGhostBtnText, sessionAddedCount > 0 && styles.modalDoneBtnText]}>
-                    {sessionAddedCount > 0 ? 'Done' : 'Cancel'}
+                  <Text style={[styles.modalGhostBtnText, (sessionAddedCount > 0 || ((customFoodMode || !!editingEntryId || !!editingCustomFoodId) && !!draftMealName.trim())) && styles.modalDoneBtnText]}>
+                    {(sessionAddedCount > 0 || ((customFoodMode || !!editingEntryId || !!editingCustomFoodId) && !!draftMealName.trim())) ? 'Done' : 'Cancel'}
                   </Text>
                 </Pressable>
                 {customFoodMode || editingEntryId ? (
