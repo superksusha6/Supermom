@@ -621,7 +621,7 @@ const MEAL_COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
 // Label multi-dish lunch/dinner as courses (First / Second …) for the cook's day view.
 function mealCourseLabel(slot: MealPlanSlot, index: number, count: number): string {
   if (count < 2) return '';
-  if (slot === 'lunch' || slot === 'dinner') return MEAL_COURSE_LABELS[index] || `Dish ${index + 1}`;
+  if (slot === 'lunch') return MEAL_COURSE_LABELS[index] || `Dish ${index + 1}`;
   return '';
 }
 
@@ -8577,7 +8577,7 @@ function AppShell() {
             <View key={m.key} style={styles.staffMenuRow}>
               <Text style={styles.staffMenuSlot}>{m.label}</Text>
               <View style={styles.staffMenuRowBody}>
-                {m.items.length > 1 ? (
+                {m.slot === 'lunch' && m.items.length > 1 ? (
                   <>
                     {m.items.map((dish, i) => {
                       const course = mealCourseLabel(m.slot, i, m.items.length);
@@ -10463,7 +10463,7 @@ function AppShell() {
                   >
                     <Text style={styles.staffDayMenuSlot}>{m.label}</Text>
                     <View style={styles.staffMenuRowBody}>
-                      {m.items.length > 1 ? (
+                      {m.slot === 'lunch' && m.items.length > 1 ? (
                         <>
                           {m.items.map((dish, i) => {
                             const course = mealCourseLabel(m.slot, i, m.items.length);

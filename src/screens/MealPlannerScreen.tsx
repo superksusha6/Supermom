@@ -159,11 +159,11 @@ function getCustomItemsSummary(items: Array<{ title: string; grams?: number; cal
   };
 }
 
-// Build the editor's dish rows from an entry. For a lunch/dinner typed as a single
-// "a + b + c" field, split it into separate courses so the person can restructure.
+// Build the editor's dish rows from an entry. Only LUNCH is split into courses (soup +
+// main); every other meal stays a single dish even if it lists several components.
 function buildEditDishItems(entry: WeeklyMealPlanEntry, slot: MealPlanSlot) {
   const items = getEntryCustomItems(entry);
-  const isMain = slot === 'lunch' || slot === 'dinner';
+  const isMain = slot === 'lunch';
   if (isMain && items.length === 1) {
     const parts = items[0].title.split(/\s*[+\n]\s*/).map((s) => s.trim()).filter(Boolean);
     if (parts.length > 1) {
@@ -181,7 +181,7 @@ const COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
 // Label multi-dish main meals as courses (First / Second …); other slots stay a plain list.
 function courseLabelFor(slot: MealPlanSlot, index: number, count: number): string {
   if (count < 2) return '';
-  if (slot === 'lunch' || slot === 'dinner') return COURSE_LABELS[index] || `Dish ${index + 1}`;
+  if (slot === 'lunch') return COURSE_LABELS[index] || `Dish ${index + 1}`;
   return '';
 }
 
@@ -242,6 +242,7 @@ export function MealPlannerScreen({
   const [profileActionTargetKey, setProfileActionTargetKey] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
+  const [rotationExpanded, setRotationExpanded] = useState(false);
   const [pickerForChildId, setPickerForChildId] = useState<string | null>(null);
   const childNameById = (id?: string) => (id ? children.find((c) => c.id === id)?.name || '' : '');
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
@@ -597,7 +598,7 @@ export function MealPlannerScreen({
             <Text style={styles.weekGridRecipeMeta}>{recipeCaloriesForEntry(recipe, entry)} kcal</Text>
           </>
         ) : customMealTitle ? (
-          customItems.length > 1 ? (
+          slot.key === 'lunch' && customItems.length > 1 ? (
             <>
               <View style={styles.courseList}>
                 {customItems.map((it, i) => {
@@ -733,6 +734,14 @@ export function MealPlannerScreen({
         </SectionCard>
 
         <SectionCard title="Weekly rotation">
+          <Pressable style={styles.rotCollapseRow} onPress={() => setRotationExpanded((v) => !v)}>
+            <Text style={styles.rotCollapseSummary}>
+              {rotation.enabled ? `On · This week: ${rotationThisWeekLabel || '—'}` : 'Off'}
+            </Text>
+            <Text style={styles.rotCollapseToggle}>{rotationExpanded ? 'Hide' : 'Manage'}</Text>
+          </Pressable>
+          {rotationExpanded ? (
+          <>
           <Text style={styles.heroText}>
             Cycle several menus by week so meals don&apos;t repeat — e.g. Menu 1 one week, Menu 2 the next. The Today view and your nanny automatically follow this week&apos;s menu.
           </Text>
@@ -810,6 +819,8 @@ export function MealPlannerScreen({
                   : 'Week 1 of each month uses the first menu, week 2 the second, and so on.'}
               </Text>
             </>
+          ) : null}
+          </>
           ) : null}
         </SectionCard>
 
@@ -1068,7 +1079,7 @@ export function MealPlannerScreen({
               </>
             ) : (
               <ScrollView ref={simpleMealScrollRef} contentContainerStyle={styles.modalList} keyboardShouldPersistTaps="handled">
-                {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner' ? (
+                {pickerTarget?.slot === 'lunch' ? (
                   <Text style={styles.courseTip}>Add each dish on its own line — e.g. soup as the first course, the main as the second. Use “+ Add course” for another dish.</Text>
                 ) : null}
                 <View style={styles.simpleMealCard}>
@@ -1082,7 +1093,7 @@ export function MealPlannerScreen({
                     <View key={item.id} style={styles.simpleMealRowCard}>
                       <View style={styles.simpleMealRowHeader}>
                         <Text style={styles.simpleMealRowLabel}>
-                          {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner'
+                          {pickerTarget?.slot === 'lunch'
                             ? `${COURSE_LABELS[index] || `Dish ${index + 1}`} course`
                             : `Dish ${index + 1}`}
                         </Text>
@@ -1149,7 +1160,7 @@ export function MealPlannerScreen({
                   );
                 })}
                 <Pressable style={styles.addItemBtn} onPress={addDraftSimpleMealItem}>
-                  <Text style={styles.addItemBtnText}>+ Add {pickerTarget?.slot === 'lunch' || pickerTarget?.slot === 'dinner' ? 'course' : 'dish'}</Text>
+                  <Text style={styles.addItemBtnText}>+ Add {pickerTarget?.slot === 'lunch' ? 'course' : 'dish'}</Text>
                 </Pressable>
                 <TextInput
                   placeholder="Note for staff, optional"
@@ -1545,6 +1556,25 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '800',
       marginBottom: 8,
+    },
+    rotCollapseRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+      gap: 10,
+    },
+    rotCollapseSummary: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    rotCollapseToggle: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
     },
     rotToggle: {
       flexDirection: 'row',
