@@ -1461,6 +1461,10 @@ export function NutritionScreen({
                   <Pressable style={styles.primaryBtn} onPress={commitProduct}>
                     <Text style={styles.primaryBtnText}>{editingCustomFoodId ? 'Save changes' : editingEntryId ? 'Update' : '✓ Add'}</Text>
                   </Pressable>
+                ) : selectedPreset ? (
+                  <Pressable style={[styles.primaryBtn, cardAddedFlash && styles.modalDoneBtn]} onPress={quickAddSelected}>
+                    <Text style={styles.primaryBtnText}>{cardAddedFlash ? 'Added ✓' : '✓ Add'}</Text>
+                  </Pressable>
                 ) : null}
               </View>
             </View>
@@ -1786,8 +1790,11 @@ export function NutritionScreen({
                     <Pressable
                       style={[styles.cardAddPill, cardAddedFlash && styles.cardAddPillActive]}
                       onPress={quickAddSelected}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${selectedPreset.name}`}
                     >
-                      {cardAddedFlash ? <Text style={styles.cardAddPillText}>✓</Text> : null}
+                      <Text style={[styles.cardAddPillText, !cardAddedFlash && styles.cardAddPillPlus]}>{cardAddedFlash ? '✓' : '+'}</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -3341,6 +3348,9 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 22,
       fontWeight: '900',
       lineHeight: 24,
+    },
+    cardAddPillPlus: {
+      color: colors.primary,
     },
     productInfoTitle: {
       color: colors.text,
