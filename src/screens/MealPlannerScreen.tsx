@@ -243,6 +243,7 @@ export function MealPlannerScreen({
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
   const [rotationExpanded, setRotationExpanded] = useState(false);
+  const [menuExpanded, setMenuExpanded] = useState(false);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
   const toggleDayCollapsed = (key: string) =>
     setCollapsedDays((prev) => {
@@ -251,8 +252,6 @@ export function MealPlannerScreen({
       else next.add(key);
       return next;
     });
-  const allCollapsed = DAYS.every((d) => collapsedDays.has(d.key));
-  const toggleAllDays = () => setCollapsedDays(allCollapsed ? new Set() : new Set(DAYS.map((d) => d.key)));
   const [pickerForChildId, setPickerForChildId] = useState<string | null>(null);
   const childNameById = (id?: string) => (id ? children.find((c) => c.id === id)?.name || '' : '');
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
@@ -802,12 +801,13 @@ export function MealPlannerScreen({
         </SectionCard>
 
         <View style={styles.weekMenuSection}>
-          <View style={styles.weekMenuHeader}>
+          <Pressable style={styles.weekMenuBar} onPress={() => setMenuExpanded((v) => !v)}>
+            <Text style={styles.dayCollapseCaret}>{menuExpanded ? '▾' : '▸'}</Text>
             <Text style={styles.weekMenuTitle}>{activeProfile.label} Weekly Menu</Text>
-            <Pressable style={styles.menuHeadBtn} onPress={toggleAllDays}>
-              <Text style={styles.menuHeadBtnText}>{allCollapsed ? 'Expand all' : 'Collapse all'}</Text>
-            </Pressable>
-          </View>
+            <Text style={styles.weekMenuBarHint}>{menuExpanded ? 'Hide' : 'Show week'}</Text>
+          </Pressable>
+          {menuExpanded ? (
+          <>
           <View style={styles.menuActionsRow}>
             <Pressable
               style={[styles.menuActionBtn, styles.menuActionBtnSend, exportMenu === 'send' && styles.staffExportBtnActive]}
@@ -953,6 +953,8 @@ export function MealPlannerScreen({
                 ))}
             </View>
           )}
+          </>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -2093,15 +2095,19 @@ const createStyles = (colors: ThemeColors) =>
       padding: 12,
       gap: 10,
     },
-    menuHeadBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 999,
+    weekMenuBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: colors.border,
+      backgroundColor: colors.surface,
     },
-    menuHeadBtnText: {
-      color: colors.text,
+    weekMenuBarHint: {
+      color: colors.primary,
       fontSize: 13,
       fontWeight: '800',
     },
