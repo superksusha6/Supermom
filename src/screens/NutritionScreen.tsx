@@ -110,6 +110,9 @@ export function NutritionScreen({
   const [sessionAddedName, setSessionAddedName] = useState('');
   const [quickAddedIds, setQuickAddedIds] = useState<string[]>([]);
   const [cardAddedFlash, setCardAddedFlash] = useState(false);
+  // Anti-double-tap debounce kept OFF the visual state, so a stuck flash can never
+  // block the Add button. Always reset in the flash timeout.
+  const quickAddBusyRef = useRef(false);
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -641,7 +644,8 @@ export function NutritionScreen({
   }
 
   function quickAddSelected() {
-    if (!effectiveLoggingPreset || !activeMealType || cardAddedFlash) return;
+    if (!effectiveLoggingPreset || !activeMealType || quickAddBusyRef.current) return;
+    quickAddBusyRef.current = true;
     const logPreset = effectiveLoggingPreset;
     const baseMode = logPreset.baseMode || '100g';
     const grams = draftGrams || (baseMode === 'serving' ? '1' : '100');
@@ -684,6 +688,7 @@ export function NutritionScreen({
     // Fill the circle with a check briefly, then return to search for the next product.
     setCardAddedFlash(true);
     setTimeout(() => {
+      quickAddBusyRef.current = false;
       setCardAddedFlash(false);
       setSelectedPreset(null);
       setLoggingUnit('base');
@@ -737,6 +742,8 @@ export function NutritionScreen({
   }
 
   function openMealAdder(mealKey: NutritionMealType) {
+    quickAddBusyRef.current = false;
+    setCardAddedFlash(false);
     setEditingEntryId(null);
     setAddTab('recent');
     setSessionAddedCount(0);
