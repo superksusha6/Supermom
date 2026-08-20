@@ -243,6 +243,16 @@ export function MealPlannerScreen({
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
   const [rotationExpanded, setRotationExpanded] = useState(false);
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
+  const toggleDayCollapsed = (key: string) =>
+    setCollapsedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const allCollapsed = DAYS.every((d) => collapsedDays.has(d.key));
+  const toggleAllDays = () => setCollapsedDays(allCollapsed ? new Set() : new Set(DAYS.map((d) => d.key)));
   const [pickerForChildId, setPickerForChildId] = useState<string | null>(null);
   const childNameById = (id?: string) => (id ? children.find((c) => c.id === id)?.name || '' : '');
   const [pickerMode, setPickerMode] = useState<'recipe' | 'simple'>('simple');
@@ -698,39 +708,6 @@ export function MealPlannerScreen({
               <Text style={styles.addProfileBtnText}>Add</Text>
             </Pressable>
           </View>
-
-          <View style={[styles.staffExportCard, isMobile && styles.staffExportCardMobile]}>
-            <View style={[styles.staffExportActions, isMobile && styles.staffExportActionsMobile]}>
-              <Pressable
-                style={[styles.staffExportBtn, styles.staffExportBtnSend, exportMenu === 'send' && styles.staffExportBtnActive, isMobile && styles.staffExportBtnMobile]}
-                onPress={() => setExportMenu((prev) => (prev === 'send' ? null : 'send'))}
-              >
-                <Text style={[styles.staffExportBtnText, styles.staffExportBtnTextSend]}>Send  ▾</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.staffExportBtn, exportMenu === 'save' && styles.staffExportBtnActive, isMobile && styles.staffExportBtnMobile]}
-                onPress={() => setExportMenu((prev) => (prev === 'save' ? null : 'save'))}
-              >
-                <Text style={styles.staffExportBtnText}>Save  ▾</Text>
-              </Pressable>
-            </View>
-            {exportMenu ? (
-              <View style={styles.exportMenu}>
-                {(exportMenu === 'send' ? sendOptions : saveOptions).map((option) => (
-                  <Pressable
-                    key={option.key}
-                    style={styles.exportMenuItem}
-                    onPress={() => {
-                      option.action();
-                      setExportMenu(null);
-                    }}
-                  >
-                    <Text style={styles.exportMenuItemText}>{option.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
         </SectionCard>
 
         <SectionCard title="Weekly rotation">
@@ -827,24 +804,55 @@ export function MealPlannerScreen({
         <View style={styles.weekMenuSection}>
           <View style={styles.weekMenuHeader}>
             <Text style={styles.weekMenuTitle}>{activeProfile.label} Weekly Menu</Text>
+            <Pressable style={styles.menuHeadBtn} onPress={toggleAllDays}>
+              <Text style={styles.menuHeadBtnText}>{allCollapsed ? 'Expand all' : 'Collapse all'}</Text>
+            </Pressable>
           </View>
+          <View style={styles.menuActionsRow}>
+            <Pressable
+              style={[styles.menuActionBtn, styles.menuActionBtnSend, exportMenu === 'send' && styles.staffExportBtnActive]}
+              onPress={() => setExportMenu((prev) => (prev === 'send' ? null : 'send'))}
+            >
+              <Text style={styles.menuActionBtnSendText}>Send ▾</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.menuActionBtn, exportMenu === 'save' && styles.staffExportBtnActive]}
+              onPress={() => setExportMenu((prev) => (prev === 'save' ? null : 'save'))}
+            >
+              <Text style={styles.menuActionBtnText}>Print / Save ▾</Text>
+            </Pressable>
+          </View>
+          {exportMenu ? (
+            <View style={styles.exportMenu}>
+              {(exportMenu === 'send' ? sendOptions : saveOptions).map((option) => (
+                <Pressable key={option.key} style={styles.exportMenuItem} onPress={() => { option.action(); setExportMenu(null); }}>
+                  <Text style={styles.exportMenuItemText}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           {isMobile ? (
             <View style={styles.mobileWeekList}>
               {DAYS.map((day) => {
                 const editing = editingDayKey === day.key;
+                const collapsed = collapsedDays.has(day.key);
                 return (
                 <View key={day.key} style={styles.mobileDayCard}>
                   <View style={styles.mobileDayHeader}>
-                    <Text style={styles.mobileDayTitle}>{day.label}</Text>
+                    <Pressable style={styles.dayTitleBtn} hitSlop={6} onPress={() => toggleDayCollapsed(day.key)}>
+                      <Text style={styles.dayCollapseCaret}>{collapsed ? '▸' : '▾'}</Text>
+                      <Text style={styles.mobileDayTitle}>{day.label}</Text>
+                    </Pressable>
                     <Pressable
                       style={[styles.dayEditBtn, editing && styles.dayEditBtnActive]}
                       hitSlop={8}
-                      onPress={() => setEditingDayKey((prev) => (prev === day.key ? null : day.key))}
+                      onPress={() => { setEditingDayKey((prev) => (prev === day.key ? null : day.key)); setCollapsedDays((prev) => { const n = new Set(prev); n.delete(day.key); return n; }); }}
                       accessibilityLabel={editing ? `Done editing ${day.label}` : `Edit ${day.label}`}
                     >
                       <Text style={[styles.dayEditBtnText, editing && styles.dayEditBtnTextActive]}>{editing ? 'Done' : '⋯'}</Text>
                     </Pressable>
                   </View>
+                  {collapsed ? null : (
                   <View style={styles.mobileDaySlots}>
                     {(() => {
                       const dayRows = orderedDayEntries(day.key);
@@ -887,6 +895,7 @@ export function MealPlannerScreen({
                       </Pressable>
                     ) : null}
                   </View>
+                  )}
                 </View>
                 );
               })}
@@ -1919,10 +1928,16 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: 12,
     },
     weekMenuHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
       marginBottom: 10,
       paddingHorizontal: 2,
     },
     weekMenuTitle: {
+      flex: 1,
+      minWidth: 0,
       color: colors.text,
       fontSize: 16,
       fontWeight: '700',
@@ -2077,6 +2092,58 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       padding: 12,
       gap: 10,
+    },
+    menuHeadBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    menuHeadBtnText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    menuActionsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 12,
+    },
+    menuActionBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+    },
+    menuActionBtnSend: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    menuActionBtnSendText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    menuActionBtnText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    dayTitleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+      minWidth: 0,
+    },
+    dayCollapseCaret: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: '900',
     },
     mobileDayHeader: {
       flexDirection: 'row',
