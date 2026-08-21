@@ -136,6 +136,7 @@ export function ChildrenScreen({
   const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
   const [childMenuOpen, setChildMenuOpen] = useState(false);
+  const [listMenuChildId, setListMenuChildId] = useState<string | null>(null);
   const [addChoreOpen, setAddChoreOpen] = useState(false);
   const [choreTitle, setChoreTitle] = useState('');
   const [activityName, setActivityName] = useState('');
@@ -324,7 +325,17 @@ export function ChildrenScreen({
                 style={styles.childCard}
                 onPress={() => setOpenChildId(item.id)}
               >
-                {renderAvatar(item, 56)}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Options for ${item.name}`}
+                  hitSlop={6}
+                  onPress={() => setListMenuChildId(item.id)}
+                >
+                  {renderAvatar(item, 56)}
+                  <View style={styles.childCardAvatarBadge}>
+                    <Text style={styles.childCardAvatarBadgeText}>⋯</Text>
+                  </View>
+                </Pressable>
                 <View style={styles.childCardCopy}>
                   <Text style={styles.childCardName}>{item.name}{item.age ? ` · ${item.age}` : ''}</Text>
                   <Text style={[styles.childCardPlan, !plans.length && styles.childCardPlanEmpty]} numberOfLines={1}>
@@ -338,6 +349,27 @@ export function ChildrenScreen({
         )}
       </SectionCard>
       {cropModal}
+      <Modal visible={!!listMenuChildId} transparent animationType="fade" onRequestClose={() => setListMenuChildId(null)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setListMenuChildId(null)}>
+          <Pressable style={styles.menuCard} onPress={() => undefined}>
+            <Pressable style={styles.menuRow} onPress={() => { const id = listMenuChildId; setListMenuChildId(null); if (id) onEditChild(id); }}>
+              <Text style={styles.menuRowText}>Edit child</Text>
+            </Pressable>
+            {onInviteChild ? (
+              <>
+                <View style={styles.menuDivider} />
+                <Pressable style={styles.menuRow} onPress={() => { const id = listMenuChildId; setListMenuChildId(null); if (id) onInviteChild(id); }}>
+                  <Text style={styles.menuRowText}>Invite to their own account</Text>
+                </Pressable>
+              </>
+            ) : null}
+            <View style={styles.menuDivider} />
+            <Pressable style={styles.menuRow} onPress={() => { const id = listMenuChildId; setListMenuChildId(null); if (id) onDeleteChild(id); }}>
+              <Text style={[styles.menuRowText, styles.menuRowDanger]}>Delete child &amp; calendar</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
       </>
     );
   }
@@ -1136,6 +1168,26 @@ const createStyles = (colors: ThemeColors) =>
     paddingVertical: 12,
     borderTopWidth: 1,
     borderColor: colors.border,
+  },
+  childCardAvatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 2,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childCardAvatarBadgeText: {
+    color: colors.subtext,
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 14,
   },
   childCardCopy: {
     flex: 1,
