@@ -8085,7 +8085,7 @@ function AppShell() {
   })();
   const focusPlanner = isStaffView ? null : (
     <View style={styles.plannerCard}>
-      <View style={styles.plannerHead}>
+      <Pressable style={styles.plannerHead} onPress={() => setHomeTab('calendar')} accessibilityRole="button" accessibilityLabel="Open calendar">
         <Text style={styles.plannerTitle}>Today</Text>
         {!isStaffView ? (
           <View style={[styles.trackChip, needsYouCount === 0 ? styles.trackChipOk : styles.trackChipWarn]}>
@@ -8094,7 +8094,7 @@ function AppShell() {
             </Text>
           </View>
         ) : null}
-      </View>
+      </Pressable>
       {cycleDay && !isStaffView ? (
         <Pressable
           accessibilityRole="button"
@@ -8106,28 +8106,30 @@ function AppShell() {
           <Text style={styles.cycleChipText}>Cycle · Day {cycleDay}</Text>
         </Pressable>
       ) : null}
-      <View style={styles.nowLine}>
+      <Pressable style={styles.nowLine} onPress={() => setHomeTab('calendar')} accessibilityRole="button" accessibilityLabel="Open calendar">
         <Text style={styles.nowText}>now · {nowLabel}</Text>
         <View style={styles.nowRule} />
-      </View>
+      </Pressable>
       {todayAgenda.length > 0 ? (
         todayAgenda.map((item, index) => (
           <View key={item.id}>
             {index > 0 ? <View style={styles.agendaLine} /> : null}
             <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted, item.isNext && styles.agendaRowNext]}>
-              <Text style={[styles.agendaTime, item.isNext && styles.agendaTimeNext]}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
-              <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}`}
-                style={styles.agendaCopy}
-                onPress={() => openDaySheet(todayDateKey)}
+                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}. Open calendar.`}
+                style={styles.agendaMain}
+                onPress={() => setHomeTab('calendar')}
               >
-                <View style={styles.agendaTitleRow}>
-                  <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
-                  {item.isNext ? <Text style={styles.agendaNextChip}>NEXT</Text> : null}
+                <Text style={[styles.agendaTime, item.isNext && styles.agendaTimeNext]}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
+                <View style={[styles.agendaDot, { backgroundColor: item.color }]} />
+                <View style={styles.agendaCopy}>
+                  <View style={styles.agendaTitleRow}>
+                    <Text style={[styles.agendaTitle, item.done && styles.agendaTitleDone]} numberOfLines={1}>{item.title}</Text>
+                    {item.isNext ? <Text style={styles.agendaNextChip}>NEXT</Text> : null}
+                  </View>
+                  <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
                 </View>
-                <Text style={styles.agendaWho} numberOfLines={1}>{item.who}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="checkbox"
@@ -8143,7 +8145,7 @@ function AppShell() {
           </View>
         ))
       ) : (
-        <Pressable style={styles.agendaEmpty} onPress={() => openDaySheet(todayDateKey)}>
+        <Pressable style={styles.agendaEmpty} onPress={() => setHomeTab('calendar')}>
           <Text style={styles.agendaEmptyText}>No events scheduled today.</Text>
           {nextUpcomingEvent ? (
             <Text style={styles.agendaEmptySub}>Next up: {nextUpcomingEvent.title}</Text>
@@ -17354,6 +17356,13 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     gap: 12,
     paddingHorizontal: 10,
     paddingVertical: 11,
+  },
+  agendaMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   agendaRowMuted: {
     opacity: 0.5,
