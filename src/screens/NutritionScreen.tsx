@@ -1396,6 +1396,9 @@ export function NutritionScreen({
                   <View style={styles.mealCaloriesCol}>
                     <Text style={styles.mealCaloriesValue}>{section.totals.calories}</Text>
                     <Text style={styles.mealCaloriesLabel}>kcal</Text>
+                    {hasEntries ? (
+                      <Text style={styles.mealMacroLine} numberOfLines={1}>{`P ${Math.round(section.totals.protein)} · F ${Math.round(section.totals.fat)} · C ${Math.round(section.totals.carbs)}`}</Text>
+                    ) : null}
                   </View>
                 </Pressable>
                 <Pressable style={styles.addMealBtn} onPress={() => openMealAdder(section.key)}>
@@ -1422,12 +1425,6 @@ export function NutritionScreen({
                       </Pressable>
                     </View>
                   ))}
-                  <View style={styles.mealTotalRow}>
-                    <Text style={styles.mealTotalLabel}>Meal total</Text>
-                    <Text style={styles.mealTotalMeta}>
-                      {`${Math.round(section.totals.calories)} kcal · P ${Math.round(section.totals.protein)} · F ${Math.round(section.totals.fat)} · C ${Math.round(section.totals.carbs)}`}
-                    </Text>
-                  </View>
                   <Pressable style={styles.mealAddMoreBtn} onPress={() => openMealAdder(section.key)}>
                     <Text style={styles.mealAddMoreText}>+ Add food</Text>
                   </Pressable>
@@ -2296,6 +2293,12 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     mealCaloriesLabel: {
       color: colors.subtext,
       fontSize: 10,
+      fontWeight: '700',
+    },
+    mealMacroLine: {
+      marginTop: 2,
+      color: colors.subtext,
+      fontSize: 10.5,
       fontWeight: '700',
     },
     weekDayCaloriesActive: {
