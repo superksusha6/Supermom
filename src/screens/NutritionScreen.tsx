@@ -1422,6 +1422,12 @@ export function NutritionScreen({
                       </Pressable>
                     </View>
                   ))}
+                  <View style={styles.mealTotalRow}>
+                    <Text style={styles.mealTotalLabel}>Meal total</Text>
+                    <Text style={styles.mealTotalMeta}>
+                      {`${Math.round(section.totals.calories)} kcal · P ${Math.round(section.totals.protein)} · F ${Math.round(section.totals.fat)} · C ${Math.round(section.totals.carbs)}`}
+                    </Text>
+                  </View>
                   <Pressable style={styles.mealAddMoreBtn} onPress={() => openMealAdder(section.key)}>
                     <Text style={styles.mealAddMoreText}>+ Add food</Text>
                   </Pressable>
@@ -2614,6 +2620,30 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
       fontSize: 18,
       fontWeight: '800',
       lineHeight: 20,
+    },
+    mealTotalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      marginTop: 6,
+      marginBottom: 4,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    mealTotalLabel: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '900',
+    },
+    mealTotalMeta: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: 'right',
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '700',
     },
     mealAddMoreBtn: {
       marginTop: 2,
