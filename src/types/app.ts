@@ -242,6 +242,7 @@ export type CalendarEvent = {
   owner: Role;
   ownerName: string;
   ownerChildProfileId?: string;
+  sourceProfileId?: string;
   date: string;
   time: string;
   endTime?: string;

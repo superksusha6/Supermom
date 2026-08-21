@@ -917,7 +917,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
   const client = requireClient();
   const { data, error } = await client
     .from('events')
-    .select('id, title, notes, starts_at, owner_user_id, owner_child_profile_id')
+    .select('id, title, notes, starts_at, owner_user_id, owner_child_profile_id, source_profile_id')
     .eq('family_id', familyId)
     .order('starts_at', { ascending: true });
 
@@ -936,6 +936,7 @@ export async function listCalendarEvents(familyId: string): Promise<CalendarEven
       owner,
       ownerName: meta.ownerName || (owner === 'child' ? 'Child' : owner === 'staff' ? 'Staff' : 'Mother'),
       ownerChildProfileId: row.owner_child_profile_id || undefined,
+      sourceProfileId: row.source_profile_id || undefined,
       date,
       time,
       endTime: meta.endTime || undefined,

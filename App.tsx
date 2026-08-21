@@ -978,6 +978,28 @@ function AppShell() {
       return true;
     }
   });
+  // Children the owner chose to hide from THEIR OWN calendar/today view (per-device;
+  // doesn't affect the child, co-parent or anyone else — purely declutters my view).
+  const [hiddenChildIds, setHiddenChildIds] = useState<Set<string>>(() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.hiddenChildCalendars.v1');
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleHiddenChild = (childId: string) =>
+    setHiddenChildIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(childId)) next.delete(childId);
+      else next.add(childId);
+      try {
+        globalThis.localStorage?.setItem('smartmom.hiddenChildCalendars.v1', JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   // Event ids the child has ticked done today (their day-plan check-offs).
   const [childEventChecks, setChildEventChecks] = useState<Set<string>>(new Set());
   // The child's personal vocabulary deck + which language pair they're studying.
@@ -2370,13 +2392,27 @@ function AppShell() {
       .forEach((r) => items.push({ label: `Approve “${r.itemName}”`, go: () => setScreen('family') }));
     return items;
   }, [chores, homeIssues, purchaseRequests]);
+  // The owner's calendar/today view with hidden children removed. Child/staff sessions
+  // and an empty hide-set pass through untouched; only my own view is decluttered.
+  const visibleEvents = useMemo(() => {
+    if (isChildView || isStaffView || hiddenChildIds.size === 0) return events;
+    const hiddenNames = new Set(
+      children.filter((c) => hiddenChildIds.has(c.id)).map((c) => (c.name || '').trim().toLowerCase()),
+    );
+    return events.filter((e) => {
+      if (e.ownerChildProfileId && hiddenChildIds.has(e.ownerChildProfileId)) return false;
+      if (e.sourceProfileId && hiddenChildIds.has(e.sourceProfileId)) return false;
+      if (e.owner === 'child' && hiddenNames.has((e.ownerName || '').trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [events, hiddenChildIds, isChildView, isStaffView, children]);
   const todayAgenda = useMemo(() => {
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     // Collapse mirrored duplicates (same time + same normalized title). Prefer
     // the child-owned copy so "who" shows the child, not the parent mirror.
     const byKey = new Map<string, (typeof events)[number]>();
-    events
+    visibleEvents
       .filter((e) => e.date === todayDateKey)
       .forEach((e) => {
         const key = `${dashTimeToMinutes(e.time)}|${normalizeEventKey(e.title)}`;
@@ -2400,10 +2436,10 @@ function AppShell() {
       .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || a.mins - b.mins);
     const nextIdx = sorted.findIndex((x) => !x.done && !x.past);
     return sorted.map((x, i) => ({ ...x, isNext: i === nextIdx }));
-  }, [events, todayDateKey, colors.primary, doneEventIds]);
+  }, [visibleEvents, todayDateKey, colors.primary, doneEventIds]);
   const upcomingEvents = useMemo(() => {
     const seen = new Set<string>();
-    return events
+    return visibleEvents
       .filter((e) => e.date > todayDateKey)
       .sort((a, b) => a.date.localeCompare(b.date) || dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
       .filter((e) => {
@@ -2414,7 +2450,7 @@ function AppShell() {
       })
       .slice(0, 4)
       .map((e) => ({ id: e.id, title: e.title, who: e.ownerName || 'Family', color: e.color || colors.primary, date: e.date }));
-  }, [events, todayDateKey, colors.primary]);
+  }, [visibleEvents, todayDateKey, colors.primary]);
   // Which menu is in effect this week (rotation), or null when rotation is off.
   const rotationWeekMenuKey = useMemo(() => resolveWeekMenuKey(mealRotation, todayDateKey), [mealRotation, todayDateKey]);
   // When rotating, today's meals come strictly from this week's menu; otherwise keep the
@@ -2574,17 +2610,17 @@ function AppShell() {
     }).catch((error) => setTasksError(error instanceof Error ? error.message : 'Could not save the activity.'));
   }
 
-  const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events]);
+  const eventDates = useMemo(() => new Set(visibleEvents.map((e) => e.date)), [visibleEvents]);
   const eventColorsByDate = useMemo(() => {
     const map = new Map<string, string[]>();
-    events.forEach((e) => {
+    visibleEvents.forEach((e) => {
       if (!e.date) return;
       const existing = map.get(e.date) || [];
       existing.push(e.color || colors.primary);
       map.set(e.date, existing);
     });
     return map;
-  }, [events, colors.primary]);
+  }, [visibleEvents, colors.primary]);
   const toggleEventDone = (id: string) => {
     setDoneEventIds((prev) => {
       const next = new Set(prev);
@@ -4443,7 +4479,7 @@ function AppShell() {
         seriesId?: string;
       }[];
     const seen = new Set<string>();
-    return events
+    return visibleEvents
       .filter((e) => e.date === daySheetDate)
       .sort((a, b) => dashTimeToMinutes(a.time) - dashTimeToMinutes(b.time))
       .filter((e) => {
@@ -4464,7 +4500,7 @@ function AppShell() {
         ownerChildProfileId: e.ownerChildProfileId,
         seriesId: e.seriesId,
       }));
-  }, [events, daySheetDate, colors.primary]);
+  }, [visibleEvents, daySheetDate, colors.primary]);
 
   // Group the day's events: the parent's own plans first, then each child's, then staff.
   const daySheetGroups = useMemo(() => {
@@ -4572,6 +4608,36 @@ function AppShell() {
     setChildSetupOpen(true);
     setStaffSetupOpen(false);
     setTasksError(null);
+  }
+
+  // Send a child's weekly schedule as a plain-text message (for the nanny / co-parent).
+  // One-time forwardable text — does NOT grant calendar access.
+  function sendChildSchedule(childId: string | null) {
+    const child = children.find((c) => c.id === childId);
+    if (!child) return;
+    const order: WeekDayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const label: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+    const lines: string[] = [`${child.name} — weekly schedule`, ''];
+    order.forEach((dk) => {
+      const items = (child.activities || [])
+        .filter((a) => (a.weekDays || []).includes(dk))
+        .map((a) => {
+          const start = a.dayTimes?.[dk] || a.time || '';
+          const end = a.dayEndTimes?.[dk] || (a.time ? a.endTime : '');
+          return `${start}${end ? `–${end}` : ''} ${a.name}`.trim();
+        })
+        .filter(Boolean);
+      if (items.length) lines.push(`${label[dk]}: ${items.join(', ')}`);
+    });
+    if (lines.length <= 2) lines.push('No activities scheduled yet.');
+    const text = lines.join('\n');
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const nav = typeof navigator !== 'undefined' ? (navigator as unknown as { share?: (d: { title?: string; text?: string }) => Promise<void> }) : undefined;
+    if (nav?.share) {
+      nav.share({ title: `${child.name} schedule`, text }).catch(() => Linking.openURL(waUrl));
+    } else {
+      Linking.openURL(waUrl);
+    }
   }
 
   function openChildActivitiesEditor(childId: string) {
@@ -12173,6 +12239,22 @@ function AppShell() {
               </Pressable>
             </View>
 
+            <Pressable
+              style={styles.calHideRow}
+              onPress={() => editingChildId && toggleHiddenChild(editingChildId)}
+            >
+              <View style={[styles.calHideCheck, !(editingChildId && hiddenChildIds.has(editingChildId)) && styles.calHideCheckOn]}>
+                {!(editingChildId && hiddenChildIds.has(editingChildId)) ? <Text style={styles.calHideCheckMark}>✓</Text> : null}
+              </View>
+              <View style={styles.calHideCopy}>
+                <Text style={styles.calHideLabel}>Show {children.find((c) => c.id === editingChildId)?.name || 'their'} events in my calendar</Text>
+                <Text style={styles.calHideHint}>Only changes your view — they and your co-parent still see everything. Nothing is deleted.</Text>
+              </View>
+            </Pressable>
+            <Pressable style={styles.calSendBtn} onPress={() => sendChildSchedule(editingChildId)}>
+              <Text style={styles.calSendBtnText}>Send this week&apos;s schedule…</Text>
+            </Pressable>
+
             <View style={styles.authActions}>
               <Pressable style={styles.authBtn} onPress={saveEditingChildActivities}>
                 <Text style={styles.authBtnText}>Save</Text>
@@ -15253,6 +15335,65 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.surface,
+  },
+  calHideRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.glassSoft,
+  },
+  calHideCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calHideCheckOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  calHideCheckMark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  calHideCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  calHideLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  calHideHint: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  calSendBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  calSendBtnText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
   },
   roleChipActive: {
     borderColor: neonBloomActiveBorder,
