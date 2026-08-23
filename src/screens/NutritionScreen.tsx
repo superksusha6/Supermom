@@ -1819,6 +1819,12 @@ export function NutritionScreen({
                 </View>
               ) : null}
 
+              {editingEntryId && selectedPreset?.isCustom ? (
+                <Pressable style={styles.editFoodLink} onPress={() => editCustomFood(selectedPreset)}>
+                  <Text style={styles.editFoodLinkText}>✎ Fix this product&apos;s calories &amp; macros</Text>
+                </Pressable>
+              ) : null}
+
               <View style={styles.modalSection}>
                 {selectedPreset || customFoodMode ? (
                   <>
@@ -3407,6 +3413,20 @@ const createStyles = (colors: ThemeColors, isMobile = false) =>
     },
     cardAddPillPlus: {
       color: colors.primary,
+    },
+    editFoodLink: {
+      marginTop: 10,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    editFoodLinkText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '800',
     },
     productInfoTitle: {
       color: colors.text,
