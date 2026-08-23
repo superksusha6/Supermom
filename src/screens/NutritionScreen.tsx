@@ -445,18 +445,24 @@ export function NutritionScreen({
     if (!customFoodMode || !draftMealName.trim()) return null;
     // When only per-serving was filled, preview/log that serving directly.
     if (customPreviewServing) {
+      const p = Number(draftServingProtein.replace(',', '.')) || 0;
+      const f = Number(draftServingFat.replace(',', '.')) || 0;
+      const c = Number(draftServingCarbs.replace(',', '.')) || 0;
       return {
         id: 'custom-preview',
         name: draftMealName.trim(),
         baseAmount: 'per 1 serving',
         baseMode: 'serving',
         baseQuantity: 1,
-        caloriesPer100g: Number(draftServingCalories.replace(',', '.')) || 0,
-        proteinPer100g: Number(draftServingProtein.replace(',', '.')) || 0,
-        fatPer100g: Number(draftServingFat.replace(',', '.')) || 0,
-        carbsPer100g: Number(draftServingCarbs.replace(',', '.')) || 0,
+        caloriesPer100g: (Number(draftServingCalories.replace(',', '.')) || 0) || estimateKcalFromMacros(p, f, c),
+        proteinPer100g: p,
+        fatPer100g: f,
+        carbsPer100g: c,
       };
     }
+    const p = Number(draftProtein.replace(',', '.')) || 0;
+    const f = Number(draftFat.replace(',', '.')) || 0;
+    const c = Number(draftCarbs.replace(',', '.')) || 0;
     return {
       id: 'custom-preview',
       name: draftMealName.trim(),
@@ -466,10 +472,10 @@ export function NutritionScreen({
           : `per 100 ${customServingType === '100ml' ? 'ml' : 'g'}`,
       baseMode: customServingType,
       baseQuantity: customServingType === 'serving' ? 1 : 100,
-      caloriesPer100g: Number(draftCalories.replace(',', '.')) || 0,
-      proteinPer100g: Number(draftProtein.replace(',', '.')) || 0,
-      fatPer100g: Number(draftFat.replace(',', '.')) || 0,
-      carbsPer100g: Number(draftCarbs.replace(',', '.')) || 0,
+      caloriesPer100g: (Number(draftCalories.replace(',', '.')) || 0) || estimateKcalFromMacros(p, f, c),
+      proteinPer100g: p,
+      fatPer100g: f,
+      carbsPer100g: c,
     };
   }, [customFoodMode, customServingType, customPreviewServing, draftCalories, draftCarbs, draftFat, draftMealName, draftProtein, draftServingCalories, draftServingProtein, draftServingFat, draftServingCarbs]);
   const customFoodPreviewValues = useMemo(() => {
@@ -953,7 +959,7 @@ export function NutritionScreen({
         const servC = Number(draftServingCarbs.replace(',', '.')) || 0;
         const hasServing = servCal > 0 || servP > 0 || servF > 0 || servC > 0;
         const servingMacros = hasServing
-          ? { calories: servCal, protein: servP, fat: servF, carbs: servC }
+          ? { calories: servCal || estimateKcalFromMacros(servP, servF, servC), protein: servP, fat: servF, carbs: servC }
           : undefined;
         const servingWeightInput = Number(customServingGrams) || 0;
         let foodBaseMode: '100g' | '100ml' | 'serving';
@@ -964,20 +970,21 @@ export function NutritionScreen({
         if (hasPer100) {
           // 'serving' base: the main fields hold per-serving values, used as-is.
           foodBaseMode = customServingType;
-          baseCal = per100Cal;
+          // If calories were left blank, estimate from macros so it never saves as 0 kcal.
+          baseCal = per100Cal || estimateKcalFromMacros(per100P, per100F, per100C);
           baseP = per100P;
           baseF = per100F;
           baseC = per100C;
         } else if (hasServing && servingWeightInput > 0) {
           const k = 100 / servingWeightInput;
           foodBaseMode = '100g';
-          baseCal = Math.round(servCal * k);
+          baseCal = Math.round((servCal || estimateKcalFromMacros(servP, servF, servC)) * k);
           baseP = Math.round(servP * k * 10) / 10;
           baseF = Math.round(servF * k * 10) / 10;
           baseC = Math.round(servC * k * 10) / 10;
         } else {
           foodBaseMode = 'serving';
-          baseCal = servCal;
+          baseCal = servCal || estimateKcalFromMacros(servP, servF, servC);
           baseP = servP;
           baseF = servF;
           baseC = servC;
@@ -2082,6 +2089,12 @@ function presetFromEntrySource(source: NutritionEntrySource, idSeed: string): Nu
     fatPer100g: source.fatPer100g,
     carbsPer100g: source.carbsPer100g,
   };
+}
+
+// Estimate calories from macros (4·protein + 9·fat + 4·carbs) — used as a fallback when
+// the calories field is left blank so a custom food never saves as 0 kcal.
+function estimateKcalFromMacros(protein: number, fat: number, carbs: number) {
+  return Math.round(4 * protein + 9 * fat + 4 * carbs);
 }
 
 function formatNutritionEntryName({
