@@ -1145,7 +1145,23 @@ function AppShell() {
   const [nutritionPace, setNutritionPace] = useState<NutritionPace>('flexible');
   const [physiqueGoal, setPhysiqueGoal] = useState<PhysiqueGoal>(() => loadLocalPhysiqueGoal());
   const [calorieOverride, setCalorieOverride] = useState('');
-  const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
+  // Cache the diary locally so a page refresh shows the last-known totals instantly
+  // (no 0 → value flicker) while the server snapshot loads and confirms.
+  const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>(() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.nutritionEntries.v1');
+      return raw ? (JSON.parse(raw) as NutritionFoodEntry[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    try {
+      globalThis.localStorage?.setItem('smartmom.nutritionEntries.v1', JSON.stringify(nutritionEntries));
+    } catch {
+      /* ignore */
+    }
+  }, [nutritionEntries]);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
@@ -1611,7 +1627,14 @@ function AppShell() {
   const latestChildrenRef = useRef<ChildProfile[]>(loadLocalChildren());
   const latestHabitsRef = useRef<HabitEntry[]>(loadLocalHabits());
   const latestFridgeItemsRef = useRef<FridgeItem[]>([]);
-  const nutritionEntriesRef = useRef<NutritionFoodEntry[]>([]);
+  const nutritionEntriesRef = useRef<NutritionFoodEntry[]>((() => {
+    try {
+      const raw = globalThis.localStorage?.getItem('smartmom.nutritionEntries.v1');
+      return raw ? (JSON.parse(raw) as NutritionFoodEntry[]) : [];
+    } catch {
+      return [];
+    }
+  })());
   const customNutritionFoodsRef = useRef<CustomNutritionFood[]>([]);
   const mealPlanProfilesRef = useRef<MealPlanProfilePreference[]>(DEFAULT_MEAL_PLAN_PROFILES);
   const activeMealPlanProfileKeyRef = useRef('family');
@@ -2832,7 +2855,8 @@ function AppShell() {
     try {
       const rows = await listNutritionEntries(current);
       nutritionEntriesRef.current = rows;
-      setNutritionEntries(rows);
+      // Avoid a redundant re-render (and total flicker) when nothing actually changed.
+      setNutritionEntries((prev) => (JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows));
     } catch {
       // keep current
     }
