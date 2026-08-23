@@ -948,12 +948,12 @@ export function NutritionScreen({
     if (customFoodMode) {
       if (!photoEstimateMode) {
         // Two independent value sets: per-100 (for grams) and per-serving (used as-is).
-        const per100Cal = Number(draftCalories) || 0;
+        const per100Cal = Number(draftCalories.replace(',', '.')) || 0;
         const per100P = Number(draftProtein.replace(',', '.')) || 0;
         const per100F = Number(draftFat.replace(',', '.')) || 0;
         const per100C = Number(draftCarbs.replace(',', '.')) || 0;
         const hasPer100 = per100Cal > 0 || per100P > 0 || per100F > 0 || per100C > 0;
-        const servCal = Number(draftServingCalories) || 0;
+        const servCal = Number(draftServingCalories.replace(',', '.')) || 0;
         const servP = Number(draftServingProtein.replace(',', '.')) || 0;
         const servF = Number(draftServingFat.replace(',', '.')) || 0;
         const servC = Number(draftServingCarbs.replace(',', '.')) || 0;
@@ -1894,7 +1894,7 @@ export function NutritionScreen({
                         <Text style={styles.fieldLabel}>
                           Calories {customServingType === 'serving' ? 'per serving' : customServingType === '100ml' ? 'per 100 ml' : 'per 100 g'}
                         </Text>
-                        <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftCalories} onChangeText={(text) => setDraftCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
+                        <TextInput placeholder="Calories" keyboardType="decimal-pad" style={styles.input} value={draftCalories} onChangeText={(text) => setDraftCalories(cleanNutritionNumber(text))} />
                       </View>
                       <View style={styles.half}>
                         <Text style={styles.fieldLabel}>
@@ -1924,7 +1924,7 @@ export function NutritionScreen({
                         <View style={styles.row}>
                           <View style={styles.half}>
                             <Text style={styles.fieldLabel}>Calories / serving</Text>
-                            <TextInput placeholder="Calories" keyboardType="number-pad" style={styles.input} value={draftServingCalories} onChangeText={(text) => setDraftServingCalories(text.replace(/[^\d]/g, '').slice(0, 4))} />
+                            <TextInput placeholder="Calories" keyboardType="decimal-pad" style={styles.input} value={draftServingCalories} onChangeText={(text) => setDraftServingCalories(cleanNutritionNumber(text))} />
                           </View>
                           <View style={styles.half}>
                             <Text style={styles.fieldLabel}>Protein / serving</Text>
