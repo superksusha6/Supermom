@@ -1145,23 +1145,10 @@ function AppShell() {
   const [nutritionPace, setNutritionPace] = useState<NutritionPace>('flexible');
   const [physiqueGoal, setPhysiqueGoal] = useState<PhysiqueGoal>(() => loadLocalPhysiqueGoal());
   const [calorieOverride, setCalorieOverride] = useState('');
-  // Cache the diary locally so a page refresh shows the last-known totals instantly
-  // (no 0 → value flicker) while the server snapshot loads and confirms.
-  const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>(() => {
-    try {
-      const raw = globalThis.localStorage?.getItem('smartmom.nutritionEntries.v1');
-      return raw ? (JSON.parse(raw) as NutritionFoodEntry[]) : [];
-    } catch {
-      return [];
-    }
-  });
-  useEffect(() => {
-    try {
-      globalThis.localStorage?.setItem('smartmom.nutritionEntries.v1', JSON.stringify(nutritionEntries));
-    } catch {
-      /* ignore */
-    }
-  }, [nutritionEntries]);
+  const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
+  // True once the diary has loaded from the server this session — used to show a brief
+  // placeholder instead of a wrong 0/stale total while data is still arriving.
+  const [nutritionLoaded, setNutritionLoaded] = useState(false);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
@@ -1627,14 +1614,7 @@ function AppShell() {
   const latestChildrenRef = useRef<ChildProfile[]>(loadLocalChildren());
   const latestHabitsRef = useRef<HabitEntry[]>(loadLocalHabits());
   const latestFridgeItemsRef = useRef<FridgeItem[]>([]);
-  const nutritionEntriesRef = useRef<NutritionFoodEntry[]>((() => {
-    try {
-      const raw = globalThis.localStorage?.getItem('smartmom.nutritionEntries.v1');
-      return raw ? (JSON.parse(raw) as NutritionFoodEntry[]) : [];
-    } catch {
-      return [];
-    }
-  })());
+  const nutritionEntriesRef = useRef<NutritionFoodEntry[]>([]);
   const customNutritionFoodsRef = useRef<CustomNutritionFood[]>([]);
   const mealPlanProfilesRef = useRef<MealPlanProfilePreference[]>(DEFAULT_MEAL_PLAN_PROFILES);
   const activeMealPlanProfileKeyRef = useRef('family');
@@ -3297,6 +3277,7 @@ function AppShell() {
         nutritionEntriesRef.current = entries;
         setNutritionEntries(entries);
         nutritionLoadedRef.current = true;
+        setNutritionLoaded(true);
       }),
       listCustomNutritionFoods(ctx).then((foods) => {
         customNutritionFoodsRef.current = foods;
@@ -3878,6 +3859,7 @@ function AppShell() {
     preferencesLoadedRef.current = false;
     setDailyCardsPrefsReady(false);
     nutritionLoadedRef.current = false;
+    setNutritionLoaded(false);
     customNutritionFoodsLoadedRef.current = false;
     homeFixitLoadedRef.current = false;
     choresLoadedRef.current = false;
@@ -7854,6 +7836,7 @@ function AppShell() {
           onCalorieOverrideChange={setCalorieOverride}
           physiqueGoal={physiqueGoal}
           nutritionEntries={nutritionEntries}
+          nutritionLoaded={nutritionLoaded}
           onNutritionEntriesChange={handleNutritionEntriesChange}
           customFoodPresets={customNutritionFoods}
           onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
@@ -8152,7 +8135,7 @@ function AppShell() {
         <Text style={styles.calLogLink}>Log food</Text>
       </View>
       <View style={styles.calNumbers}>
-        <Text style={styles.calEaten}>{calGoal > 0 ? calRemaining : calEaten}</Text>
+        <Text style={styles.calEaten}>{!nutritionLoaded ? '—' : (calGoal > 0 ? calRemaining : calEaten)}</Text>
         <Text style={styles.calGoal}>{calGoal > 0 ? (calOver ? ' kcal over' : ' kcal left') : ' kcal'}</Text>
       </View>
       <View style={styles.calBarTrack}>
@@ -9718,6 +9701,7 @@ function AppShell() {
         onCalorieOverrideChange={setCalorieOverride}
         physiqueGoal={physiqueGoal}
         nutritionEntries={nutritionEntries}
+        nutritionLoaded={nutritionLoaded}
         onNutritionEntriesChange={handleNutritionEntriesChange}
         customFoodPresets={customNutritionFoods}
         onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
@@ -10381,6 +10365,7 @@ function AppShell() {
               calorieOverride={calorieOverride}
               physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
+              nutritionLoaded={nutritionLoaded}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               children={children}
               staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name }))}
@@ -10765,6 +10750,7 @@ function AppShell() {
               onCalorieOverrideChange={setCalorieOverride}
               physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
+              nutritionLoaded={nutritionLoaded}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               customFoodPresets={customNutritionFoods}
               onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}

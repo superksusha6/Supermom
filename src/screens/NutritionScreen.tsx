@@ -30,6 +30,7 @@ type Props = {
   customFoodPresets: CustomNutritionFood[];
   onCustomFoodPresetsChange: Dispatch<SetStateAction<CustomNutritionFood[]>>;
   recipes?: Recipe[];
+  nutritionLoaded?: boolean;
   quickActionRequest?: { type: 'add-meal'; mealType: NutritionMealType; token: number } | null;
   renderInlineContent?: boolean;
 };
@@ -90,6 +91,7 @@ export function NutritionScreen({
   customFoodPresets,
   onCustomFoodPresetsChange,
   recipes,
+  nutritionLoaded = true,
   quickActionRequest,
   renderInlineContent = true,
 }: Props) {
@@ -1333,7 +1335,7 @@ export function NutritionScreen({
             <Text style={styles.todaySummaryLabel}>{plan ? 'Calories left' : 'Selected day eaten'}</Text>
             <View style={styles.todaySummaryHeadline}>
               <Text style={styles.todaySummaryCalories}>
-                {plan ? Math.max(0, Math.round(plan.calories - totals.calories)) : totals.calories}
+                {!nutritionLoaded ? '—' : (plan ? Math.max(0, Math.round(plan.calories - totals.calories)) : totals.calories)}
               </Text>
               <Text style={styles.todaySummaryCaloriesTarget}>{plan ? 'left' : 'kcal'}</Text>
             </View>
