@@ -10611,7 +10611,7 @@ function AppShell() {
               <View style={styles.foodListCopy}>
                 <Text style={styles.foodListTitle}>Meals Today</Text>
                 <Text style={styles.foodListSub} numberOfLines={1}>
-                  {calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories'}
+                  {!nutritionLoaded ? 'Loading…' : (calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories')}
                 </Text>
               </View>
               <Icon name="chevron" color={colors.subtext} size={18} />
