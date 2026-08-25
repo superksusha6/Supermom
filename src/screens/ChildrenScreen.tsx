@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SectionCard } from '@/components/SectionCard';
 import { Icon } from '@/components/Icon';
 import { WheelTimePicker } from '@/components/WheelTimePicker';
-import { ChildActivity, ChildProfile, Chore, WeekDayCode } from '@/types/app';
+import { CalendarEvent, ChildActivity, ChildProfile, Chore, WeekDayCode } from '@/types/app';
 import { choreStatus } from '@/lib/chores';
 import { ThemeColors, useThemeColors } from '@/theme/theme';
 
@@ -58,6 +58,14 @@ function addMinutesToTime(t: string, add: number): string {
   return `${h12}:${String(mm).padStart(2, '0')} ${ap}`;
 }
 
+// "2026-08-25" -> "Mon, Aug 25" for the child's event list.
+function formatEventDate(dateKey: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return dateKey;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 const SHORT_DAY: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
 const FULL_DAY: Record<WeekDayCode, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
@@ -108,6 +116,8 @@ type Props = {
   onAddChore: (childId: string, title: string) => void;
   onToggleChore: (choreId: string) => void;
   onDeleteChore: (choreId: string) => void;
+  eventsByChild?: Record<string, CalendarEvent[]>;
+  onDeleteEvent?: (payload: { id: string }) => void;
   todayPlansByChild?: Record<string, TodayPlan[]>;
   quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
@@ -126,6 +136,8 @@ export function ChildrenScreen({
   onAddChore,
   onToggleChore,
   onDeleteChore,
+  eventsByChild,
+  onDeleteEvent,
   todayPlansByChild,
   quickActionRequest,
 }: Props) {
@@ -456,6 +468,40 @@ export function ChildrenScreen({
           </View>
         ))}
       </SectionCard>
+
+      {onDeleteEvent ? (
+        <SectionCard title="Calendar events">
+          {(() => {
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const list = (eventsByChild?.[child.id] || [])
+              .filter((e) => e.date >= todayKey)
+              .sort((a, b) => (a.date === b.date ? (a.time || '').localeCompare(b.time || '') : a.date.localeCompare(b.date)));
+            if (list.length === 0) {
+              return <Text style={styles.emptyText}>No upcoming events. Add them on the Calendar tab.</Text>;
+            }
+            return list.map((event) => (
+              <View key={event.id} style={[styles.item, styles.activityRow]}>
+                <View style={styles.activityCopy}>
+                  <Text style={styles.title}>{event.title}</Text>
+                  <Text style={styles.meta}>
+                    {formatEventDate(event.date)}
+                    {event.time ? ` · ${event.time}` : ''}
+                    {event.seriesId ? ' · repeats' : ''}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${event.title}`}
+                  style={styles.activityRemove}
+                  onPress={() => onDeleteEvent({ id: event.id })}
+                >
+                  <Text style={styles.activityRemoveText}>Remove</Text>
+                </Pressable>
+              </View>
+            ));
+          })()}
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Responsibilities / Chores">
         <View style={styles.profileHeaderRow}>

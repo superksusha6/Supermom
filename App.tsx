@@ -2523,6 +2523,16 @@ function AppShell() {
       .map((c) => ({ id: c.id, title: c.title, child: children.find((ch) => ch.id === c.childId)?.name || 'Kid' }))
       .slice(0, 3);
   }, [chores, children]);
+  // Child-owned calendar events grouped by child, for the Children tab's
+  // "Calendar events" list (view + delete alongside activities/chores).
+  const eventsByChild = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {};
+    for (const c of children) {
+      map[c.id] = events.filter((e) => e.owner === 'child' && e.ownerChildProfileId === c.id);
+    }
+    return map;
+  }, [events, children]);
+
   const childTodayPlans = useMemo(() => {
     const map: Record<string, { time: string; title: string }[]> = {};
     const todayEvents = events.filter((e) => e.date === todayDateKey && e.owner === 'child');
@@ -4049,6 +4059,26 @@ function AppShell() {
       setActiveOwnerFilter('mother');
       setCalendarScope('my');
     }
+  }
+
+  // Delete a calendar event (used by the Calendar tab and the Children tab).
+  // Repeating events prompt this-one vs whole-series; otherwise removes the
+  // event plus any linked parent/child mirror.
+  function handleDeleteEvent({ id }: { id: string }) {
+    const sourceEvent = events.find((event) => event.id === id) || null;
+    if (sourceEvent?.seriesId) {
+      setSeriesDeletePrompt({ id, seriesId: sourceEvent.seriesId });
+      return;
+    }
+    const counterpartEvent = findLinkedChildMirrorEvent(events, sourceEvent);
+    const deleteIds = [id, counterpartEvent?.id].filter(Boolean) as string[];
+    if (session) {
+      Promise.all(deleteIds.map((eventId) => deleteCalendarEvent(session, eventId)))
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
+      return;
+    }
+    setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
   }
 
   function requestDelete(taskId: string) {
@@ -10499,25 +10529,7 @@ function AppShell() {
                   ),
                 );
               }}
-              onDeleteEvent={({ id }) => {
-                const sourceEvent = events.find((event) => event.id === id) || null;
-                // Repeating → ask this-one vs whole series.
-                if (sourceEvent?.seriesId) {
-                  setSeriesDeletePrompt({ id, seriesId: sourceEvent.seriesId });
-                  return;
-                }
-                const counterpartEvent = findLinkedChildMirrorEvent(events, sourceEvent);
-                const deleteIds = [id, counterpartEvent?.id].filter(Boolean) as string[];
-
-                if (session) {
-                  Promise.all(deleteIds.map((eventId) => deleteCalendarEvent(session, eventId)))
-                    .then(() => refreshLiveCalendar())
-                    .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
-                  return;
-                }
-
-                setEvents((prev) => prev.filter((event) => !deleteIds.includes(event.id)));
-              }}
+              onDeleteEvent={handleDeleteEvent}
             />
         ) : null}
 
@@ -10764,6 +10776,8 @@ function AppShell() {
             onDeleteChild={handleDeleteChildDirect}
             onEditChild={openChildActivitiesEditor}
             onInviteChild={handleInviteChild}
+            eventsByChild={eventsByChild}
+            onDeleteEvent={handleDeleteEvent}
             todayPlansByChild={childTodayPlans}
             onSetChildPhoto={(childId, photoUri) => {
               setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)));
