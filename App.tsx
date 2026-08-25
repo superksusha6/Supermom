@@ -4609,24 +4609,51 @@ function AppShell() {
         .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
     }
   }
+  // Expand a set of event ids to also include each one's linked parent/child
+  // mirror, so deleting a child's event also clears its copy on the parent's
+  // Home/calendar (mirrors carry no seriesId, so they must be gathered here).
+  function withLinkedMirrors(ids: string[]): string[] {
+    const set = new Set(ids);
+    for (const id of ids) {
+      const ev = events.find((e) => e.id === id) || null;
+      if (!ev) continue;
+      const direct = findLinkedChildMirrorEvent(events, ev);
+      if (direct) set.add(direct.id);
+      // Robust fallback: the parent's "Child Plan" copy at the same date/time for
+      // the same child — matched by profile id, child name, or "Name: title".
+      const childName = ev.ownerName;
+      for (const cand of events) {
+        if (cand.id === ev.id || cand.owner !== 'mother' || cand.category !== 'Child Plan') continue;
+        if (cand.date !== ev.date || normalizeTimeText(cand.time) !== normalizeTimeText(ev.time)) continue;
+        const sameChild =
+          (!!ev.ownerChildProfileId && cand.ownerChildProfileId === ev.ownerChildProfileId) ||
+          (!!childName && children.some((c) => c.id === cand.ownerChildProfileId && c.name === childName)) ||
+          (!!childName && cand.title.startsWith(`${childName}:`));
+        if (sameChild) set.add(cand.id);
+      }
+    }
+    return Array.from(set);
+  }
   // Delete an explicit set of event ids (used by the Children tab to drop a
   // name-grouped recurring event that has no shared seriesId, or a single day).
   function handleDeleteEventsBulk(ids: string[]) {
     if (!ids.length) return;
-    setEvents((prev) => prev.filter((e) => !ids.includes(e.id)));
+    const allIds = withLinkedMirrors(ids);
+    setEvents((prev) => prev.filter((e) => !allIds.includes(e.id)));
     if (session && isSupabaseConfigured) {
-      deleteCalendarEvents(session, ids)
+      deleteCalendarEvents(session, allIds)
         .then(() => refreshLiveCalendar())
         .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete events failed.'));
     }
   }
   // Delete every occurrence (and mirror) of a repeating series.
   function deleteEventSeries(seriesId: string) {
-    const ids = events.filter((e) => e.seriesId === seriesId).map((e) => e.id);
-    if (dayEditId && ids.includes(dayEditId)) setDayEditId(null);
-    setEvents((prev) => prev.filter((e) => e.seriesId !== seriesId));
+    const seriesIds = events.filter((e) => e.seriesId === seriesId).map((e) => e.id);
+    const allIds = withLinkedMirrors(seriesIds);
+    if (dayEditId && allIds.includes(dayEditId)) setDayEditId(null);
+    setEvents((prev) => prev.filter((e) => !allIds.includes(e.id)));
     if (session && isSupabaseConfigured) {
-      deleteCalendarEvents(session, ids)
+      deleteCalendarEvents(session, allIds)
         .then(() => refreshLiveCalendar())
         .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete series failed.'));
     }
