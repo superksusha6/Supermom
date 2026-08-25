@@ -73,11 +73,10 @@ function weekdayOf(dateKey: string): number {
   if (!m) return 0;
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
 }
-// "Tue · Wed · Thu · Fri" from a set of dates (unique weekdays, Mon-first order).
-function weekdaysSummary(dates: string[]): string {
+// Weekday numbers present across a set of dates, Mon-first order.
+function weekdaysPresent(dates: string[]): number[] {
   const present = new Set(dates.map(weekdayOf));
-  const order = [1, 2, 3, 4, 5, 6, 0];
-  return order.filter((d) => present.has(d)).map((d) => DOW_SHORT[d]).join(' · ');
+  return [1, 2, 3, 4, 5, 6, 0].filter((d) => present.has(d));
 }
 
 const SHORT_DAY: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
@@ -162,7 +161,6 @@ export function ChildrenScreen({
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [openChildId, setOpenChildId] = useState<string | null>(null);
-  const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
@@ -514,7 +512,11 @@ export function ChildrenScreen({
               else if (onDeleteMany) onDeleteMany(group.map((e) => e.id));
               else group.forEach((e) => onDeleteEvent({ id: e.id }));
             };
-            const removeOne = (id: string) => (onDeleteMany ? onDeleteMany([id]) : onDeleteEvent({ id }));
+            const removeWeekday = (group: CalendarEvent[], dow: number) => {
+              const ids = group.filter((e) => weekdayOf(e.date) === dow).map((e) => e.id);
+              if (onDeleteMany) onDeleteMany(ids);
+              else ids.forEach((id) => onDeleteEvent({ id }));
+            };
             return Array.from(groups.entries()).map(([key, group]) => {
               const first = group[0];
               const isSeries = group.length > 1;
@@ -539,32 +541,17 @@ export function ChildrenScreen({
                   </View>
                 );
               }
-              const expanded = expandedSeries.has(key);
               const dates = group.map((e) => e.date);
+              const days = weekdaysPresent(dates);
+              const lastDate = dates[dates.length - 1];
               return (
                 <View key={key} style={styles.seriesGroup}>
                   <View style={[styles.item, styles.activityRow]}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${first.title}, repeats. Tap to see dates.`}
-                      style={styles.activityCopy}
-                      onPress={() =>
-                        setExpandedSeries((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(key)) next.delete(key);
-                          else next.add(key);
-                          return next;
-                        })
-                      }
-                    >
+                    <View style={styles.activityCopy}>
                       <Text style={styles.title}>{first.title}</Text>
-                      <Text style={styles.meta}>
-                        {`Repeats · ${weekdaysSummary(dates)}${first.time ? ` · ${first.time}` : ''}`}
-                      </Text>
-                      <Text style={styles.seriesRange}>
-                        {`${group.length} dates · ${formatEventDate(dates[0])} – ${formatEventDate(dates[dates.length - 1])} · ${expanded ? 'hide dates ▲' : 'tap to see dates ▼'}`}
-                      </Text>
-                    </Pressable>
+                      <Text style={styles.meta}>{`Repeats${first.time ? ` · ${first.time}` : ''}`}</Text>
+                      <Text style={styles.seriesRange}>{`${group.length} events · until ${formatEventDate(lastDate)}`}</Text>
+                    </View>
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Remove all ${first.title}`}
@@ -574,24 +561,21 @@ export function ChildrenScreen({
                       <Text style={styles.activityRemoveText}>Remove all</Text>
                     </Pressable>
                   </View>
-                  {expanded
-                    ? group.map((occ) => (
-                        <View key={occ.id} style={styles.seriesDateRow}>
-                          <Text style={styles.seriesDateText}>
-                            {formatEventDate(occ.date)}
-                            {occ.time ? ` · ${occ.time}` : ''}
-                          </Text>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove ${occ.title} on ${formatEventDate(occ.date)}`}
-                            hitSlop={8}
-                            onPress={() => removeOne(occ.id)}
-                          >
-                            <Text style={styles.seriesDateRemove}>Remove this day</Text>
-                          </Pressable>
-                        </View>
-                      ))
-                    : null}
+                  <Text style={styles.weekdayHint}>Tap a day to remove every one of it:</Text>
+                  <View style={styles.weekdayChipRow}>
+                    {days.map((d) => (
+                      <Pressable
+                        key={d}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove every ${DOW_SHORT[d]}`}
+                        style={styles.weekdayChip}
+                        onPress={() => removeWeekday(group, d)}
+                      >
+                        <Text style={styles.weekdayChipText}>{DOW_SHORT[d]}</Text>
+                        <Text style={styles.weekdayChipX}>✕</Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
               );
             });
@@ -998,31 +982,46 @@ const createStyles = (colors: ThemeColors) =>
     fontWeight: '800',
   },
   seriesGroup: {
-    marginBottom: 2,
+    marginBottom: 8,
   },
   seriesRange: {
     color: colors.subtext,
     fontSize: 11.5,
     marginTop: 2,
   },
-  seriesDateRow: {
+  weekdayHint: {
+    color: colors.subtext,
+    fontSize: 11.5,
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  weekdayChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  weekdayChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    backgroundColor: '#fff1f2',
+    paddingHorizontal: 12,
     paddingVertical: 7,
-    paddingHorizontal: 14,
-    marginLeft: 12,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.border,
   },
-  seriesDateText: {
+  weekdayChipText: {
     color: colors.text,
     fontSize: 13,
+    fontWeight: '700',
   },
-  seriesDateRemove: {
+  weekdayChipX: {
     color: '#be123c',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   activityEdit: {
     borderRadius: 999,
