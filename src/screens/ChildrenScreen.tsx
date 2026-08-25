@@ -66,6 +66,20 @@ function formatEventDate(dateKey: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Weekday of a "YYYY-MM-DD" key (0=Sun).
+function weekdayOf(dateKey: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return 0;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+}
+// "Tue · Wed · Thu · Fri" from a set of dates (unique weekdays, Mon-first order).
+function weekdaysSummary(dates: string[]): string {
+  const present = new Set(dates.map(weekdayOf));
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  return order.filter((d) => present.has(d)).map((d) => DOW_SHORT[d]).join(' · ');
+}
+
 const SHORT_DAY: Record<WeekDayCode, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
 const FULL_DAY: Record<WeekDayCode, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
@@ -118,6 +132,7 @@ type Props = {
   onDeleteChore: (choreId: string) => void;
   eventsByChild?: Record<string, CalendarEvent[]>;
   onDeleteEvent?: (payload: { id: string }) => void;
+  onDeleteSeries?: (seriesId: string) => void;
   todayPlansByChild?: Record<string, TodayPlan[]>;
   quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
@@ -138,12 +153,14 @@ export function ChildrenScreen({
   onDeleteChore,
   eventsByChild,
   onDeleteEvent,
+  onDeleteSeries,
   todayPlansByChild,
   quickActionRequest,
 }: Props) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [openChildId, setOpenChildId] = useState<string | null>(null);
+  const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropChildId, setCropChildId] = useState<string | null>(null);
   const [addActivityOpen, setAddActivityOpen] = useState(false);
@@ -479,26 +496,95 @@ export function ChildrenScreen({
             if (list.length === 0) {
               return <Text style={styles.emptyText}>No upcoming events. Add them on the Calendar tab.</Text>;
             }
-            return list.map((event) => (
-              <View key={event.id} style={[styles.item, styles.activityRow]}>
-                <View style={styles.activityCopy}>
-                  <Text style={styles.title}>{event.title}</Text>
-                  <Text style={styles.meta}>
-                    {formatEventDate(event.date)}
-                    {event.time ? ` · ${event.time}` : ''}
-                    {event.seriesId ? ' · repeats' : ''}
-                  </Text>
+            // Collapse a repeating event (shared seriesId) into ONE row; standalone
+            // events keep their own row keyed by id.
+            const groups = new Map<string, CalendarEvent[]>();
+            for (const e of list) {
+              const key = e.seriesId || `one:${e.id}`;
+              const arr = groups.get(key);
+              if (arr) arr.push(e);
+              else groups.set(key, [e]);
+            }
+            return Array.from(groups.entries()).map(([key, group]) => {
+              const first = group[0];
+              const isSeries = group.length > 1 && !!first.seriesId;
+              if (!isSeries) {
+                return (
+                  <View key={key} style={[styles.item, styles.activityRow]}>
+                    <View style={styles.activityCopy}>
+                      <Text style={styles.title}>{first.title}</Text>
+                      <Text style={styles.meta}>
+                        {formatEventDate(first.date)}
+                        {first.time ? ` · ${first.time}` : ''}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${first.title}`}
+                      style={styles.activityRemove}
+                      onPress={() => onDeleteEvent({ id: first.id })}
+                    >
+                      <Text style={styles.activityRemoveText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                );
+              }
+              const expanded = expandedSeries.has(key);
+              const dates = group.map((e) => e.date);
+              return (
+                <View key={key} style={styles.seriesGroup}>
+                  <View style={[styles.item, styles.activityRow]}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${first.title}, repeats. Tap to see dates.`}
+                      style={styles.activityCopy}
+                      onPress={() =>
+                        setExpandedSeries((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        })
+                      }
+                    >
+                      <Text style={styles.title}>{first.title}</Text>
+                      <Text style={styles.meta}>
+                        {`Repeats · ${weekdaysSummary(dates)}${first.time ? ` · ${first.time}` : ''}`}
+                      </Text>
+                      <Text style={styles.seriesRange}>
+                        {`${group.length} dates · ${formatEventDate(dates[0])} – ${formatEventDate(dates[dates.length - 1])} · ${expanded ? 'hide dates ▲' : 'tap to see dates ▼'}`}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove all ${first.title}`}
+                      style={styles.activityRemove}
+                      onPress={() => (first.seriesId && onDeleteSeries ? onDeleteSeries(first.seriesId) : onDeleteEvent({ id: first.id }))}
+                    >
+                      <Text style={styles.activityRemoveText}>Remove all</Text>
+                    </Pressable>
+                  </View>
+                  {expanded
+                    ? group.map((occ) => (
+                        <View key={occ.id} style={styles.seriesDateRow}>
+                          <Text style={styles.seriesDateText}>
+                            {formatEventDate(occ.date)}
+                            {occ.time ? ` · ${occ.time}` : ''}
+                          </Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${occ.title} on ${formatEventDate(occ.date)}`}
+                            hitSlop={8}
+                            onPress={() => onDeleteEvent({ id: occ.id })}
+                          >
+                            <Text style={styles.seriesDateRemove}>Remove this day</Text>
+                          </Pressable>
+                        </View>
+                      ))
+                    : null}
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${event.title}`}
-                  style={styles.activityRemove}
-                  onPress={() => onDeleteEvent({ id: event.id })}
-                >
-                  <Text style={styles.activityRemoveText}>Remove</Text>
-                </Pressable>
-              </View>
-            ));
+              );
+            });
           })()}
         </SectionCard>
       ) : null}
@@ -900,6 +986,33 @@ const createStyles = (colors: ThemeColors) =>
     color: '#be123c',
     fontSize: 12.5,
     fontWeight: '800',
+  },
+  seriesGroup: {
+    marginBottom: 2,
+  },
+  seriesRange: {
+    color: colors.subtext,
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  seriesDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    marginLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
+  },
+  seriesDateText: {
+    color: colors.text,
+    fontSize: 13,
+  },
+  seriesDateRemove: {
+    color: '#be123c',
+    fontSize: 12,
+    fontWeight: '700',
   },
   activityEdit: {
     borderRadius: 999,

@@ -10780,6 +10780,7 @@ function AppShell() {
             onInviteChild={handleInviteChild}
             eventsByChild={eventsByChild}
             onDeleteEvent={handleDeleteEvent}
+            onDeleteSeries={deleteEventSeries}
             todayPlansByChild={childTodayPlans}
             onSetChildPhoto={(childId, photoUri) => {
               setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)));
