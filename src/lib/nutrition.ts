@@ -506,7 +506,7 @@ export function getNutritionPlan({
   const targetCalories = toNumber(calorieOverride) > 0 ? toNumber(calorieOverride) : flooredCalories;
 
   const proteinTarget = weight * tuning.proteinPerKg;
-  const fatTarget = weight * 0.8;
+  const fatTarget = weight * 1;
   const proteinCalories = proteinTarget * 4;
   const fatCalories = fatTarget * 9;
   const carbsTarget = Math.max(0, (targetCalories - proteinCalories - fatCalories) / 4);
