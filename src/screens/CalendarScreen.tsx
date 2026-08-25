@@ -283,6 +283,8 @@ export function CalendarScreen({
         // Mother's device: the avatar row picks whose plans are shown.
         if (currentRole === 'mother') {
           if (event.owner === 'staff' && event.visibility === 'staff_private') return false;
+          // "All" — everyone's plans overlaid on one calendar.
+          if (activeOwnerFilter === 'all') return true;
           if (activeOwnerFilter.startsWith('child:')) {
             const childId = activeOwnerFilter.replace('child:', '');
             return event.owner === 'child' && event.ownerChildProfileId === childId;
@@ -337,6 +339,8 @@ export function CalendarScreen({
       { key: 'mother', label: 'You', color: colors.primary },
     ];
     children.forEach((c, i) => list.push({ key: `child:${c.id}`, label: c.name, color: basePalette[i % basePalette.length], photo: c.photoUri }));
+    // "All" — everyone's plans on one calendar (only worth showing when there's more than just You).
+    if (children.length > 0) list.push({ key: 'all', label: 'All', color: colors.primary });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRole, children, colors.primary]);
@@ -1833,7 +1837,9 @@ export function CalendarScreen({
                 <Pressable key={person.key} style={styles.avatarItem} onPress={() => onSelectOwnerFilter(person.key)}>
                   <View style={[styles.avatarRing, active && styles.avatarRingActive]}>
                     <View style={[styles.avatarCircle, { backgroundColor: person.photo ? colors.surfaceAlt : person.color }]}>
-                      {person.photo ? (
+                      {person.key === 'all' ? (
+                        <Text style={styles.avatarInitials}>👥</Text>
+                      ) : person.photo ? (
                         <Image source={{ uri: person.photo }} style={styles.avatarImage} />
                       ) : (
                         <Text style={styles.avatarInitials}>{initials}</Text>
@@ -1847,12 +1853,6 @@ export function CalendarScreen({
               );
             })}
           </ScrollView>
-        ) : null}
-        {currentRole === 'mother' ? (
-          <View style={styles.scopeRow}>
-            <Chip active={scope === 'my'} label="My" onPress={() => onScopeChange('my')} styles={styles} />
-            <Chip active={scope === 'family'} label="Family" onPress={() => onScopeChange('family')} styles={styles} />
-          </View>
         ) : null}
         {periodReminderMessage ? (
           <View style={styles.periodReminderBanner}>
