@@ -133,6 +133,7 @@ type Props = {
   eventsByChild?: Record<string, CalendarEvent[]>;
   onDeleteEvent?: (payload: { id: string }) => void;
   onDeleteSeries?: (seriesId: string) => void;
+  onDeleteMany?: (ids: string[]) => void;
   todayPlansByChild?: Record<string, TodayPlan[]>;
   quickActionRequest?: { type: 'add-activity'; token: number } | null;
 };
@@ -154,6 +155,7 @@ export function ChildrenScreen({
   eventsByChild,
   onDeleteEvent,
   onDeleteSeries,
+  onDeleteMany,
   todayPlansByChild,
   quickActionRequest,
 }: Props) {
@@ -496,18 +498,26 @@ export function ChildrenScreen({
             if (list.length === 0) {
               return <Text style={styles.emptyText}>No upcoming events. Add them on the Calendar tab.</Text>;
             }
-            // Collapse a repeating event (shared seriesId) into ONE row; standalone
-            // events keep their own row keyed by id.
+            // Collapse repeating occurrences into ONE row. Prefer a shared seriesId;
+            // if the occurrences carry no seriesId, fall back to same title + time so
+            // a recurring event still shows as a single "tennis camp", not a long list.
             const groups = new Map<string, CalendarEvent[]>();
             for (const e of list) {
-              const key = e.seriesId || `one:${e.id}`;
+              const key = e.seriesId ? `s:${e.seriesId}` : `n:${e.title.trim().toLowerCase()}|${e.time || ''}`;
               const arr = groups.get(key);
               if (arr) arr.push(e);
               else groups.set(key, [e]);
             }
+            const removeGroup = (group: CalendarEvent[]) => {
+              const first = group[0];
+              if (first.seriesId && onDeleteSeries) onDeleteSeries(first.seriesId);
+              else if (onDeleteMany) onDeleteMany(group.map((e) => e.id));
+              else group.forEach((e) => onDeleteEvent({ id: e.id }));
+            };
+            const removeOne = (id: string) => (onDeleteMany ? onDeleteMany([id]) : onDeleteEvent({ id }));
             return Array.from(groups.entries()).map(([key, group]) => {
               const first = group[0];
-              const isSeries = group.length > 1 && !!first.seriesId;
+              const isSeries = group.length > 1;
               if (!isSeries) {
                 return (
                   <View key={key} style={[styles.item, styles.activityRow]}>
@@ -559,7 +569,7 @@ export function ChildrenScreen({
                       accessibilityRole="button"
                       accessibilityLabel={`Remove all ${first.title}`}
                       style={styles.activityRemove}
-                      onPress={() => (first.seriesId && onDeleteSeries ? onDeleteSeries(first.seriesId) : onDeleteEvent({ id: first.id }))}
+                      onPress={() => removeGroup(group)}
                     >
                       <Text style={styles.activityRemoveText}>Remove all</Text>
                     </Pressable>
@@ -575,7 +585,7 @@ export function ChildrenScreen({
                             accessibilityRole="button"
                             accessibilityLabel={`Remove ${occ.title} on ${formatEventDate(occ.date)}`}
                             hitSlop={8}
-                            onPress={() => onDeleteEvent({ id: occ.id })}
+                            onPress={() => removeOne(occ.id)}
                           >
                             <Text style={styles.seriesDateRemove}>Remove this day</Text>
                           </Pressable>

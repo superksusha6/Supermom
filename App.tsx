@@ -4609,6 +4609,17 @@ function AppShell() {
         .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete event failed.'));
     }
   }
+  // Delete an explicit set of event ids (used by the Children tab to drop a
+  // name-grouped recurring event that has no shared seriesId, or a single day).
+  function handleDeleteEventsBulk(ids: string[]) {
+    if (!ids.length) return;
+    setEvents((prev) => prev.filter((e) => !ids.includes(e.id)));
+    if (session && isSupabaseConfigured) {
+      deleteCalendarEvents(session, ids)
+        .then(() => refreshLiveCalendar())
+        .catch((error) => setTasksError(error instanceof Error ? error.message : 'Delete events failed.'));
+    }
+  }
   // Delete every occurrence (and mirror) of a repeating series.
   function deleteEventSeries(seriesId: string) {
     const ids = events.filter((e) => e.seriesId === seriesId).map((e) => e.id);
@@ -10781,6 +10792,7 @@ function AppShell() {
             eventsByChild={eventsByChild}
             onDeleteEvent={handleDeleteEvent}
             onDeleteSeries={deleteEventSeries}
+            onDeleteMany={handleDeleteEventsBulk}
             todayPlansByChild={childTodayPlans}
             onSetChildPhoto={(childId, photoUri) => {
               setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, photoUri } : c)));
