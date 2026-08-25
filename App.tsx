@@ -2528,7 +2528,9 @@ function AppShell() {
   const eventsByChild = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
     for (const c of children) {
-      map[c.id] = events.filter((e) => e.owner === 'child' && e.ownerChildProfileId === c.id);
+      // Match the same way the Today card does: by child profile id OR by name,
+      // since some events carry only the child's name, not the profile id.
+      map[c.id] = events.filter((e) => e.owner === 'child' && (e.ownerChildProfileId === c.id || e.ownerName === c.name));
     }
     return map;
   }, [events, children]);
