@@ -4626,6 +4626,10 @@ function AppShell() {
         if (cand.id === ev.id || cand.owner !== 'mother' || cand.category !== 'Child Plan') continue;
         if (cand.date !== ev.date || normalizeTimeText(cand.time) !== normalizeTimeText(ev.time)) continue;
         const sameChild =
+          // Most reliable: a child event and its parent mirror share source_profile_id
+          // (the child's id), even though the mirror's owner_child_profile_id is null.
+          (!!ev.sourceProfileId && cand.sourceProfileId === ev.sourceProfileId) ||
+          (!!ev.ownerChildProfileId && cand.sourceProfileId === ev.ownerChildProfileId) ||
           (!!ev.ownerChildProfileId && cand.ownerChildProfileId === ev.ownerChildProfileId) ||
           (!!childName && children.some((c) => c.id === cand.ownerChildProfileId && c.name === childName)) ||
           (!!childName && cand.title.startsWith(`${childName}:`));
