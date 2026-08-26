@@ -10442,6 +10442,8 @@ function AppShell() {
               nutritionLoaded={nutritionLoaded}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               children={children}
+              hiddenChildIds={[...hiddenChildIds]}
+              onToggleHiddenChild={toggleHiddenChild}
               staffProfiles={staffProfiles.map((profile) => ({ id: profile.id, name: profile.name }))}
               events={calendarEventsWithBirthdays.filter((e) => {
                 if (activeOwnerFilter.startsWith('staff:')) {

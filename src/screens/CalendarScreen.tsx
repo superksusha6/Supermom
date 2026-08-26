@@ -41,6 +41,8 @@ type Props = {
   onScopeChange: Dispatch<SetStateAction<CalendarScope>>;
   activeOwnerFilter: string;
   onSelectOwnerFilter: (key: string) => void;
+  hiddenChildIds?: string[];
+  onToggleHiddenChild?: (childId: string) => void;
   showStaff: boolean;
   filtersBelowSection?: ReactNode;
   filtersHeaderRight?: ReactNode;
@@ -129,6 +131,8 @@ export function CalendarScreen({
   onScopeChange,
   activeOwnerFilter,
   onSelectOwnerFilter,
+  hiddenChildIds,
+  onToggleHiddenChild,
   showStaff,
   filtersBelowSection,
   filtersHeaderRight,
@@ -331,6 +335,26 @@ export function CalendarScreen({
     [events, scope, activeOwnerFilter, currentRole, staffProfiles],
   );
 
+  const hiddenSet = useMemo(() => new Set(hiddenChildIds || []), [hiddenChildIds]);
+  // Does this child have any events on the calendar (their own or a parent mirror)?
+  const childHasEvents = useMemo(() => {
+    const withEvents = new Set<string>();
+    for (const e of events) {
+      if (e.ownerChildProfileId) withEvents.add(e.ownerChildProfileId);
+      if (e.sourceProfileId) withEvents.add(e.sourceProfileId);
+      if (e.owner === 'child' && e.ownerName) {
+        const c = children.find((ch) => ch.name === e.ownerName);
+        if (c) withEvents.add(c.id);
+      }
+    }
+    return withEvents;
+  }, [events, children]);
+  // Visible (non-hidden) children whose calendar is empty — offer to tidy these away.
+  const emptyVisibleChildren = useMemo(
+    () => children.filter((c) => !hiddenSet.has(c.id) && !childHasEvents.has(c.id)),
+    [children, hiddenSet, childHasEvents],
+  );
+
   // Faces for the calendar's person switcher (mother's view only): You + each child.
   // Staff are intentionally excluded — the mother manages them in Tasks, not the calendar.
   const avatarPeople = useMemo(() => {
@@ -338,12 +362,13 @@ export function CalendarScreen({
     const list: { key: string; label: string; color: string; photo?: string }[] = [
       { key: 'mother', label: 'You', color: colors.primary },
     ];
-    children.forEach((c, i) => list.push({ key: `child:${c.id}`, label: c.name, color: basePalette[i % basePalette.length], photo: c.photoUri }));
+    const shownChildren = children.filter((c) => !hiddenSet.has(c.id));
+    shownChildren.forEach((c, i) => list.push({ key: `child:${c.id}`, label: c.name, color: basePalette[i % basePalette.length], photo: c.photoUri }));
     // "All" — everyone's plans on one calendar (only worth showing when there's more than just You).
-    if (children.length > 0) list.push({ key: 'all', label: 'All', color: colors.primary });
+    if (shownChildren.length > 0) list.push({ key: 'all', label: 'All', color: colors.primary });
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRole, children, colors.primary]);
+  }, [currentRole, children, colors.primary, hiddenSet]);
 
   const selectedEvents = useMemo(() => {
     let eventsByDay = filtered.filter((event) => event.date === selectedDateKey);
@@ -1853,6 +1878,31 @@ export function CalendarScreen({
               );
             })}
           </ScrollView>
+        ) : null}
+        {currentRole === 'mother' && onToggleHiddenChild && emptyVisibleChildren.length > 0 ? (
+          <View style={styles.tidyRow}>
+            <Text style={styles.tidyText}>
+              {`No events yet for ${emptyVisibleChildren.map((c) => c.name).join(', ')}.`}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hide empty calendars"
+              style={styles.tidyBtn}
+              onPress={() => emptyVisibleChildren.forEach((c) => onToggleHiddenChild(c.id))}
+            >
+              <Text style={styles.tidyBtnText}>Hide</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {currentRole === 'mother' && onToggleHiddenChild && (hiddenChildIds?.length || 0) > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Show hidden calendars"
+            style={styles.tidyShowHidden}
+            onPress={() => (hiddenChildIds || []).forEach((id) => onToggleHiddenChild(id))}
+          >
+            <Text style={styles.tidyShowHiddenText}>{`Show hidden (${hiddenChildIds?.length || 0})`}</Text>
+          </Pressable>
         ) : null}
         {periodReminderMessage ? (
           <View style={styles.periodReminderBanner}>
@@ -3820,6 +3870,46 @@ const createStyles = (colors: ThemeColors) =>
   avatarRowScroll: {
     marginBottom: 12,
     marginHorizontal: -4,
+  },
+  tidyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  tidyText: {
+    flex: 1,
+    color: colors.subtext,
+    fontSize: 12.5,
+  },
+  tidyBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  tidyBtnText: {
+    color: colors.primary,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  tidyShowHidden: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  tidyShowHiddenText: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   avatarRow: {
     gap: 6,
