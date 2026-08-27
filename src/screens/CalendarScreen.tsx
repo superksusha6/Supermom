@@ -107,9 +107,10 @@ function minutesToClockLabel(totalMinutes: number): string {
   return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
 }
 
-// A day-timeline event card that can be long-pressed and dragged vertically to a
-// new time. A short tap opens the editor; holding (~250ms) arms the drag (locks
-// the list scroll), then vertical movement moves the card; release reschedules.
+// A day-timeline event card. A short tap/click opens the editor; press-and-hold
+// (~220ms) then move drags it vertically to a new time; release reschedules.
+// All gestures live in one PanResponder (an inner Pressable would swallow the
+// move events on web and break the drag).
 function DayTimelineEventCard({
   cardStyle,
   onTap,
@@ -126,7 +127,7 @@ function DayTimelineEventCard({
   const pan = useRef(new Animated.Value(0)).current;
   const [armed, setArmed] = useState(false);
   const armedRef = useRef(false);
-  const draggingRef = useRef(false);
+  const movedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = () => {
@@ -135,41 +136,42 @@ function DayTimelineEventCard({
       timerRef.current = null;
     }
   };
-  const endDrag = () => {
+  const reset = () => {
+    clearTimer();
     armedRef.current = false;
-    draggingRef.current = false;
+    movedRef.current = false;
     setArmed(false);
     setScrollEnabled(true);
-    pan.setValue(0);
-  };
-  const arm = () => {
-    clearTimer();
-    timerRef.current = setTimeout(() => {
-      armedRef.current = true;
-      setArmed(true);
-      setScrollEnabled(false);
-    }, 250);
+    Animated.timing(pan, { toValue: 0, duration: 100, useNativeDriver: true }).start();
   };
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: () => {
-        if (armedRef.current) {
-          draggingRef.current = true;
-          return true;
-        }
-        return false;
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        movedRef.current = false;
+        armedRef.current = false;
+        setScrollEnabled(false);
+        clearTimer();
+        timerRef.current = setTimeout(() => {
+          armedRef.current = true;
+          setArmed(true);
+        }, 220);
       },
       onPanResponderMove: (_evt, gesture) => {
-        pan.setValue(gesture.dy);
+        if (Math.abs(gesture.dy) > 4 || Math.abs(gesture.dx) > 4) movedRef.current = true;
+        if (armedRef.current) pan.setValue(gesture.dy);
       },
       onPanResponderRelease: (_evt, gesture) => {
-        const dy = gesture.dy;
-        endDrag();
-        onCommitDelta(dy);
+        const wasArmed = armedRef.current;
+        const moved = movedRef.current;
+        clearTimer();
+        if (wasArmed && moved) onCommitDelta(gesture.dy);
+        else if (!moved) onTap();
+        reset();
       },
-      onPanResponderTerminate: () => endDrag(),
+      onPanResponderTerminate: () => reset(),
     }),
   ).current;
 
@@ -178,19 +180,7 @@ function DayTimelineEventCard({
       style={[cardStyle, { transform: [{ translateY: pan }] }, armed ? { zIndex: 40, opacity: 0.94, borderStyle: 'dashed' } : null]}
       {...panResponder.panHandlers}
     >
-      <Pressable
-        style={{ flex: 1 }}
-        onPressIn={arm}
-        onPressOut={() => {
-          clearTimer();
-          if (armedRef.current && !draggingRef.current) endDrag();
-        }}
-        onPress={() => {
-          if (!armedRef.current && !draggingRef.current) onTap();
-        }}
-      >
-        {children}
-      </Pressable>
+      {children}
     </Animated.View>
   );
 }
