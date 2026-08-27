@@ -97,6 +97,104 @@ const DAY_TIMELINE_HOURS = Array.from(
   (_, index) => DAY_TIMELINE_START_HOUR + index,
 );
 
+// Minutes-since-midnight -> "HH:MM AM/PM" (matches the app's time strings).
+function minutesToClockLabel(totalMinutes: number): string {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(totalMinutes)));
+  const h24 = Math.floor(clamped / 60);
+  const minute = clamped % 60;
+  const period: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
+  const hour12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+// A day-timeline event card that can be long-pressed and dragged vertically to a
+// new time. A short tap opens the editor; holding (~250ms) arms the drag (locks
+// the list scroll), then vertical movement moves the card; release reschedules.
+function DayTimelineEventCard({
+  cardStyle,
+  onTap,
+  onCommitDelta,
+  setScrollEnabled,
+  children,
+}: {
+  cardStyle: any;
+  onTap: () => void;
+  onCommitDelta: (dy: number) => void;
+  setScrollEnabled: (enabled: boolean) => void;
+  children: ReactNode;
+}) {
+  const pan = useRef(new Animated.Value(0)).current;
+  const [armed, setArmed] = useState(false);
+  const armedRef = useRef(false);
+  const draggingRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+  const endDrag = () => {
+    armedRef.current = false;
+    draggingRef.current = false;
+    setArmed(false);
+    setScrollEnabled(true);
+    pan.setValue(0);
+  };
+  const arm = () => {
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      armedRef.current = true;
+      setArmed(true);
+      setScrollEnabled(false);
+    }, 250);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: () => {
+        if (armedRef.current) {
+          draggingRef.current = true;
+          return true;
+        }
+        return false;
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        pan.setValue(gesture.dy);
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        const dy = gesture.dy;
+        endDrag();
+        onCommitDelta(dy);
+      },
+      onPanResponderTerminate: () => endDrag(),
+    }),
+  ).current;
+
+  return (
+    <Animated.View
+      style={[cardStyle, { transform: [{ translateY: pan }] }, armed ? { zIndex: 40, opacity: 0.94, borderStyle: 'dashed' } : null]}
+      {...panResponder.panHandlers}
+    >
+      <Pressable
+        style={{ flex: 1 }}
+        onPressIn={arm}
+        onPressOut={() => {
+          clearTimer();
+          if (armedRef.current && !draggingRef.current) endDrag();
+        }}
+        onPress={() => {
+          if (!armedRef.current && !draggingRef.current) onTap();
+        }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export function CalendarScreen({
   isActive,
   parentLabel,
@@ -168,6 +266,8 @@ export function CalendarScreen({
   const [calendarPagerWidth, setCalendarPagerWidth] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dayTimelineOpen, setDayTimelineOpen] = useState(false);
+  // Locked while an event is being dragged to a new time so the list doesn't scroll.
+  const [dayTimelineScrollEnabled, setDayTimelineScrollEnabled] = useState(true);
   const [guidanceScope, setGuidanceScope] = useState<GuidanceScope>('day');
   const [nutritionInfoOpen, setNutritionInfoOpen] = useState(false);
   const [nutritionEditorOpen, setNutritionEditorOpen] = useState(false);
@@ -389,6 +489,43 @@ export function CalendarScreen({
     return eventsByDay.sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
   }, [filtered, selectedDateKey, currentRole]);
   const selectedTimelineEvents = useMemo(() => buildTimelineEvents(selectedEvents), [selectedEvents]);
+
+  // Re-time an event (keeping everything else) after a timeline drag.
+  const rescheduleTimelineEvent = (
+    event: (typeof selectedTimelineEvents)[number],
+    newTime: string,
+    newEndTime: string | undefined,
+  ) => {
+    onUpdateEvent({
+      id: event.id,
+      title: event.title,
+      color: event.color || '#64748b',
+      time: newTime,
+      endTime: newEndTime,
+      date: event.date,
+      owner: event.owner,
+      ownerName: event.ownerName,
+      ownerChildProfileId: event.ownerChildProfileId,
+      shareToParent: event.owner === 'child' ? true : undefined,
+      category: event.category || 'General',
+      motherColor: event.motherColor,
+      staffColor: event.staffColor,
+      visibility: event.visibility,
+    });
+  };
+  // Convert a vertical drag distance into a new snapped start time (15-min steps).
+  const commitTimelineDrag = (event: (typeof selectedTimelineEvents)[number], dy: number) => {
+    const deltaMinutes = Math.round((dy / DAY_TIMELINE_HOUR_HEIGHT) * 60 / 15) * 15;
+    if (deltaMinutes === 0) return;
+    const duration = Math.max(event.endMinutes - event.startMinutes, 15);
+    const trackStart = DAY_TIMELINE_START_HOUR * 60;
+    const trackEnd = DAY_TIMELINE_END_HOUR * 60;
+    const newStart = Math.max(trackStart, Math.min(trackEnd - duration, event.startMinutes + deltaMinutes));
+    if (newStart === event.startMinutes) return;
+    const newTime = minutesToClockLabel(newStart);
+    const newEndTime = event.endTime ? minutesToClockLabel(newStart + duration) : undefined;
+    rescheduleTimelineEvent(event, newTime, newEndTime);
+  };
   const nutritionPlan = useMemo(
     () =>
       getNutritionPlan({
@@ -1739,7 +1876,7 @@ export function CalendarScreen({
               );
             })() : null}
 
-            <Text style={styles.dayTimelineHint}>Tap a time to add a plan</Text>
+            <Text style={styles.dayTimelineHint}>Tap a time to add · hold an event to drag it to a new time</Text>
 
             {isMomProfile ? (
               <Pressable
@@ -1756,6 +1893,7 @@ export function CalendarScreen({
               style={styles.dayTimelineScroll}
               contentContainerStyle={styles.dayTimelineScrollContent}
               showsVerticalScrollIndicator={false}
+              scrollEnabled={dayTimelineScrollEnabled}
             >
               <View style={styles.dayTimelineSurface}>
                 <View style={styles.dayTimelineHoursCol}>
@@ -1810,9 +1948,9 @@ export function CalendarScreen({
                   ) : null}
 
                   {selectedTimelineEvents.map((event) => (
-                    <Pressable
+                    <DayTimelineEventCard
                       key={`timeline-event-${event.id}`}
-                      style={[
+                      cardStyle={[
                         styles.dayTimelineEventCard,
                         {
                           top: event.top,
@@ -1823,7 +1961,9 @@ export function CalendarScreen({
                           backgroundColor: hexToRgba(resolveDisplayColor(event), 0.16) || 'rgba(255,255,255,0.92)',
                         },
                       ]}
-                      onPress={() => openEditModal(event)}
+                      onTap={() => openEditModal(event)}
+                      onCommitDelta={(dy) => commitTimelineDrag(event, dy)}
+                      setScrollEnabled={setDayTimelineScrollEnabled}
                     >
                       <View style={styles.dayTimelineEventMetaRow}>
                         <Text style={styles.dayTimelineEventTime}>
@@ -1837,7 +1977,7 @@ export function CalendarScreen({
                       <Text style={styles.dayTimelineEventSubtitle}>
                         {isBirthdayEvent(event) ? 'Birthday' : event.category || event.ownerName || 'Plan'}
                       </Text>
-                    </Pressable>
+                    </DayTimelineEventCard>
                   ))}
 
                 </View>
