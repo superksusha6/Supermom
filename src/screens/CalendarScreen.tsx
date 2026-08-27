@@ -488,7 +488,21 @@ export function CalendarScreen({
     // Chronological order (string compare mis-orders "10:00 AM" vs "9:00 AM").
     return eventsByDay.sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
   }, [filtered, selectedDateKey, currentRole]);
-  const selectedTimelineEvents = useMemo(() => buildTimelineEvents(selectedEvents), [selectedEvents]);
+  // Extend the day timeline past 10 PM when an event runs later (e.g. ends at
+  // midnight), so late events show in full and their hour rows appear.
+  const dayTimelineEndHour = useMemo(() => {
+    let latest = DAY_TIMELINE_END_HOUR * 60;
+    for (const e of selectedEvents) {
+      const start = convertTimeToMinutes(e.time);
+      latest = Math.max(latest, timelineEventEndMinutes(e, start));
+    }
+    return Math.min(24, Math.max(DAY_TIMELINE_END_HOUR, Math.ceil(latest / 60)));
+  }, [selectedEvents]);
+  const dayTimelineHours = useMemo(
+    () => Array.from({ length: dayTimelineEndHour - DAY_TIMELINE_START_HOUR + 1 }, (_, i) => DAY_TIMELINE_START_HOUR + i),
+    [dayTimelineEndHour],
+  );
+  const selectedTimelineEvents = useMemo(() => buildTimelineEvents(selectedEvents, dayTimelineEndHour), [selectedEvents, dayTimelineEndHour]);
 
   // Re-time an event (keeping everything else) after a timeline drag.
   const rescheduleTimelineEvent = (
@@ -519,7 +533,7 @@ export function CalendarScreen({
     if (deltaMinutes === 0) return;
     const duration = Math.max(event.endMinutes - event.startMinutes, 15);
     const trackStart = DAY_TIMELINE_START_HOUR * 60;
-    const trackEnd = DAY_TIMELINE_END_HOUR * 60;
+    const trackEnd = dayTimelineEndHour * 60;
     const newStart = Math.max(trackStart, Math.min(trackEnd - duration, event.startMinutes + deltaMinutes));
     if (newStart === event.startMinutes) return;
     const newTime = minutesToClockLabel(newStart);
@@ -1897,7 +1911,7 @@ export function CalendarScreen({
             >
               <View style={styles.dayTimelineSurface}>
                 <View style={styles.dayTimelineHoursCol}>
-                  {DAY_TIMELINE_HOURS.map((hour) => (
+                  {dayTimelineHours.map((hour) => (
                     <View key={`timeline-hour-${hour}`} style={styles.dayTimelineHourMark}>
                       <Text style={styles.dayTimelineHourText}>{formatTimelineHour(hour)}</Text>
                     </View>
@@ -1905,7 +1919,7 @@ export function CalendarScreen({
                 </View>
 
                 <View style={styles.dayTimelineTrack}>
-                  {DAY_TIMELINE_HOURS.map((hour, index) => (
+                  {dayTimelineHours.map((hour, index) => (
                     <Pressable
                       key={`timeline-slot-${hour}`}
                       style={[
@@ -1914,15 +1928,15 @@ export function CalendarScreen({
                       ]}
                       onPress={() =>
                         openCreatorFromTimeline(primaryTimelineCreatorMode, formatClockTime(
-                          hour % 12 === 0 ? 12 : hour % 12,
+                          hour % 24 % 12 === 0 ? 12 : hour % 24 % 12,
                           0,
-                          hour >= 12 ? 'PM' : 'AM',
+                          hour % 24 >= 12 ? 'PM' : 'AM',
                         ))
                       }
                     />
                   ))}
 
-                  {DAY_TIMELINE_HOURS.map((hour, index) => (
+                  {dayTimelineHours.map((hour, index) => (
                     <View
                       key={`timeline-line-${hour}`}
                       pointerEvents="none"
@@ -3684,8 +3698,9 @@ function formatCreatorDateLabel(dateKey: string) {
 }
 
 function formatTimelineHour(hour24: number) {
-  const period = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const normalized = hour24 % 24; // 24 -> 0 (midnight)
+  const period = normalized >= 12 ? 'PM' : 'AM';
+  const hour12 = normalized % 12 === 0 ? 12 : normalized % 12;
   return `${hour12} ${period}`;
 }
 
@@ -3706,7 +3721,16 @@ function getCurrentTimeLineOffset() {
   return ((clamped - DAY_TIMELINE_START_HOUR * 60) / 60) * DAY_TIMELINE_HOUR_HEIGHT;
 }
 
-function buildTimelineEvents(events: CalendarEvent[]) {
+// End minutes for an event, treating an end at/-before its start as crossing to
+// the next day (e.g. "12:00 AM" as midnight = 1440, not 0).
+function timelineEventEndMinutes(event: CalendarEvent, startMinutes: number): number {
+  if (!event.endTime) return startMinutes + DAY_TIMELINE_EVENT_DURATION_MINUTES;
+  let end = convertTimeToMinutes(event.endTime);
+  if (end <= startMinutes) end += 24 * 60;
+  return end;
+}
+
+function buildTimelineEvents(events: CalendarEvent[], endHour: number = DAY_TIMELINE_END_HOUR) {
   const sorted = [...events].sort((a, b) => convertTimeToMinutes(a.time) - convertTimeToMinutes(b.time));
   const timelineEvents: Array<
     CalendarEvent & {
@@ -3737,15 +3761,13 @@ function buildTimelineEvents(events: CalendarEvent[]) {
   };
 
   const trackStartMinutes = DAY_TIMELINE_START_HOUR * 60;
-  const trackEndMinutes = DAY_TIMELINE_END_HOUR * 60;
+  const trackEndMinutes = endHour * 60;
 
   sorted.forEach((event) => {
     const startMinutes = convertTimeToMinutes(event.time);
     const clampedStart = Math.max(trackStartMinutes, Math.min(trackEndMinutes, startMinutes));
-    const rawDuration = event.endTime
-      ? convertTimeToMinutes(event.endTime) - startMinutes
-      : DAY_TIMELINE_EVENT_DURATION_MINUTES;
-    const durationMinutes = rawDuration > 0 ? rawDuration : DAY_TIMELINE_EVENT_DURATION_MINUTES;
+    const rawEnd = timelineEventEndMinutes(event, startMinutes);
+    const durationMinutes = rawEnd - startMinutes > 0 ? rawEnd - startMinutes : DAY_TIMELINE_EVENT_DURATION_MINUTES;
     const endMinutes = Math.min(trackEndMinutes, clampedStart + durationMinutes);
     const visibleDuration = Math.max(endMinutes - clampedStart, 15);
 
