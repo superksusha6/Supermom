@@ -1616,6 +1616,11 @@ function AppShell() {
   };
 
   const sessionRef = useRef<AppSession | null>(null);
+  // Guards against re-loading profile/preferences/etc. on every startup hydrate
+  // pass (bootstrap + auth INITIAL_SESSION/TOKEN_REFRESHED all call hydrate). A
+  // second pass re-setting the profile/prefs would move the calorie target after
+  // the UI settled → the "669 ↔ 1200" flicker. We hydrate heavy data once per user.
+  const hydratedUserRef = useRef<string | null>(null);
   const shoppingBootstrapCompleteRef = useRef(loadShoppingBootstrapComplete());
   // listId -> when we first saw it empty, so we only prune persistently-empty lists.
   const emptyListSinceRef = useRef<Record<string, number>>({});
@@ -3244,6 +3249,12 @@ function AppShell() {
       setActiveStaffProfileId(ctx.staffProfileId);
       setActiveOwnerFilter(`staff:${ctx.staffProfileId}`);
     }
+    // Session/role are refreshed above on every pass, but the heavy data load
+    // (profile, preferences, nutrition, …) must run ONCE per user — re-running it
+    // on later hydrate passes re-sets the calorie target and flickers the number.
+    // The live poll keeps this data fresh afterwards, so skipping re-loads is safe.
+    if (hydratedUserRef.current === ctx.userId) return;
+    hydratedUserRef.current = ctx.userId;
     habitsLoadedRef.current = false;
     habitsDirtyRef.current = false;
     personalProfileLoadedRef.current = false;
@@ -3805,6 +3816,7 @@ function AppShell() {
 
   function resetSignedOutState() {
     sessionRef.current = null;
+    hydratedUserRef.current = null;
     setSession(null);
     setTasks([]);
     setEvents([]);

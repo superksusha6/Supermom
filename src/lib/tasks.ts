@@ -2764,7 +2764,10 @@ export async function listNutritionEntries(session: AppSession): Promise<Nutriti
     .from('nutrition_entries')
     .select('id, name, meal_type, entry_date, calories, protein, fat, carbs, source_json')
     .eq('user_id', session.userId)
-    .order('entry_date', { ascending: false });
+    .order('entry_date', { ascending: false })
+    // Stable secondary sort so two reads return rows in the same order — otherwise a
+    // reordered-but-identical array defeats the client's no-op equality guard.
+    .order('id', { ascending: true });
   if (isMissingNutritionEntriesTableError(error)) {
     throw new Error('Supabase nutrition table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then refresh.');
   }
