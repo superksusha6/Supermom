@@ -1880,8 +1880,8 @@ export function CalendarScreen({
         </Pressable>
       </Modal>
 
-      <Modal visible={dayTimelineOpen} transparent animationType="fade" onRequestClose={closeDayTimeline}>
-        <View style={styles.modalBackdrop}>
+      <Modal visible={dayTimelineOpen} transparent animationType="none" onRequestClose={closeDayTimeline}>
+        <View style={[styles.modalBackdrop, styles.dayTimelineBackdrop]}>
           <View style={[styles.modalCard, styles.dayTimelineModalCard]}>
             <View style={styles.dayTimelineModalTop}>
               <View style={styles.dayTimelineModalCopy}>
@@ -6848,6 +6848,11 @@ const createStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+  },
+  // Opaque so the calendar (children avatar row + month grid) never shows through
+  // when the day sheet opens — it was flashing behind the translucent backdrop.
+  dayTimelineBackdrop: {
+    backgroundColor: colors.surfaceAlt,
   },
   modalCard: {
     width: '100%',
