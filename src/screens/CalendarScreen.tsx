@@ -1,5 +1,5 @@
 import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native';
 import { ActivityLevel, CalendarEvent, CalendarScope, ChildProfile, CycleDayEntry, NutritionFoodEntry, NutritionGoal, NutritionPace, NutritionSex, PhysiqueGoal, Role, TaskItem } from '@/types/app';
 import { SectionCard } from '@/components/SectionCard';
@@ -2828,9 +2828,26 @@ export function CalendarScreen({
                   style={styles.cancelBtn}
                   onPress={() => {
                     if (!editingEventId) return;
-                    onDeleteEvent({ id: editingEventId });
-                    setEditOpen(false);
-                    returnHomeIfFromHome();
+                    const doDelete = () => {
+                      onDeleteEvent({ id: editingEventId });
+                      setEditOpen(false);
+                      returnHomeIfFromHome();
+                    };
+                    // Repeating events show their own "this one / whole series" prompt.
+                    const isSeries = !!events.find((e) => e.id === editingEventId)?.seriesId;
+                    if (isSeries) {
+                      doDelete();
+                      return;
+                    }
+                    if (Platform.OS === 'web') {
+                      if (typeof globalThis.confirm === 'function' && !globalThis.confirm('Delete this event?')) return;
+                      doDelete();
+                      return;
+                    }
+                    Alert.alert('Delete event?', 'This removes it from the calendar.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: doDelete },
+                    ]);
                   }}
                 >
                   <Text style={styles.cancelBtnText}>Delete</Text>
