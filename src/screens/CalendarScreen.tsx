@@ -47,6 +47,7 @@ type Props = {
   filtersBelowSection?: ReactNode;
   filtersHeaderRight?: ReactNode;
   quickActionRequest?: { type: 'add-plan' | 'today' | 'log-period' | 'day-timeline'; token: number } | null;
+  onReturnHome?: () => void;
   onAddEvent: (payload: {
     title: string;
     date: string;
@@ -225,6 +226,7 @@ export function CalendarScreen({
   filtersBelowSection,
   filtersHeaderRight,
   quickActionRequest,
+  onReturnHome,
   onAddEvent,
   onUpdateEvent,
   onDeleteEvent,
@@ -258,6 +260,19 @@ export function CalendarScreen({
   const [dayTimelineOpen, setDayTimelineOpen] = useState(false);
   // Locked while an event is being dragged to a new time so the list doesn't scroll.
   const [dayTimelineScrollEnabled, setDayTimelineScrollEnabled] = useState(true);
+  // The day sheet was opened from the Home "Today" card — closing it (or any
+  // editor it leads to) should return the user Home, not leave them on the month.
+  const dayTimelineFromHomeRef = useRef(false);
+  const returnHomeIfFromHome = () => {
+    if (dayTimelineFromHomeRef.current) {
+      dayTimelineFromHomeRef.current = false;
+      onReturnHome?.();
+    }
+  };
+  const closeDayTimeline = () => {
+    setDayTimelineOpen(false);
+    returnHomeIfFromHome();
+  };
   const [guidanceScope, setGuidanceScope] = useState<GuidanceScope>('day');
   const [nutritionInfoOpen, setNutritionInfoOpen] = useState(false);
   const [nutritionEditorOpen, setNutritionEditorOpen] = useState(false);
@@ -1106,6 +1121,7 @@ export function CalendarScreen({
     if (quickActionRequest.type === 'day-timeline') {
       setVisibleMonth(today, false, true);
       setSelectedDateKey(todayKey);
+      dayTimelineFromHomeRef.current = true;
       setDayTimelineOpen(true);
       return;
     }
@@ -1150,6 +1166,7 @@ export function CalendarScreen({
     setSleepHours(existing?.sleepHours ?? 0);
     setSleepMinutes(existing?.sleepMinutes ?? 0);
     setMarkAsPeriodStart(!!existing?.isPeriodStart || cyclePeriodStartDates.has(selectedDateKey));
+    dayTimelineFromHomeRef.current = false;
     setDayTimelineOpen(false);
     setCycleModalOpen(true);
   }
@@ -1586,6 +1603,7 @@ export function CalendarScreen({
     mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task',
     prefillTime?: string,
   ) {
+    dayTimelineFromHomeRef.current = false;
     setDayTimelineOpen(false);
     openCreator(mode, prefillTime);
   }
@@ -1691,6 +1709,7 @@ export function CalendarScreen({
                     onPress={(event) => {
                     if (!cell.dateKey) return;
                     setSelectedDateKey(cell.dateKey);
+                    dayTimelineFromHomeRef.current = false;
                     setDayTimelineOpen(true);
                     if (birthdayDates.has(cell.dateKey)) {
                       triggerBirthdayCelebration({
@@ -1853,7 +1872,7 @@ export function CalendarScreen({
         </Pressable>
       </Modal>
 
-      <Modal visible={dayTimelineOpen} transparent animationType="fade" onRequestClose={() => setDayTimelineOpen(false)}>
+      <Modal visible={dayTimelineOpen} transparent animationType="fade" onRequestClose={closeDayTimeline}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, styles.dayTimelineModalCard]}>
             <View style={styles.dayTimelineModalTop}>
@@ -1865,7 +1884,7 @@ export function CalendarScreen({
                   </Text>
                 ) : null}
               </View>
-              <Pressable style={styles.pickerModalCloseBtn} onPress={() => setDayTimelineOpen(false)}>
+              <Pressable style={styles.pickerModalCloseBtn} onPress={closeDayTimeline}>
                 <Text style={styles.pickerModalCloseText}>×</Text>
               </Pressable>
             </View>
@@ -2710,7 +2729,7 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      <Modal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
+      <Modal visible={editOpen} transparent animationType="fade" onRequestClose={() => { setEditOpen(false); returnHomeIfFromHome(); }}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator>
@@ -2788,6 +2807,7 @@ export function CalendarScreen({
                     if (!editingEventId) return;
                     onDeleteEvent({ id: editingEventId });
                     setEditOpen(false);
+                    returnHomeIfFromHome();
                   }}
                 >
                   <Text style={styles.cancelBtnText}>Delete</Text>
@@ -2825,6 +2845,7 @@ export function CalendarScreen({
                       visibility: selectedStaff ? editVisibility : 'shared',
                     });
                     setEditOpen(false);
+                    returnHomeIfFromHome();
                   }}
                 >
                   <Text style={styles.addBtnText}>Save</Text>

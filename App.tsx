@@ -10462,6 +10462,7 @@ function AppShell() {
               onSelectOwnerFilter={setActiveOwnerFilter}
               showStaff={staffProfiles.length > 0}
               quickActionRequest={dashboardCalendarQuickAction}
+              onReturnHome={() => setHomeTab('today')}
               onCompleteStaffTask={markStaffTaskDone}
               getStaffTaskSuggestions={getStaffTaskSuggestions}
               onAddEvent={addCalendarEvent}
