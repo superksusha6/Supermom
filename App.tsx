@@ -162,7 +162,7 @@ type FoodTab = 'today' | 'shopping' | 'recipes' | 'plan' | 'diary';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'recover';
 type ParentLabel = 'Mom' | 'Dad';
 type UiRole = Exclude<Role, 'admin'>;
-type DashboardCalendarQuickAction = { type: 'add-plan' | 'today' | 'log-period'; token: number } | null;
+type DashboardCalendarQuickAction = { type: 'add-plan' | 'today' | 'log-period' | 'day-timeline'; token: number } | null;
 type DashboardNutritionQuickAction = { type: 'add-meal'; mealType: NutritionMealType; token: number } | null;
 type DashboardShoppingQuickAction = { type: 'add-item' | 'create-basket' | 'use-basket'; token: number } | null;
 type DashboardFamilyQuickAction = { type: 'add-activity'; token: number } | null;
@@ -8264,9 +8264,9 @@ function AppShell() {
             <View style={[styles.agendaRow, (item.done || item.past) && styles.agendaRowMuted, item.isNext && styles.agendaRowNext]}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}. Open calendar.`}
+                accessibilityLabel={`${item.time}, ${item.title}, ${item.who}${item.isNext ? ', next up' : ''}. Open today's schedule.`}
                 style={styles.agendaMain}
-                onPress={() => setHomeTab('calendar')}
+                onPress={() => { setHomeTab('calendar'); setDashboardCalendarQuickAction({ type: 'day-timeline', token: Date.now() }); }}
               >
                 <Text style={[styles.agendaTime, item.isNext && styles.agendaTimeNext]}>{(item.time || '').replace(/\s?[AP]M/i, '')}</Text>
                 <View style={[styles.agendaDot, { backgroundColor: item.color }]} />

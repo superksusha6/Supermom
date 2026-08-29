@@ -46,7 +46,7 @@ type Props = {
   showStaff: boolean;
   filtersBelowSection?: ReactNode;
   filtersHeaderRight?: ReactNode;
-  quickActionRequest?: { type: 'add-plan' | 'today' | 'log-period'; token: number } | null;
+  quickActionRequest?: { type: 'add-plan' | 'today' | 'log-period' | 'day-timeline'; token: number } | null;
   onAddEvent: (payload: {
     title: string;
     date: string;
@@ -1100,6 +1100,13 @@ export function CalendarScreen({
     if (quickActionRequest.type === 'today') {
       setVisibleMonth(today, false, true);
       setSelectedDateKey(todayKey);
+      return;
+    }
+
+    if (quickActionRequest.type === 'day-timeline') {
+      setVisibleMonth(today, false, true);
+      setSelectedDateKey(todayKey);
+      setDayTimelineOpen(true);
       return;
     }
 
