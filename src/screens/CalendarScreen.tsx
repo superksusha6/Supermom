@@ -47,6 +47,7 @@ type Props = {
   filtersBelowSection?: ReactNode;
   filtersHeaderRight?: ReactNode;
   quickActionRequest?: { type: 'add-plan' | 'today' | 'log-period' | 'day-timeline'; token: number } | null;
+  onQuickActionConsumed?: () => void;
   onReturnHome?: () => void;
   onAddEvent: (payload: {
     title: string;
@@ -226,6 +227,7 @@ export function CalendarScreen({
   filtersBelowSection,
   filtersHeaderRight,
   quickActionRequest,
+  onQuickActionConsumed,
   onReturnHome,
   onAddEvent,
   onUpdateEvent,
@@ -257,12 +259,15 @@ export function CalendarScreen({
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
   const [calendarPagerWidth, setCalendarPagerWidth] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [dayTimelineOpen, setDayTimelineOpen] = useState(false);
+  // Seed from the incoming quick action so, when this screen is mounted fresh by a
+  // Home "Today" tap, the day sheet is open on the very first render — otherwise the
+  // month grid paints alone for a moment before a post-mount effect opens the sheet.
+  const [dayTimelineOpen, setDayTimelineOpen] = useState(() => quickActionRequest?.type === 'day-timeline');
   // Locked while an event is being dragged to a new time so the list doesn't scroll.
   const [dayTimelineScrollEnabled, setDayTimelineScrollEnabled] = useState(true);
   // The day sheet was opened from the Home "Today" card — closing it (or any
   // editor it leads to) should return the user Home, not leave them on the month.
-  const dayTimelineFromHomeRef = useRef(false);
+  const dayTimelineFromHomeRef = useRef(quickActionRequest?.type === 'day-timeline');
   const returnHomeIfFromHome = () => {
     if (dayTimelineFromHomeRef.current) {
       dayTimelineFromHomeRef.current = false;
@@ -1123,6 +1128,9 @@ export function CalendarScreen({
       setSelectedDateKey(todayKey);
       dayTimelineFromHomeRef.current = true;
       setDayTimelineOpen(true);
+      // Clear so a later normal visit to the calendar tab doesn't re-open the sheet
+      // (the first-render seeding above reads this same prop on mount).
+      onQuickActionConsumed?.();
       return;
     }
 
