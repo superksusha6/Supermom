@@ -1149,6 +1149,10 @@ function AppShell() {
   // True once the diary has loaded from the server this session — used to show a brief
   // placeholder instead of a wrong 0/stale total while data is still arriving.
   const [nutritionLoaded, setNutritionLoaded] = useState(false);
+  // True once the personal profile (weight/height/goal) has loaded, so the calorie
+  // TARGET is final. Without this the card shows a default-profile target first
+  // (e.g. "669 left") then jumps to the real one ("1223 left") when the profile lands.
+  const [personalProfileReady, setPersonalProfileReady] = useState(false);
   const [customNutritionFoods, setCustomNutritionFoods] = useState<CustomNutritionFood[]>([]);
   const [medicines, setMedicines] = useState<MedicineItem[]>(() => loadLocalMedicines());
   const [medsEnabled, setMedsEnabled] = useState<boolean>(() => loadLocalMedsEnabled());
@@ -1250,6 +1254,10 @@ function AppShell() {
   const [dailyCardsModalOpen, setDailyCardsModalOpen] = useState(false);
   const [dailyCardsReady, setDailyCardsReady] = useState(false);
   const [dailyCardsPrefsReady, setDailyCardsPrefsReady] = useState(false);
+  // Show calorie figures only once the diary (eaten) AND the profile/prefs (target)
+  // have loaded — otherwise the target lands late and the number visibly jumps
+  // (e.g. "669 left" with a default target, then "1223 left" once the profile loads).
+  const calorieViewReady = nutritionLoaded && personalProfileReady && dailyCardsPrefsReady;
   const [dailyCardPromptShown, setDailyCardPromptShown] = useState(() => initialDailyCardStateRef.current.promptShown);
   const [revealingDailyCardId, setRevealingDailyCardId] = useState<string | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
@@ -2951,6 +2959,7 @@ function AppShell() {
       };
       latestPersonalProfileRef.current = nextProfile;
       personalProfileLoadedRef.current = true;
+      setPersonalProfileReady(true);
       setPersonalProfile(nextProfile);
       setSavedPersonalFullName(nextFullName);
       setSavedPersonalDateOfBirth(nextDateOfBirth);
@@ -2962,6 +2971,8 @@ function AppShell() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync personal profile.';
       setTasksError(message);
+      // Don't leave the calorie card stuck on the placeholder if the profile fails.
+      setPersonalProfileReady(true);
     }
   }
 
@@ -3872,6 +3883,7 @@ function AppShell() {
     setDailyCardsPrefsReady(false);
     nutritionLoadedRef.current = false;
     setNutritionLoaded(false);
+    setPersonalProfileReady(false);
     customNutritionFoodsLoadedRef.current = false;
     homeFixitLoadedRef.current = false;
     choresLoadedRef.current = false;
@@ -7910,7 +7922,7 @@ function AppShell() {
           onCalorieOverrideChange={setCalorieOverride}
           physiqueGoal={physiqueGoal}
           nutritionEntries={nutritionEntries}
-          nutritionLoaded={nutritionLoaded}
+          nutritionLoaded={calorieViewReady}
           onNutritionEntriesChange={handleNutritionEntriesChange}
           customFoodPresets={customNutritionFoods}
           onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
@@ -8209,7 +8221,7 @@ function AppShell() {
         <Text style={styles.calLogLink}>Log food</Text>
       </View>
       <View style={styles.calNumbers}>
-        <Text style={styles.calEaten}>{!nutritionLoaded ? '—' : (calGoal > 0 ? calRemaining : calEaten)}</Text>
+        <Text style={styles.calEaten}>{!calorieViewReady ? '—' : (calGoal > 0 ? calRemaining : calEaten)}</Text>
         <Text style={styles.calGoal}>{calGoal > 0 ? (calOver ? ' kcal over' : ' kcal left') : ' kcal'}</Text>
       </View>
       <View style={styles.calBarTrack}>
@@ -9775,7 +9787,7 @@ function AppShell() {
         onCalorieOverrideChange={setCalorieOverride}
         physiqueGoal={physiqueGoal}
         nutritionEntries={nutritionEntries}
-        nutritionLoaded={nutritionLoaded}
+        nutritionLoaded={calorieViewReady}
         onNutritionEntriesChange={handleNutritionEntriesChange}
         customFoodPresets={customNutritionFoods}
         onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
@@ -10439,7 +10451,7 @@ function AppShell() {
               calorieOverride={calorieOverride}
               physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
-              nutritionLoaded={nutritionLoaded}
+              nutritionLoaded={calorieViewReady}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               children={children}
               hiddenChildIds={[...hiddenChildIds]}
@@ -10671,7 +10683,7 @@ function AppShell() {
               <View style={styles.foodListCopy}>
                 <Text style={styles.foodListTitle}>Meals Today</Text>
                 <Text style={styles.foodListSub} numberOfLines={1}>
-                  {!nutritionLoaded ? 'Loading…' : (calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories')}
+                  {!calorieViewReady ? 'Loading…' : (calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories')}
                 </Text>
               </View>
               <Icon name="chevron" color={colors.subtext} size={18} />
@@ -10810,7 +10822,7 @@ function AppShell() {
               onCalorieOverrideChange={setCalorieOverride}
               physiqueGoal={physiqueGoal}
               nutritionEntries={nutritionEntries}
-              nutritionLoaded={nutritionLoaded}
+              nutritionLoaded={calorieViewReady}
               onNutritionEntriesChange={handleNutritionEntriesChange}
               customFoodPresets={customNutritionFoods}
               onCustomFoodPresetsChange={handleCustomNutritionFoodsChange}
