@@ -547,12 +547,14 @@ export function CalendarScreen({
   };
   // Convert a vertical drag distance into a new snapped start time (15-min steps).
   const commitTimelineDrag = (event: (typeof selectedTimelineEvents)[number], dy: number) => {
-    const deltaMinutes = Math.round((dy / DAY_TIMELINE_HOUR_HEIGHT) * 60 / 15) * 15;
-    if (deltaMinutes === 0) return;
+    // Snap the new start to the absolute half-hour grid (:00 / :30), matching the
+    // rest of the app's time pickers — so a drag always lands on a clean time.
+    const rawNewStart = event.startMinutes + (dy / DAY_TIMELINE_HOUR_HEIGHT) * 60;
+    const snappedStart = Math.round(rawNewStart / 30) * 30;
     const duration = Math.max(event.endMinutes - event.startMinutes, 15);
     const trackStart = DAY_TIMELINE_START_HOUR * 60;
     const trackEnd = dayTimelineEndHour * 60;
-    const newStart = Math.max(trackStart, Math.min(trackEnd - duration, event.startMinutes + deltaMinutes));
+    const newStart = Math.max(trackStart, Math.min(trackEnd - duration, snappedStart));
     if (newStart === event.startMinutes) return;
     const newTime = minutesToClockLabel(newStart);
     const newEndTime = event.endTime ? minutesToClockLabel(newStart + duration) : undefined;
