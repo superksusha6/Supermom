@@ -268,9 +268,17 @@ export function CalendarScreen({
   // The day sheet was opened from the Home "Today" card — closing it (or any
   // editor it leads to) should return the user Home, not leave them on the month.
   const dayTimelineFromHomeRef = useRef(quickActionRequest?.type === 'day-timeline');
+  // Reactive mirror of the ref: when the sheet was opened from Home we hide the
+  // calendar body behind it (see the render) so its avatars never flash; a normal
+  // open from a month day cell keeps the calendar mounted (no reflow on close).
+  const [dayTimelineFromHome, setDayTimelineFromHome] = useState(() => quickActionRequest?.type === 'day-timeline');
+  const setFromHome = (value: boolean) => {
+    dayTimelineFromHomeRef.current = value;
+    setDayTimelineFromHome(value);
+  };
   const returnHomeIfFromHome = () => {
     if (dayTimelineFromHomeRef.current) {
-      dayTimelineFromHomeRef.current = false;
+      setFromHome(false);
       onReturnHome?.();
     }
   };
@@ -1126,7 +1134,7 @@ export function CalendarScreen({
     if (quickActionRequest.type === 'day-timeline') {
       setVisibleMonth(today, false, true);
       setSelectedDateKey(todayKey);
-      dayTimelineFromHomeRef.current = true;
+      setFromHome(true);
       setDayTimelineOpen(true);
       // Clear so a later normal visit to the calendar tab doesn't re-open the sheet
       // (the first-render seeding above reads this same prop on mount).
@@ -1174,7 +1182,7 @@ export function CalendarScreen({
     setSleepHours(existing?.sleepHours ?? 0);
     setSleepMinutes(existing?.sleepMinutes ?? 0);
     setMarkAsPeriodStart(!!existing?.isPeriodStart || cyclePeriodStartDates.has(selectedDateKey));
-    dayTimelineFromHomeRef.current = false;
+    setFromHome(false);
     setDayTimelineOpen(false);
     setCycleModalOpen(true);
   }
@@ -1611,7 +1619,7 @@ export function CalendarScreen({
     mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task',
     prefillTime?: string,
   ) {
-    dayTimelineFromHomeRef.current = false;
+    setFromHome(false);
     setDayTimelineOpen(false);
     openCreator(mode, prefillTime);
   }
@@ -1717,7 +1725,7 @@ export function CalendarScreen({
                     onPress={(event) => {
                     if (!cell.dateKey) return;
                     setSelectedDateKey(cell.dateKey);
-                    dayTimelineFromHomeRef.current = false;
+                    setFromHome(false);
                     setDayTimelineOpen(true);
                     if (birthdayDates.has(cell.dateKey)) {
                       triggerBirthdayCelebration({
@@ -2025,6 +2033,12 @@ export function CalendarScreen({
         </View>
       </Modal>
 
+      {/* react-native-web's Modal shows its content at opacity:0 for the first frame
+          (it reveals on a post-paint effect), so anything rendered here paints behind
+          it for that frame. When the sheet is opened from Home, don't render the
+          calendar body — otherwise its children avatar row flashes before the sheet
+          appears. (A normal open from a month day cell keeps the calendar mounted.) */}
+      {dayTimelineOpen && dayTimelineFromHome ? null : (
       <SectionCard title="Calendar">
         {avatarPeople.length > 1 ? (
           <ScrollView
@@ -2204,6 +2218,7 @@ export function CalendarScreen({
           </Pressable>
         ) : null}
       </SectionCard>
+      )}
 
       <Modal visible={cycleModalOpen} transparent animationType="fade" onRequestClose={() => setCycleModalOpen(false)}>
         <View style={styles.modalBackdrop}>
