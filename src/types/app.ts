@@ -201,6 +201,9 @@ export type HabitEntry = {
   completedToday: boolean;
   completedDate?: string; // YYYY-MM-DD the habit was last ticked; drives the daily reset
   streak: number;
+  // Per-day history for the monthly tracker: { 'YYYY-MM-DD': true } for done days.
+  // Missing/absent day = not done (no punishment, no streak burn).
+  completions?: Record<string, boolean>;
 };
 
 export type HabitChallenge = {

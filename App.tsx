@@ -134,6 +134,7 @@ import { ChildrenScreen, PhotoCropper } from '@/screens/ChildrenScreen';
 import { Pet3D } from '@/components/Pet3D';
 import { Asset } from 'expo-asset';
 import { HabitsScreen } from '@/screens/HabitsScreen';
+import { HabitsMonthScreen } from '@/screens/HabitsMonthScreen';
 import { WordsScreen } from '@/screens/WordsScreen';
 import { WordPractice } from '@/screens/WordPractice';
 import { NutritionScreen } from '@/screens/NutritionScreen';
@@ -305,6 +306,8 @@ const LOCAL_MEDICINES_KEY = 'smartmom.medicines.v1';
 const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
 const LOCAL_PHYSIQUE_GOAL_KEY = 'smartmom.physiqueGoal.v1';
+const LOCAL_HABIT_COLOR_KEY = 'smartmom.habitColor.v1';
+const DEFAULT_HABIT_COLOR = '#3345e6'; // Luminous Blue — WGSN/Coloro Colour of the Year 2027
 const LOCAL_QUIET_HOURS_KEY = 'smartmom.quietHours.v1';
 const LOCAL_QUIET_START_KEY = 'smartmom.quietStart.v1';
 const LOCAL_QUIET_END_KEY = 'smartmom.quietEnd.v1';
@@ -1144,6 +1147,13 @@ function AppShell() {
   const [desiredWeight, setDesiredWeight] = useState('');
   const [nutritionPace, setNutritionPace] = useState<NutritionPace>('flexible');
   const [physiqueGoal, setPhysiqueGoal] = useState<PhysiqueGoal>(() => loadLocalPhysiqueGoal());
+  const [habitColor, setHabitColor] = useState<string>(() => {
+    try {
+      return globalThis.localStorage?.getItem(LOCAL_HABIT_COLOR_KEY) || DEFAULT_HABIT_COLOR;
+    } catch {
+      return DEFAULT_HABIT_COLOR;
+    }
+  });
   const [calorieOverride, setCalorieOverride] = useState('');
   const [nutritionEntries, setNutritionEntries] = useState<NutritionFoodEntry[]>([]);
   // True once the diary has loaded from the server this session — used to show a brief
@@ -3193,6 +3203,7 @@ function AppShell() {
       if (preferences?.nutritionPace) setNutritionPace(preferences.nutritionPace);
       if (typeof preferences?.calorieOverride === 'string') setCalorieOverride(preferences.calorieOverride);
       if (preferences?.physiqueGoal) setPhysiqueGoal(normalizePhysiqueGoal(preferences.physiqueGoal));
+      if (preferences?.habitColor) setHabitColor(preferences.habitColor);
       if (typeof preferences?.periodRemindersEnabled === 'boolean') setPeriodRemindersEnabled(preferences.periodRemindersEnabled);
       if (typeof preferences?.periodReminderLeadDays === 'number' && preferences.periodReminderLeadDays >= 1 && preferences.periodReminderLeadDays <= 3) {
         setPeriodReminderLeadDays(preferences.periodReminderLeadDays);
@@ -3650,6 +3661,14 @@ function AppShell() {
     persistLocalPhysiqueGoal(physiqueGoal);
   }, [physiqueGoal]);
 
+  useEffect(() => {
+    try {
+      globalThis.localStorage?.setItem(LOCAL_HABIT_COLOR_KEY, habitColor);
+    } catch {
+      /* ignore */
+    }
+  }, [habitColor]);
+
   useEffect(() => { writeLocal(LOCAL_QUIET_HOURS_KEY, quietHoursEnabled ? 'true' : 'false'); }, [quietHoursEnabled]);
   useEffect(() => { writeLocal(LOCAL_QUIET_START_KEY, quietHoursStart); }, [quietHoursStart]);
   useEffect(() => { writeLocal(LOCAL_QUIET_END_KEY, quietHoursEnd); }, [quietHoursEnd]);
@@ -3694,6 +3713,7 @@ function AppShell() {
       quietHoursEnd,
       eventRemindersEnabled,
       eventReminderLead,
+      habitColor,
     }).catch((error) =>
       setTasksError(error instanceof Error ? error.message : 'Could not save preferences.'),
     );
@@ -3720,6 +3740,7 @@ function AppShell() {
     quietHoursEnd,
     eventRemindersEnabled,
     eventReminderLead,
+    habitColor,
   ]);
 
   useEffect(() => {
@@ -8900,7 +8921,11 @@ function AppShell() {
               const continues = h.completedDate === getYesterdayKey() || h.completedDate === getTwoDaysAgoKey();
               const nextStreak = completing ? (continues ? h.streak + 1 : 1) : Math.max(0, h.streak - 1);
               const nextDate = completing ? getTodayKey() : nextStreak > 0 ? getYesterdayKey() : undefined;
-              return { ...h, completedToday: completing, completedDate: nextDate, streak: nextStreak };
+              // Mirror into the per-day map so the monthly tracker's today cell agrees.
+              const completions = { ...(h.completions || {}) };
+              if (completing) completions[getTodayKey()] = true;
+              else delete completions[getTodayKey()];
+              return { ...h, completedToday: completing, completedDate: nextDate, streak: nextStreak, completions };
             })()
           : h,
       ),
@@ -11030,15 +11055,14 @@ function AppShell() {
         ) : null}
 
         {screen === 'wellness' && habitsEnabled && !isStaffView ? (
-          <HabitsScreen
+          <HabitsMonthScreen
             habits={habits}
             onHabitsChange={setHabitsByUser}
             onDeleteHabit={(id) => {
               if (session && isSupabaseConfigured) deleteHabitEntry(session, id).catch(() => {});
             }}
-            challenges={habitChallenges}
-            habitRemindersEnabled={habitRemindersEnabled}
-            quickActionRequest={dashboardWellnessQuickAction}
+            habitColor={habitColor}
+            onHabitColorChange={setHabitColor}
           />
         ) : null}
 

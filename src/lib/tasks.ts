@@ -154,6 +154,7 @@ export type UserPreferencesRecord = {
   quietHoursEnd?: string;
   eventRemindersEnabled?: boolean;
   eventReminderLead?: string;
+  habitColor?: string; // chosen accent colour for the monthly habit tracker (any hex)
 };
 
 export type MealPlanProfileRecord = {
@@ -2498,6 +2499,7 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
     quiet_hours_end?: string | null;
     event_reminders_enabled?: boolean | null;
     event_reminder_lead?: string | null;
+    habit_color?: string | null;
   };
 
   const boolOrUndef = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
@@ -2522,6 +2524,7 @@ export async function getUserPreferences(session: AppSession): Promise<UserPrefe
     nutritionPace: record.nutrition_pace || undefined,
     calorieOverride: record.calorie_override != null ? String(record.calorie_override) : undefined,
     physiqueGoal: record.physique_goal || undefined,
+    habitColor: record.habit_color || undefined,
     activeMealPlanProfile: record.active_meal_plan_profile || undefined,
     periodRemindersEnabled: typeof record.period_reminders_enabled === 'boolean' ? record.period_reminders_enabled : undefined,
     periodReminderLeadDays:
@@ -2562,6 +2565,7 @@ export async function upsertUserPreferences(
     ...('quietHoursEnd' in payload ? { quiet_hours_end: payload.quietHoursEnd || null } : {}),
     ...('eventRemindersEnabled' in payload ? { event_reminders_enabled: !!payload.eventRemindersEnabled } : {}),
     ...('eventReminderLead' in payload ? { event_reminder_lead: payload.eventReminderLead || null } : {}),
+    ...('habitColor' in payload ? { habit_color: payload.habitColor || null } : {}),
   };
 
   let { error } = await client.from('user_preferences').upsert(
@@ -2582,6 +2586,7 @@ export async function upsertUserPreferences(
       'quiet_hours_end',
       'event_reminders_enabled',
       'event_reminder_lead',
+      'habit_color',
     ];
     const rest: Record<string, unknown> = {};
     Object.entries(fullPayload).forEach(([k, v]) => {
@@ -2649,24 +2654,27 @@ function isMissingHabitCompletedDateError(error: { message?: string } | null): b
 
 export async function listHabitEntries(session: AppSession): Promise<HabitEntry[]> {
   const client = requireClient();
-  // completed_date tells us which day the tick belongs to. Retry without it if the
-  // column hasn't been migrated yet (supabase/habit_completed_date.sql).
-  const withDate = await client
-    .from('habit_entries')
-    .select(`${HABIT_BASE_COLUMNS}, completed_date`)
-    .eq('user_id', session.userId)
-    .order('created_at', { ascending: false });
-
-  let data: any[] | null = withDate.data;
-  let error = withDate.error;
-  if (isMissingHabitCompletedDateError(error)) {
-    const fallback = await client
+  // Progressively drop newer columns (completions, completed_date) if they haven't
+  // been migrated yet, so the app keeps working before the SQL is applied.
+  const selects = [
+    `${HABIT_BASE_COLUMNS}, completed_date, completions`,
+    `${HABIT_BASE_COLUMNS}, completed_date`,
+    HABIT_BASE_COLUMNS,
+  ];
+  let data: any[] | null = null;
+  let error: any = null;
+  for (const sel of selects) {
+    const res = await client
       .from('habit_entries')
-      .select(HABIT_BASE_COLUMNS)
+      .select(sel)
       .eq('user_id', session.userId)
       .order('created_at', { ascending: false });
-    data = fallback.data;
-    error = fallback.error;
+    data = res.data as any[] | null;
+    error = res.error;
+    if (!error) break;
+    const m = String(error?.message || '').toLowerCase();
+    // Only fall back for a missing-column error; otherwise stop and report it.
+    if (!(m.includes('completions') || m.includes('completed_date'))) break;
   }
   if (isMissingHabitEntriesTableError(error)) {
     throw new Error('Supabase habits table is missing. Run /Users/ksu/promom/smart-mom-app/supabase/habits_nutrition.sql in the Supabase SQL Editor, then refresh.');
@@ -2686,6 +2694,10 @@ export async function listHabitEntries(session: AppSession): Promise<HabitEntry[
     completedToday: !!row.completed_today,
     completedDate: 'completed_date' in row && row.completed_date ? String(row.completed_date) : undefined,
     streak: Number(row.streak) || 0,
+    completions:
+      row && typeof row.completions === 'object' && row.completions
+        ? (row.completions as Record<string, boolean>)
+        : undefined,
   }));
 }
 
@@ -2734,10 +2746,19 @@ export async function replaceHabitEntries(session: AppSession, habits: HabitEntr
     ...row,
     completed_date: habits[index].completedDate || null,
   }));
+  const fullRows = withDateRows.map((row, index) => ({
+    ...row,
+    completions: habits[index].completions || {},
+  }));
 
   // 1) Upsert the current habits FIRST. If anything interrupts us after this, the
   //    latest data is already saved — the worst case is a stale row lingering.
-  let { error } = await client.from('habit_entries').upsert(withDateRows, { onConflict: 'id' });
+  //    Fall back progressively if the completions / completed_date columns aren't
+  //    migrated yet, so ticking never fails on an older DB.
+  let { error } = await client.from('habit_entries').upsert(fullRows, { onConflict: 'id' });
+  if (error && String(error.message || '').toLowerCase().includes('completions')) {
+    ({ error } = await client.from('habit_entries').upsert(withDateRows, { onConflict: 'id' }));
+  }
   if (isMissingHabitCompletedDateError(error)) {
     ({ error } = await client.from('habit_entries').upsert(baseRows, { onConflict: 'id' }));
   }
