@@ -48,6 +48,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
   const todayKey = dateKey(now);
 
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [barW, setBarW] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [draftColor, setDraftColor] = useState(habitColor);
   const [addOpen, setAddOpen] = useState(false);
@@ -211,8 +212,20 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                   <Text style={styles.pctLabel}>{st.pct}%</Text>
                   <Text style={[styles.chevDown, open && styles.chevUp]}>⌄</Text>
                 </Pressable>
-                {/* month bar — each day is tappable to mark it done */}
-                <View style={styles.bar}>
+                {/* month bar — tap anywhere on the strip to mark the day under the finger */}
+                <Pressable
+                  style={styles.bar}
+                  onLayout={(e) => setBarW(e.nativeEvent.layout.width)}
+                  onPress={(e) => {
+                    const ne = e.nativeEvent as any;
+                    const w = barW || ne.target?.offsetWidth || 1;
+                    const x = ne.locationX ?? ne.offsetX ?? 0;
+                    const idx = Math.min(daysInMonth - 1, Math.max(0, Math.floor((x / w) * daysInMonth)));
+                    const k = keyFor(year, month, idx + 1);
+                    if (k > todayKey) return; // can't mark the future
+                    toggleDay(h.id, k);
+                  }}
+                >
                   {Array.from({ length: daysInMonth }, (_, i) => {
                     const day = i + 1;
                     const k = keyFor(year, month, day);
@@ -220,10 +233,9 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                     const done = doneOn(h, k);
                     const isToday = k === todayKey;
                     return (
-                      <Pressable
+                      <View
                         key={day}
-                        disabled={future}
-                        onPress={() => toggleDay(h.id, k)}
+                        pointerEvents="none"
                         style={[
                           styles.seg,
                           { backgroundColor: done ? accent : colors.surfaceAlt },
@@ -233,7 +245,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                       />
                     );
                   })}
-                </View>
+                </Pressable>
                 <Text style={styles.best}>Лучшее: <Text style={{ color: accentDeep, fontWeight: '700' }}>{st.best} подряд</Text> 🌟</Text>
               </View>
             </View>
