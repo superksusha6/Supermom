@@ -3755,17 +3755,28 @@ function AppShell() {
     // Safety: never wipe the server copy with an empty set. An empty `habits` here is
     // almost always a transient/reset state, not a deliberate "delete every habit".
     if (habits.length === 0) return;
-    if (habitsSaveInFlightRef.current) return; // a save is running; a later edit re-triggers this
-    habitsSaveInFlightRef.current = true;
-    habitsDirtyRef.current = false;
-    replaceHabitEntries(session, habits)
-      .catch((error) => {
-        habitsDirtyRef.current = true; // failed — keep it dirty so the next change retries
-        setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
-      })
-      .finally(() => {
-        habitsSaveInFlightRef.current = false;
-      });
+    // Always track the newest list, even when a save is mid-flight, so the re-save
+    // below persists the very latest ticks.
+    latestHabitsRef.current = habits;
+    if (habitsSaveInFlightRef.current) return; // a save is running; its finally will flush the latest
+    const runSave = () => {
+      const toSave = latestHabitsRef.current;
+      if (!toSave || toSave.length === 0) return;
+      habitsSaveInFlightRef.current = true;
+      habitsDirtyRef.current = false;
+      replaceHabitEntries(session, toSave)
+        .catch((error) => {
+          habitsDirtyRef.current = true; // failed — keep it dirty so the next change retries
+          setTasksError(error instanceof Error ? error.message : 'Could not save habits.');
+        })
+        .finally(() => {
+          habitsSaveInFlightRef.current = false;
+          // A tick landed while we were saving → persist it now, so a reload can't
+          // pull an older server copy and drop it.
+          if (habitsDirtyRef.current && (latestHabitsRef.current || []).length > 0) runSave();
+        });
+    };
+    runSave();
   }, [session, habits]);
 
   useEffect(() => {
