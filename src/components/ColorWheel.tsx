@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 // ---- HSV <-> hex helpers -----------------------------------------------------
@@ -68,6 +68,18 @@ export function ColorWheel({ value, onChange, size = 220, colors }: Props) {
   const [s, setS] = useState(initial.s);
   const [v, setV] = useState(initial.v);
   const R = size / 2;
+
+  // Re-seed the wheel/slider when `value` is changed from OUTSIDE (e.g. tapping a
+  // preset swatch) — but not when it changed because we just emitted it (a drag).
+  useEffect(() => {
+    if (value && value.toLowerCase() !== hsvToHex(h, s, v).toLowerCase()) {
+      const nx = hexToHsv(value);
+      setH(nx.h);
+      setS(nx.s);
+      setV(nx.v);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   const emit = (nh: number, ns: number, nv: number) => onChange(hsvToHex(nh, ns, nv));
 

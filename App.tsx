@@ -2898,10 +2898,22 @@ function AppShell() {
     if (habitsDirtyRef.current || habitsSaveInFlightRef.current) return;
     try {
       const rows = await listHabitEntries(current);
+      // A tick may have landed DURING the fetch — re-check the guards so we don't
+      // overwrite it with the (now stale) server copy we just read.
+      if (habitsDirtyRef.current || habitsSaveInFlightRef.current) return;
       // Server empty = nothing saved yet (or a transient RLS/auth miss). Keep the
       // local list so we never wipe habits that are still waiting to migrate up.
       if (rows.length === 0) return;
-      const next = normalizeHabitsForToday(rows);
+      // Union each habit's per-day marks with what this device already has, so a
+      // mark made on another device (or a beat ago) is never dropped by a wholesale
+      // replace. Local keys win where present; absent keys fall back to the server.
+      const localById = new Map(latestHabitsRef.current.map((h) => [h.id, h]));
+      const merged = rows.map((r) => {
+        const local = localById.get(r.id);
+        if (!local || !local.completions || Object.keys(local.completions).length === 0) return r;
+        return { ...r, completions: { ...(r.completions || {}), ...local.completions } };
+      });
+      const next = normalizeHabitsForToday(merged);
       latestHabitsRef.current = next;
       setHabits(next);
     } catch {
@@ -3298,8 +3310,20 @@ function AppShell() {
           // progress, or a changed set — e.g. the desktop's list), migrate those up
           // once so they sync to the phone. The pristine starter set is never pushed.
           const localHabits = latestHabitsRef.current.length > 0 ? latestHabitsRef.current : loadLocalHabits();
-          const nextHabits =
-            liveHabits.length > 0 ? normalizeHabitsForToday(liveHabits) : normalizeHabitsForToday(localHabits);
+          let nextHabits: HabitEntry[];
+          if (liveHabits.length > 0) {
+            // Union local per-day marks into the server list so a tick made during
+            // this initial load window (held only locally) isn't overwritten.
+            const localById = new Map(localHabits.map((h) => [h.id, h]));
+            const mergedLive = liveHabits.map((r) => {
+              const local = localById.get(r.id);
+              if (!local || !local.completions || Object.keys(local.completions).length === 0) return r;
+              return { ...r, completions: { ...(r.completions || {}), ...local.completions } };
+            });
+            nextHabits = normalizeHabitsForToday(mergedLive);
+          } else {
+            nextHabits = normalizeHabitsForToday(localHabits);
+          }
           latestHabitsRef.current = nextHabits;
           setHabits(nextHabits);
           habitsLoadedRef.current = true;

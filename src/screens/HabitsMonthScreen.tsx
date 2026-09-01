@@ -29,6 +29,18 @@ function dateKey(d: Date): string {
 function keyFor(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+// Readable text/glyph colour on a filled swatch — dark ink on light colours,
+// white on dark ones — so a pale accent never leaves invisible text.
+function textOn(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
+  if (!m) return '#ffffff';
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.62 ? '#1c1c22' : '#ffffff';
+}
 
 type Props = {
   habits: HabitEntry[];
@@ -99,10 +111,22 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
         if (map[key]) delete map[key];
         else map[key] = true;
         const next: HabitEntry = { ...h, completions: map };
-        // keep the Home card's "today" state in sync when toggling today
+        // keep the Home card's "today" state in sync when toggling today. Derive
+        // completedDate + streak from the map so an UN-check doesn't leave a stale
+        // "done today" that reappears after a reload.
         if (key === todayKey) {
           next.completedToday = !!map[key];
-          next.completedDate = map[key] ? todayKey : h.completedDate;
+          const doneDays = Object.keys(map).filter((d) => map[d]).sort();
+          next.completedDate = doneDays.length ? doneDays[doneDays.length - 1] : undefined;
+          let s = 0;
+          if (doneDays.length) {
+            const cursor = new Date(`${doneDays[doneDays.length - 1]}T00:00:00`);
+            while (map[dateKey(cursor)]) {
+              s += 1;
+              cursor.setDate(cursor.getDate() - 1);
+            }
+          }
+          next.streak = s;
         }
         return next;
       }),
@@ -112,7 +136,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
   const addHabit = () => {
     const name = newName.trim();
     if (!name) return;
-    const id = `h-${Date.now()}`;
+    const id = `h-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     onHabitsChange((prev) => [
       ...prev,
       {
@@ -174,7 +198,9 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
         <View style={styles.monthNav}>
           <Pressable onPress={() => stepMonth(-1)} hitSlop={8}><Text style={styles.chev}>‹</Text></Pressable>
           <Text style={styles.monthLabel}>{MONTHS_RU[month]} {year}</Text>
-          <Pressable onPress={() => stepMonth(1)} hitSlop={8}><Text style={styles.chev}>›</Text></Pressable>
+          <Pressable onPress={() => stepMonth(1)} hitSlop={8} disabled={isCurrentMonth}>
+            <Text style={[styles.chev, isCurrentMonth && { opacity: 0.25 }]}>›</Text>
+          </Pressable>
         </View>
         <Pressable style={styles.colorBtn} onPress={() => { setDraftColor(habitColor); setColorOpen(true); }}>
           <View style={[styles.colorDot, { backgroundColor: accent }]} />
@@ -192,7 +218,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
           </Text>
         </View>
         <Pressable style={[styles.addBtn, { backgroundColor: accent }]} onPress={() => setAddOpen(true)}>
-          <Text style={styles.addBtnText}>＋</Text>
+          <Text style={[styles.addBtnText, { color: textOn(accent) }]}>＋</Text>
         </Pressable>
       </View>
 
@@ -201,6 +227,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
       {active.map((h) => {
         const st = stats(h);
         const open = expanded === h.id;
+        const todayDone = doneOn(h, todayKey);
         return (
           <View key={h.id} style={styles.card}>
             <View style={styles.cardTop}>
@@ -218,7 +245,8 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                   onLayout={(e) => setBarW(e.nativeEvent.layout.width)}
                   onPress={(e) => {
                     const ne = e.nativeEvent as any;
-                    const w = barW || ne.target?.offsetWidth || 1;
+                    const w = barW || ne.target?.offsetWidth || 0;
+                    if (!w) return; // width not measured yet — avoid defaulting to day 1
                     const x = ne.locationX ?? ne.offsetX ?? 0;
                     const idx = Math.min(daysInMonth - 1, Math.max(0, Math.floor((x / w) * daysInMonth)));
                     const k = keyFor(year, month, idx + 1);
@@ -239,8 +267,10 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                         style={[
                           styles.seg,
                           { backgroundColor: done ? accent : colors.surfaceAlt },
-                          done ? null : { opacity: future ? 0.5 : 1 },
-                          isToday ? { borderWidth: 1.4, borderColor: accent } : null,
+                          done ? null : { opacity: future ? 0.35 : 1 },
+                          // today stays locatable in both states: white ring on a
+                          // filled cell, accent ring on an empty one.
+                          isToday ? { borderWidth: 1.6, borderColor: done ? '#ffffff' : accent } : null,
                         ]}
                       />
                     );
@@ -248,6 +278,15 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                 </Pressable>
                 <Text style={styles.best}>Лучшее: <Text style={{ color: accentDeep, fontWeight: '700' }}>{st.best} подряд</Text> 🌟</Text>
               </View>
+              {/* one-tap "mark today" — the primary daily action */}
+              <Pressable
+                style={[styles.todayCheck, { borderColor: accent }, todayDone && { backgroundColor: accent }]}
+                onPress={() => toggleDay(h.id, todayKey)}
+                accessibilityRole="button"
+                accessibilityLabel={`Отметить сегодня: ${h.title}`}
+              >
+                {todayDone ? <Text style={[styles.todayCheckMark, { color: textOn(accent) }]}>✓</Text> : null}
+              </Pressable>
             </View>
 
             {open ? (
@@ -270,12 +309,12 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                           styles.dayCell,
                           done ? { backgroundColor: accent } : { backgroundColor: colors.surfaceAlt },
                           future ? { opacity: 0.45 } : null,
-                          isToday ? { borderWidth: 2, borderColor: accent } : null,
+                          isToday ? { borderWidth: 2, borderColor: done ? textOn(accent) : accent } : null,
                         ]}
                         disabled={future}
                         onPress={() => toggleDay(h.id, k)}
                       >
-                        <Text style={[styles.dayText, done ? { color: '#fff' } : { color: colors.subtext }]}>{day}</Text>
+                        <Text style={[styles.dayText, done ? { color: textOn(accent) } : { color: colors.subtext }]}>{day}</Text>
                       </Pressable>
                     );
                   })}
@@ -310,7 +349,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                 <Text style={styles.cancelText}>Отмена</Text>
               </Pressable>
               <Pressable style={[styles.saveBtn, { backgroundColor: draftColor }]} onPress={() => { onHabitColorChange(draftColor); setColorOpen(false); }}>
-                <Text style={styles.saveText}>Применить</Text>
+                <Text style={[styles.saveText, { color: textOn(draftColor) }]}>Применить</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -337,7 +376,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                 <Text style={styles.cancelText}>Отмена</Text>
               </Pressable>
               <Pressable style={[styles.saveBtn, { backgroundColor: accent }]} onPress={addHabit}>
-                <Text style={styles.saveText}>Добавить</Text>
+                <Text style={[styles.saveText, { color: textOn(accent) }]}>Добавить</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -354,14 +393,14 @@ function makeStyles(c: ThemeColors) {
     topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
     monthNav: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     chev: { fontSize: 20, fontWeight: '700', color: c.subtext },
-    monthLabel: { fontSize: 16, fontWeight: '750', color: c.text, minWidth: 120, textAlign: 'center' },
+    monthLabel: { fontSize: 16, fontWeight: '700', color: c.text, minWidth: 120, textAlign: 'center' },
     colorBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: c.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: c.surface },
     colorDot: { width: 15, height: 15, borderRadius: 8 },
     colorBtnText: { fontSize: 13, fontWeight: '700', color: c.text },
 
     hero: { flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 22, padding: 16, marginBottom: 18 },
     heroInfo: { flex: 1, minWidth: 0 },
-    heroTitle: { fontSize: 17, fontWeight: '760', color: c.text },
+    heroTitle: { fontSize: 17, fontWeight: '800', color: c.text },
     heroSub: { fontSize: 13, color: c.subtext, marginTop: 4 },
     ringBig: { fontSize: 24, fontWeight: '800' },
     ringSmall: { fontSize: 12, fontWeight: '800' },
@@ -373,10 +412,12 @@ function makeStyles(c: ThemeColors) {
     card: { borderWidth: 1, borderColor: c.border, borderRadius: 18, backgroundColor: c.surface, padding: 13, marginBottom: 11 },
     cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     cardMain: { flex: 1, minWidth: 0 },
+    todayCheck: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flex: 0 },
+    todayCheckMark: { fontSize: 17, fontWeight: '800', marginTop: -1 },
     cardName: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     emoji: { fontSize: 15 },
-    name: { fontSize: 14.5, fontWeight: '720', color: c.text, flexShrink: 1 },
-    pctLabel: { marginLeft: 'auto', fontSize: 12, fontWeight: '640', color: c.subtext },
+    name: { fontSize: 14.5, fontWeight: '700', color: c.text, flexShrink: 1 },
+    pctLabel: { marginLeft: 'auto', fontSize: 12, fontWeight: '600', color: c.subtext },
     chevDown: { fontSize: 13, color: c.subtext },
     chevUp: { transform: [{ rotate: '180deg' }] },
     bar: { flexDirection: 'row', gap: 1.5, marginTop: 9, height: 26 },
@@ -390,7 +431,7 @@ function makeStyles(c: ThemeColors) {
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
     cell: { width: `${100 / 7}%`, aspectRatio: 1, padding: 2.5, alignItems: 'center', justifyContent: 'center' } as any,
     dayCell: { borderRadius: 999 },
-    dayText: { fontSize: 12, fontWeight: '650' },
+    dayText: { fontSize: 12, fontWeight: '700' },
     removeRow: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
     removeText: { color: '#be123c', fontSize: 12.5, fontWeight: '700' },
 
@@ -398,7 +439,7 @@ function makeStyles(c: ThemeColors) {
 
     backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
     sheet: { width: '100%', maxWidth: 360, backgroundColor: c.surface, borderRadius: 22, padding: 18, borderWidth: 1, borderColor: c.border },
-    sheetTitle: { fontSize: 17, fontWeight: '750', color: c.text, marginBottom: 14, textAlign: 'center' },
+    sheetTitle: { fontSize: 17, fontWeight: '700', color: c.text, marginBottom: 14, textAlign: 'center' },
     presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 16 },
     presetSw: { width: 34, height: 34, borderRadius: 10, borderWidth: 2, borderColor: 'transparent' },
     presetSwActive: { borderColor: c.text },
