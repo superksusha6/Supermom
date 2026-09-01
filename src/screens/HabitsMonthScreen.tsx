@@ -202,16 +202,16 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
         const open = expanded === h.id;
         return (
           <View key={h.id} style={styles.card}>
-            <Pressable style={styles.cardTop} onPress={() => setExpanded(open ? null : h.id)}>
-              {ring(40, st.pct)}
+            <View style={styles.cardTop}>
+              <Pressable onPress={() => setExpanded(open ? null : h.id)}>{ring(40, st.pct)}</Pressable>
               <View style={styles.cardMain}>
-                <View style={styles.cardName}>
+                <Pressable style={styles.cardName} onPress={() => setExpanded(open ? null : h.id)}>
                   <Text style={styles.emoji}>{h.icon || '•'}</Text>
                   <Text style={styles.name} numberOfLines={1}>{h.title}</Text>
                   <Text style={styles.pctLabel}>{st.pct}%</Text>
                   <Text style={[styles.chevDown, open && styles.chevUp]}>⌄</Text>
-                </View>
-                {/* month bar */}
+                </Pressable>
+                {/* month bar — each day is tappable to mark it done */}
                 <View style={styles.bar}>
                   {Array.from({ length: daysInMonth }, (_, i) => {
                     const day = i + 1;
@@ -220,11 +220,13 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                     const done = doneOn(h, k);
                     const isToday = k === todayKey;
                     return (
-                      <View
+                      <Pressable
                         key={day}
+                        disabled={future}
+                        onPress={() => toggleDay(h.id, k)}
                         style={[
                           styles.seg,
-                          done ? { backgroundColor: accent } : future ? { backgroundColor: colors.surfaceAlt } : { backgroundColor: colors.surfaceAlt },
+                          { backgroundColor: done ? accent : colors.surfaceAlt },
                           done ? null : { opacity: future ? 0.5 : 1 },
                           isToday ? { borderWidth: 1.4, borderColor: accent } : null,
                         ]}
@@ -234,7 +236,7 @@ export function HabitsMonthScreen({ habits, onHabitsChange, onDeleteHabit, habit
                 </View>
                 <Text style={styles.best}>Лучшее: <Text style={{ color: accentDeep, fontWeight: '700' }}>{st.best} подряд</Text> 🌟</Text>
               </View>
-            </Pressable>
+            </View>
 
             {open ? (
               <View style={styles.cal}>
@@ -365,8 +367,8 @@ function makeStyles(c: ThemeColors) {
     pctLabel: { marginLeft: 'auto', fontSize: 12, fontWeight: '640', color: c.subtext },
     chevDown: { fontSize: 13, color: c.subtext },
     chevUp: { transform: [{ rotate: '180deg' }] },
-    bar: { flexDirection: 'row', gap: 1.5, marginTop: 9, height: 18 },
-    seg: { flex: 1, borderRadius: 2.5, minWidth: 0 },
+    bar: { flexDirection: 'row', gap: 1.5, marginTop: 9, height: 26 },
+    seg: { flex: 1, borderRadius: 3, minWidth: 0 },
     best: { marginTop: 9, fontSize: 11.5, color: c.subtext, fontWeight: '600' },
 
     cal: { marginTop: 14, paddingTop: 13, borderTopWidth: 1, borderTopColor: c.border, borderStyle: 'dashed' },
