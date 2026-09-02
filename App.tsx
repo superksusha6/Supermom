@@ -8311,7 +8311,7 @@ function AppShell() {
     return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   })();
   const focusPlanner = isStaffView ? null : (
-    <View style={styles.plannerCard}>
+    <Pressable style={styles.plannerCard} onPress={() => setHomeTab('calendar')} accessibilityRole="button" accessibilityLabel="Open calendar">
       <Pressable style={styles.plannerHead} onPress={() => setHomeTab('calendar')} accessibilityRole="button" accessibilityLabel="Open calendar">
         <Text style={styles.plannerTitle}>Today</Text>
         {!isStaffView ? (
@@ -8364,7 +8364,7 @@ function AppShell() {
                 accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
                 hitSlop={8}
                 style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
-                onPress={() => toggleEventDone(item.id)}
+                onPress={(e) => { (e as any)?.stopPropagation?.(); toggleEventDone(item.id); }}
               >
                 {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
               </Pressable>
@@ -8381,7 +8381,7 @@ function AppShell() {
           )}
         </Pressable>
       )}
-    </View>
+    </Pressable>
   );
 
   // Hide the whole card when nothing needs attention — no point showing an "all clear" panel.
@@ -8434,7 +8434,7 @@ function AppShell() {
                 accessibilityLabel={`Mark ${item.title} ${item.done ? 'not done' : 'done'}`}
                 hitSlop={8}
                 style={[styles.agendaCheck, item.done && styles.agendaCheckDone]}
-                onPress={() => toggleEventDone(item.id)}
+                onPress={(e) => { (e as any)?.stopPropagation?.(); toggleEventDone(item.id); }}
               >
                 {item.done ? <Text style={styles.agendaCheckMark}>✓</Text> : null}
               </Pressable>
