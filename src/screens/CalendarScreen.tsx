@@ -2054,7 +2054,30 @@ export function CalendarScreen({
               const active = activeOwnerFilter === person.key;
               const initials = (person.label.trim()[0] || '?').toUpperCase();
               return (
-                <Pressable key={person.key} style={styles.avatarItem} onPress={() => onSelectOwnerFilter(person.key)}>
+                <Pressable
+                  key={person.key}
+                  style={styles.avatarItem}
+                  onPress={() => onSelectOwnerFilter(person.key)}
+                  delayLongPress={350}
+                  onLongPress={() => {
+                    // Long-press a child's photo → offer to hide their calendar from the row.
+                    if (!onToggleHiddenChild || !person.key.startsWith('child:')) return;
+                    const childId = person.key.replace('child:', '');
+                    const doHide = () => {
+                      onToggleHiddenChild(childId);
+                      if (active) onSelectOwnerFilter('mother');
+                    };
+                    if (Platform.OS === 'web') {
+                      if (typeof globalThis.confirm === 'function' && !globalThis.confirm(`Скрыть календарь «${person.label}» из ряда? Вернуть можно кнопкой «Show hidden».`)) return;
+                      doHide();
+                      return;
+                    }
+                    Alert.alert('Скрыть из календаря?', `«${person.label}» исчезнет из ряда. Вернуть — кнопкой «Show hidden».`, [
+                      { text: 'Отмена', style: 'cancel' },
+                      { text: 'Скрыть', style: 'destructive', onPress: doHide },
+                    ]);
+                  }}
+                >
                   <View style={[styles.avatarRing, active && styles.avatarRingActive]}>
                     <View style={[styles.avatarCircle, { backgroundColor: person.photo ? colors.surfaceAlt : person.color }]}>
                       {person.key === 'all' ? (
