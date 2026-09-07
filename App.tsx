@@ -1437,13 +1437,25 @@ function AppShell() {
     try {
       do {
         nutritionNeedsResaveRef.current = false;
-        await replaceNutritionEntries(activeSession, nutritionEntriesRef.current);
+        const forceIds = Array.from(nutritionDeletedIdsRef.current);
+        await replaceNutritionEntries(activeSession, nutritionEntriesRef.current, forceIds);
+        // Sent successfully — stop tracking them so the set doesn't grow forever.
+        forceIds.forEach((id) => nutritionDeletedIdsRef.current.delete(id));
       } while (nutritionNeedsResaveRef.current);
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not save nutrition entries.');
     } finally {
       nutritionSaveInFlightRef.current = false;
     }
+  };
+
+  // Coalesce a burst of edits into one save (~600ms after the last change).
+  const scheduleNutritionSave = () => {
+    if (nutritionSaveTimerRef.current) clearTimeout(nutritionSaveTimerRef.current);
+    nutritionSaveTimerRef.current = setTimeout(() => {
+      nutritionSaveTimerRef.current = null;
+      void persistNutritionEntries();
+    }, 600);
   };
 
   const persistCustomNutritionFoods = async () => {
@@ -1496,10 +1508,17 @@ function AppShell() {
   };
 
   const handleNutritionEntriesChange: Dispatch<SetStateAction<NutritionFoodEntry[]>> = (value) => {
-    const nextValue = typeof value === 'function' ? value(nutritionEntriesRef.current) : value;
+    const prevValue = nutritionEntriesRef.current;
+    const nextValue = typeof value === 'function' ? value(prevValue) : value;
+    // Track ids the user removed so the save force-deletes them (past the grace window).
+    const nextIds = new Set(nextValue.map((e) => e.id));
+    prevValue.forEach((e) => {
+      if (!nextIds.has(e.id)) nutritionDeletedIdsRef.current.add(e.id);
+    });
+    nextValue.forEach((e) => nutritionDeletedIdsRef.current.delete(e.id)); // re-added → not deleted
     nutritionEntriesRef.current = nextValue;
     setNutritionEntries(nextValue);
-    void persistNutritionEntries();
+    scheduleNutritionSave();
   };
 
   const handleCustomNutritionFoodsChange: Dispatch<SetStateAction<CustomNutritionFood[]>> = (value) => {
@@ -1644,6 +1663,11 @@ function AppShell() {
   const weeklyMealPlanRef = useRef<WeeklyMealPlanEntry[]>(createDefaultWeeklyMealPlan());
   const nutritionSaveInFlightRef = useRef(false);
   const nutritionNeedsResaveRef = useRef(false);
+  // Ids the user explicitly deleted — force-deleted on save so they don't reappear
+  // via the concurrent-insert grace window + poll.
+  const nutritionDeletedIdsRef = useRef<Set<string>>(new Set());
+  // Debounce the (multi-round-trip) save so a burst of snack adds/deletes coalesces.
+  const nutritionSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customFoodsSaveInFlightRef = useRef(false);
   const customFoodsNeedsResaveRef = useRef(false);
   const mealPlanProfilesSaveInFlightRef = useRef(false);
@@ -2867,8 +2891,15 @@ function AppShell() {
   // keep their snapshots fresh so a stale second device can't delete rows the other added.
   async function refreshLiveNutrition(current: AppSession | null = session) {
     if (!current || !nutritionLoadedRef.current) return;
+    // A save the user just triggered hasn't landed yet — don't re-pull a stale copy that
+    // would resurrect a just-deleted snack or drop a just-added one.
+    if (nutritionSaveInFlightRef.current || nutritionSaveTimerRef.current || nutritionDeletedIdsRef.current.size > 0) return;
     try {
-      const rows = await listNutritionEntries(current);
+      const serverRows = await listNutritionEntries(current);
+      // Extra guard: never re-add an id the user explicitly deleted this session.
+      const rows = nutritionDeletedIdsRef.current.size
+        ? serverRows.filter((r) => !nutritionDeletedIdsRef.current.has(r.id))
+        : serverRows;
       nutritionEntriesRef.current = rows;
       // Avoid a redundant re-render (and total flicker) when nothing actually changed.
       setNutritionEntries((prev) => (JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows));

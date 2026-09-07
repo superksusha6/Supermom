@@ -2960,7 +2960,11 @@ export async function replaceCustomNutritionFoods(session: AppSession, foods: Cu
   if (staleDeleteError) throw staleDeleteError;
 }
 
-export async function replaceNutritionEntries(session: AppSession, entries: NutritionFoodEntry[]) {
+export async function replaceNutritionEntries(
+  session: AppSession,
+  entries: NutritionFoodEntry[],
+  forceDeleteIds: string[] = [],
+) {
   const client = requireClient();
   if (entries.length === 0) {
     const { error: deleteError } = await client.from('nutrition_entries').delete().eq('user_id', session.userId);
@@ -3004,11 +3008,14 @@ export async function replaceNutritionEntries(session: AppSession, entries: Nutr
   if (existingError) throw existingError;
 
   // Grace window so a diary entry another device logged seconds ago isn't deleted by this
-  // (possibly stale) snapshot.
+  // (possibly stale) snapshot. Ids the user EXPLICITLY deleted bypass the grace — otherwise
+  // deleting a snack you just added reappears (it's newer than the cutoff).
   const cutoff = Date.now() - CONCURRENT_INSERT_GRACE_MS;
+  const forceSet = new Set(forceDeleteIds);
   const staleIds = (existingRows ?? [])
     .filter((row) => {
       if (nextIds.has(row.id)) return false;
+      if (forceSet.has(row.id)) return true; // explicit delete — remove regardless of age
       const created = Date.parse(String((row as { created_at?: string }).created_at || ''));
       return Number.isNaN(created) || created < cutoff;
     })

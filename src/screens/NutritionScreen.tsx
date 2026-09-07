@@ -112,6 +112,8 @@ export function NutritionScreen({
   const [sessionAddedName, setSessionAddedName] = useState('');
   const [quickAddedIds, setQuickAddedIds] = useState<string[]>([]);
   const [cardAddedFlash, setCardAddedFlash] = useState(false);
+  // Guards a fast double/triple-tap on the same quick-add pill from logging 2-3 rows.
+  const lastQuickAddRef = useRef<{ id: string; t: number }>({ id: '', t: 0 });
   const [addFoodFlow, setAddFoodFlow] = useState<AddFoodFlow>('search');
   const [draftMealName, setDraftMealName] = useState('');
   const [draftCalories, setDraftCalories] = useState('');
@@ -604,6 +606,10 @@ export function NutritionScreen({
 
   function quickAddPreset(item: NutritionFoodPreset) {
     if (!activeMealType) return;
+    // Ignore a repeat tap on the same item within 600ms (double/triple-tap → one entry).
+    const nowT = Date.now();
+    if (lastQuickAddRef.current.id === item.id && nowT - lastQuickAddRef.current.t < 600) return;
+    lastQuickAddRef.current = { id: item.id, t: nowT };
     const baseMode = item.baseMode || '100g';
     const amount =
       baseMode === 'serving'
