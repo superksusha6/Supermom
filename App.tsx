@@ -307,6 +307,15 @@ const LOCAL_MEDS_ENABLED_KEY = 'smartmom.medsEnabled.v1';
 const LOCAL_HABITS_ENABLED_KEY = 'smartmom.habitsEnabled.v1';
 const LOCAL_PHYSIQUE_GOAL_KEY = 'smartmom.physiqueGoal.v1';
 const LOCAL_HABIT_COLOR_KEY = 'smartmom.habitColor.v1';
+const CAL_CACHE_KEY = 'smartmom.calCache.v1'; // last-known { date, goal, eaten } for instant display
+function loadCalCache(): { date: string; goal: number; eaten: number } | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(CAL_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as { date: string; goal: number; eaten: number }) : null;
+  } catch {
+    return null;
+  }
+}
 const DEFAULT_HABIT_COLOR = '#3345e6'; // Luminous Blue — WGSN/Coloro Colour of the Year 2027
 const LOCAL_QUIET_HOURS_KEY = 'smartmom.quietHours.v1';
 const LOCAL_QUIET_START_KEY = 'smartmom.quietStart.v1';
@@ -1268,6 +1277,8 @@ function AppShell() {
   // have loaded — otherwise the target lands late and the number visibly jumps
   // (e.g. "669 left" with a default target, then "1223 left" once the profile loads).
   const calorieViewReady = nutritionLoaded && personalProfileReady && dailyCardsPrefsReady;
+  // Last-known calorie figures — shown instantly on a slow load instead of a blank "—".
+  const [calCache] = useState(() => loadCalCache());
   const [dailyCardPromptShown, setDailyCardPromptShown] = useState(() => initialDailyCardStateRef.current.promptShown);
   const [revealingDailyCardId, setRevealingDailyCardId] = useState<string | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
@@ -2414,6 +2425,19 @@ function AppShell() {
     });
     return plan?.calories || 0;
   }, [personalProfile.dateOfBirth, personalProfile.heightCm, personalProfile.weightKg, nutritionGoal, activityLevel, nutritionSex, calorieOverride, desiredWeight, nutritionPace, physiqueGoal]);
+  // Cache the last-known calorie figures so the next cold open shows them instantly
+  // instead of a long blank while the (slow) initial load finishes.
+  useEffect(() => {
+    if (!calorieViewReady) return;
+    try {
+      globalThis.localStorage?.setItem(
+        CAL_CACHE_KEY,
+        JSON.stringify({ date: todayDateKey, goal: dailyCalorieTarget || 0, eaten: todayNutritionCalories }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [calorieViewReady, dailyCalorieTarget, todayNutritionCalories, todayDateKey]);
   const eventsTodayCount = useMemo(
     () => events.filter((event) => event.date === todayDateKey).length,
     [events, todayDateKey],
@@ -8302,6 +8326,12 @@ function AppShell() {
   const calPct = calGoal > 0 ? Math.min(1, calEaten / calGoal) : 0;
   const calOver = calGoal > 0 && calEaten > calGoal;
   const calRemaining = Math.max(0, calGoal - calEaten);
+  // While the real data loads, fall back to today's cached figures (no long blank).
+  const calCacheValid = !!calCache && calCache.date === todayDateKey;
+  const calShowNumber = calorieViewReady || calCacheValid;
+  const calShownGoal = calorieViewReady ? calGoal : calCacheValid ? calCache!.goal : 0;
+  const calShownEaten = calorieViewReady ? calEaten : calCacheValid ? calCache!.eaten : 0;
+  const calShownRemaining = Math.max(0, calShownGoal - calShownEaten);
   const proteinLeft = Math.max(0, Math.round((macroTargets?.protein || 0) - eatenTodayMacros.protein));
   const carbsLeft = Math.max(0, Math.round((macroTargets?.carbs || 0) - eatenTodayMacros.carbs));
   const fatLeft = Math.max(0, Math.round((macroTargets?.fat || 0) - eatenTodayMacros.fat));
@@ -8320,11 +8350,11 @@ function AppShell() {
         <Text style={styles.calLogLink}>Log food</Text>
       </View>
       <View style={styles.calNumbers}>
-        <Text style={styles.calEaten}>{!calorieViewReady ? '—' : (calGoal > 0 ? calRemaining : calEaten)}</Text>
-        <Text style={styles.calGoal}>{calGoal > 0 ? (calOver ? ' kcal over' : ' kcal left') : ' kcal'}</Text>
+        <Text style={styles.calEaten}>{!calShowNumber ? '—' : (calShownGoal > 0 ? calShownRemaining : calShownEaten)}</Text>
+        <Text style={styles.calGoal}>{calShownGoal > 0 ? (calShownEaten > calShownGoal ? ' kcal over' : ' kcal left') : ' kcal'}</Text>
       </View>
       <View style={styles.calBarTrack}>
-        <View style={[styles.calBarFill, { width: `${Math.round(calPct * 100)}%` }, calOver && styles.calBarOver]} />
+        <View style={[styles.calBarFill, { width: `${Math.round((calShownGoal > 0 ? Math.min(1, calShownEaten / calShownGoal) : 0) * 100)}%` }, calShownEaten > calShownGoal && calShownGoal > 0 && styles.calBarOver]} />
       </View>
       {calGoal > 0 && (proteinLeft + carbsLeft + fatLeft > 0) ? (
         <Text style={styles.calFoot}>
@@ -10786,7 +10816,7 @@ function AppShell() {
               <View style={styles.foodListCopy}>
                 <Text style={styles.foodListTitle}>Meals Today</Text>
                 <Text style={styles.foodListSub} numberOfLines={1}>
-                  {!calorieViewReady ? 'Loading…' : (calGoal > 0 ? `${calRemaining} kcal left · log food` : 'Log food & calories')}
+                  {!calShowNumber ? 'Loading…' : (calShownGoal > 0 ? `${calShownRemaining} kcal left · log food` : 'Log food & calories')}
                 </Text>
               </View>
               <Icon name="chevron" color={colors.subtext} size={18} />
