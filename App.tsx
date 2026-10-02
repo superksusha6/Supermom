@@ -1679,6 +1679,21 @@ function AppShell() {
   const nutritionDeletedIdsRef = useRef<Set<string>>(new Set());
   // Debounce the (multi-round-trip) save so a burst of snack adds/deletes coalesces.
   const nutritionSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live-poll de-dupe: the 15s poll / realtime re-fetch everything; only commit a
+  // setState when the data actually changed, so an unchanged poll doesn't re-render
+  // the whole app (and recompute ~60 memos) every 15 seconds.
+  const liveSigRef = useRef<Record<string, string>>({});
+  const liveChanged = (key: string, value: unknown): boolean => {
+    let sig: string;
+    try {
+      sig = JSON.stringify(value);
+    } catch {
+      return true; // can't compare — assume changed
+    }
+    if (liveSigRef.current[key] === sig) return false;
+    liveSigRef.current[key] = sig;
+    return true;
+  };
   const customFoodsSaveInFlightRef = useRef(false);
   const customFoodsNeedsResaveRef = useRef(false);
   const mealPlanProfilesSaveInFlightRef = useRef(false);
@@ -2731,19 +2746,24 @@ function AppShell() {
     return `${greeting} · ${dateLabel}`;
   }, [todayDateKey]);
 
-  async function refreshLiveTasks(current: AppSession | null = session) {
+  async function refreshLiveTasks(current: AppSession | null = session, showLoading = false) {
     if (!current) return;
-    setTasksLoading(true);
-    setTasksError(null);
+    // The 15s poll must NOT toggle the loading flag (it re-renders the whole app every
+    // time); only the initial load shows the spinner.
+    if (showLoading) {
+      setTasksLoading(true);
+      setTasksError(null);
+    }
     try {
       const [liveTasks, liveRequests] = await Promise.all([listTasks(current.familyId), listApprovalRequests(current.familyId)]);
-      setTasks(applyParentLabelToTasks(liveTasks, parentLabel));
-      setRequests(liveRequests);
+      const nextTasks = applyParentLabelToTasks(liveTasks, parentLabel);
+      if (liveChanged('tasks', nextTasks)) setTasks(nextTasks);
+      if (liveChanged('requests', liveRequests)) setRequests(liveRequests);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync tasks.';
       setTasksError(message);
     } finally {
-      setTasksLoading(false);
+      if (showLoading) setTasksLoading(false);
     }
   }
 
@@ -2751,7 +2771,8 @@ function AppShell() {
     if (!current) return;
     try {
       const liveEvents = await listCalendarEvents(current.familyId);
-      setEvents(applyParentLabelToEvents(liveEvents, parentLabel));
+      const nextEvents = applyParentLabelToEvents(liveEvents, parentLabel);
+      if (liveChanged('events', nextEvents)) setEvents(nextEvents);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync calendar.';
       setTasksError(message);
@@ -2764,7 +2785,7 @@ function AppShell() {
       const liveChildren = await listChildProfiles(current.familyId);
       const localChildren = latestChildrenRef.current.length > 0 ? latestChildrenRef.current : loadLocalChildren();
       const merged = enforceUniqueChildActivityColors(mergeChildrenPreferLocal(liveChildren, localChildren), CHILD_COLOR_PALETTE);
-      setChildren(merged);
+      if (liveChanged('children', merged)) setChildren(merged);
       // One-way recovery: if a child still has a photo saved locally (e.g. on the phone
       // where it was added) but the server doesn't have it yet, upload it so it persists
       // and syncs to every device.
@@ -2796,18 +2817,17 @@ function AppShell() {
       }
       listStaffConnections(current).then(setStaffConnectedIds).catch(() => {});
       refreshFamilyShoppers(current);
-      setStaffProfiles(
-        liveStaffProfiles.map((profile) => ({
-          id: profile.id,
-          name: profile.name,
-          dateOfBirth: profile.dateOfBirth,
-          photoUri: profile.photoUri,
-          tasks: profile.tasks.map((task) => ({
-            ...task,
-            weekDays: Array.isArray(task.weekDays) ? task.weekDays : [],
-          })),
+      const nextStaff = liveStaffProfiles.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        dateOfBirth: profile.dateOfBirth,
+        photoUri: profile.photoUri,
+        tasks: profile.tasks.map((task) => ({
+          ...task,
+          weekDays: Array.isArray(task.weekDays) ? task.weekDays : [],
         })),
-      );
+      }));
+      if (liveChanged('staff', nextStaff)) setStaffProfiles(nextStaff);
       setStaffEnabled(liveStaffProfiles.length > 0);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync staff profiles.';
@@ -2877,7 +2897,7 @@ function AppShell() {
     if (!current) return;
     try {
       const rows = await listMedicines(current);
-      setMedicines(rows);
+      if (liveChanged('medicines', rows)) setMedicines(rows);
       persistLocalMedicines(rows);
     } catch {
       // Table not migrated yet — keep whatever is in local storage.
@@ -2892,7 +2912,7 @@ function AppShell() {
     try {
       const rows = await listChores(current);
       choresRef.current = rows;
-      setChores(rows);
+      if (liveChanged('chores', rows)) setChores(rows);
     } catch {
       // keep current
     }
@@ -2904,8 +2924,8 @@ function AppShell() {
       const [issues, provs] = await Promise.all([listHomeIssues(current), listHomeProviders(current)]);
       homeIssuesRef.current = issues;
       homeProvidersRef.current = provs;
-      setHomeIssues(issues);
-      setHomeProviders(provs);
+      if (liveChanged('homeIssues', issues)) setHomeIssues(issues);
+      if (liveChanged('homeProviders', provs)) setHomeProviders(provs);
     } catch {
       // keep current
     }
@@ -2926,7 +2946,7 @@ function AppShell() {
         : serverRows;
       nutritionEntriesRef.current = rows;
       // Avoid a redundant re-render (and total flicker) when nothing actually changed.
-      setNutritionEntries((prev) => (JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows));
+      if (liveChanged('nutrition', rows)) setNutritionEntries(rows);
     } catch {
       // keep current
     }
@@ -2937,7 +2957,7 @@ function AppShell() {
     try {
       const rows = await listCustomNutritionFoods(current);
       customNutritionFoodsRef.current = rows;
-      setCustomNutritionFoods(rows);
+      if (liveChanged('customFoods', rows)) setCustomNutritionFoods(rows);
     } catch {
       // keep current
     }
@@ -2970,7 +2990,7 @@ function AppShell() {
       });
       const next = normalizeHabitsForToday(merged);
       latestHabitsRef.current = next;
-      setHabits(next);
+      if (liveChanged('habits', next)) setHabits(next);
     } catch {
       // keep current
     }
@@ -3074,7 +3094,7 @@ function AppShell() {
         // server already has and heal the flag instead of deleting everyone's lists.
         markShoppingBootstrapComplete();
       }
-      setShoppingLists(liveLists);
+      if (liveChanged('shoppingLists', liveLists)) setShoppingLists(liveLists);
       // Prefer the local copy only on the very first load (it may hold items this
       // device hasn't uploaded yet). Afterwards the server is authoritative — otherwise
       // every refresh resurrected our stale copy and re-uploaded it, silently undoing
@@ -3084,9 +3104,9 @@ function AppShell() {
         ? liveFridgeItems
         : mergeFridgeItemsPreferLocal(liveFridgeItems, localFridgeItems);
       lastFridgeSyncRef.current = JSON.stringify(mergedFridgeItems);
-      setFridgeItems(mergedFridgeItems);
-      setShoppingShares(liveShares);
-      setPurchaseRequests(livePurchaseRequests);
+      if (liveChanged('fridge', mergedFridgeItems)) setFridgeItems(mergedFridgeItems);
+      if (liveChanged('shoppingShares', liveShares)) setShoppingShares(liveShares);
+      if (liveChanged('purchaseRequests', livePurchaseRequests)) setPurchaseRequests(livePurchaseRequests);
       fridgeLoadedRef.current = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync shopping.';
@@ -3150,18 +3170,18 @@ function AppShell() {
       if (liveWeeklyPlanRecord.entries.length > 0) {
         const mergedWeeklyPlan = mergeWeeklyMealPlan(liveWeeklyPlanRecord.entries);
         weeklyMealPlanRef.current = mergedWeeklyPlan;
-        setWeeklyMealPlan(mergedWeeklyPlan);
+        if (liveChanged('weeklyPlan', mergedWeeklyPlan)) setWeeklyMealPlan(mergedWeeklyPlan);
         const nextProfiles = mergeMealPlanProfiles(
           liveWeeklyPlanRecord.profiles.length > 0
             ? liveWeeklyPlanRecord.profiles
             : deriveMealPlanProfilesFromEntries(mergedWeeklyPlan),
         );
         mealPlanProfilesRef.current = nextProfiles;
-        setMealPlanProfiles(nextProfiles);
+        if (liveChanged('mealProfiles', nextProfiles)) setMealPlanProfiles(nextProfiles);
       } else if (liveWeeklyPlanRecord.profiles.length > 0) {
         const nextProfiles = mergeMealPlanProfiles(liveWeeklyPlanRecord.profiles);
         mealPlanProfilesRef.current = nextProfiles;
-        setMealPlanProfiles(nextProfiles);
+        if (liveChanged('mealProfiles', nextProfiles)) setMealPlanProfiles(nextProfiles);
       }
       if (liveWeeklyPlanRecord.rotation) {
         const nextRotation: MealRotation = {
@@ -3171,7 +3191,7 @@ function AppShell() {
           mode: liveWeeklyPlanRecord.rotation.mode === 'monthly' ? 'monthly' : 'continuous',
         };
         mealRotationRef.current = nextRotation;
-        setMealRotation(nextRotation);
+        if (liveChanged('mealRotation', nextRotation)) setMealRotation(nextRotation);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync weekly meal plan.';
@@ -3220,32 +3240,30 @@ function AppShell() {
         listCompletedTaskNotifications(current.familyId),
         listStaffReminderNotifications(current.familyId),
       ]);
-      setCompletedTaskNotifications(
-        liveCompleted
-          // Each parent is notified only about completions of tasks THEY assigned.
-          // Legacy rows (no target) are shown to every owner as a safe fallback.
-          .filter((item) => !item.notifyUserId || item.notifyUserId === current.userId)
-          .map((item) => ({
-            id: item.id,
-            taskId: item.taskId,
-            taskTitle: item.taskTitle,
-            staffName: item.staffName,
-            completedAt: item.completedAt,
-            read: item.read,
-            comment: item.comment ?? null,
-            photoUrl: item.photoUrl ?? null,
-            notifyUserId: item.notifyUserId ?? null,
-          })),
-      );
-      setStaffReminderNotifications(
-        liveReminders.map((item) => ({
+      const nextCompleted = liveCompleted
+        // Each parent is notified only about completions of tasks THEY assigned.
+        // Legacy rows (no target) are shown to every owner as a safe fallback.
+        .filter((item) => !item.notifyUserId || item.notifyUserId === current.userId)
+        .map((item) => ({
           id: item.id,
           taskId: item.taskId,
           taskTitle: item.taskTitle,
           staffName: item.staffName,
-          sentAt: item.sentAt,
-        })),
-      );
+          completedAt: item.completedAt,
+          read: item.read,
+          comment: item.comment ?? null,
+          photoUrl: item.photoUrl ?? null,
+          notifyUserId: item.notifyUserId ?? null,
+        }));
+      if (liveChanged('completedNotifs', nextCompleted)) setCompletedTaskNotifications(nextCompleted);
+      const nextReminders = liveReminders.map((item) => ({
+        id: item.id,
+        taskId: item.taskId,
+        taskTitle: item.taskTitle,
+        staffName: item.staffName,
+        sentAt: item.sentAt,
+      }));
+      if (liveChanged('staffReminders', nextReminders)) setStaffReminderNotifications(nextReminders);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync notifications.';
       setTasksError(message);
@@ -3341,7 +3359,7 @@ function AppShell() {
     homeFixitLoadedRef.current = false;
     choresLoadedRef.current = false;
     await Promise.all([
-      refreshLiveTasks(ctx),
+      refreshLiveTasks(ctx, true),
       refreshLiveCalendar(ctx),
       refreshLiveChildren(ctx),
       refreshLiveStaffProfiles(ctx),
@@ -6548,7 +6566,7 @@ function AppShell() {
         setSession(ctx);
         setRole(toUiRole(ctx.role));
         await Promise.allSettled([
-          refreshLiveTasks(ctx),
+          refreshLiveTasks(ctx, true),
           refreshLiveCalendar(ctx),
           refreshLiveChildren(ctx),
           refreshLiveStaffProfiles(ctx),
@@ -6681,7 +6699,7 @@ function AppShell() {
           setRole(toUiRole(ctx.role));
           await upsertUserPreferences(ctx, { parentLabel: nextParentLabel, nutritionSex: authSignupSex });
           await Promise.all([
-            refreshLiveTasks(ctx),
+            refreshLiveTasks(ctx, true),
             refreshLiveCalendar(ctx),
             refreshLiveChildren(ctx),
             refreshLiveStaffProfiles(ctx),
