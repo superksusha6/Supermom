@@ -8326,11 +8326,14 @@ function AppShell() {
   const calPct = calGoal > 0 ? Math.min(1, calEaten / calGoal) : 0;
   const calOver = calGoal > 0 && calEaten > calGoal;
   const calRemaining = Math.max(0, calGoal - calEaten);
-  // While the real data loads, fall back to today's cached figures (no long blank).
-  const calCacheValid = !!calCache && calCache.date === todayDateKey;
-  const calShowNumber = calorieViewReady || calCacheValid;
-  const calShownGoal = calorieViewReady ? calGoal : calCacheValid ? calCache!.goal : 0;
-  const calShownEaten = calorieViewReady ? calEaten : calCacheValid ? calCache!.eaten : 0;
+  // While the real data loads, fall back to cached figures (no long blank). The GOAL
+  // is stable day-to-day so we show it even on a new day (eaten just resets to 0),
+  // instead of a "—" every morning until the slow load finishes.
+  const calCacheSameDay = !!calCache && calCache.date === todayDateKey;
+  const haveCachedGoal = !!calCache && (calCache.goal || 0) > 0;
+  const calShowNumber = calorieViewReady || haveCachedGoal || calCacheSameDay;
+  const calShownGoal = calorieViewReady ? calGoal : calCache?.goal || 0;
+  const calShownEaten = calorieViewReady ? calEaten : calCacheSameDay ? calCache!.eaten : 0;
   const calShownRemaining = Math.max(0, calShownGoal - calShownEaten);
   const proteinLeft = Math.max(0, Math.round((macroTargets?.protein || 0) - eatenTodayMacros.protein));
   const carbsLeft = Math.max(0, Math.round((macroTargets?.carbs || 0) - eatenTodayMacros.carbs));
