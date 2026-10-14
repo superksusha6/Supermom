@@ -630,6 +630,10 @@ const MEAL_PLAN_SLOTS: Array<{ key: MealPlanSlot; label: string }> = [
   { key: 'dinner', label: 'Dinner' },
 ];
 
+// Soft, varied recipe-thumbnail tints for the meal-editor sheet (picked by title hash)
+// so the recipe list reads like a scannable shelf, never a broken-looking dropdown.
+const MEAL_THUMB_TINTS = ['#ffe3c2', '#d6ecd1', '#e7dcf5', '#fde0d0', '#d5e8f7', '#f6e0ea', '#e4efcf', '#d8e2f8'];
+
 const MEAL_COURSE_LABELS = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
 // Label multi-dish lunch/dinner as courses (First / Second …) for the cook's day view.
 function mealCourseLabel(slot: MealPlanSlot, index: number, count: number): string {
@@ -1187,7 +1191,7 @@ function AppShell() {
   const [dayHintReadOpen, setDayHintReadOpen] = useState(false);
   // Tap a meal on the Today hub → focused edit sheet (name or saved recipe), writing
   // straight to this week's plan. Keeps the common edit out of the full planner.
-  const [mealEditTarget, setMealEditTarget] = useState<{ slot: MealPlanSlot; entryId?: string; label: string; hasMeal: boolean } | null>(null);
+  const [mealEditTarget, setMealEditTarget] = useState<{ slot: MealPlanSlot; entryId?: string; label: string; hasMeal: boolean; original: string } | null>(null);
   const [mealEditName, setMealEditName] = useState('');
   const [mealEditRecipeSearch, setMealEditRecipeSearch] = useState('');
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
@@ -2626,7 +2630,7 @@ function AppShell() {
   function openMealEdit(m: { key: string; slot: MealPlanSlot; label: string; title: string | null; items: string[] }) {
     const entryId = m.key.endsWith('-empty') ? undefined : m.key;
     const display = m.title || m.items.join(', ');
-    setMealEditTarget({ slot: m.slot, entryId, label: m.label, hasMeal: !!(m.title || m.items.length) });
+    setMealEditTarget({ slot: m.slot, entryId, label: m.label, hasMeal: !!(m.title || m.items.length), original: display });
     setMealEditName(display);
     setMealEditRecipeSearch('');
   }
@@ -9755,56 +9759,91 @@ function AppShell() {
       </Modal>
 
       {mealEditTarget ? (
-      <Modal visible transparent animationType="fade" onRequestClose={closeMealEdit}>
-        <Pressable style={styles.newListBackdrop} onPress={closeMealEdit}>
-          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.daySheetTitle}>{mealEditTarget.hasMeal ? 'Edit' : 'Add'} {mealEditTarget.label.toLowerCase()}</Text>
-            <Text style={styles.mealEditHint}>Type a dish, or pick one of your saved recipes below.</Text>
-            <TextInput
-              style={styles.input}
-              value={mealEditName}
-              onChangeText={setMealEditName}
-              placeholder="e.g. Chicken soup"
-              placeholderTextColor={colors.subtext}
-              returnKeyType="done"
-              onSubmitEditing={saveMealEditName}
-            />
-            <View style={styles.daySheetActions}>
-              {mealEditTarget.hasMeal ? (
-                <Pressable style={styles.mealEditRemove} onPress={clearMealEdit}>
-                  <Text style={styles.mealEditRemoveText}>Remove</Text>
-                </Pressable>
-              ) : null}
-              <Pressable style={styles.daySheetCancel} onPress={closeMealEdit}>
-                <Text style={styles.daySheetCancelText}>Cancel</Text>
+      <Modal visible transparent animationType="slide" onRequestClose={closeMealEdit}>
+        <Pressable style={styles.mealSheetBackdrop} onPress={closeMealEdit}>
+          <Pressable style={styles.mealSheet} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.mealGrab} />
+            <View style={styles.mealNav}>
+              <Pressable style={styles.mealNavSide} onPress={closeMealEdit} accessibilityRole="button" accessibilityLabel="Cancel">
+                <Text style={styles.mealNavCancel}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.daySheetAdd, !mealEditName.trim() && styles.daySheetAddDisabled]} onPress={saveMealEditName} disabled={!mealEditName.trim()}>
-                <Text style={styles.daySheetAddText}>Save</Text>
+              <Text style={styles.mealNavEyebrow} numberOfLines={1}>{mealEditTarget.label}</Text>
+              <Pressable
+                style={styles.mealNavSide}
+                onPress={saveMealEditName}
+                disabled={!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+              >
+                <Text style={[styles.mealNavSave, (!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()) && styles.mealNavSaveOff]}>Save</Text>
               </Pressable>
             </View>
-            {recipes.length ? (
-              <View style={styles.mealEditRecipes}>
-                <Text style={styles.mealEditRecipesLabel}>Or pick a recipe</Text>
-                <TextInput
-                  style={styles.input}
-                  value={mealEditRecipeSearch}
-                  onChangeText={setMealEditRecipeSearch}
-                  placeholder="Search recipes"
-                  placeholderTextColor={colors.subtext}
-                />
-                <ScrollView style={styles.mealEditRecipeList} keyboardShouldPersistTaps="handled">
-                  {mealEditRecipeMatches.map((r) => (
-                    <Pressable key={r.id} style={styles.mealEditRecipeRow} onPress={() => pickMealEditRecipe(r.id)}>
-                      <Text style={styles.mealEditRecipeName} numberOfLines={1}>{r.title}</Text>
-                      <Text style={styles.mealEditRecipeMeta}>
-                        {[r.servings ? `${r.servings} serv` : null, r.cookTimeMinutes ? `${r.cookTimeMinutes} min` : null].filter(Boolean).join(' · ')}
-                      </Text>
-                    </Pressable>
-                  ))}
-                  {mealEditRecipeMatches.length === 0 ? <Text style={styles.mealEditRecipeMeta}>No recipes match.</Text> : null}
-                </ScrollView>
+            <Text style={styles.mealSheetTitle}>{mealEditTarget.hasMeal ? 'Edit meal' : `Add ${mealEditTarget.label.toLowerCase()}`}</Text>
+
+            <ScrollView style={styles.mealSheetScroll} contentContainerStyle={styles.mealSheetScrollBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.mealGroupHeader}>CURRENT MEAL</Text>
+              <View style={styles.mealGroup}>
+                <View style={styles.mealFieldCell}>
+                  <TextInput
+                    style={styles.mealFieldInput}
+                    value={mealEditName}
+                    onChangeText={setMealEditName}
+                    placeholder="e.g. Chicken soup"
+                    placeholderTextColor={colors.subtext}
+                    returnKeyType="done"
+                    onSubmitEditing={saveMealEditName}
+                    multiline
+                  />
+                </View>
               </View>
-            ) : null}
+
+              {recipes.length ? (
+                <>
+                  <Text style={styles.mealGroupHeader}>OR CHOOSE A RECIPE</Text>
+                  <View style={styles.mealGroup}>
+                    <View style={styles.mealSearchCell}>
+                      <View style={styles.mealSearchGlyph}>
+                        <Icon name="search" color={colors.subtext} size={15} />
+                      </View>
+                      <TextInput
+                        style={styles.mealSearchInput}
+                        value={mealEditRecipeSearch}
+                        onChangeText={setMealEditRecipeSearch}
+                        placeholder={`Search ${recipes.length} recipes`}
+                        placeholderTextColor={colors.subtext}
+                      />
+                    </View>
+                    {mealEditRecipeMatches.map((r, i) => {
+                      const tint = MEAL_THUMB_TINTS[(r.title.charCodeAt(0) + r.title.length) % MEAL_THUMB_TINTS.length];
+                      const meta = [r.servings ? `${r.servings} servings` : null, r.cookTimeMinutes ? `${r.cookTimeMinutes} min` : null].filter(Boolean).join(' · ');
+                      return (
+                        <Pressable key={r.id} style={[styles.mealRecipeRow, i === 0 && styles.mealRecipeRowFirst]} onPress={() => pickMealEditRecipe(r.id)} accessibilityRole="button" accessibilityLabel={`Use recipe ${r.title}`}>
+                          <View style={[styles.mealThumb, { backgroundColor: tint }]}>
+                            <Icon name="meal" color="rgba(60,48,36,0.6)" size={19} />
+                          </View>
+                          <View style={styles.mealRecipeText}>
+                            <Text style={styles.mealRecipeTitle} numberOfLines={1}>{r.title || 'Untitled recipe'}</Text>
+                            {meta ? <Text style={styles.mealRecipeMeta}>{meta}</Text> : null}
+                          </View>
+                          <Icon name="chevron" color={colors.subtext} size={15} />
+                        </Pressable>
+                      );
+                    })}
+                    {mealEditRecipeMatches.length === 0 ? (
+                      <View style={[styles.mealRecipeRow, styles.mealRecipeRowFirst]}>
+                        <Text style={styles.mealRecipeMeta}>No recipes match “{mealEditRecipeSearch.trim()}”.</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+
+              {mealEditTarget.hasMeal ? (
+                <Pressable style={styles.mealRemoveCell} onPress={clearMealEdit} accessibilityRole="button" accessibilityLabel={`Remove ${mealEditTarget.label}`}>
+                  <Text style={styles.mealRemoveText}>Remove from {mealEditTarget.label}</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -17340,59 +17379,168 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexGrow: 1,
   },
   // Day guidance — Home teaser row + the Day/Month/Year sheet.
-  mealEditHint: {
-    color: colors.subtext,
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 12,
+  mealSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  mealEditRemove: {
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+  mealSheet: {
+    backgroundColor: colors.surfaceAlt,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 24,
+    maxHeight: '92%',
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+  mealGrab: {
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: themeName === 'dark' ? 'rgba(255,255,255,0.28)' : 'rgba(60,60,67,0.3)',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  mealNav: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
-  mealEditRemoveText: {
-    color: '#dc2626',
-    fontSize: 14,
-    fontWeight: '800',
+  mealNavSide: {
+    flex: 1,
+    paddingVertical: 4,
   },
-  mealEditRecipes: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 14,
+  mealNavCancel: {
+    color: colors.primary,
+    fontSize: 16,
   },
-  mealEditRecipesLabel: {
+  mealNavEyebrow: {
+    flex: 1.4,
+    textAlign: 'center',
     color: colors.subtext,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 8,
   },
-  mealEditRecipeList: {
-    maxHeight: 220,
-    marginTop: 4,
+  mealNavSave: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'right',
   },
-  mealEditRecipeRow: {
-    paddingVertical: 11,
-    paddingHorizontal: 12,
+  mealNavSaveOff: {
+    color: colors.subtext,
+    opacity: 0.6,
+    fontWeight: '600',
+  },
+  mealSheetTitle: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  mealSheetScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  mealSheetScrollBody: {
+    paddingBottom: 8,
+  },
+  mealGroupHeader: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
+    paddingTop: 4,
+  },
+  mealGroup: {
+    backgroundColor: colors.surface,
+    marginHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: colors.glassSoft,
-    marginBottom: 6,
+    overflow: 'hidden',
+    marginBottom: 18,
   },
-  mealEditRecipeName: {
+  mealFieldCell: {
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  mealFieldInput: {
+    color: colors.text,
+    fontSize: 16,
+    padding: 0,
+    minHeight: 22,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null),
+  },
+  mealSearchCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  mealSearchGlyph: {
+    opacity: 0.8,
+  },
+  mealSearchInput: {
+    flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontWeight: '700',
+    padding: 0,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null),
   },
-  mealEditRecipeMeta: {
+  mealRecipeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  mealRecipeRowFirst: {
+    borderTopWidth: 0,
+  },
+  mealThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealRecipeText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mealRecipeTitle: {
+    color: colors.text,
+    fontSize: 16,
+  },
+  mealRecipeMeta: {
     color: colors.subtext,
-    fontSize: 12,
+    fontSize: 14,
+    marginTop: 1,
+  },
+  mealRemoveCell: {
+    backgroundColor: colors.surface,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
     marginTop: 2,
+  },
+  mealRemoveText: {
+    color: colors.urgent,
+    fontSize: 16,
   },
   dayHintCard: {
     borderRadius: 18,

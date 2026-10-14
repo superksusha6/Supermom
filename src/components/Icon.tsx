@@ -12,6 +12,7 @@ export type IconName =
   | 'wrench'
   | 'pill'
   | 'plus'
+  | 'search'
   | 'chevron'
   | 'chevron-left'
   | 'home'
@@ -90,6 +91,12 @@ export function Icon({ name, size = 22, color = '#0f172a', strokeWidth = 2 }: Pr
         </>
       ) : null}
       {name === 'plus' ? <Path d="M5 12h14 M12 5v14" {...common} /> : null}
+      {name === 'search' ? (
+        <>
+          <Circle cx={11} cy={11} r={7} {...common} />
+          <Path d="m21 21-4.3-4.3" {...common} />
+        </>
+      ) : null}
       {name === 'chevron' ? <Path d="m9 18 6-6-6-6" {...common} /> : null}
       {name === 'chevron-left' ? <Path d="m15 18-6-6 6-6" {...common} /> : null}
       {name === 'home' ? (
