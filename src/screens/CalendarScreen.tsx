@@ -117,12 +117,14 @@ function DayTimelineEventCard({
   cardStyle,
   onTap,
   onCommitDelta,
+  onGesture,
   setScrollEnabled,
   children,
 }: {
   cardStyle: any;
   onTap: () => void;
   onCommitDelta: (dy: number) => void;
+  onGesture?: () => void;
   setScrollEnabled: (enabled: boolean) => void;
   children: ReactNode;
 }) {
@@ -152,6 +154,7 @@ function DayTimelineEventCard({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        onGesture?.();
         movedRef.current = false;
         armedRef.current = false;
         setScrollEnabled(false);
@@ -163,9 +166,18 @@ function DayTimelineEventCard({
       },
       onPanResponderMove: (_evt, gesture) => {
         if (Math.abs(gesture.dy) > 4 || Math.abs(gesture.dx) > 4) movedRef.current = true;
+        // On web (mouse), there is no scroll-vs-drag conflict and no long-press
+        // idiom: arm the drag as soon as the pointer moves vertically, so an event
+        // follows the cursor immediately instead of needing a 220ms hold first.
+        if (!armedRef.current && Platform.OS === 'web' && Math.abs(gesture.dy) > 4 && Math.abs(gesture.dy) >= Math.abs(gesture.dx)) {
+          clearTimer();
+          armedRef.current = true;
+          setArmed(true);
+        }
         if (armedRef.current) pan.setValue(gesture.dy);
       },
       onPanResponderRelease: (_evt, gesture) => {
+        onGesture?.();
         const wasArmed = armedRef.current;
         const moved = movedRef.current;
         clearTimer();
@@ -179,7 +191,14 @@ function DayTimelineEventCard({
 
   return (
     <Animated.View
-      style={[cardStyle, { transform: [{ translateY: pan }] }, armed ? { zIndex: 40, opacity: 0.94, borderStyle: 'dashed' } : null]}
+      style={[
+        cardStyle,
+        { transform: [{ translateY: pan }] },
+        // Web: show a grab cursor and stop the browser from selecting the event
+        // text while dragging (text selection otherwise hijacks the mouse-move).
+        Platform.OS === 'web' ? ({ cursor: armed ? 'grabbing' : 'grab', userSelect: 'none' } as any) : null,
+        armed ? { zIndex: 40, opacity: 0.94, borderStyle: 'dashed' } : null,
+      ]}
       {...panResponder.panHandlers}
     >
       {children}
@@ -250,6 +269,11 @@ export function CalendarScreen({
   const calendarDragX = useRef(new Animated.Value(0)).current;
   const calendarSwipeAnimatingRef = useRef(false);
   const calendarWebScrollSuppressRef = useRef(false);
+  // Timestamp of the last event-card gesture (press/drag). On web a single pointer
+  // interaction can reach both the event card AND the empty hour-slot beneath it;
+  // the slot's onPress checks this to ignore the ghost click that would otherwise
+  // open the creator on top of the editor (the "two windows" bug).
+  const eventGestureRef = useRef(0);
   const calendarWebScrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -1496,8 +1520,10 @@ export function CalendarScreen({
     setEditingTimeField(null);
     setEditWheelOpen(false);
     setEditEndWheelOpen(false);
-    // Close the day-view overlay so the editor isn't hidden behind it.
+    // Close the day-view overlay AND the creator so only the editor is visible
+    // (the three modals are independent booleans; keep them mutually exclusive).
     setDayTimelineOpen(false);
+    setCreatorOpen(false);
     setEditingEventId(event.id);
     const mirrorChildId = event.owner === 'mother' && event.category === 'Child Plan' ? event.ownerChildProfileId : undefined;
     const linkedChildId = event.owner === 'child' ? event.ownerChildProfileId : mirrorChildId;
@@ -1548,6 +1574,8 @@ export function CalendarScreen({
     mode: 'general' | 'staff_assigned_task' | 'staff_self_plan' | 'staff_self_task',
     prefillTime?: string,
   ) {
+    // Keep the input modals mutually exclusive — never show the creator over the editor.
+    setEditOpen(false);
     setCreatorMode(mode);
     setHasPickedColor(false);
     setColorPickerOpen(false);
@@ -1961,13 +1989,16 @@ export function CalendarScreen({
                         styles.dayTimelineSlot,
                         { top: index * DAY_TIMELINE_HOUR_HEIGHT, height: DAY_TIMELINE_HOUR_HEIGHT },
                       ]}
-                      onPress={() =>
+                      onPress={() => {
+                        // Ignore the ghost click that follows an event-card press/drag
+                        // (web: one interaction can reach the card and this slot both).
+                        if (Date.now() - eventGestureRef.current < 500) return;
                         openCreatorFromTimeline(primaryTimelineCreatorMode, formatClockTime(
                           hour % 24 % 12 === 0 ? 12 : hour % 24 % 12,
                           0,
                           hour % 24 >= 12 ? 'PM' : 'AM',
-                        ))
-                      }
+                        ));
+                      }}
                     />
                   ))}
 
@@ -2012,6 +2043,7 @@ export function CalendarScreen({
                       ]}
                       onTap={() => openEditModal(event)}
                       onCommitDelta={(dy) => commitTimelineDrag(event, dy)}
+                      onGesture={() => { eventGestureRef.current = Date.now(); }}
                       setScrollEnabled={setDayTimelineScrollEnabled}
                     >
                       <View style={styles.dayTimelineEventMetaRow}>
@@ -2451,22 +2483,6 @@ export function CalendarScreen({
           </View>
         </View>
       </Modal>
-
-      <Pressable
-        style={styles.guidanceEntryCard}
-        onPress={() => {
-          setGuidanceScope('day');
-          setGuidanceOpen(true);
-        }}
-      >
-        <View style={styles.guidanceEntryCopy}>
-          <Text style={styles.guidanceEntryTitle}>Day guidance</Text>
-          <Text style={styles.guidanceEntryText}>
-            {dayGuidancePreview ? dayGuidancePreview.summary : 'Open guidance for the day, month and year.'}
-          </Text>
-        </View>
-        <Text style={styles.guidanceEntryChevron}>›</Text>
-      </Pressable>
 
       <Modal visible={creatorOpen} transparent animationType="fade" onRequestClose={() => setCreatorOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -3063,56 +3079,6 @@ export function CalendarScreen({
         </View>
       </Modal>
 
-      <Modal visible={guidanceOpen} transparent animationType="fade" onRequestClose={() => setGuidanceOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.guidanceModalTop}>
-              <View style={styles.guidanceModalTopCopy}>
-                <Text style={styles.createTitle}>{selectedGuidanceTitle}</Text>
-                <Text style={styles.modalSub}>{selectedGuidanceLabel}</Text>
-              </View>
-              <Pressable style={styles.cancelBtn} onPress={() => setGuidanceOpen(false)}>
-                <Text style={styles.cancelBtnText}>Close</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.guidanceTabs}>
-              <Chip active={guidanceScope === 'day'} label="Day" onPress={() => setGuidanceScope('day')} styles={styles} />
-              <Chip active={guidanceScope === 'month'} label="Month" onPress={() => setGuidanceScope('month')} styles={styles} />
-              <Chip active={guidanceScope === 'year'} label="Year" onPress={() => setGuidanceScope('year')} styles={styles} />
-            </View>
-
-            {selectedGuidance && selectedGuidanceNumber ? (
-              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator>
-                <Text style={styles.guidanceSummary}>{selectedGuidance.summary}</Text>
-                <Text style={styles.guidanceLongText}>{getEnergyMeaning(selectedGuidanceNumber, guidanceScope)}</Text>
-                <View style={styles.guidanceBody}>
-                  <View style={styles.guidanceSection}>
-                    <Text style={styles.guidanceSectionTitle}>Best for</Text>
-                    {selectedGuidance.bestFor.map((item) => (
-                      <Text key={`modal-${guidanceScope}-best-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
-                    ))}
-                  </View>
-                  <View style={styles.guidanceSection}>
-                    <Text style={styles.guidanceSectionTitle}>Be careful with</Text>
-                    {selectedGuidance.beCarefulWith.map((item) => (
-                      <Text key={`modal-${guidanceScope}-careful-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
-                    ))}
-                  </View>
-                  <View style={styles.guidanceSection}>
-                    <Text style={styles.guidanceSectionTitle}>Focus on</Text>
-                    {selectedGuidance.focusOn.map((item) => (
-                      <Text key={`modal-${guidanceScope}-focus-${item}`} style={styles.guidanceBulletText}>{`• ${item}`}</Text>
-                    ))}
-                  </View>
-                </View>
-              </ScrollView>
-            ) : (
-              <Text style={styles.guidanceEmptyText}>Add your date of birth in Settings → Personal to unlock day, month and year guidance.</Text>
-            )}
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }

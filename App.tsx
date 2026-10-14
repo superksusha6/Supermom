@@ -127,6 +127,7 @@ import {
 import { getNutritionPlan, getNutritionTotals } from '@/lib/nutrition';
 import { enrichWords, scanWordsPhoto } from '@/lib/words';
 import { choreStatus, choreTodayKey } from '@/lib/chores';
+import { getDayGuidance, type GuidanceScope } from '@/lib/dayGuidance';
 import { CalendarScreen } from '@/screens/CalendarScreen';
 import { ChoresScreen } from '@/screens/ChoresScreen';
 import { FixItScreen } from '@/screens/FixItScreen';
@@ -1178,6 +1179,12 @@ function AppShell() {
   const [habitsEnabled, setHabitsEnabled] = useState<boolean>(() => loadLocalHabitsEnabled());
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(() => loadLocalHomeLayout());
   const [homeTab, setHomeTab] = useState<'today' | 'calendar'>('today');
+  // Day guidance ("A good day for…") — a gentle, date-based focus shown as a
+  // one-line teaser on Home that opens a Day/Month/Year sheet. Moved here from
+  // the Calendar screen so it's visible on open; framed as planning, not numerology.
+  const [dayHintOpen, setDayHintOpen] = useState(false);
+  const [dayHintScope, setDayHintScope] = useState<GuidanceScope>('day');
+  const [dayHintReadOpen, setDayHintReadOpen] = useState(false);
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
@@ -8388,6 +8395,28 @@ function AppShell() {
     </Pressable>
   );
 
+  // Day guidance teaser — always the DAY scope on Home; tap opens the sheet.
+  // Reuses the component-scoped `todayDateKey` string (today, YYYY-MM-DD).
+  const dayHintTeaser = getDayGuidance(personalProfile.dateOfBirth, todayDateKey, 'day');
+  // Guidance for the scope selected inside the sheet (Day/Month/Year).
+  const dayHintGuidance = getDayGuidance(personalProfile.dateOfBirth, todayDateKey, dayHintScope);
+  const dayHintScopeLabel = dayHintScope === 'day' ? 'today' : dayHintScope === 'month' ? 'this month' : 'this year';
+  const focusDayHint = (isStaffView || isChildView || !dayHintTeaser) ? null : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${dayHintTeaser.kicker} ${dayHintTeaser.headline}. Tap for more.`}
+      style={styles.dayHintCard}
+      onPress={() => { setDayHintScope('day'); setDayHintReadOpen(false); setDayHintOpen(true); }}
+    >
+      <View style={styles.dayHintBar} />
+      <View style={styles.dayHintBody}>
+        <Text style={styles.dayHintKicker}>{dayHintTeaser.kicker}</Text>
+        <Text style={styles.dayHintTitle}>{dayHintTeaser.headline}</Text>
+      </View>
+      <Text style={styles.dayHintChevron}>›</Text>
+    </Pressable>
+  );
+
   const nowLabel = (() => {
     const d = new Date();
     return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -9193,6 +9222,7 @@ function AppShell() {
     <View style={styles.dashWrap}>
       {focusIncomingShopping}
       {focusStaffHeader}
+      {focusDayHint}
       {focusPlanner}
       {focusProposals}
       {focusPartnerReplies}
@@ -9213,6 +9243,7 @@ function AppShell() {
       <View style={styles.dashMain}>
         {focusIncomingShopping}
         {focusStaffHeader}
+        {focusDayHint}
         {focusPlanner}
         {focusProposals}
         {focusPartnerReplies}
@@ -9573,6 +9604,68 @@ function AppShell() {
                 <Text style={styles.daySheetAddText}>{changePwBusy ? 'Saving…' : 'Update'}</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={dayHintOpen} transparent animationType="fade" onRequestClose={() => setDayHintOpen(false)}>
+        <Pressable style={styles.newListBackdrop} onPress={() => setDayHintOpen(false)}>
+          <Pressable style={styles.dayHintSheet} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.dayHintSheetHead}>
+              <Text style={styles.dayHintSheetDate}>Today · {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
+              <Pressable onPress={() => setDayHintOpen(false)} accessibilityRole="button" accessibilityLabel="Close">
+                <Text style={styles.dayHintSheetClose}>Close</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.dayHintTabs}>
+              {(['day', 'month', 'year'] as GuidanceScope[]).map((sc) => (
+                <Pressable
+                  key={sc}
+                  style={[styles.dayHintTab, dayHintScope === sc && styles.dayHintTabOn]}
+                  onPress={() => { setDayHintScope(sc); setDayHintReadOpen(false); }}
+                >
+                  <Text style={[styles.dayHintTabText, dayHintScope === sc && styles.dayHintTabTextOn]}>
+                    {sc === 'day' ? 'Day' : sc === 'month' ? 'Month' : 'Year'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {dayHintGuidance ? (
+              <ScrollView style={styles.dayHintScroll} contentContainerStyle={styles.dayHintScrollBody} showsVerticalScrollIndicator>
+                <Text style={styles.dayHintSheetKicker}>{dayHintGuidance.kicker}</Text>
+                <Text style={styles.dayHintSheetTitle}>{dayHintGuidance.headline}</Text>
+                <Text style={styles.dayHintSheetSub}>{dayHintGuidance.subline}</Text>
+                <Text style={styles.dayHintWit}>{`ⓘ A gentle focus for ${dayHintScopeLabel}, based on the date — a nudge to plan by, not a rule.`}</Text>
+
+                <View style={styles.dayHintCue}>
+                  <Text style={[styles.dayHintCueLabel, { color: colors.done }]}>✅ Good for</Text>
+                  <Text style={styles.dayHintCueText}>{dayHintGuidance.good.join(' · ')}</Text>
+                </View>
+                <View style={styles.dayHintCue}>
+                  <Text style={[styles.dayHintCueLabel, { color: '#e08a2b' }]}>⚠️ Go easy on</Text>
+                  <Text style={styles.dayHintCueText}>{dayHintGuidance.careful.join(' · ')}</Text>
+                </View>
+                <View style={styles.dayHintCue}>
+                  <Text style={[styles.dayHintCueLabel, { color: colors.primary }]}>🎯 Focus</Text>
+                  <Text style={styles.dayHintCueText}>{dayHintGuidance.focus.join(' · ')}</Text>
+                </View>
+
+                {dayHintScope !== 'day' && dayHintGuidance.longText ? (
+                  <>
+                    <Pressable style={styles.dayHintReadBtn} onPress={() => setDayHintReadOpen((v) => !v)}>
+                      <Text style={styles.dayHintReadBtnText}>
+                        {dayHintReadOpen ? 'Hide' : dayHintScope === 'month' ? "What this month's about" : 'Read the full note'} {dayHintReadOpen ? '⌃' : '⌄'}
+                      </Text>
+                    </Pressable>
+                    {dayHintReadOpen ? <Text style={styles.dayHintLongText}>{dayHintGuidance.longText}</Text> : null}
+                  </>
+                ) : null}
+              </ScrollView>
+            ) : (
+              <Text style={styles.dayHintEmpty}>Add your date of birth in Settings → Personal to unlock day, month and year guidance.</Text>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -10749,9 +10842,11 @@ function AppShell() {
 
         {screen === 'food' && foodTab === 'today' ? (
           <View style={styles.dashWrap}>
-            {/* A cook (menu grant) lands here — show the WHOLE day's menu, each meal
-                tappable into its recipe. Everyone else keeps the single "Tonight" card. */}
-            {isStaffView && staffCan('menu') ? (
+            {/* Everyone with a menu grant (the owner included) sees the WHOLE day's
+                menu as tappable rows — tap a meal to open its recipe, or the plan
+                editor when it has none. No separate "Open recipe" button. Only a
+                recipes-only member (menu grant off) falls back to the Tonight card. */}
+            {staffCan('menu') ? (
             <View style={styles.foodTonightCard}>
               <Text style={styles.foodTonightLabel}>TODAY&apos;S MENU · {formatShortDate(todayDateKey)}</Text>
               {todayMeals.map((m) => {
@@ -10926,19 +11021,6 @@ function AppShell() {
             >
               <View style={styles.foodShopIcon}><Icon name="meal" color={colors.primary} size={20} /></View>
               <Text style={styles.foodShopText}>Recipes</Text>
-              <Icon name="chevron" color={colors.subtext} size={18} />
-            </Pressable>
-            ) : null}
-
-            {staffCan('recipes') ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="What can I cook now"
-              style={styles.foodCookNowBtn}
-              onPress={() => { setRecipesCookNowToken((t) => t + 1); setFoodTab('recipes'); }}
-            >
-              <View style={styles.foodCookNowIcon}><Icon name="check" color="#16a34a" size={20} /></View>
-              <Text style={styles.foodCookNowText}>What can I cook now?</Text>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
             ) : null}
@@ -17140,6 +17222,95 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexBasis: '47%',
     flexGrow: 1,
   },
+  // Day guidance — Home teaser row + the Day/Month/Year sheet.
+  dayHintCard: {
+    borderRadius: 18,
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  dayHintBar: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  dayHintBody: { flex: 1 },
+  dayHintKicker: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  },
+  dayHintTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 1 },
+  dayHintChevron: { fontSize: 20, color: colors.subtext },
+  dayHintSheet: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  dayHintSheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  dayHintSheetDate: { fontSize: 13, fontWeight: '700', color: colors.subtext },
+  dayHintSheetClose: { fontSize: 13, fontWeight: '700', color: colors.subtext },
+  dayHintTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    padding: 3,
+    marginBottom: 15,
+  },
+  dayHintTab: { flex: 1, paddingVertical: 7, borderRadius: 999, alignItems: 'center' },
+  dayHintTabOn: { backgroundColor: colors.text },
+  dayHintTabText: { fontSize: 13, fontWeight: '700', color: colors.subtext },
+  dayHintTabTextOn: { color: colors.surface },
+  dayHintScroll: { maxHeight: 460 },
+  dayHintScrollBody: { paddingBottom: 4 },
+  dayHintSheetKicker: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  },
+  dayHintSheetTitle: { fontSize: 24, fontWeight: '800', color: colors.text, marginTop: 4 },
+  dayHintSheetSub: { fontSize: 14.5, color: colors.subtext, marginTop: 6, lineHeight: 20 },
+  dayHintWit: { fontSize: 11.5, color: colors.subtext, marginTop: 11, opacity: 0.85, lineHeight: 16 },
+  dayHintCue: {
+    backgroundColor: colors.glassSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 13,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    marginTop: 8,
+  },
+  dayHintCueLabel: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.3 },
+  dayHintCueText: { fontSize: 14, color: colors.text, marginTop: 3, lineHeight: 19 },
+  dayHintReadBtn: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: colors.glassSoft,
+  },
+  dayHintReadBtnText: { fontSize: 13, fontWeight: '700', color: colors.subtext },
+  dayHintLongText: { fontSize: 13.5, color: colors.subtext, marginTop: 10, lineHeight: 20 },
+  dayHintEmpty: { fontSize: 14, color: colors.subtext, padding: 10, textAlign: 'center', lineHeight: 20 },
   calCard: {
     borderRadius: 18,
     backgroundColor: colors.glassSoft,
