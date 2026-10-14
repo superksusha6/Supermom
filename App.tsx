@@ -1185,6 +1185,11 @@ function AppShell() {
   const [dayHintOpen, setDayHintOpen] = useState(false);
   const [dayHintScope, setDayHintScope] = useState<GuidanceScope>('day');
   const [dayHintReadOpen, setDayHintReadOpen] = useState(false);
+  // Tap a meal on the Today hub → focused edit sheet (name or saved recipe), writing
+  // straight to this week's plan. Keeps the common edit out of the full planner.
+  const [mealEditTarget, setMealEditTarget] = useState<{ slot: MealPlanSlot; entryId?: string; label: string; hasMeal: boolean } | null>(null);
+  const [mealEditName, setMealEditName] = useState('');
+  const [mealEditRecipeSearch, setMealEditRecipeSearch] = useState('');
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
@@ -2610,6 +2615,85 @@ function AppShell() {
     return rows;
   }, [weeklyMealPlan, recipes, todayDateKey, rotationWeekMenuKey]);
   const plannedTodayMeals = todayMeals.filter((m) => m.title);
+  // --- Quick meal edit (from the Today hub) ---------------------------------
+  // Writes to this week's plan for today's weekday + slot, mirroring the planner's
+  // single-cell-per-slot rule (snacks are multi, keyed by entry id).
+  const mealEditRecipeMatches = useMemo(() => {
+    const q = mealEditRecipeSearch.trim().toLowerCase();
+    const list = q ? recipes.filter((r) => r.title.toLowerCase().includes(q)) : recipes;
+    return list.slice(0, 8);
+  }, [mealEditRecipeSearch, recipes]);
+  function openMealEdit(m: { key: string; slot: MealPlanSlot; label: string; title: string | null; items: string[] }) {
+    const entryId = m.key.endsWith('-empty') ? undefined : m.key;
+    const display = m.title || m.items.join(', ');
+    setMealEditTarget({ slot: m.slot, entryId, label: m.label, hasMeal: !!(m.title || m.items.length) });
+    setMealEditName(display);
+    setMealEditRecipeSearch('');
+  }
+  function closeMealEdit() {
+    setMealEditTarget(null);
+    setMealEditName('');
+    setMealEditRecipeSearch('');
+  }
+  function writeMealEdit(payload: Partial<WeeklyMealPlanEntry>) {
+    const target = mealEditTarget;
+    if (!target) return;
+    const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
+    const menuKey = rotationWeekMenuKey || 'family';
+    const menuLabel = mealPlanProfiles.find((p) => p.key === menuKey)?.label || 'Family';
+    const dayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    handleWeeklyMealPlanChange((prev) => {
+      const next = [...prev];
+      if (target.entryId) {
+        const i = next.findIndex((e) => e.id === target.entryId);
+        if (i >= 0) { next[i] = { ...next[i], ...payload }; return next; }
+      }
+      if (target.slot !== 'snack') {
+        const i = next.findIndex((e) => (e.profileKey || 'family') === menuKey && e.dayKey === code && e.slot === target.slot);
+        if (i >= 0) { next[i] = { ...next[i], ...payload }; return next; }
+      }
+      next.push({
+        id: `meal-plan-${menuKey}-${code}-${target.slot}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        profileKey: menuKey,
+        profileLabel: menuLabel,
+        dayKey: code,
+        dayLabel,
+        slot: target.slot,
+        order: target.slot === 'breakfast' ? 0 : target.slot === 'snack' ? 1 : target.slot === 'lunch' ? 2 : 3,
+        ...payload,
+      });
+      return next;
+    });
+  }
+  function saveMealEditName() {
+    const name = mealEditName.trim();
+    if (!name) return;
+    writeMealEdit({ customTitle: name, recipeId: undefined, recipeSelection: undefined, customItems: undefined, customCalories: undefined, customGrams: undefined, customHideCalories: undefined, customNote: undefined });
+    closeMealEdit();
+  }
+  function pickMealEditRecipe(recipeId: string) {
+    writeMealEdit({ recipeId, recipeSelection: undefined, customTitle: undefined, customItems: undefined, customCalories: undefined, customGrams: undefined, customHideCalories: undefined, customNote: undefined });
+    closeMealEdit();
+  }
+  function clearMealEdit() {
+    const target = mealEditTarget;
+    if (!target) { closeMealEdit(); return; }
+    const code = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
+    const menuKey = rotationWeekMenuKey || 'family';
+    handleWeeklyMealPlanChange((prev) => {
+      if (target.slot === 'snack') {
+        return target.entryId ? prev.filter((e) => e.id !== target.entryId) : prev;
+      }
+      return prev.map((e) => {
+        const match = target.entryId
+          ? e.id === target.entryId
+          : (e.profileKey || 'family') === menuKey && e.dayKey === code && e.slot === target.slot;
+        if (!match) return e;
+        return { ...e, recipeId: undefined, recipeSelection: undefined, customItems: undefined, customTitle: undefined, customCalories: undefined, customGrams: undefined, customHideCalories: undefined, customNote: undefined };
+      });
+    });
+    closeMealEdit();
+  }
   const todayChoreList = useMemo(() => {
     return chores
       .filter((c) => c.childId && choreStatus(c) === 'todo')
@@ -9670,6 +9754,62 @@ function AppShell() {
         </Pressable>
       </Modal>
 
+      {mealEditTarget ? (
+      <Modal visible transparent animationType="fade" onRequestClose={closeMealEdit}>
+        <Pressable style={styles.newListBackdrop} onPress={closeMealEdit}>
+          <Pressable style={styles.newListCard} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={styles.daySheetTitle}>{mealEditTarget.hasMeal ? 'Edit' : 'Add'} {mealEditTarget.label.toLowerCase()}</Text>
+            <Text style={styles.mealEditHint}>Type a dish, or pick one of your saved recipes below.</Text>
+            <TextInput
+              style={styles.input}
+              value={mealEditName}
+              onChangeText={setMealEditName}
+              placeholder="e.g. Chicken soup"
+              placeholderTextColor={colors.subtext}
+              returnKeyType="done"
+              onSubmitEditing={saveMealEditName}
+            />
+            <View style={styles.daySheetActions}>
+              {mealEditTarget.hasMeal ? (
+                <Pressable style={styles.mealEditRemove} onPress={clearMealEdit}>
+                  <Text style={styles.mealEditRemoveText}>Remove</Text>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.daySheetCancel} onPress={closeMealEdit}>
+                <Text style={styles.daySheetCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.daySheetAdd, !mealEditName.trim() && styles.daySheetAddDisabled]} onPress={saveMealEditName} disabled={!mealEditName.trim()}>
+                <Text style={styles.daySheetAddText}>Save</Text>
+              </Pressable>
+            </View>
+            {recipes.length ? (
+              <View style={styles.mealEditRecipes}>
+                <Text style={styles.mealEditRecipesLabel}>Or pick a recipe</Text>
+                <TextInput
+                  style={styles.input}
+                  value={mealEditRecipeSearch}
+                  onChangeText={setMealEditRecipeSearch}
+                  placeholder="Search recipes"
+                  placeholderTextColor={colors.subtext}
+                />
+                <ScrollView style={styles.mealEditRecipeList} keyboardShouldPersistTaps="handled">
+                  {mealEditRecipeMatches.map((r) => (
+                    <Pressable key={r.id} style={styles.mealEditRecipeRow} onPress={() => pickMealEditRecipe(r.id)}>
+                      <Text style={styles.mealEditRecipeName} numberOfLines={1}>{r.title}</Text>
+                      <Text style={styles.mealEditRecipeMeta}>
+                        {[r.servings ? `${r.servings} serv` : null, r.cookTimeMinutes ? `${r.cookTimeMinutes} min` : null].filter(Boolean).join(' · ')}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  {mealEditRecipeMatches.length === 0 ? <Text style={styles.mealEditRecipeMeta}>No recipes match.</Text> : null}
+                </ScrollView>
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+      ) : null}
+
       {inviteModalOpen ? (
       <Modal visible transparent animationType="fade" onRequestClose={() => setInviteModalOpen(false)}>
         <Pressable style={styles.newListBackdrop} onPress={() => setInviteModalOpen(false)}>
@@ -10850,14 +10990,13 @@ function AppShell() {
             <View style={styles.foodTonightCard}>
               <Text style={styles.foodTonightLabel}>TODAY&apos;S MENU · {formatShortDate(todayDateKey)}</Text>
               {todayMeals.map((m) => {
-                const canOpen = !!m.recipe && staffCan('recipes');
                 return (
                   <Pressable
                     key={m.key}
                     accessibilityRole="button"
                     accessibilityLabel={m.title ? `${m.label}, ${m.title}` : `${m.label}, not planned`}
                     style={styles.staffDayMenuRow}
-                    onPress={() => setFoodTab(canOpen ? 'recipes' : 'plan')}
+                    onPress={() => openMealEdit(m)}
                   >
                     <Text style={styles.staffDayMenuSlot}>{m.label}</Text>
                     <View style={styles.staffMenuRowBody}>
@@ -10883,7 +11022,7 @@ function AppShell() {
                         </Text>
                       ) : null}
                     </View>
-                    {canOpen ? <Icon name="chevron" color={colors.subtext} size={16} /> : null}
+                    <Icon name="chevron" color={colors.subtext} size={16} />
                   </Pressable>
                 );
               })}
@@ -17200,6 +17339,60 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexGrow: 1,
   },
   // Day guidance — Home teaser row + the Day/Month/Year sheet.
+  mealEditHint: {
+    color: colors.subtext,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  mealEditRemove: {
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  mealEditRemoveText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  mealEditRecipes: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 14,
+  },
+  mealEditRecipesLabel: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  mealEditRecipeList: {
+    maxHeight: 220,
+    marginTop: 4,
+  },
+  mealEditRecipeRow: {
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: colors.glassSoft,
+    marginBottom: 6,
+  },
+  mealEditRecipeName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  mealEditRecipeMeta: {
+    color: colors.subtext,
+    fontSize: 12,
+    marginTop: 2,
+  },
   dayHintCard: {
     borderRadius: 18,
     backgroundColor: colors.glassSoft,
