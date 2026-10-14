@@ -13,6 +13,7 @@ export type IconName =
   | 'pill'
   | 'plus'
   | 'chevron'
+  | 'chevron-left'
   | 'home'
   | 'family'
   | 'heart'
@@ -90,6 +91,7 @@ export function Icon({ name, size = 22, color = '#0f172a', strokeWidth = 2 }: Pr
       ) : null}
       {name === 'plus' ? <Path d="M5 12h14 M12 5v14" {...common} /> : null}
       {name === 'chevron' ? <Path d="m9 18 6-6-6-6" {...common} /> : null}
+      {name === 'chevron-left' ? <Path d="m15 18-6-6 6-6" {...common} /> : null}
       {name === 'home' ? (
         <>
           <Path d="M3 10.5 12 3l9 7.5" {...common} />

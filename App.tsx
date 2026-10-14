@@ -7664,7 +7664,7 @@ function AppShell() {
   const childBackBar = (title: string) => (
     <View style={styles.childSubHeader}>
       <Pressable style={styles.childBackBtn} onPress={() => setChildScreen('home')}>
-        <Icon name="chevron" color={colors.primary} size={16} />
+        <Icon name="chevron-left" color={colors.primary} size={16} />
         <Text style={styles.childBackText}>Back</Text>
       </Pressable>
       <Text style={styles.childSubTitle}>{title}</Text>
@@ -10636,7 +10636,7 @@ function AppShell() {
             }
           }}
         >
-          <Icon name="chevron" color={colors.primary} size={16} />
+          <Icon name="chevron-left" color={colors.primary} size={16} />
           <Text style={styles.calBackText}>{foodEntryOrigin === 'home' ? 'Back to Today' : 'Back to Food'}</Text>
         </Pressable>
       ) : null}
@@ -10667,7 +10667,7 @@ function AppShell() {
         {!isChildView && screen === 'calendar' && (homeTab === 'today' || isStaffView) ? focusHome : null}
         {screen === 'calendar' && homeTab === 'calendar' && !isStaffView ? (
           <Pressable style={styles.calBackBtn} onPress={() => setHomeTab('today')}>
-            <Icon name="chevron" color={colors.primary} size={16} />
+            <Icon name="chevron-left" color={colors.primary} size={16} />
             <Text style={styles.calBackText}>Back to home</Text>
           </Pressable>
         ) : null}
@@ -10924,16 +10924,14 @@ function AppShell() {
             {!isStaffView ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Meals today, log food and calories"
+              accessibilityLabel="Food diary, log what you ate"
               style={styles.foodShopBtn}
               onPress={() => setFoodTab('diary')}
             >
               <View style={styles.foodShopIcon}><Icon name="meal" color={colors.primary} size={20} /></View>
               <View style={styles.foodListCopy}>
-                <Text style={styles.foodListTitle}>Meals Today</Text>
-                <Text style={styles.foodListSub} numberOfLines={1}>
-                  {!calShowNumber ? 'Loading…' : (calShownGoal > 0 ? `${calShownRemaining} kcal left · log food` : 'Log food & calories')}
-                </Text>
+                <Text style={styles.foodListTitle}>Food diary</Text>
+                <Text style={styles.foodListSub} numberOfLines={1}>Log what you ate</Text>
               </View>
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
@@ -11248,7 +11246,7 @@ function AppShell() {
               if (subScreenBack === 'calendar') setHomeTab('today');
             }}
           >
-            <Icon name="chevron" color={colors.primary} size={16} />
+            <Icon name="chevron-left" color={colors.primary} size={16} />
             <Text style={styles.calBackText}>{subScreenBack === 'calendar' ? 'Back' : 'Back to Home'}</Text>
           </Pressable>
         ) : null}
