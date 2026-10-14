@@ -10986,27 +10986,6 @@ function AppShell() {
               <Icon name="chevron" color={colors.subtext} size={18} />
             </Pressable>
 
-            {pastShoppingLists.length ? (
-              <>
-                <Text style={styles.foodHubSectionLabel}>Past lists</Text>
-                {pastShoppingLists.map((list) => (
-                  <Pressable
-                    key={list.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open past list ${list.title}`}
-                    style={styles.foodShopBtn}
-                    onPress={() => { setSelectedShoppingListId(list.id); setFoodTab('shopping'); }}
-                  >
-                    <View style={styles.foodShopIcon}><Icon name="cart" color={colors.subtext} size={20} /></View>
-                    <View style={styles.foodListCopy}>
-                      <Text style={styles.foodListTitle} numberOfLines={1}>{list.title}</Text>
-                      <Text style={styles.foodListSub}>{formatShortDate(list.completedAt || list.createdAt)} · done</Text>
-                    </View>
-                    <Icon name="chevron" color={colors.subtext} size={18} />
-                  </Pressable>
-                ))}
-              </>
-            ) : null}
             </>
             ) : null}
 
