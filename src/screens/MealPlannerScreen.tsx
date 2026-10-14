@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useMemo, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SectionCard } from '@/components/SectionCard';
 import { DraggableList } from '@/components/DraggableList';
@@ -18,6 +18,7 @@ type Props = {
   rotation: MealRotation;
   onRotationChange: (next: MealRotation) => void;
   todayDateKey: string;
+  rotationWeekMenuKey?: string;
   rotationThisWeekLabel: string;
   rotationNextWeekLabel: string;
   children?: { id: string; name: string }[];
@@ -196,6 +197,7 @@ export function MealPlannerScreen({
   rotation,
   onRotationChange,
   todayDateKey,
+  rotationWeekMenuKey,
   rotationThisWeekLabel,
   rotationNextWeekLabel,
   children = [],
@@ -243,7 +245,20 @@ export function MealPlannerScreen({
   const [detailTarget, setDetailTarget] = useState<{ dayKey: string; slot: MealPlanSlot; entryId?: string } | null>(null);
   const [editingDayKey, setEditingDayKey] = useState<string | null>(null);
   const [rotationExpanded, setRotationExpanded] = useState(false);
-  const [menuExpanded, setMenuExpanded] = useState(false);
+  // The week is the main thing here — open it on arrival, not a collapsed "Show week".
+  const [menuExpanded, setMenuExpanded] = useState(true);
+  // Multiple menus (profiles) + weekly rotation are power features — tucked away so the
+  // default screen is just "edit this week's menu". Kept (not deleted) so existing
+  // menus stored under a profile aren't hidden from their owner.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // In the simple view (advanced hidden) with rotation on, edit the SAME menu Today
+  // shows (this week's rotation menu) so "This week's menu" is never an empty mismatch.
+  useEffect(() => {
+    if (!advancedOpen && rotation.enabled && rotationWeekMenuKey && activeProfileKey !== rotationWeekMenuKey) {
+      onActiveProfileKeyChange(rotationWeekMenuKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advancedOpen, rotation.enabled, rotationWeekMenuKey, activeProfileKey]);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
   const toggleDayCollapsed = (key: string) =>
     setCollapsedDays((prev) => {
@@ -674,8 +689,17 @@ export function MealPlannerScreen({
     <>
       <ScrollView contentContainerStyle={styles.content}>
         <SectionCard title="Weekly Meal Planner">
-          <Text style={styles.heroText}>Build a weekly menu from your saved recipes. Next we can connect this plan to staff and shopping.</Text>
+          <Text style={styles.heroText}>Build this week&apos;s menu from your saved recipes. Tap a meal below to set or change it.</Text>
+          {rotation.enabled ? (
+            <Text style={styles.heroText}>This week&apos;s menu: <Text style={{ fontWeight: '800' }}>{rotationThisWeekLabel || activeProfile.label}</Text>.</Text>
+          ) : null}
 
+          <Pressable style={styles.advancedToggle} onPress={() => setAdvancedOpen((v) => !v)}>
+            <Text style={styles.advancedToggleText}>Advanced · multiple menus and weekly rotation {advancedOpen ? '▾' : '▸'}</Text>
+          </Pressable>
+
+          {advancedOpen ? (
+          <>
           <Text style={styles.profileLabel}>Meal plan profile</Text>
           <View style={styles.profileTabs}>
             {planProfiles.map((profile) => {
@@ -707,8 +731,11 @@ export function MealPlannerScreen({
               <Text style={styles.addProfileBtnText}>Add</Text>
             </Pressable>
           </View>
+          </>
+          ) : null}
         </SectionCard>
 
+        {advancedOpen ? (
         <SectionCard title="Weekly rotation">
           <Pressable style={styles.rotCollapseRow} onPress={() => setRotationExpanded((v) => !v)}>
             <Text style={styles.rotCollapseSummary}>
@@ -799,11 +826,12 @@ export function MealPlannerScreen({
           </>
           ) : null}
         </SectionCard>
+        ) : null}
 
         <View style={styles.weekMenuSection}>
           <Pressable style={styles.weekMenuBar} onPress={() => setMenuExpanded((v) => !v)}>
             <Text style={styles.dayCollapseCaret}>{menuExpanded ? '▾' : '▸'}</Text>
-            <Text style={styles.weekMenuTitle}>{activeProfile.label} Weekly Menu</Text>
+            <Text style={styles.weekMenuTitle}>{advancedOpen ? `${activeProfile.label} Weekly Menu` : "This week's menu"}</Text>
             <Text style={styles.weekMenuBarHint}>{menuExpanded ? 'Hide' : 'Show week'}</Text>
           </Pressable>
           {menuExpanded ? (
@@ -1567,6 +1595,15 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '800',
       marginBottom: 8,
+    },
+    advancedToggle: {
+      paddingVertical: 6,
+      marginBottom: 4,
+    },
+    advancedToggleText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '700',
     },
     rotCollapseRow: {
       flexDirection: 'row',

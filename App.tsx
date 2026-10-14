@@ -11318,6 +11318,7 @@ function AppShell() {
             rotation={mealRotation}
             onRotationChange={handleMealRotationChange}
             todayDateKey={todayDateKey}
+            rotationWeekMenuKey={rotationWeekMenuKey}
             rotationThisWeekLabel={rotationWeekMenuKey ? (mealPlanProfiles.find((p) => p.key === rotationWeekMenuKey)?.label || rotationWeekMenuKey) : ''}
             rotationNextWeekLabel={(() => {
               if (!mealRotation.enabled || mealRotation.order.length === 0) return '';
