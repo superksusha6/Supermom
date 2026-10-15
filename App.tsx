@@ -1194,6 +1194,9 @@ function AppShell() {
   const [mealEditTarget, setMealEditTarget] = useState<{ slot: MealPlanSlot; entryId?: string; label: string; hasMeal: boolean; original: string } | null>(null);
   const [mealEditName, setMealEditName] = useState('');
   const [mealEditRecipeSearch, setMealEditRecipeSearch] = useState('');
+  // Recipe list stays collapsed behind one row so the default sheet is just the
+  // dish field — the common edit — and the recipe list never dominates.
+  const [mealEditRecipesOpen, setMealEditRecipesOpen] = useState(false);
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
@@ -2633,11 +2636,13 @@ function AppShell() {
     setMealEditTarget({ slot: m.slot, entryId, label: m.label, hasMeal: !!(m.title || m.items.length), original: display });
     setMealEditName(display);
     setMealEditRecipeSearch('');
+    setMealEditRecipesOpen(false);
   }
   function closeMealEdit() {
     setMealEditTarget(null);
     setMealEditName('');
     setMealEditRecipeSearch('');
+    setMealEditRecipesOpen(false);
   }
   function writeMealEdit(payload: Partial<WeeklyMealPlanEntry>) {
     const target = mealEditTarget;
@@ -9797,9 +9802,19 @@ function AppShell() {
                 </View>
               </View>
 
-              {recipes.length ? (
+              {recipes.length && !mealEditRecipesOpen ? (
+                <Pressable style={[styles.mealGroup, styles.mealChooseRow]} onPress={() => setMealEditRecipesOpen(true)} accessibilityRole="button" accessibilityLabel="Choose a saved recipe">
+                  <View style={styles.mealSearchGlyph}>
+                    <Icon name="search" color={colors.primary} size={17} />
+                  </View>
+                  <Text style={styles.mealChooseText}>Choose a saved recipe</Text>
+                  <Icon name="chevron" color={colors.subtext} size={15} />
+                </Pressable>
+              ) : null}
+
+              {recipes.length && mealEditRecipesOpen ? (
                 <>
-                  <Text style={styles.mealGroupHeader}>OR CHOOSE A RECIPE</Text>
+                  <Text style={styles.mealGroupHeader}>CHOOSE A RECIPE</Text>
                   <View style={styles.mealGroup}>
                     <View style={styles.mealSearchCell}>
                       <View style={styles.mealSearchGlyph}>
@@ -9811,6 +9826,7 @@ function AppShell() {
                         onChangeText={setMealEditRecipeSearch}
                         placeholder={`Search ${recipes.length} recipes`}
                         placeholderTextColor={colors.subtext}
+                        autoFocus
                       />
                     </View>
                     {mealEditRecipeMatches.map((r, i) => {
@@ -17467,6 +17483,19 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 18,
+  },
+  mealChooseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+  },
+  mealChooseText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   mealFieldCell: {
     paddingHorizontal: 15,
