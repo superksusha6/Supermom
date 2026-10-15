@@ -1197,6 +1197,8 @@ function AppShell() {
   // Recipe list stays collapsed behind one row so the default sheet is just the
   // dish field — the common edit — and the recipe list never dominates.
   const [mealEditRecipesOpen, setMealEditRecipesOpen] = useState(false);
+  // Today's menu on the Food hub is collapsed by default — tap the header to reveal it.
+  const [todayMenuOpen, setTodayMenuOpen] = useState(false);
   const [doneEventIds, setDoneEventIds] = useState<Set<string>>(() => loadLocalDoneEvents(toDateKey(new Date())));
   const [homeIssues, setHomeIssues] = useState<HomeIssue[]>([]);
   const [homeProviders, setHomeProviders] = useState<HomeProvider[]>([]);
@@ -11043,8 +11045,23 @@ function AppShell() {
                 recipes-only member (menu grant off) falls back to the Tonight card. */}
             {staffCan('menu') ? (
             <View style={styles.foodTonightCard}>
-              <Text style={styles.foodTonightLabel}>TODAY&apos;S MENU · {formatShortDate(todayDateKey)}</Text>
-              {todayMeals.map((m) => {
+              <Pressable
+                style={styles.foodMenuHeader}
+                onPress={() => setTodayMenuOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={todayMenuOpen ? "Hide today's menu" : "Show today's menu"}
+              >
+                <Text style={styles.foodTonightLabel}>TODAY&apos;S MENU · {formatShortDate(todayDateKey)}</Text>
+                <View style={styles.foodMenuHeaderRight}>
+                  {!todayMenuOpen && plannedTodayMeals.length ? (
+                    <Text style={styles.foodMenuCount}>{plannedTodayMeals.length} {plannedTodayMeals.length === 1 ? 'meal' : 'meals'}</Text>
+                  ) : null}
+                  <View style={{ transform: [{ rotate: todayMenuOpen ? '-90deg' : '90deg' }] }}>
+                    <Icon name="chevron" color={colors.subtext} size={16} />
+                  </View>
+                </View>
+              </Pressable>
+              {todayMenuOpen ? todayMeals.map((m) => {
                 return (
                   <Pressable
                     key={m.key}
@@ -11080,7 +11097,7 @@ function AppShell() {
                     <Icon name="chevron" color={colors.subtext} size={16} />
                   </Pressable>
                 );
-              })}
+              }) : null}
             </View>
             ) : staffCan('menu') || staffCan('recipes') ? (
             <View style={styles.foodTonightCard}>
@@ -17407,7 +17424,7 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     paddingBottom: 24,
     maxHeight: '92%',
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 412,
     alignSelf: 'center',
   },
   mealGrab: {
@@ -17785,6 +17802,21 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,
+  },
+  foodMenuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  foodMenuHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  foodMenuCount: {
+    color: colors.subtext,
+    fontSize: 12,
+    fontWeight: '700',
   },
   foodTonightBody: {
     marginBottom: 12,
