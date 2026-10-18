@@ -83,9 +83,13 @@ function collapseWhitespace(value?: string) {
 export function normalizeNutritionSearchText(value?: string) {
   return collapseWhitespace(value)
     .normalize('NFD')
+    // Strip Latin accent marks (caf\u00e9 \u2192 cafe) but keep base letters of every script.
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    // Keep letters (any alphabet \u2014 Cyrillic included) and digits; collapse the rest to a
+    // space. Using a-z0-9 here silently erased Russian names, so they vanished from
+    // search, Recent and were deduped into a single empty key.
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
