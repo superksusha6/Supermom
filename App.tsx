@@ -9766,102 +9766,99 @@ function AppShell() {
       </Modal>
 
       {mealEditTarget ? (
-      <Modal visible transparent animationType="slide" onRequestClose={closeMealEdit}>
-        <Pressable style={styles.mealSheetBackdrop} onPress={closeMealEdit}>
-          <Pressable style={styles.mealSheet} onPress={(e) => e.stopPropagation?.()}>
-            <View style={styles.mealGrab} />
-            <View style={styles.mealNav}>
-              <Pressable style={styles.mealNavSide} onPress={closeMealEdit} accessibilityRole="button" accessibilityLabel="Cancel">
-                <Text style={styles.mealNavCancel}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.mealNavEyebrow} numberOfLines={1}>{mealEditTarget.label}</Text>
-              <Pressable
-                style={styles.mealNavSide}
-                onPress={saveMealEditName}
-                disabled={!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()}
-                accessibilityRole="button"
-                accessibilityLabel="Save"
-              >
-                <Text style={[styles.mealNavSave, (!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()) && styles.mealNavSaveOff]}>Save</Text>
-              </Pressable>
+      <Modal visible transparent animationType="fade" onRequestClose={closeMealEdit}>
+        <Pressable style={styles.mealDialogBackdrop} onPress={closeMealEdit}>
+          <Pressable style={styles.mealDialog} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.mealDialogHead}>
+              <Text style={styles.mealDialogTitle}>{mealEditTarget.hasMeal ? 'Edit meal' : 'Add meal'}</Text>
+              <View style={styles.mealDialogChip}>
+                <Text style={styles.mealDialogChipText}>{mealEditTarget.label.toUpperCase()}</Text>
+              </View>
             </View>
-            <Text style={styles.mealSheetTitle}>{mealEditTarget.hasMeal ? 'Edit meal' : `Add ${mealEditTarget.label.toLowerCase()}`}</Text>
 
-            <ScrollView style={styles.mealSheetScroll} contentContainerStyle={styles.mealSheetScrollBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <Text style={styles.mealGroupHeader}>CURRENT MEAL</Text>
-              <View style={styles.mealGroup}>
-                <View style={styles.mealFieldCell}>
-                  <TextInput
-                    style={styles.mealFieldInput}
-                    value={mealEditName}
-                    onChangeText={setMealEditName}
-                    placeholder="e.g. Chicken soup"
-                    placeholderTextColor={colors.subtext}
-                    returnKeyType="done"
-                    onSubmitEditing={saveMealEditName}
-                    multiline
-                  />
-                </View>
+            <ScrollView style={styles.mealDialogScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.mealDialogLabel}>Current meal</Text>
+              <View style={styles.mealDialogField}>
+                <TextInput
+                  style={styles.mealDialogInput}
+                  value={mealEditName}
+                  onChangeText={setMealEditName}
+                  placeholder="e.g. Chicken soup"
+                  placeholderTextColor={colors.subtext}
+                  returnKeyType="done"
+                  onSubmitEditing={saveMealEditName}
+                  multiline
+                />
               </View>
 
               {recipes.length && !mealEditRecipesOpen ? (
-                <Pressable style={[styles.mealGroup, styles.mealChooseRow]} onPress={() => setMealEditRecipesOpen(true)} accessibilityRole="button" accessibilityLabel="Choose a saved recipe">
-                  <View style={styles.mealSearchGlyph}>
-                    <Icon name="search" color={colors.primary} size={17} />
-                  </View>
-                  <Text style={styles.mealChooseText}>Choose a saved recipe</Text>
+                <Pressable style={styles.mealDialogRecLink} onPress={() => setMealEditRecipesOpen(true)} accessibilityRole="button" accessibilityLabel="Choose a saved recipe">
+                  <Icon name="search" color={colors.primary} size={16} />
+                  <Text style={styles.mealDialogRecLinkText}>Choose a saved recipe</Text>
                   <Icon name="chevron" color={colors.subtext} size={15} />
                 </Pressable>
               ) : null}
 
               {recipes.length && mealEditRecipesOpen ? (
-                <>
-                  <Text style={styles.mealGroupHeader}>CHOOSE A RECIPE</Text>
-                  <View style={styles.mealGroup}>
-                    <View style={styles.mealSearchCell}>
-                      <View style={styles.mealSearchGlyph}>
-                        <Icon name="search" color={colors.subtext} size={15} />
-                      </View>
-                      <TextInput
-                        style={styles.mealSearchInput}
-                        value={mealEditRecipeSearch}
-                        onChangeText={setMealEditRecipeSearch}
-                        placeholder={`Search ${recipes.length} recipes`}
-                        placeholderTextColor={colors.subtext}
-                        autoFocus
-                      />
+                <View style={styles.mealDialogRecBox}>
+                  <View style={styles.mealSearchCell}>
+                    <View style={styles.mealSearchGlyph}>
+                      <Icon name="search" color={colors.subtext} size={15} />
                     </View>
-                    {mealEditRecipeMatches.map((r, i) => {
-                      const tint = MEAL_THUMB_TINTS[(r.title.charCodeAt(0) + r.title.length) % MEAL_THUMB_TINTS.length];
-                      const meta = [r.servings ? `${r.servings} servings` : null, r.cookTimeMinutes ? `${r.cookTimeMinutes} min` : null].filter(Boolean).join(' · ');
-                      return (
-                        <Pressable key={r.id} style={[styles.mealRecipeRow, i === 0 && styles.mealRecipeRowFirst]} onPress={() => pickMealEditRecipe(r.id)} accessibilityRole="button" accessibilityLabel={`Use recipe ${r.title}`}>
-                          <View style={[styles.mealThumb, { backgroundColor: tint }]}>
-                            <Icon name="meal" color="rgba(60,48,36,0.6)" size={19} />
-                          </View>
-                          <View style={styles.mealRecipeText}>
-                            <Text style={styles.mealRecipeTitle} numberOfLines={1}>{r.title || 'Untitled recipe'}</Text>
-                            {meta ? <Text style={styles.mealRecipeMeta}>{meta}</Text> : null}
-                          </View>
-                          <Icon name="chevron" color={colors.subtext} size={15} />
-                        </Pressable>
-                      );
-                    })}
-                    {mealEditRecipeMatches.length === 0 ? (
-                      <View style={[styles.mealRecipeRow, styles.mealRecipeRowFirst]}>
-                        <Text style={styles.mealRecipeMeta}>No recipes match “{mealEditRecipeSearch.trim()}”.</Text>
-                      </View>
-                    ) : null}
+                    <TextInput
+                      style={styles.mealSearchInput}
+                      value={mealEditRecipeSearch}
+                      onChangeText={setMealEditRecipeSearch}
+                      placeholder={`Search ${recipes.length} recipes`}
+                      placeholderTextColor={colors.subtext}
+                      autoFocus
+                    />
                   </View>
-                </>
-              ) : null}
-
-              {mealEditTarget.hasMeal ? (
-                <Pressable style={styles.mealRemoveCell} onPress={clearMealEdit} accessibilityRole="button" accessibilityLabel={`Remove ${mealEditTarget.label}`}>
-                  <Text style={styles.mealRemoveText}>Remove from {mealEditTarget.label}</Text>
-                </Pressable>
+                  {mealEditRecipeMatches.map((r, i) => {
+                    const tint = MEAL_THUMB_TINTS[(r.title.charCodeAt(0) + r.title.length) % MEAL_THUMB_TINTS.length];
+                    const meta = [r.servings ? `${r.servings} servings` : null, r.cookTimeMinutes ? `${r.cookTimeMinutes} min` : null].filter(Boolean).join(' · ');
+                    return (
+                      <Pressable key={r.id} style={[styles.mealRecipeRow, i === 0 && styles.mealRecipeRowFirst]} onPress={() => pickMealEditRecipe(r.id)} accessibilityRole="button" accessibilityLabel={`Use recipe ${r.title}`}>
+                        <View style={[styles.mealThumb, { backgroundColor: tint }]}>
+                          <Icon name="meal" color="rgba(60,48,36,0.6)" size={18} />
+                        </View>
+                        <View style={styles.mealRecipeText}>
+                          <Text style={styles.mealRecipeTitle} numberOfLines={1}>{r.title || 'Untitled recipe'}</Text>
+                          {meta ? <Text style={styles.mealRecipeMeta}>{meta}</Text> : null}
+                        </View>
+                        <Icon name="chevron" color={colors.subtext} size={15} />
+                      </Pressable>
+                    );
+                  })}
+                  {mealEditRecipeMatches.length === 0 ? (
+                    <View style={[styles.mealRecipeRow, styles.mealRecipeRowFirst]}>
+                      <Text style={styles.mealRecipeMeta}>No recipes match “{mealEditRecipeSearch.trim()}”.</Text>
+                    </View>
+                  ) : null}
+                </View>
               ) : null}
             </ScrollView>
+
+            {mealEditTarget.hasMeal ? (
+              <Pressable style={styles.mealDialogRemove} onPress={clearMealEdit} accessibilityRole="button" accessibilityLabel={`Remove ${mealEditTarget.label}`}>
+                <Text style={styles.mealDialogRemoveText}>Remove from {mealEditTarget.label}</Text>
+              </Pressable>
+            ) : null}
+
+            <View style={styles.mealDialogBtns}>
+              <Pressable style={styles.mealDialogCancel} onPress={closeMealEdit} accessibilityRole="button" accessibilityLabel="Cancel">
+                <Text style={styles.mealDialogCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.mealDialogSave, (!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()) && styles.mealDialogSaveOff]}
+                onPress={saveMealEditName}
+                disabled={!mealEditName.trim() || mealEditName.trim() === mealEditTarget.original.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+              >
+                <Text style={styles.mealDialogSaveText}>Save</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -17412,118 +17409,99 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     flexGrow: 1,
   },
   // Day guidance — Home teaser row + the Day/Month/Year sheet.
-  mealSheetBackdrop: {
+  mealDialogBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  mealSheet: {
-    backgroundColor: colors.surfaceAlt,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 24,
-    maxHeight: '92%',
+  mealDialog: {
     width: '100%',
-    maxWidth: 412,
-    alignSelf: 'center',
+    maxWidth: 360,
+    maxHeight: '86%',
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 20px 60px -15px rgba(15,23,42,0.45)' } as any)
+      : { shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 10 }),
   },
-  mealGrab: {
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: themeName === 'dark' ? 'rgba(255,255,255,0.28)' : 'rgba(60,60,67,0.3)',
-    alignSelf: 'center',
-    marginTop: 8,
-  },
-  mealNav: {
+  mealDialogHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  mealNavSide: {
-    flex: 1,
-    paddingVertical: 4,
-  },
-  mealNavCancel: {
-    color: colors.primary,
-    fontSize: 16,
-  },
-  mealNavEyebrow: {
-    flex: 1.4,
-    textAlign: 'center',
-    color: colors.subtext,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-  },
-  mealNavSave: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  mealNavSaveOff: {
-    color: colors.subtext,
-    opacity: 0.6,
-    fontWeight: '600',
-  },
-  mealSheetTitle: {
+  mealDialogTitle: {
     color: colors.text,
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '800',
-    letterSpacing: -0.4,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
+    letterSpacing: -0.3,
   },
-  mealSheetScroll: {
+  mealDialogChip: {
+    backgroundColor: colors.selection,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  mealDialogChipText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  mealDialogScroll: {
     flexGrow: 0,
     flexShrink: 1,
   },
-  mealSheetScrollBody: {
-    paddingBottom: 8,
-  },
-  mealGroupHeader: {
+  mealDialogLabel: {
     color: colors.subtext,
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    paddingHorizontal: 20,
-    paddingBottom: 6,
-    paddingTop: 4,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 7,
   },
-  mealGroup: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 12,
+  mealDialogField: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
   },
-  mealChooseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 14,
-  },
-  mealChooseText: {
-    flex: 1,
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  mealFieldCell: {
-    paddingHorizontal: 15,
-    paddingVertical: 13,
-  },
-  mealFieldInput: {
+  mealDialogInput: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
     padding: 0,
     minHeight: 22,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null),
+  },
+  mealDialogRecLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  mealDialogRecLinkText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  mealDialogRecBox: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
   },
   mealSearchCell: {
     flexDirection: 'row',
@@ -17576,17 +17554,47 @@ const createStyles = (colors: ThemeColors, themeName: ThemeName, isMobile = fals
     fontSize: 14,
     marginTop: 1,
   },
-  mealRemoveCell: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 12,
-    borderRadius: 12,
-    paddingVertical: 13,
+  mealDialogRemove: {
     alignItems: 'center',
-    marginTop: 2,
+    paddingVertical: 13,
+    marginTop: 12,
   },
-  mealRemoveText: {
+  mealDialogRemoveText: {
     color: colors.urgent,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  mealDialogBtns: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  mealDialogCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 13,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+  },
+  mealDialogCancelText: {
+    color: colors.subtext,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  mealDialogSave: {
+    flex: 1.5,
+    paddingVertical: 13,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  mealDialogSaveOff: {
+    opacity: 0.4,
+  },
+  mealDialogSaveText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
   },
   dayHintCard: {
     borderRadius: 18,
