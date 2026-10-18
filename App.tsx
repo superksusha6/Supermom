@@ -1902,6 +1902,8 @@ function AppShell() {
         .on(pg, { event: '*', schema: 'public', table: 'completed_task_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
         .on(pg, { event: '*', schema: 'public', table: 'staff_reminder_notifications' }, () => bounce('notif', () => refreshLiveNotifications(current)))
         .on(pg, { event: '*', schema: 'public', table: 'medicines' }, () => bounce('meds', () => refreshLiveMedicines(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'nutrition_entries' }, () => bounce('nutrition', () => refreshLiveNutrition(current)))
+        .on(pg, { event: '*', schema: 'public', table: 'custom_nutrition_foods' }, () => bounce('customFoods', () => refreshLiveCustomFoods(current)))
         .subscribe((status) => {
           // On (re)connect, pull once so anything missed while offline shows up.
           if (status === 'SUBSCRIBED') pullEverythingLive();
